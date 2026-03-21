@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, createContext, useContext, useMemo } from "react";
+import { useState, useEffect, useRef, createContext, useContext, useMemo, type CSSProperties } from "react";
 import { ChevronRight, ChevronDown, MapPin, Layers, FileText, Plus, Trash2, FolderOpen, GripVertical, Map as MapIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,7 +31,6 @@ import {
   verticalListSortingStrategy,
   arrayMove,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 
 // ─── Children registry context ────────────────────────────────────────────────
 // Usa Record<string, BudgetBlock[]> onde null parent usa a chave "__root__"
@@ -362,8 +361,14 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
     data: { parentId: block.parent_id ?? null },
     disabled: isReadOnly,
   });
-  const dragStyle = {
-    transform: CSS.Transform.toString(transform),
+  // Só transladação: CSS.Transform inclui scale em alguns estados do sortable e o texto parece “aumentar” durante o arraste.
+  const tx = transform?.x ?? 0;
+  const ty = transform?.y ?? 0;
+  const dragStyle: CSSProperties = {
+    transform:
+      tx === 0 && ty === 0
+        ? undefined
+        : `translate3d(${Math.round(tx)}px, ${Math.round(ty)}px, 0)`,
     transition: isDragging ? undefined : transition,
     opacity: isDragging ? 0.5 : 1,
   };
@@ -382,11 +387,11 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
   };
 
   return (
-    <div ref={setNodeRef} style={dragStyle}>
+    <div ref={setNodeRef} style={dragStyle} className="w-full min-w-0 max-w-full">
       {/* Linha do nó */}
       <div
         className={cn(
-          "group flex items-center gap-1 pr-1 py-1.5 cursor-pointer transition-colors select-none rounded-sm",
+          "group flex min-w-0 w-full items-center gap-1 pr-1 py-1.5 cursor-pointer transition-colors select-none rounded-sm",
           isSelected ? "bg-primary text-primary-foreground" : "hover:bg-muted text-foreground"
         )}
         style={{ paddingLeft: `${indentPx}px` }}
@@ -443,7 +448,10 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
           />
         ) : (
           <span
-            className={cn("flex-1 truncate text-xs font-medium leading-none", (block.type === "session" || isScope) && "uppercase")}
+            className={cn(
+              "min-w-0 flex-1 truncate text-xs font-medium leading-none [text-size-adjust:100%]",
+              (block.type === "session" || isScope) && "uppercase"
+            )}
             onDoubleClick={(e) => { if (!isReadOnly && !isScope) { e.stopPropagation(); setLabelDraft(block.label || ""); setEditingLabel(true); } }}
           >
             {isScope ? "ESCOPO" : (block.label || `(${block.type})`)}
