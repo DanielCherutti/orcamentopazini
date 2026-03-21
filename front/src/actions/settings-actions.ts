@@ -72,6 +72,7 @@ export async function updateProposalSettingsAction(data: ProposalSettings) {
         }
 
         revalidatePath("/settings");
+        revalidatePath("/dashboard");
         return { success: true };
     } catch (e) {
         if (e instanceof InvalidRecordIdError) {

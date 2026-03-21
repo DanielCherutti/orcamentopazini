@@ -1,6 +1,5 @@
 import type { ComponentType } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import {
   ArrowRight,
   Boxes,
@@ -11,6 +10,7 @@ import {
   Users,
 } from "lucide-react";
 import type { DashboardHomeSummary } from "@/actions/dashboard-home-actions";
+import { DashboardWelcomeLogo } from "@/components/dashboard/dashboard-welcome-logo";
 import { DashboardContentCard } from "@/components/layout/dashboard-page-shell";
 import { cn } from "@/lib/utils";
 
@@ -73,9 +73,12 @@ function KpiCard({
 export function DashboardHomePanel({
   data,
   errorMessage,
+  logoUrl,
 }: {
   data: DashboardHomeSummary | null;
   errorMessage?: string | null;
+  /** Configurações → URL da logo, ou `NEXT_PUBLIC_BRAND_LOGO_URL` */
+  logoUrl?: string | null;
 }) {
   const counts = data?.counts ?? {
     products: 0,
@@ -106,16 +109,7 @@ export function DashboardHomePanel({
       {/* Marca + boas-vindas */}
       <DashboardContentCard className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-4">
-          <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-border/60 bg-muted/40">
-            <Image
-              src="/logo.jpeg"
-              alt="Pazini Engenharia"
-              fill
-              className="object-contain p-1.5"
-              sizes="64px"
-              priority
-            />
-          </div>
+          <DashboardWelcomeLogo logoUrl={logoUrl} alt="Logomarca" />
           <div className="min-w-0 space-y-1">
             <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <Sparkles className="h-4 w-4 shrink-0 text-[#FBB03B]" aria-hidden />

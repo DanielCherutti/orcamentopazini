@@ -103,7 +103,7 @@ bun run start      # Inicia servidor de produção
 bun run lint       # Executa linter
 ```
 
-Após o login, a rota **`/dashboard` (Início)** exibe um painel com contagens de produtos, grupos, orçamentos e clientes, atalhos para criar registros e uma lista dos orçamentos mais recentes com link direto para o workspace.
+Após o login, a rota **`/dashboard` (Início)** exibe um painel com contagens de produtos, grupos, orçamentos e clientes, atalhos para criar registros e uma lista dos orçamentos mais recentes com link direto para o workspace. A logo do cartão de boas-vindas usa **Configurações → URL da logo** (`company_logo_url`); opcionalmente `NEXT_PUBLIC_BRAND_LOGO_URL` no `.env`; se ambos vazios, cai em `/public/logo.jpeg`. URLs `http(s)` e `data:image/...` são exibidas com `<img>` para não depender de `remotePatterns` do Next.
 
 ## 📚 Padrões de Desenvolvimento
 
