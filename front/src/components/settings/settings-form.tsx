@@ -48,7 +48,11 @@ export function SettingsForm({ initialSettings }: { initialSettings: ProposalSet
             <Card>
                 <CardHeader>
                     <CardTitle>Identidade Visual</CardTitle>
-                    <CardDescription>Defina como sua marca aparece nas propostas.</CardDescription>
+                    <CardDescription>
+                        Defina como sua marca aparece nas propostas. A <strong>cor primária</strong> e a{" "}
+                        <strong>cor secundária</strong> também atualizam o painel interno, o menu lateral e a tela de
+                        login (após salvar).
+                    </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

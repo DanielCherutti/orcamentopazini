@@ -22,7 +22,11 @@ export function DashboardPageShell({
                 <header className="flex flex-col gap-5 border-b border-border/60 pb-7 sm:flex-row sm:items-end sm:justify-between">
                     <div className="min-w-0 space-y-2">
                         <div
-                            className="h-1 w-11 rounded-full bg-[#FBB03B] shadow-[0_0_14px_rgba(251,176,59,0.4)]"
+                            className="h-1 w-11 rounded-full"
+                            style={{
+                                backgroundColor: "var(--brand-secondary)",
+                                boxShadow: "0 0 14px rgb(var(--brand-secondary-rgb) / 0.4)",
+                            }}
                             aria-hidden
                         />
                         <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{title}</h1>

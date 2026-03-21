@@ -56,6 +56,11 @@
   /* Slightly off-white background */
   --foreground: oklch(0.145 0 0);
 
+  /* Detalhes de marca (sobrescritos em runtime por Configurações — ver brandingCSSProperties) */
+  --brand-secondary: #ea580c;
+  --brand-secondary-rgb: 234 88 12;
+  --primary-rgb: 30 58 138;
+
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);

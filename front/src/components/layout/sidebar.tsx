@@ -57,7 +57,8 @@ function NavItem({
                 "group flex items-center gap-3 rounded-lg text-sm transition-all duration-150",
                 nested ? "py-1.5 pl-3 pr-2 ml-2 border-l-2" : "px-3 py-2",
                 nested && !active && "border-transparent text-sidebar-foreground/65 hover:text-sidebar-foreground",
-                nested && active && "border-[#FBB03B] bg-sidebar-accent/60 text-sidebar-foreground font-medium",
+                nested && active &&
+                    "border-[color:var(--brand-secondary)] bg-sidebar-accent/60 text-sidebar-foreground font-medium",
                 !nested &&
                     (active
                         ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm ring-1 ring-white/10"
@@ -106,7 +107,13 @@ export function Sidebar({
         >
             {/* Marca */}
             <div className="shrink-0 border-b border-sidebar-border bg-gradient-to-br from-sidebar-accent/40 via-sidebar to-sidebar px-4 py-5">
-                <div className="mb-2 h-1 w-10 rounded-full bg-[#FBB03B] shadow-[0_0_12px_rgba(251,176,59,0.45)]" />
+                <div
+                    className="mb-2 h-1 w-10 rounded-full"
+                    style={{
+                        backgroundColor: "var(--brand-secondary)",
+                        boxShadow: "0 0 12px rgb(var(--brand-secondary-rgb) / 0.45)",
+                    }}
+                />
                 <h2 className="text-lg font-bold tracking-tight text-white">PAZINI</h2>
                 <p className="text-[11px] font-medium text-sidebar-foreground/55">Engenharia</p>
             </div>
@@ -212,7 +219,8 @@ export function Sidebar({
             <div className="shrink-0 border-t border-sidebar-border bg-sidebar-accent/25 p-3">
                 <div className="flex items-center gap-3 rounded-lg border border-sidebar-border/60 bg-sidebar/80 p-2.5 shadow-sm">
                     <div
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/90 to-primary text-[11px] font-bold text-primary-foreground shadow-inner ring-2 ring-[#FBB03B]/30"
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/90 to-primary text-[11px] font-bold text-primary-foreground shadow-inner"
+                        style={{ boxShadow: "0 0 0 2px rgb(var(--brand-secondary-rgb) / 0.35)" }}
                         aria-hidden
                     >
                         {initialsFromEmail(sessionEmail)}

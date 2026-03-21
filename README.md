@@ -103,6 +103,8 @@ bun run start      # Inicia servidor de produção
 bun run lint       # Executa linter
 ```
 
+O **login** fica na raiz **`/`** (título da aba “Entrar”). **Cores da interface** (primária e secundária) vêm de **Configurações da empresa** (`proposal_settings`); são aplicadas em variáveis CSS no layout autenticado e na página de login via leitura pública só de branding (`getPublicProposalBrandingAction`). Valores hex inválidos são ignorados e caem nos padrões (`#1e3a8a` / `#ea580c`). Logo no login: URL das configurações, depois `NEXT_PUBLIC_BRAND_LOGO_URL`, senão `/public/logo.jpeg`.
+
 Após o login, a rota **`/dashboard` (Início)** exibe um painel com contagens de produtos, grupos, orçamentos e clientes, atalhos para criar registros e uma lista dos orçamentos mais recentes com link direto para o workspace. A logo do cartão de boas-vindas usa **Configurações → URL da logo** (`company_logo_url`); opcionalmente `NEXT_PUBLIC_BRAND_LOGO_URL` no `.env`; se ambos vazios, cai em `/public/logo.jpeg`. URLs `http(s)` e `data:image/...` são exibidas com `<img>` para não depender de `remotePatterns` do Next.
 
 ## 📚 Padrões de Desenvolvimento

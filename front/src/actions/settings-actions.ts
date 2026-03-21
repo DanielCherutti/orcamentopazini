@@ -2,6 +2,11 @@
 
 import { Table } from "surrealdb";
 import { assertActionSession } from "@/actions/auth-actions";
+import {
+  BRAND_DEFAULT_PRIMARY,
+  BRAND_DEFAULT_SECONDARY,
+  normalizeHex,
+} from "@/lib/branding-theme";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { revalidatePath } from "next/cache";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
@@ -16,6 +21,77 @@ export interface ProposalSettings {
     secondary_color?: string;
 }
 
+/** Dados de marca legíveis sem sessão (apenas para tela de login / branding). */
+export type PublicProposalBranding = {
+  company_name: string;
+  company_logo_url?: string;
+  primary_color: string;
+  secondary_color: string;
+};
+
+const PROPOSAL_SETTINGS_DEFAULTS: ProposalSettings = {
+  company_name: "Pazini - Móveis Planejados",
+  introduction_text: `Prezado Cliente,
+
+É com satisfação que apresentamos nossa proposta comercial para execução do seu projeto de móveis planejados.
+
+Nossa proposta contempla materiais de altíssima qualidade, acabamento impecável e garantia estendida.`,
+  closing_text: `Termos Gerais:
+1. Validade da Proposta: 15 dias.
+2. Prazo de Entrega: 45 dias úteis após medição final.
+3. Garantia: 5 anos contra defeitos de fabricação.`,
+  primary_color: BRAND_DEFAULT_PRIMARY,
+  secondary_color: BRAND_DEFAULT_SECONDARY,
+};
+
+/**
+ * Cores e nome exibidos no login. Sem autenticação — apenas campos não sensíveis.
+ */
+export async function getPublicProposalBrandingAction(): Promise<PublicProposalBranding> {
+  try {
+    const db = await getDb();
+    const result = await db.query<
+      [
+        {
+          primary_color?: string;
+          secondary_color?: string;
+          company_name?: string;
+          company_logo_url?: string;
+        }[],
+      ]
+    >(
+      "SELECT primary_color, secondary_color, company_name, company_logo_url FROM proposal_settings LIMIT 1"
+    );
+    const row = result[0]?.[0];
+    const primary =
+      normalizeHex(row?.primary_color != null ? String(row.primary_color) : undefined) ??
+      BRAND_DEFAULT_PRIMARY;
+    const secondary =
+      normalizeHex(row?.secondary_color != null ? String(row.secondary_color) : undefined) ??
+      BRAND_DEFAULT_SECONDARY;
+    return {
+      company_name:
+        row?.company_name != null && String(row.company_name).trim() !== ""
+          ? String(row.company_name).trim()
+          : PROPOSAL_SETTINGS_DEFAULTS.company_name!,
+      company_logo_url:
+        row?.company_logo_url != null && String(row.company_logo_url).trim() !== ""
+          ? String(row.company_logo_url).trim()
+          : undefined,
+      primary_color: primary,
+      secondary_color: secondary,
+    };
+  } catch (e) {
+    console.error("getPublicProposalBrandingAction:", e);
+    if (isTokenExpiredError(e)) resetDb();
+    return {
+      company_name: PROPOSAL_SETTINGS_DEFAULTS.company_name!,
+      primary_color: BRAND_DEFAULT_PRIMARY,
+      secondary_color: BRAND_DEFAULT_SECONDARY,
+    };
+  }
+}
+
 export async function getProposalSettingsAction() {
     const auth = await assertActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
@@ -24,23 +100,7 @@ export async function getProposalSettingsAction() {
     try {
         const result = await db.query<[ProposalSettings[]]>("SELECT * FROM proposal_settings LIMIT 1");
 
-        // Dados Padrão (Fallback)
-        const defaultSettings: ProposalSettings = {
-            company_name: "Pazini - Móveis Planejados",
-            introduction_text: `Prezado Cliente,
-
-É com satisfação que apresentamos nossa proposta comercial para execução do seu projeto de móveis planejados.
-
-Nossa proposta contempla materiais de altíssima qualidade, acabamento impecável e garantia estendida.`,
-            closing_text: `Termos Gerais:
-1. Validade da Proposta: 15 dias.
-2. Prazo de Entrega: 45 dias úteis após medição final.
-3. Garantia: 5 anos contra defeitos de fabricação.`,
-            primary_color: "#1e3a8a", // blue-900
-            secondary_color: "#ea580c" // orange-600
-        };
-
-        const settings = result[0]?.[0] || defaultSettings;
+        const settings = result[0]?.[0] || { ...PROPOSAL_SETTINGS_DEFAULTS };
 
         // Serializar ID se existir
         if (settings.id) settings.id = String(settings.id);
@@ -73,6 +133,7 @@ export async function updateProposalSettingsAction(data: ProposalSettings) {
 
         revalidatePath("/settings");
         revalidatePath("/dashboard");
+        revalidatePath("/");
         return { success: true };
     } catch (e) {
         if (e instanceof InvalidRecordIdError) {

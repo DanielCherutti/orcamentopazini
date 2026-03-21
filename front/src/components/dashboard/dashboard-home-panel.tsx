@@ -112,7 +112,7 @@ export function DashboardHomePanel({
           <DashboardWelcomeLogo logoUrl={logoUrl} alt="Logomarca" />
           <div className="min-w-0 space-y-1">
             <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <Sparkles className="h-4 w-4 shrink-0 text-[#FBB03B]" aria-hidden />
+              <Sparkles className="h-4 w-4 shrink-0 text-[color:var(--brand-secondary)]" aria-hidden />
               Bem-vindo ao painel
             </p>
             <p className="max-w-md text-sm text-muted-foreground leading-relaxed">
