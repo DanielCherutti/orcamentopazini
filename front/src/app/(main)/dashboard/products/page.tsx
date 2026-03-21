@@ -1,17 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
+import { Plus } from "lucide-react";
+import { getProductsAction } from "@/actions/product-actions";
+import { Button } from "@/components/ui/button";
+import { SearchInput } from "@/components/products/search-input";
+import { SearchBadge } from "@/components/products/search-badge";
+import { ProductListSkeleton } from "@/components/products/product-list-skeleton";
+import { ProductsTable } from "@/components/products/products-table";
+import { DashboardContentCard, DashboardPageShell } from "@/components/layout/dashboard-page-shell";
 
 export const metadata: Metadata = {
     title: "Produtos",
 };
-import { getProductsAction } from "@/actions/product-actions";
-import { Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { SearchInput } from "@/components/products/search-input";
-import { SearchBadge } from "@/components/products/search-badge";
-import { Suspense } from "react";
-import { ProductListSkeleton } from "@/components/products/product-list-skeleton";
-import { ProductsTable } from "@/components/products/products-table";
 
 async function ProductsContent({
     searchParams,
@@ -62,30 +63,25 @@ export default async function ProductsPage({
     const params = await searchParams;
 
     return (
-        <div className="max-w-7xl mx-auto p-6 space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Catálogo de Produtos</h1>
-                    <p className="text-muted-foreground text-sm mt-1">
-                        Gerencie o catálogo de equipamentos e serviços de segurança
-                    </p>
-                </div>
-
-                <Button asChild className="rounded-sm">
+        <DashboardPageShell
+            title="Catálogo de produtos"
+            description="Equipamentos, serviços e itens usados nos orçamentos. Busque, ordene e mantenha preços atualizados."
+            action={
+                <Button asChild className="rounded-lg shadow-sm">
                     <Link href="/dashboard/products/new">
                         <Plus className="mr-2 h-4 w-4" />
-                        Adicionar Produto
+                        Novo produto
                     </Link>
                 </Button>
-            </div>
-
-            <div className="bg-card rounded-xl border border-border shadow-sm p-6 space-y-6">
+            }
+        >
+            <DashboardContentCard className="space-y-6">
                 <SearchInput />
 
                 <Suspense fallback={<ProductListSkeleton />}>
                     <ProductsContent searchParams={params} />
                 </Suspense>
-            </div>
-        </div>
+            </DashboardContentCard>
+        </DashboardPageShell>
     );
 }

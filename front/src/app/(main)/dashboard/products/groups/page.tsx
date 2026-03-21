@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { listProductGroupsAction, getProductGroupProductsAction } from "@/actions/product-group-actions";
 import { ProductGroupsTable } from "@/components/products/groups/product-groups-table";
+import { DashboardContentCard, DashboardPageShell } from "@/components/layout/dashboard-page-shell";
 
 export const metadata: Metadata = {
   title: "Grupos de Produtos",
@@ -23,25 +24,21 @@ export default async function ProductGroupsPage() {
   );
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Grupos de Produtos</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Gerencie os grupos para organizar o catálogo de produtos
-          </p>
-        </div>
-        <Button asChild className="rounded-sm">
+    <DashboardPageShell
+      title="Grupos de produtos"
+      description="Agrupe itens do catálogo para inserção rápida em orçamentos e escopo."
+      action={
+        <Button asChild className="rounded-lg shadow-sm">
           <Link href="/dashboard/products/groups/new">
             <Plus className="mr-2 h-4 w-4" />
-            Novo Grupo
+            Novo grupo
           </Link>
         </Button>
-      </div>
-
-      <div className="bg-card rounded-xl border border-border shadow-sm p-6">
+      }
+    >
+      <DashboardContentCard>
         <ProductGroupsTable groups={groups} productCounts={productCounts} />
-      </div>
-    </div>
+      </DashboardContentCard>
+    </DashboardPageShell>
   );
 }

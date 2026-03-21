@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { listCustomersAction } from "@/actions/client-actions";
 import { CustomersTable } from "@/components/clients/customers-table";
 import { CustomerSearchInput } from "@/components/clients/customer-search-input";
+import { DashboardContentCard, DashboardPageShell } from "@/components/layout/dashboard-page-shell";
 
 export const metadata: Metadata = {
     title: "Clientes",
@@ -65,30 +66,25 @@ export default async function CustomersPage({
     const params = await searchParams;
 
     return (
-        <div className="max-w-7xl mx-auto p-6 space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Clientes</h1>
-                    <p className="text-muted-foreground text-sm mt-1">
-                        Gerencie os clientes cadastrados
-                    </p>
-                </div>
-
-                <Button asChild className="rounded-sm">
+        <DashboardPageShell
+            title="Clientes"
+            description="Cadastro de empresas e contatos vinculados aos orçamentos."
+            action={
+                <Button asChild className="rounded-lg shadow-sm">
                     <Link href="/customers/new">
                         <Plus className="mr-2 h-4 w-4" />
-                        Novo Cliente
+                        Novo cliente
                     </Link>
                 </Button>
-            </div>
-
-            <div className="bg-card rounded-xl border border-border shadow-sm p-6 space-y-6">
+            }
+        >
+            <DashboardContentCard className="space-y-6">
                 <CustomerSearchInput defaultValue={params.query} />
 
                 <Suspense fallback={<CustomersSkeleton />}>
                     <CustomersContent searchParams={params} />
                 </Suspense>
-            </div>
-        </div>
+            </DashboardContentCard>
+        </DashboardPageShell>
     );
 }
