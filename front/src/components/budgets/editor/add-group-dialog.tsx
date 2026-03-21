@@ -11,7 +11,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "@/lib/toast";
 import { Layers, Search } from "lucide-react";
 import {
@@ -228,13 +227,13 @@ export function AddGroupDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Adicionar produtos de grupos</DialogTitle>
-        </DialogHeader>
+      <DialogContent className="flex max-h-[min(90vh,900px)] w-[calc(100%-2rem)] max-w-lg flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+        <div className="flex flex-col gap-3 border-b px-6 pb-3 pt-6 shrink-0">
+          <DialogHeader className="space-y-1.5 text-left">
+            <DialogTitle>Adicionar produtos de grupos</DialogTitle>
+          </DialogHeader>
 
-        <div className="space-y-3 flex-1 min-h-0 flex flex-col overflow-hidden">
-          <div className="relative shrink-0">
+          <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <Input
               placeholder="Buscar grupo por nome..."
@@ -243,7 +242,9 @@ export function AddGroupDialog({
               className="pl-9"
             />
           </div>
+        </div>
 
+        <div className="min-h-0 flex-1 px-6 py-3">
           {loading ? (
             <div className="py-8 text-center text-sm text-muted-foreground">Carregando grupos e produtos...</div>
           ) : filteredGroupsWithIdx.length === 0 ? (
@@ -251,7 +252,11 @@ export function AddGroupDialog({
               {search.trim() ? "Nenhum grupo encontrado com esse nome." : "Nenhum grupo com produtos cadastrados."}
             </div>
           ) : (
-            <ScrollArea className="flex-1 min-h-0 rounded-md border">
+            <div
+              className="max-h-[calc(90vh-14rem)] min-h-[8rem] overflow-y-auto overflow-x-hidden rounded-md border border-border overscroll-contain pr-1 [scrollbar-gutter:stable]"
+              role="region"
+              aria-label="Lista de grupos e produtos"
+            >
               <div className="p-2 space-y-4">
                 {filteredGroupsWithIdx.map(({ group, idx }) => {
                   const products = groupProducts[idx] ?? [];
@@ -337,11 +342,11 @@ export function AddGroupDialog({
                   );
                 })}
               </div>
-            </ScrollArea>
+            </div>
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0 gap-2 border-t px-6 py-4 sm:justify-end">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
