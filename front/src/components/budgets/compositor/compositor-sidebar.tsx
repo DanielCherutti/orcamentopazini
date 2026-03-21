@@ -17,14 +17,16 @@ import type { BudgetBlock, BlockType } from "@/types/budget-compositor-types";
 import { flattenTree } from "@/types/budget-compositor-types";
 import {
   DndContext,
+  DragOverlay,
   closestCenter,
   pointerWithin,
   PointerSensor,
   useSensor,
   useSensors,
   useDroppable,
+  useDndMonitor,
 } from "@dnd-kit/core";
-import type { CollisionDetection, DragEndEvent, DragStartEvent } from "@dnd-kit/core";
+import type { CollisionDetection, DragEndEvent, DragStartEvent, Modifier } from "@dnd-kit/core";
 import {
   SortableContext,
   useSortable,
@@ -38,6 +40,35 @@ import {
 const ROOT_KEY = "__root__";
 function pKey(id: string | null): string { return id ?? ROOT_KEY; }
 type ChildrenReg = Record<string, BudgetBlock[]>;
+
+/** Painel rolável da árvore (overflow-y-auto) — usado para compensar scroll com DragOverlay. */
+const compositorTreeScrollStore = {
+  el: null as HTMLElement | null,
+  startScrollTop: 0,
+};
+
+/**
+ * Com DragOverlay, o DndContext não soma `activeNodeScrollDelta` ao translate.
+ * Ao arrastar para cima, o autoscroll / scroll do painel altera `scrollTop` e o overlay
+ * fica visualmente “embaixo” do ponteiro; somamos o delta de scroll em Y.
+ */
+const compositorOverlayScrollCompensation: Modifier = ({ transform }) => {
+  const el = compositorTreeScrollStore.el;
+  if (!el) return transform;
+  const delta = el.scrollTop - compositorTreeScrollStore.startScrollTop;
+  if (delta === 0) return transform;
+  return { ...transform, y: transform.y + delta };
+};
+
+function CompositorTreeScrollCompensationBridge() {
+  useDndMonitor({
+    onDragStart() {
+      const el = compositorTreeScrollStore.el;
+      compositorTreeScrollStore.startScrollTop = el?.scrollTop ?? 0;
+    },
+  });
+  return null;
+}
 
 interface CompositorDndCtxValue {
   childrenReg: ChildrenReg;
@@ -152,6 +183,58 @@ function getAddOptions(parentType: string | null, hasScopeBlock: boolean): typeo
   if (parentType === "location") return ALL_OPTIONS.filter((o) => o.type === "section" || o.type === "text");
   // session (e qualquer outro contêiner futuro): session, location, text
   return ALL_OPTIONS.filter((o) => o.type !== "section" && o.type !== "scope");
+}
+
+/** Pré-visualização no portal: segue o ponteiro com o offset do clique (simétrico pra cima/baixo). */
+function SidebarDragPreview({
+  block,
+  selectedId,
+}: {
+  block: BudgetBlock | undefined;
+  selectedId: string | null;
+}) {
+  if (!block) return null;
+  const depth = block.depth;
+  const indentPx = depth * 12 + 8;
+  const isScope = block.type === "scope";
+  const isSelected = selectedId === block.id;
+  const isExpandable = (block.type === "session" || block.type === "location") && !isScope;
+
+  return (
+    <div
+      className={cn(
+        "pointer-events-none flex min-w-0 w-full cursor-grabbing items-center gap-1 rounded-md border py-1.5 pr-1 text-xs shadow-lg",
+        isSelected
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-border bg-card text-foreground"
+      )}
+      style={{ paddingLeft: `${indentPx}px` }}
+    >
+      <GripVertical className="h-3 w-3 shrink-0 opacity-70" />
+      {isExpandable ? (
+        <span className="shrink-0 opacity-50">
+          <ChevronRight className="h-3.5 w-3.5" />
+        </span>
+      ) : (
+        <span className={cn("shrink-0", isSelected ? "opacity-80" : "opacity-60")}>
+          {BLOCK_ICONS[block.type] ?? <FileText className="h-3.5 w-3.5" />}
+        </span>
+      )}
+      {block.number ? (
+        <span className={cn("shrink-0 font-mono text-xs", isSelected ? "opacity-80" : "opacity-70")}>
+          {block.number}.
+        </span>
+      ) : null}
+      <span
+        className={cn(
+          "min-w-0 flex-1 truncate text-xs font-medium leading-none",
+          (block.type === "session" || isScope) && "uppercase"
+        )}
+      >
+        {isScope ? "ESCOPO" : (block.label || `(${block.type})`)}
+      </span>
+    </div>
+  );
 }
 
 // ─── InlineAdder — expansível no próprio sidebar ──────────────────────────────
@@ -361,16 +444,18 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
     data: { parentId: block.parent_id ?? null },
     disabled: isReadOnly,
   });
-  // Só transladação: CSS.Transform inclui scale em alguns estados do sortable e o texto parece “aumentar” durante o arraste.
+  // Só transladação (sem scale). Com DragOverlay, o item ativo fica invisível na lista e não recebe translate — o overlay segue o ponteiro com offset correto.
   const tx = transform?.x ?? 0;
   const ty = transform?.y ?? 0;
   const dragStyle: CSSProperties = {
     transform:
-      tx === 0 && ty === 0
+      isDragging
         ? undefined
-        : `translate3d(${Math.round(tx)}px, ${Math.round(ty)}px, 0)`,
+        : tx === 0 && ty === 0
+          ? undefined
+          : `translate3d(${Math.round(tx)}px, ${Math.round(ty)}px, 0)`,
     transition: isDragging ? undefined : transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0 : 1,
   };
 
   const handleDelete = async (e: React.MouseEvent) => {
@@ -646,6 +731,11 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
     setActiveDragId(String(event.active.id));
   };
 
+  const overlayBlock = useMemo(() => {
+    if (!activeDragId) return undefined;
+    return flattenTree(roots).find((b) => b.id === activeDragId);
+  }, [activeDragId, roots]);
+
   return (
     <CompositorDndCtx.Provider value={{ childrenReg, activeDragId }}>
       <div className="w-64 shrink-0 flex flex-col border-r bg-card">
@@ -656,7 +746,12 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
         </div>
 
         {/* Árvore */}
-        <div className="flex-1 overflow-y-auto min-h-0">
+        <div
+          ref={(el) => {
+            compositorTreeScrollStore.el = el;
+          }}
+          className="flex-1 overflow-y-auto min-h-0"
+        >
           <nav className="p-1.5 space-y-0">
             {localRoots.length === 0 && !addingRootSession && (
               <p className="text-xs text-muted-foreground px-2 py-4 text-center">
@@ -670,6 +765,7 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
               onDragEnd={handleDragEnd}
               onDragCancel={() => setActiveDragId(null)}
             >
+              <CompositorTreeScrollCompensationBridge />
               <SortableContext items={localRoots.map((b) => b.id)} strategy={verticalListSortingStrategy}>
                 {localRoots.map((block) => (
                   <BlockTreeNode
@@ -687,6 +783,25 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
                   />
                 ))}
               </SortableContext>
+              {/*
+                Por padrão o DragOverlay usa width/height do activeNodeRect (linha + filhos + zonas "into").
+                Isso deixa uma caixa invisível enorme: o cartão fica “embaixo” do cursor. Sobrescrever
+                altura/largura para só a linha da pré-visualização.
+              */}
+              <DragOverlay
+                dropAnimation={null}
+                modifiers={[compositorOverlayScrollCompensation]}
+                style={{
+                  width: 244,
+                  height: "auto",
+                  minHeight: 0,
+                  boxSizing: "border-box",
+                }}
+              >
+                {activeDragId ? (
+                  <SidebarDragPreview block={overlayBlock} selectedId={selectedId} />
+                ) : null}
+              </DragOverlay>
             </DndContext>
           </nav>
         </div>
