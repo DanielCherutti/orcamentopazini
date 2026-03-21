@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import type { ProductGroup } from "@/actions/product-group-actions";
 import type { BudgetItem } from "@/types/budget-types";
-import { reorderSectionItemsAction } from "@/actions/budget-hierarchy-actions";
+import { reorderSectionItemsAction } from "@/actions/budget-hierarchy-section-items-actions";
 import { buildItemSegments, type ItemSegment } from "./budget-scope-utils";
 import { ScopeItemRow } from "./budget-scope-item-row";
 

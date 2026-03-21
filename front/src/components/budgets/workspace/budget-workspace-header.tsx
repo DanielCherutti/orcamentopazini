@@ -5,7 +5,7 @@ import { Budget } from "@/types/budget-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Save, Eye, Pencil } from "lucide-react";
-import { updateBudgetAction } from "@/actions/budget-core-actions";
+import { updateBudgetAction } from "@/actions/budget-core-write-actions";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { ClientSelector } from "./client-selector";

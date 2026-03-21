@@ -1,11 +1,17 @@
 "use client";
 
-import { useState, useEffect, useRef, createContext, useContext } from "react";
-import { ChevronRight, ChevronDown, MapPin, Layers, FileText, Plus, Trash2, FolderOpen, GripVertical, Map } from "lucide-react";
+import { useState, useEffect, useRef, createContext, useContext, useMemo } from "react";
+import { ChevronRight, ChevronDown, MapPin, Layers, FileText, Plus, Trash2, FolderOpen, GripVertical, Map as MapIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { addBlockAction, deleteBlockAction, reorderBlocksAction, updateBlockAction, moveBlockToParentAction } from "@/actions/budget-compositor-actions";
+import {
+    addBlockAction,
+    deleteBlockAction,
+    reorderBlocksAction,
+    updateBlockAction,
+    moveBlockToParentAction,
+} from "@/actions/budget-compositor-block-actions";
 import { toast } from "@/lib/toast";
 import type { BudgetBlock, BlockType } from "@/types/budget-compositor-types";
 import { flattenTree } from "@/types/budget-compositor-types";
@@ -18,7 +24,7 @@ import {
   useSensors,
   useDroppable,
 } from "@dnd-kit/core";
-import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
+import type { CollisionDetection, DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import {
   SortableContext,
   useSortable,
@@ -52,6 +58,46 @@ function buildChildrenReg(roots: BudgetBlock[]): ChildrenReg {
   return reg;
 }
 
+/**
+ * Árvore aninhada com vários SortableContext compartilhando um DndContext:
+ * sem filtro, o retângulo de colisão do pai inclui todos os filhos e o "over"
+ * vira um nó interno — reordenação na raiz (ex.: Escopo) parece "bugada".
+ * Só consideramos droppables com o mesmo parentId do item ativo; zonas `into:*`
+ * mantêm prioridade. `parentById` cobre quando o sortable não expõe `data` no droppable.
+ */
+function createCompositorTreeCollisionDetection(
+  parentById: Map<string, string | null>
+): CollisionDetection {
+  return (args) => {
+    const pointerAll = pointerWithin(args);
+    const intoHit = pointerAll.find((c) => String(c.id).startsWith("into:"));
+    if (intoHit) return [intoHit];
+
+    const activeId = String(args.active.id);
+    const activeParentRaw =
+      (args.active.data.current?.parentId as string | null | undefined) ??
+      parentById.get(activeId);
+    const activeParent = activeParentRaw ?? null;
+
+    const sameParentContainers = args.droppableContainers.filter((c) => {
+      const sid = String(c.id);
+      if (sid.startsWith("into:")) return false;
+      const fromData = c.data.current?.parentId as string | null | undefined;
+      const pRaw = fromData !== undefined ? fromData : parentById.get(sid);
+      return (pRaw ?? null) === activeParent;
+    });
+
+    if (sameParentContainers.length === 0) {
+      return closestCenter(args);
+    }
+
+    const restricted = { ...args, droppableContainers: sameParentContainers };
+    const ptr = pointerWithin(restricted);
+    if (ptr.length > 0) return ptr;
+    return closestCenter(restricted);
+  };
+}
+
 // ─── DroppableSessionInto ─────────────────────────────────────────────────────
 // Zona de drop dentro de uma sessão (para soltar como filho)
 
@@ -82,7 +128,7 @@ const BLOCK_ICONS: Record<string, React.ReactNode> = {
   location: <MapPin className="h-3.5 w-3.5 shrink-0" />,
   section:  <Layers className="h-3.5 w-3.5 shrink-0" />,
   text:     <FileText className="h-3.5 w-3.5 shrink-0" />,
-  scope:    <Map className="h-3.5 w-3.5 shrink-0 text-primary" />,
+  scope:    <MapIcon className="h-3.5 w-3.5 shrink-0 text-primary" />,
 };
 
 // Opções disponíveis por tipo de pai
@@ -314,13 +360,12 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: block.id,
     data: { parentId: block.parent_id ?? null },
-    // Scope é fixo — não pode ser arrastado
-    disabled: isScope,
+    disabled: isReadOnly,
   });
   const dragStyle = {
     transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
+    transition: isDragging ? undefined : transition,
+    opacity: isDragging ? 0.5 : 1,
   };
 
   const handleDelete = async (e: React.MouseEvent) => {
@@ -347,8 +392,8 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
         style={{ paddingLeft: `${indentPx}px` }}
         onClick={() => onSelect(block)}
       >
-        {/* Handle de drag — oculto em isReadOnly e scope */}
-        {!isReadOnly && !isScope && (
+        {/* Handle de drag — oculto em isReadOnly (Escopo reordena na raiz como os demais) */}
+        {!isReadOnly && (
           <div
             {...listeners}
             {...attributes}
@@ -516,8 +561,16 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
   const localRoots = childrenReg[ROOT_KEY] ?? [];
   const hasScopeBlock = localRoots.some((b) => b.type === "scope");
 
+  const collisionDetection = useMemo(() => {
+    const map = new Map<string, string | null>();
+    for (const b of flattenTree(roots)) {
+      map.set(b.id, b.parent_id ?? null);
+    }
+    return createCompositorTreeCollisionDetection(map);
+  }, [roots]);
+
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -527,12 +580,15 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
 
     const overId = String(over.id);
 
-    // Busca o bloco arrastado para checar se é scope
     const activeBlock = flattenTree(roots).find((b) => b.id === String(active.id));
-    if (activeBlock?.type === "scope") return; // scope não pode ser movido
 
     // Drop dentro de uma sessão (zona "into:")
     if (overId.startsWith("into:")) {
+      // Escopo só existe na raiz — não pode virar filho de sessão
+      if (activeBlock?.type === "scope") {
+        toast.error("O bloco Escopo só pode ser reordenado entre os itens da raiz.");
+        return;
+      }
       const targetParentId = overId.slice(5);
       // Não permite dropar dentro do scope
       const targetBlock = flattenTree(roots).find((b) => b.id === targetParentId);
@@ -549,6 +605,11 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
 
     const activeParentId: string | null = (active.data.current?.parentId as string | null) ?? null;
     const overParentId: string | null = (over.data.current?.parentId as string | null) ?? null;
+
+    if (activeBlock?.type === "scope" && overParentId !== null) {
+      toast.error("O bloco Escopo só pode ser reordenado entre os itens da raiz.");
+      return;
+    }
 
     if (activeParentId === overParentId) {
       // Reordenar dentro do mesmo pai
@@ -596,12 +657,7 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
             )}
             <DndContext
               sensors={sensors}
-              collisionDetection={(args) => {
-                const ptr = pointerWithin(args);
-                const intoHit = ptr.find((c) => String(c.id).startsWith("into:"));
-                if (intoHit) return [intoHit];
-                return ptr.length ? ptr : closestCenter(args);
-              }}
+              collisionDetection={collisionDetection}
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
               onDragCancel={() => setActiveDragId(null)}

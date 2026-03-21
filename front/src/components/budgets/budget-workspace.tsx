@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, createContext, useContext } from "react";
-import { Info, FileText, Map, Printer } from "lucide-react";
+import { Info, FileText, Map as MapIcon, Printer } from "lucide-react";
 import { Budget } from "@/types/budget-types";
 import { BudgetTreeV2 } from "./editor/budget-tree-v2";
 import { BudgetCompositor } from "./compositor/budget-compositor";
@@ -16,7 +16,7 @@ import { WorkspaceContext, type ActiveTab } from "./workspace-context";
 
 const TABS: { id: ActiveTab; label: string; icon: React.ReactNode }[] = [
     { id: 'budget',  label: 'Orçamento', icon: <FileText className="h-3.5 w-3.5" /> },
-    { id: 'scope',   label: 'Escopo',    icon: <Map className="h-3.5 w-3.5" /> },
+    { id: 'scope',   label: 'Escopo',    icon: <MapIcon className="h-3.5 w-3.5" /> },
     { id: 'print',   label: 'Impressão', icon: <Printer className="h-3.5 w-3.5" /> },
 ];
 

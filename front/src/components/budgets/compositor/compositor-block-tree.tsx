@@ -2,7 +2,7 @@
 
 import type { ComponentType, RefObject } from "react";
 import { useEffect, useState } from "react";
-import { FileText, Map, ArrowRight, Plus } from "lucide-react";
+import { FileText, Map as MapIcon, ArrowRight, Plus } from "lucide-react";
 import {
     DndContext,
     PointerSensor,
@@ -30,7 +30,7 @@ import {
     addGroupToBlockAction,
     deleteItemFromBlockAction,
     reorderItemsInBlockAction,
-} from "@/actions/budget-compositor-actions";
+} from "@/actions/budget-compositor-block-items-actions";
 import { listProductGroupsAction, type ProductGroup } from "@/actions/product-group-actions";
 import { deleteBudgetImage } from "@/actions/budget-annotations";
 import { getScopeStatsAction } from "@/actions/budget-scope-actions";
@@ -525,7 +525,7 @@ function ScopeRenderer({ block, budgetId }: CompositorRendererProps) {
             className="rounded-lg border-2 border-dashed border-primary/30 bg-primary/5 p-5 space-y-3"
         >
             <div className="flex items-center gap-2">
-                <Map className="h-5 w-5 text-primary" />
+                <MapIcon className="h-5 w-5 text-primary" />
                 <span className="font-bold text-sm text-primary uppercase tracking-wide">
                     ESCOPO
                 </span>

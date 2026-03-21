@@ -19,7 +19,7 @@ import { BudgetItem } from "@/types/budget-types";
 import { Toolbar } from "./toolbar";
 import { CatalogDock } from "./catalog-dock";
 import { toast } from "@/lib/toast";
-import { addItemAction } from "@/actions/budget-hierarchy-actions";
+import { addItemAction } from "@/actions/budget-hierarchy-section-items-actions";
 import { Product } from "@/actions/product-actions";
 import type { ProductGroup } from "@/actions/product-group-actions";
 import Konva from "konva";

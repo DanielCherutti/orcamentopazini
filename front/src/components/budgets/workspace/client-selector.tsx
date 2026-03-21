@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { searchClientsAction, getCustomerAction } from "@/actions/client-actions";
-import { updateBudgetAction } from "@/actions/budget-core-actions";
+import { updateBudgetAction } from "@/actions/budget-core-write-actions";
 import { cn } from "@/lib/utils";
 import type { Client } from "@/actions/client-actions";
 

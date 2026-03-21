@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, Map, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Loader2, Map as MapIcon, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { getLocationsAction, type ScopeLocation } from "@/actions/budget-scope-actions";
 import { ScopeSidebar } from "./budget-scope-sidebar";
 import { LocationDetail } from "./budget-scope-location-detail";
@@ -24,7 +24,7 @@ export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) 
     }, [budgetId]);
 
     const loadScopeNumber = useCallback(async () => {
-        const { getCompositorTreeAction } = await import("@/actions/budget-compositor-actions");
+        const { getCompositorTreeAction } = await import("@/actions/budget-compositor-tree-actions");
         const { buildTree } = await import("@/types/budget-compositor-types");
         const res = await getCompositorTreeAction(budgetId);
         if (res.success && res.blocks) {
@@ -90,7 +90,7 @@ export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) 
                 <div className="flex-1 overflow-y-auto p-6">
                     {!selected ? (
                         <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
-                            <Map className="h-12 w-12 mb-4 opacity-20" />
+                            <MapIcon className="h-12 w-12 mb-4 opacity-20" />
                             <p className="text-sm">Selecione um local ou adicione um novo para começar</p>
                         </div>
                     ) : selected.type === "location" ? (

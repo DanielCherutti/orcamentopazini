@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Map, Layers, ChevronRight, Copy, Trash2, Pencil } from "lucide-react";
+import { Map as MapIcon, Layers, ChevronRight, Copy, Trash2, Pencil } from "lucide-react";
 import {
     Dialog,
     DialogContent,
@@ -19,12 +19,12 @@ import { BudgetImageGallery } from "@/components/budgets/budget-image-gallery";
 import { BudgetPhotoAnnotatorDialog } from "@/components/budgets/budget-photo-annotator-dialog";
 import type { BudgetImage, BudgetItem } from "@/types/budget-types";
 import type { ScopeLocation } from "@/actions/budget-scope-actions";
+import { getItemsBySectionAction } from "@/actions/budget-hierarchy-section-items-actions";
 import {
     updateLocationAction,
     deleteLocationAction,
     duplicateLocationAction,
-    getItemsBySectionAction,
-} from "@/actions/budget-hierarchy-actions";
+} from "@/actions/budget-hierarchy-scope-structure-actions";
 import { getBudgetImagesByLocation, deleteBudgetImage } from "@/actions/budget-annotations";
 
 interface LocationDetailProps {
@@ -114,7 +114,7 @@ export function LocationDetail({
     return (
         <div className="space-y-6 bg-primary/[0.03] rounded-lg p-5 border border-primary/20 shadow-sm">
             <div className="flex items-center gap-2 pb-3 border-b-2 border-primary/50">
-                <Map className="h-5 w-5 text-primary shrink-0" />
+                <MapIcon className="h-5 w-5 text-primary shrink-0" />
                 {editingName && !isReadOnly ? (
                     <input
                         autoFocus

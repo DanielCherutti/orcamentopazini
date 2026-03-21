@@ -31,7 +31,7 @@ pazini/
 │   ├── src/
 │   │   ├── app/            # Pages (App Router)
 │   │   ├── components/     # Componentes React (ex.: budgets/scope/*, budgets/compositor/*, annotator/* modular)
-│   │   ├── actions/        # Server Actions
+│   │   ├── actions/        # Server Actions (orçamentos: módulos `budget-*-actions.ts`; em `"use client"` importar o arquivo onde a action está definida, não agregadores só com reexport)
 │   │   └── lib/            # Utilitários
 │   └── public/             # Arquivos estáticos
 ├── .agent/                  # Configuração Antigravity

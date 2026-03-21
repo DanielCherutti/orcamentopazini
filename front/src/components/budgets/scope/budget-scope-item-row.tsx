@@ -18,7 +18,7 @@ import {
     updateItemQuantityAction,
     updateItemGroupInSectionAction,
     deleteItemAction,
-} from "@/actions/budget-hierarchy-actions";
+} from "@/actions/budget-hierarchy-section-items-actions";
 import { formatCurrency, NO_GROUP_VALUE } from "./budget-scope-utils";
 
 export function ScopeItemRow({

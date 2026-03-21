@@ -91,15 +91,19 @@ ALTO
 - Impacto:
   - Manutenção e revisão continuam mais seguras com módulos coesos.
 
-8) Actions muito grandes e com múltiplas responsabilidades
-- Evidência:
-  - src/actions/budget-hierarchy-actions.ts (618 linhas)
-  - src/actions/budget-core-actions.ts (421 linhas)
-  - src/actions/budget-compositor-actions.ts (414 linhas)
-- Problema:
-  - Mistura de validação, persistência, regra de negócio e revalidação.
+8) Actions muito grandes e com múltiplas responsabilidades  [MITIGADO (modularização) em 21/03/2026]
+- Evidência (histórico):
+  - Monolitos em budget-hierarchy / budget-core / budget-compositor (centenas de linhas cada).
+- Correção:
+  - Hierarquia (escopo legado): `budget-hierarchy-section-items-actions.ts`, `budget-hierarchy-scope-structure-actions.ts`, helpers em `budget-hierarchy-helpers.ts`.
+  - Core: `budget-core-read-actions.ts`, `budget-core-write-actions.ts`, `budget-core-duplicate-actions.ts`, `budget-core-duplicate-internals.ts`.
+  - Compositor: `budget-compositor-tree-actions.ts`, `budget-compositor-block-actions.ts`, `budget-compositor-block-items-actions.ts`.
+  - Agregador servidor-only: `budget-actions.ts` reexporta o conjunto usado pelas rotas.
+  - **Client Components** importam diretamente o arquivo onde a action está definida (`"use server"`); barrels de reexport quebravam o bundle (Turbopack).
+- Problema (se regredir):
+  - Reunir de novo CRUD + regras + revalidação num único arquivo; ou importar actions a partir de barrels só com reexport para o cliente.
 - Impacto:
-  - Alto acoplamento e maior risco em mudanças.
+  - Mudanças ficam localizadas; risco de regressão no build por boundary cliente/servidor reduzido.
 
 9) Acoplamento elevado entre camadas (UI <-> dados)
 - Evidência:
@@ -150,7 +154,7 @@ MÉDIO
 - Evidência:
   - console.log em src/lib/surreal.ts, src/lib/surreal-schemas.ts,
     src/components/budgets/workspace/budget-data-section.tsx,
-    src/actions/budget-core-actions.ts.
+    src/actions/budget-core-read-actions.ts (e demais módulos budget-core-*).
 - Problema:
   - Debug misturado ao fluxo normal da aplicação.
 - Impacto:

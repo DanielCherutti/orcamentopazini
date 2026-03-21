@@ -20,12 +20,12 @@ import { BudgetPhotoAnnotatorDialog } from "@/components/budgets/budget-photo-an
 import type { BudgetImage, BudgetItem } from "@/types/budget-types";
 import type { ScopeLocation, ScopeSection } from "@/actions/budget-scope-actions";
 import type { ProductGroup } from "@/actions/product-group-actions";
+import { getItemsBySectionAction } from "@/actions/budget-hierarchy-section-items-actions";
 import {
-    getItemsBySectionAction,
     updateSectionAction,
     deleteSectionAction,
     duplicateSectionAction,
-} from "@/actions/budget-hierarchy-actions";
+} from "@/actions/budget-hierarchy-scope-structure-actions";
 import { listProductGroupsAction } from "@/actions/product-group-actions";
 import { getBudgetImagesBySection, deleteBudgetImage } from "@/actions/budget-annotations";
 import { formatCurrency } from "./budget-scope-utils";

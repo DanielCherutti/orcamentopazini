@@ -7,7 +7,7 @@ import { toast } from "@/lib/toast";
 import { ProductSelector } from "@/components/products/product-selector";
 import { AddGroupDialog } from "@/components/budgets/editor/add-group-dialog";
 import type { Product } from "@/actions/product-actions";
-import { addItemAction, addGroupToSectionAction } from "@/actions/budget-hierarchy-actions";
+import { addItemAction, addGroupToSectionAction } from "@/actions/budget-hierarchy-section-items-actions";
 
 export function ScopeItemCreator({
     sectionId,

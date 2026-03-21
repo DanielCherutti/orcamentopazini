@@ -6,7 +6,7 @@ import { ProductSelector } from "@/components/products/product-selector";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/lib/toast";
-import { addItemToBlockAction } from "@/actions/budget-compositor-actions";
+import { addItemToBlockAction } from "@/actions/budget-compositor-block-items-actions";
 import type { Product } from "@/actions/product-actions";
 
 interface CompositorItemCreatorProps {

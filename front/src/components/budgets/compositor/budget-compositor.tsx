@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { CompositorSidebar } from "./compositor-sidebar";
 import { CompositorContent } from "./compositor-content";
-import { getCompositorTreeAction } from "@/actions/budget-compositor-actions";
+import { getCompositorTreeAction } from "@/actions/budget-compositor-tree-actions";
 import { buildTree } from "@/types/budget-compositor-types";
 import type { BudgetBlock, CompositorTree } from "@/types/budget-compositor-types";
 import type { BudgetItem, BudgetImage } from "@/types/budget-types";

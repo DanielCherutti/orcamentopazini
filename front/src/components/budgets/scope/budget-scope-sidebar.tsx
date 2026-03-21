@@ -7,7 +7,7 @@ import {
     Copy,
     ChevronRight,
     ChevronDown,
-    Map,
+    Map as MapIcon,
     Layers,
     GripVertical,
 } from "lucide-react";
@@ -44,7 +44,7 @@ import {
     duplicateLocationAction,
     reorderSectionsAction,
     moveSectionAction,
-} from "@/actions/budget-hierarchy-actions";
+} from "@/actions/budget-hierarchy-scope-structure-actions";
 import type { Selection } from "./budget-scope-types";
 
 interface ScopeSidebarProps {
@@ -570,7 +570,7 @@ function LocationNode({
                         <ChevronRight className="h-3.5 w-3.5" />
                     )}
                 </button>
-                <Map className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                <MapIcon className="h-3.5 w-3.5 shrink-0 opacity-60" />
                 {scopeNumber && (
                     <span className="shrink-0 text-xs font-mono opacity-40">
                         {scopeNumber}.{locIndex}.

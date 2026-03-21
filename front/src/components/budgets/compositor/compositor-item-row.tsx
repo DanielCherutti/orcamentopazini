@@ -16,7 +16,7 @@ import { toast } from "@/lib/toast";
 import {
     updateItemGroupInBlockAction,
     updateItemQuantityInBlockAction,
-} from "@/actions/budget-compositor-actions";
+} from "@/actions/budget-compositor-block-items-actions";
 import type { ProductGroup } from "@/actions/product-group-actions";
 import type { BudgetItem } from "@/types/budget-types";
 import { formatCurrency, NO_GROUP_VALUE } from "./compositor-content-utils";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { updateBlockAction } from "@/actions/budget-compositor-actions";
+import { updateBlockAction } from "@/actions/budget-compositor-block-actions";
 import type { BudgetBlock } from "@/types/budget-compositor-types";
 import { toast } from "@/lib/toast";
 
