@@ -32,6 +32,7 @@ pazini/
 │   │   ├── app/            # Pages (App Router)
 │   │   ├── components/     # Componentes React (ex.: budgets/scope/*, budgets/compositor/*, annotator/* modular)
 │   │   ├── actions/        # Server Actions (orçamentos: módulos `budget-*-actions.ts`; em `"use client"` importar o arquivo onde a action está definida, não agregadores só com reexport)
+│   │   ├── data/           # Dados estáticos versionados (ex.: novidades do login)
 │   │   └── lib/            # Utilitários
 │   └── public/             # Arquivos estáticos
 ├── .agent/                  # Configuração Antigravity
@@ -55,6 +56,7 @@ Este projeto segue **Spec Driven Development**:
 - **`02-listing-ui-pattern.spec.md`** - Padrão de telas de listagem
 - **`20260127231000001-product-management.spec.md`** - Gestão de produtos
 - **`20260321143000000-dashboard-inicio-hub.spec.md`** - Painel da página **Início** (`/dashboard`): indicadores, atalhos e orçamentos recentes
+- **`20260321160000000-login-novidades.spec.md`** - Card de **novidades** na tela de login (`/`); conteúdo em `front/src/data/login-highlights.ts`
 
 ## 🛠️ Como Usar
 
@@ -106,6 +108,23 @@ bun run lint       # Executa linter
 O **login** fica na raiz **`/`** (título da aba “Entrar”). **Cores da interface** (primária e secundária) vêm de **Configurações da empresa** (`proposal_settings`); são aplicadas em variáveis CSS no layout autenticado e na página de login via leitura pública só de branding (`getPublicProposalBrandingAction`). Valores hex inválidos são ignorados e caem nos padrões (`#1e3a8a` / `#ea580c`). Logo no login: URL das configurações, depois `NEXT_PUBLIC_BRAND_LOGO_URL`, senão `/public/logo.jpeg`.
 
 Após o login, a rota **`/dashboard` (Início)** exibe um painel com contagens de produtos, grupos, orçamentos e clientes, atalhos para criar registros e uma lista dos orçamentos mais recentes com link direto para o workspace. A logo do cartão de boas-vindas usa **Configurações → URL da logo** (`company_logo_url`); opcionalmente `NEXT_PUBLIC_BRAND_LOGO_URL` no `.env`; se ambos vazios, cai em `/public/logo.jpeg`. URLs `http(s)` e `data:image/...` são exibidas com `<img>` para não depender de `remotePatterns` do Next.
+
+### Novidades no login (card ao lado do formulário)
+
+O conteúdo **não vem do banco** nem da tela de Configurações: é **código versionado**, para você publicar novidades a cada release sem UI extra.
+
+1. **Arquivo:** edite `front/src/data/login-highlights.ts`.
+2. **Lista principal:** o array `loginHighlights` — cada item pode ter:
+   - **`title`** (obrigatório): título curto.
+   - **`description`** (opcional): uma ou duas frases para o usuário.
+   - **`kind`** (opcional): `"feature"` (selo “Novo”), `"improvement"` (padrão, “Melhoria”) ou `"fix"` (“Correção”).
+   - **`date`** (opcional): string `YYYY-MM-DD`; aparece formatada em pt-BR.
+3. **Título e subtítulo do bloco:** constantes `LOGIN_HIGHLIGHTS_TITLE` e `LOGIN_HIGHLIGHTS_SUBTITLE` no mesmo arquivo.
+4. **Ordem:** coloque o que é mais recente **no topo** do array (a lista é exibida nessa ordem).
+5. **Ocultar o card:** use `export const loginHighlights: LoginHighlight[] = [];` — o componente não renderiza nada.
+6. **Publicar:** commit + deploy (ou `bun run build` / pipeline habitual). Não é necessário reiniciar só por mudar texto em dev: o hot reload atualiza.
+
+Spec de referência: `specs/20260321160000000-login-novidades.spec.md`.
 
 ## 📚 Padrões de Desenvolvimento
 

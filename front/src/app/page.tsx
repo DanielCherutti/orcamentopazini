@@ -5,6 +5,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LoginHighlightsCard } from "@/components/auth/login-highlights-card";
 import { DashboardWelcomeLogo } from "@/components/dashboard/dashboard-welcome-logo";
 import { brandingCSSProperties } from "@/lib/branding-theme";
 import { AlertCircle, Lock, Mail } from "lucide-react";
@@ -46,7 +47,8 @@ export default async function LoginPage({
             />
 
             <main className="relative z-10 flex min-h-dvh flex-col items-center justify-center px-4 py-10 sm:px-6">
-                <div className="w-full max-w-[440px] space-y-8">
+                <div className="grid w-full max-w-5xl grid-cols-1 items-start gap-10 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] xl:max-w-6xl">
+                    <div className="mx-auto w-full max-w-[440px] space-y-8 lg:mx-0">
                     <div
                         className="rounded-2xl border border-border/80 bg-card/95 p-8 shadow-[0_8px_40px_-12px_rgb(var(--primary-rgb)/0.18)] ring-1 ring-black/[0.04] backdrop-blur-sm dark:bg-card/90 dark:ring-white/[0.06] sm:p-10"
                     >
@@ -177,6 +179,9 @@ export default async function LoginPage({
                     <p className="text-center text-xs text-muted-foreground text-balance">
                         {branding.company_name} · Acesso restrito a usuários autorizados
                     </p>
+                    </div>
+
+                    <LoginHighlightsCard className="mx-auto w-full max-w-[440px] lg:sticky lg:top-8 lg:mx-0 lg:max-w-none" />
                 </div>
             </main>
         </div>
