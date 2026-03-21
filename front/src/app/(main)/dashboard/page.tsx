@@ -1,12 +1,41 @@
-export default function DashboardHomePage() {
-  return (
-    <div className="flex items-center justify-center" style={{ height: "calc(100vh - 4rem)" }}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/logo.jpeg"
-        alt="Pazini Engenharia"
-        className="max-w-full max-h-full object-contain"
-      />
-    </div>
-  );
+import type { Metadata } from "next";
+import { getDashboardHomeSummaryAction } from "@/actions/dashboard-home-actions";
+import { getProposalSettingsAction } from "@/actions/settings-actions";
+import { DashboardHomePanel } from "@/components/dashboard/dashboard-home-panel";
+import { DashboardPageShell } from "@/components/layout/dashboard-page-shell";
+
+export const metadata: Metadata = {
+    title: "Início",
+};
+
+function resolveDashboardLogoUrl(settingsLogo: string | undefined | null): string | null {
+    const fromSettings = typeof settingsLogo === "string" ? settingsLogo.trim() : "";
+    if (fromSettings) return fromSettings;
+    const fromEnv = process.env.NEXT_PUBLIC_BRAND_LOGO_URL?.trim();
+    if (fromEnv) return fromEnv;
+    return null;
+}
+
+export default async function DashboardHomePage() {
+    const [summary, settings] = await Promise.all([
+        getDashboardHomeSummaryAction(),
+        getProposalSettingsAction(),
+    ]);
+
+    const logoUrl = resolveDashboardLogoUrl(
+        settings.success ? settings.data?.company_logo_url : null
+    );
+
+    return (
+        <DashboardPageShell
+            title="Início"
+            description="Resumo do cadastro e acesso rápido à operação do dia a dia."
+        >
+            <DashboardHomePanel
+                data={summary.success ? summary.data ?? null : null}
+                errorMessage={summary.success ? null : summary.error}
+                logoUrl={logoUrl}
+            />
+        </DashboardPageShell>
+    );
 }

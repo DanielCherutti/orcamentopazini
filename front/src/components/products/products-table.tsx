@@ -126,15 +126,15 @@ export function ProductsTable({ initialProducts, initialMeta }: ProductsTablePro
             )}
 
             {/* Desktop Table */}
-            <div className="hidden md:block rounded-md border border-border overflow-hidden">
+            <div className="hidden md:block overflow-hidden rounded-xl border border-border/80 shadow-sm">
                 <table className="w-full text-sm">
-                    <thead className="bg-muted/30 border-b border-border">
+                    <thead className="border-b border-border bg-gradient-to-r from-primary/[0.08] via-muted/60 to-muted/40">
                         <tr>
-                            <th className="h-10 px-4 text-left font-medium text-muted-foreground w-[64px]">
-                                Imagem
+                            <th className="h-11 w-16 px-4 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Foto
                             </th>
                             <th
-                                className="h-10 px-4 text-left font-medium text-muted-foreground w-[120px] cursor-pointer hover:bg-muted/50 transition-colors group"
+                                className="h-11 w-[120px] cursor-pointer px-4 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.04] group"
                                 onClick={() => handleSort("code")}
                             >
                                 <div className="flex items-center">
@@ -143,7 +143,7 @@ export function ProductsTable({ initialProducts, initialMeta }: ProductsTablePro
                                 </div>
                             </th>
                             <th
-                                className="h-10 px-4 text-left font-medium text-muted-foreground cursor-pointer hover:bg-muted/50 transition-colors group"
+                                className="h-11 cursor-pointer px-4 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.04] group"
                                 onClick={() => handleSort("description")}
                             >
                                 <div className="flex items-center">
@@ -152,33 +152,33 @@ export function ProductsTable({ initialProducts, initialMeta }: ProductsTablePro
                                 </div>
                             </th>
                             <th
-                                className="h-10 px-4 text-center font-medium text-muted-foreground w-[80px] cursor-pointer hover:bg-muted/50 transition-colors group"
+                                className="h-11 w-[88px] cursor-pointer px-4 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.04] group"
                                 onClick={() => handleSort("unit")}
                             >
-                                <div className="flex items-center justify-center">
+                                <div className="flex items-center justify-center whitespace-nowrap">
                                     Unidade
                                     {getSortIcon("unit")}
                                 </div>
                             </th>
                             <th
-                                className="h-10 px-4 text-left font-medium text-muted-foreground w-[120px] cursor-pointer hover:bg-muted/50 transition-colors group"
+                                className="h-11 min-w-[7.5rem] cursor-pointer px-4 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.04] group"
                                 onClick={() => handleSort("equipmentPrice")}
                             >
-                                <div className="flex items-center">
-                                    Preço Equip.
+                                <div className="flex items-center whitespace-nowrap">
+                                    Preço equip.
                                     {getSortIcon("equipmentPrice")}
                                 </div>
                             </th>
                             <th
-                                className="h-10 px-4 text-left font-medium text-muted-foreground w-[120px] cursor-pointer hover:bg-muted/50 transition-colors group"
+                                className="h-11 min-w-[7.5rem] cursor-pointer px-4 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.04] group"
                                 onClick={() => handleSort("assemblyPrice")}
                             >
-                                <div className="flex items-center">
-                                    Preço Mont.
+                                <div className="flex items-center whitespace-nowrap">
+                                    Preço mont.
                                     {getSortIcon("assemblyPrice")}
                                 </div>
                             </th>
-                            <th className="h-10 px-4 text-right font-medium text-muted-foreground w-[100px]">
+                            <th className="h-11 w-[88px] px-4 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                 Ações
                             </th>
                         </tr>
@@ -188,7 +188,7 @@ export function ProductsTable({ initialProducts, initialMeta }: ProductsTablePro
                             products.map((product) => (
                                 <tr
                                     key={product.id}
-                                    className="border-b border-border hover:bg-muted/20 transition-colors"
+                                    className="border-b border-border/70 transition-colors last:border-0 hover:bg-primary/[0.03]"
                                 >
                                     <td className="p-4">
                                         {product.imageUrl ? (
@@ -241,7 +241,7 @@ export function ProductsTable({ initialProducts, initialMeta }: ProductsTablePro
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                                <td colSpan={7} className="p-12 text-center text-muted-foreground">
                                     {query
                                         ? `Nenhum produto encontrado para "${query}"`
                                         : "Nenhum produto cadastrado"}
@@ -262,7 +262,7 @@ export function ProductsTable({ initialProducts, initialMeta }: ProductsTablePro
                         />
                     ))
                 ) : (
-                    <div className="p-8 text-center text-muted-foreground border border-border rounded-sm">
+                    <div className="rounded-xl border border-dashed border-border/80 bg-muted/20 p-10 text-center text-sm text-muted-foreground">
                         {query
                             ? `Nenhum produto encontrado para "${query}"`
                             : "Nenhum produto cadastrado"}
@@ -272,7 +272,7 @@ export function ProductsTable({ initialProducts, initialMeta }: ProductsTablePro
 
             {/* Pagination Controls */}
             {products && products.length > 0 && (
-                <div className="flex flex-col gap-4 pt-4 border-t border-border">
+                <div className="flex flex-col gap-4 border-t border-border/70 pt-6">
                     {/* Record Info & Items Selector */}
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <p className="text-sm text-muted-foreground font-medium">

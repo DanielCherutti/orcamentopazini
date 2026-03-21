@@ -23,12 +23,12 @@ export function SearchInput() {
     }, 300);
 
     return (
-        <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+        <div className="relative max-w-xl">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
                 type="search"
                 placeholder="Buscar por código ou descrição..."
-                className="pl-9 bg-muted/50 w-full"
+                className="h-11 w-full rounded-xl border-border/80 bg-muted/40 pl-10 shadow-inner transition-shadow focus-visible:bg-background focus-visible:ring-2 focus-visible:ring-primary/25"
                 onChange={(e) => handleSearch(e.target.value)}
                 defaultValue={searchParams.get("query")?.toString()}
             />

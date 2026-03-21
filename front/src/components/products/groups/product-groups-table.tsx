@@ -59,31 +59,39 @@ export function ProductGroupsTable({ groups, productCounts }: ProductGroupsTable
 
   if (groups.length === 0) {
     return (
-      <div className="p-8 text-center text-muted-foreground border border-border rounded-md">
-        Nenhum grupo de produtos cadastrado.
+      <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/80 bg-muted/20 px-6 py-14 text-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          <Layers className="h-7 w-7" />
+        </div>
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-foreground">Nenhum grupo ainda</p>
+          <p className="max-w-sm text-sm text-muted-foreground">
+            Crie um grupo para organizar o catálogo e facilitar filtros nos orçamentos.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
     <>
-      <div className="rounded-md border border-border overflow-hidden">
+      <div className="overflow-hidden rounded-xl border border-border/80 shadow-sm">
         <table className="w-full text-sm">
-          <thead className="bg-muted/30 border-b border-border">
+          <thead className="border-b border-border bg-gradient-to-r from-primary/[0.08] via-muted/60 to-muted/40">
             <tr>
-              <th className="h-10 px-4 text-left font-medium text-muted-foreground w-[64px]">
-                Imagem
+              <th className="h-11 w-16 px-4 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Foto
               </th>
-              <th className="h-10 px-4 text-left font-medium text-muted-foreground">
+              <th className="h-11 px-4 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Nome
               </th>
-              <th className="h-10 px-4 text-center font-medium text-muted-foreground w-[120px]">
+              <th className="h-11 w-[108px] px-4 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Produtos
               </th>
-              <th className="h-10 px-4 text-left font-medium text-muted-foreground w-[140px]">
+              <th className="h-11 w-[128px] px-4 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Criado em
               </th>
-              <th className="h-10 px-4 text-right font-medium text-muted-foreground w-[100px]">
+              <th className="h-11 w-[96px] px-4 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Ações
               </th>
             </tr>
@@ -92,7 +100,7 @@ export function ProductGroupsTable({ groups, productCounts }: ProductGroupsTable
             {groups.map((group) => (
               <tr
                 key={group.id}
-                className="border-b border-border hover:bg-muted/20 transition-colors last:border-0"
+                className="border-b border-border/70 transition-colors last:border-0 hover:bg-primary/[0.03]"
               >
                 <td className="p-4">
                   {group.image_url ? (

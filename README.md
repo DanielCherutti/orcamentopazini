@@ -54,6 +54,7 @@ Este projeto segue **Spec Driven Development**:
 - **`01-design-system.spec.md`** - Sistema de design e cores
 - **`02-listing-ui-pattern.spec.md`** - Padrão de telas de listagem
 - **`20260127231000001-product-management.spec.md`** - Gestão de produtos
+- **`20260321143000000-dashboard-inicio-hub.spec.md`** - Painel da página **Início** (`/dashboard`): indicadores, atalhos e orçamentos recentes
 
 ## 🛠️ Como Usar
 
@@ -101,6 +102,8 @@ bun run build      # Build de produção
 bun run start      # Inicia servidor de produção
 bun run lint       # Executa linter
 ```
+
+Após o login, a rota **`/dashboard` (Início)** exibe um painel com contagens de produtos, grupos, orçamentos e clientes, atalhos para criar registros e uma lista dos orçamentos mais recentes com link direto para o workspace. A logo do cartão de boas-vindas usa **Configurações → URL da logo** (`company_logo_url`); opcionalmente `NEXT_PUBLIC_BRAND_LOGO_URL` no `.env`; se ambos vazios, cai em `/public/logo.jpeg`. URLs `http(s)` e `data:image/...` são exibidas com `<img>` para não depender de `remotePatterns` do Next.
 
 ## 📚 Padrões de Desenvolvimento
 

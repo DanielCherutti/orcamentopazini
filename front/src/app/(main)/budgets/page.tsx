@@ -1,9 +1,5 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-
-export const metadata: Metadata = {
-    title: "Orçamentos",
-};
 import { Plus } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -12,6 +8,11 @@ import { getBudgetsAction } from "@/actions/budget-actions";
 import { BudgetsTable } from "@/components/budgets/budgets-table";
 import { SearchInput } from "@/components/budgets/search-input";
 import { SearchBadge } from "@/components/budgets/search-badge";
+import { DashboardContentCard, DashboardPageShell } from "@/components/layout/dashboard-page-shell";
+
+export const metadata: Metadata = {
+    title: "Orçamentos",
+};
 
 export default async function BudgetsPage(props: {
     searchParams?: Promise<{
@@ -35,42 +36,36 @@ export default async function BudgetsPage(props: {
     }));
 
     return (
-        <div className="max-w-7xl mx-auto p-6 flex flex-col gap-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Orçamentos</h1>
-                    <p className="text-muted-foreground">
-                        Gerencie e acompanhe suas propostas comerciais.
-                    </p>
-                </div>
-                <Button asChild>
+        <DashboardPageShell
+            title="Orçamentos"
+            description="Propostas comerciais em rascunho ou enviadas. Busque por título ou cliente."
+            action={
+                <Button asChild className="rounded-lg shadow-sm">
                     <Link href="/budgets/new">
-                        <Plus className="mr-2 h-4 w-4" /> Novo Orçamento
+                        <Plus className="mr-2 h-4 w-4" />
+                        Novo orçamento
                     </Link>
                 </Button>
-            </div>
-
-            <div className="flex flex-col gap-6 rounded-xl border bg-card text-card-foreground shadow-sm p-6">
-                <div className="flex flex-col md:flex-row gap-4 justify-between">
-                    <div className="w-full md:w-72">
+            }
+        >
+            <DashboardContentCard className="flex flex-col gap-6">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div className="w-full max-w-md">
                         <SearchInput />
                     </div>
                 </div>
 
                 <Suspense fallback={<TableSkeleton />}>
-                    <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex flex-wrap items-center gap-3">
                         <SearchBadge />
                     </div>
 
                     <div className="relative">
-                        <BudgetsTable
-                            initialBudgets={initial.budgets}
-                            initialMeta={initial.meta}
-                        />
+                        <BudgetsTable initialBudgets={initial.budgets} initialMeta={initial.meta} />
                     </div>
                 </Suspense>
-            </div>
-        </div>
+            </DashboardContentCard>
+        </DashboardPageShell>
     );
 }
 
