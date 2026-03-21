@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE } from "@/lib/auth-constants";
+import {
+    getApiRateLimitConfig,
+    getClientIpFromHeaders,
+    getSseLiveRateLimitConfig,
+    getUploadPostRateLimitConfig,
+    rateLimitConsume,
+} from "@/lib/rate-limit";
 import { verifySessionToken } from "@/lib/session-token";
 
 /** Páginas acessíveis sem sessão (ex.: tela de login na raiz). */
@@ -16,6 +23,19 @@ function isPublicPage(pathname: string): boolean {
     );
 }
 
+function jsonTooManyRequests(retryAfterSeconds: number) {
+    return NextResponse.json(
+        {
+            success: false,
+            error: "Muitas requisições. Aguarde e tente novamente.",
+        },
+        {
+            status: 429,
+            headers: { "Retry-After": String(retryAfterSeconds) },
+        },
+    );
+}
+
 export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
@@ -23,8 +43,31 @@ export async function proxy(request: NextRequest) {
         return NextResponse.next();
     }
 
-    // Rotas /api: exigem sessão válida (item 2 — erros-sistema: não liberar API sem auth)
+    // Rotas /api: rate limit por IP (item 6 — antiautomação / abuso)
     if (pathname.startsWith("/api")) {
+        const ip = getClientIpFromHeaders(request.headers);
+
+        if (
+            pathname.startsWith("/api/upload") &&
+            request.method === "POST"
+        ) {
+            const u = getUploadPostRateLimitConfig();
+            const ur = rateLimitConsume(`upload:${ip}`, u.max, u.windowMs);
+            if (!ur.ok) return jsonTooManyRequests(ur.retryAfterSeconds);
+        } else if (
+            pathname.includes("/compositor/") &&
+            pathname.endsWith("/live") &&
+            request.method === "GET"
+        ) {
+            const s = getSseLiveRateLimitConfig();
+            const sr = rateLimitConsume(`sse:${ip}`, s.max, s.windowMs);
+            if (!sr.ok) return jsonTooManyRequests(sr.retryAfterSeconds);
+        } else {
+            const a = getApiRateLimitConfig();
+            const ar = rateLimitConsume(`api:${ip}`, a.max, a.windowMs);
+            if (!ar.ok) return jsonTooManyRequests(ar.retryAfterSeconds);
+        }
+
         const secret = getSessionSecret();
         const raw = request.cookies.get(SESSION_COOKIE)?.value;
 

@@ -1,0 +1,313 @@
+"use client";
+
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Map, Layers, ChevronRight, Copy, Trash2, Pencil } from "lucide-react";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { cn, toAbsoluteImageUrl } from "@/lib/utils";
+import { toast } from "@/lib/toast";
+import { CompositorRichTextEditor, CollapsibleEditorSection } from "@/components/budgets/compositor/compositor-rich-text-editor";
+import { BudgetImageGallery } from "@/components/budgets/budget-image-gallery";
+import { BudgetPhotoAnnotatorDialog } from "@/components/budgets/budget-photo-annotator-dialog";
+import type { BudgetImage, BudgetItem } from "@/types/budget-types";
+import type { ScopeLocation } from "@/actions/budget-scope-actions";
+import {
+    updateLocationAction,
+    deleteLocationAction,
+    duplicateLocationAction,
+    getItemsBySectionAction,
+} from "@/actions/budget-hierarchy-actions";
+import { getBudgetImagesByLocation, deleteBudgetImage } from "@/actions/budget-annotations";
+
+interface LocationDetailProps {
+    locationId: string;
+    location: ScopeLocation | null;
+    budgetId: string;
+    isReadOnly: boolean;
+    onRefresh: () => void;
+    onSelectSection?: (sectionId: string) => void;
+}
+
+export function LocationDetail({
+    locationId,
+    location,
+    budgetId,
+    isReadOnly,
+    onRefresh,
+    onSelectSection,
+}: LocationDetailProps) {
+    const [name, setName] = useState(location?.name ?? "");
+    const [editingName, setEditingName] = useState(false);
+    const [dupDialog, setDupDialog] = useState(false);
+    const [dupName, setDupName] = useState("");
+    const [dupLocating, setDupLocating] = useState(false);
+    const [description, setDescription] = useState(location?.description ?? "");
+    const [images, setImages] = useState<BudgetImage[]>([]);
+    const [locationItems, setLocationItems] = useState<BudgetItem[]>([]);
+    const [addPhotoOpen, setAddPhotoOpen] = useState(false);
+    const [editingImage, setEditingImage] = useState<BudgetImage | null>(null);
+    const descDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        getBudgetImagesByLocation(locationId).then((imgs) =>
+            setImages(imgs as unknown as BudgetImage[])
+        );
+    }, [locationId]);
+
+    const sectionIdsKey = location?.sections?.map((s) => s.id).join(",") ?? "";
+
+    useEffect(() => {
+        if (!location?.sections?.length) {
+            setLocationItems([]);
+            return;
+        }
+        let cancelled = false;
+        Promise.all(location.sections.map((s) => getItemsBySectionAction(s.id))).then((results) => {
+            if (cancelled) return;
+            const all = results.flatMap((r) =>
+                r.success && r.data ? (r.data as unknown as BudgetItem[]) : []
+            );
+            setLocationItems(all);
+        });
+        return () => {
+            cancelled = true;
+        };
+        // location.sections coberto por sectionIdsKey + length
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [location?.id, location?.sections?.length, sectionIdsKey]);
+
+    const commitName = async () => {
+        setEditingName(false);
+        const trimmed = name.trim().toUpperCase();
+        if (!trimmed || trimmed === location?.name) return;
+        const result = await updateLocationAction(locationId, budgetId, { name: trimmed });
+        if (!result.success) toast.error(result.error || "Erro ao renomear");
+        else onRefresh();
+    };
+
+    const handleDescChange = useCallback(
+        (html: string) => {
+            setDescription(html);
+            if (descDebounce.current) clearTimeout(descDebounce.current);
+            descDebounce.current = setTimeout(async () => {
+                await updateLocationAction(locationId, budgetId, { description: html });
+            }, 1500);
+        },
+        [locationId, budgetId]
+    );
+
+    const handleDeleteImage = async (image: BudgetImage) => {
+        await deleteBudgetImage(image.id, budgetId);
+        setImages((prev) => prev.filter((img) => img.id !== image.id));
+    };
+
+    if (!location) return null;
+
+    return (
+        <div className="space-y-6 bg-primary/[0.03] rounded-lg p-5 border border-primary/20 shadow-sm">
+            <div className="flex items-center gap-2 pb-3 border-b-2 border-primary/50">
+                <Map className="h-5 w-5 text-primary shrink-0" />
+                {editingName && !isReadOnly ? (
+                    <input
+                        autoFocus
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        onBlur={commitName}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                                e.preventDefault();
+                                (e.target as HTMLInputElement).blur();
+                            }
+                            if (e.key === "Escape") {
+                                setName(location.name);
+                                setEditingName(false);
+                            }
+                        }}
+                        className="text-xl font-bold border-b border-primary outline-none bg-transparent flex-1"
+                    />
+                ) : (
+                    <button
+                        type="button"
+                        className={cn(
+                            "group flex items-center gap-1.5 flex-1 text-left",
+                            !isReadOnly && "hover:text-primary transition-colors"
+                        )}
+                        onClick={() => {
+                            if (!isReadOnly) {
+                                setName(location.name);
+                                setEditingName(true);
+                            }
+                        }}
+                        title={!isReadOnly ? "Clique para editar" : undefined}
+                        disabled={isReadOnly}
+                    >
+                        <h2 className="text-xl font-bold">{location.name}</h2>
+                        {!isReadOnly && (
+                            <Pencil className="h-3.5 w-3.5 opacity-0 group-hover:opacity-40 transition-opacity shrink-0" />
+                        )}
+                    </button>
+                )}
+                {!isReadOnly && (
+                    <>
+                        <button
+                            type="button"
+                            title="Duplicar local"
+                            onClick={() => {
+                                setDupName(`${location.name} - Cópia`);
+                                setDupDialog(true);
+                            }}
+                            className="text-muted-foreground hover:text-primary transition-colors p-1 rounded"
+                        >
+                            <Copy className="h-4 w-4" />
+                        </button>
+                        <button
+                            type="button"
+                            title="Excluir local"
+                            onClick={async () => {
+                                if (!confirm("Remover este local e todos os seus trechos?")) return;
+                                const result = await deleteLocationAction(locationId, budgetId);
+                                if (result.success) onRefresh();
+                                else toast.error(result.error || "Erro ao remover local");
+                            }}
+                            className="text-muted-foreground hover:text-destructive transition-colors p-1 rounded"
+                        >
+                            <Trash2 className="h-4 w-4" />
+                        </button>
+                    </>
+                )}
+            </div>
+
+            <Dialog open={dupDialog} onOpenChange={(open) => { if (!open) setDupDialog(false); }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Duplicar local</DialogTitle>
+                        <DialogDescription>Informe o nome para o novo local.</DialogDescription>
+                    </DialogHeader>
+                    <div className="py-2">
+                        <Input
+                            autoFocus
+                            value={dupName}
+                            onChange={(e) => setDupName(e.target.value)}
+                            onKeyDown={async (e) => {
+                                if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    if (dupLocating) return;
+                                    setDupLocating(true);
+                                    setDupDialog(false);
+                                    const result = await duplicateLocationAction(locationId, budgetId, dupName.trim());
+                                    setDupLocating(false);
+                                    if (result.success) onRefresh();
+                                    else toast.error(result.error || "Erro ao duplicar local");
+                                }
+                            }}
+                            placeholder="Nome do local"
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" type="button" onClick={() => setDupDialog(false)}>
+                            Cancelar
+                        </Button>
+                        <Button
+                            type="button"
+                            disabled={!dupName.trim() || dupLocating}
+                            onClick={async () => {
+                                if (dupLocating) return;
+                                setDupLocating(true);
+                                setDupDialog(false);
+                                const result = await duplicateLocationAction(locationId, budgetId, dupName.trim());
+                                setDupLocating(false);
+                                if (result.success) onRefresh();
+                                else toast.error(result.error || "Erro ao duplicar local");
+                            }}
+                        >
+                            <Copy className="h-4 w-4 mr-2" />
+                            Duplicar
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <CollapsibleEditorSection label="Fotos do local">
+                <BudgetImageGallery
+                    images={images}
+                    onAdd={() => { if (!isReadOnly) setAddPhotoOpen(true); }}
+                    onEdit={(img) => setEditingImage(img)}
+                    onDelete={handleDeleteImage}
+                    emptyMessage="Nenhuma foto."
+                />
+            </CollapsibleEditorSection>
+
+            <CollapsibleEditorSection label="Descrição do local">
+                <CompositorRichTextEditor
+                    key={locationId}
+                    value={description}
+                    onChange={handleDescChange}
+                    placeholder="Descreva o local..."
+                />
+            </CollapsibleEditorSection>
+
+            {location.sections.length > 0 && (
+                <CollapsibleEditorSection label={`Trechos (${location.sections.length})`} defaultOpen>
+                    <div className="space-y-1.5">
+                        {location.sections.map((sec) => (
+                            <button
+                                key={sec.id}
+                                type="button"
+                                onClick={() => onSelectSection?.(sec.id)}
+                                className="w-full flex items-center gap-2 px-3 py-2.5 rounded-md border border-border bg-white hover:bg-primary/[0.04] hover:border-primary/30 text-sm transition-colors group text-left"
+                            >
+                                <Layers className="h-4 w-4 text-primary/50 shrink-0 group-hover:text-primary transition-colors" />
+                                <span className="flex-1 font-medium">{sec.name}</span>
+                                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-primary/60 transition-colors" />
+                            </button>
+                        ))}
+                    </div>
+                </CollapsibleEditorSection>
+            )}
+
+            <BudgetPhotoAnnotatorDialog
+                budgetId={budgetId}
+                locationId={locationId}
+                availableItems={locationItems}
+                open={addPhotoOpen}
+                onOpenChange={setAddPhotoOpen}
+                onSaved={() => {
+                    setAddPhotoOpen(false);
+                    getBudgetImagesByLocation(locationId).then((imgs) =>
+                        setImages(imgs as unknown as BudgetImage[])
+                    );
+                }}
+            />
+            {editingImage && (
+                <BudgetPhotoAnnotatorDialog
+                    budgetId={budgetId}
+                    locationId={locationId}
+                    imageId={editingImage.id}
+                    availableItems={locationItems}
+                    initialImageUrl={toAbsoluteImageUrl(editingImage.url || editingImage.composed_url) ?? null}
+                    initialAnnotations={
+                        (editingImage.annotations ?? []) as unknown as Parameters<
+                            typeof BudgetPhotoAnnotatorDialog
+                        >[0]["initialAnnotations"]
+                    }
+                    open={!!editingImage}
+                    onOpenChange={(open) => { if (!open) setEditingImage(null); }}
+                    onSaved={() => {
+                        setEditingImage(null);
+                        getBudgetImagesByLocation(locationId).then((imgs) =>
+                            setImages(imgs as unknown as BudgetImage[])
+                        );
+                    }}
+                />
+            )}
+        </div>
+    );
+}

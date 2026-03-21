@@ -11,6 +11,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "dotenv";
 import { Surreal } from "surrealdb";
+import { requireSurrealPassword } from "./src/lib/surreal-env";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 config({ path: path.join(__dirname, ".env") });
@@ -24,8 +25,6 @@ const database =
     process.env.SURREAL_DB || process.env.SURREALDB_DB || "pazini";
 const username =
     process.env.SURREAL_USER || process.env.SURREALDB_USER || "admin";
-const password =
-    process.env.SURREAL_PASS || process.env.SURREALDB_PASS || "q1w2e3r4";
 
 /** Mesmo bloco de src/lib/surreal.ts (ensureSchema). */
 const BASE_SCHEMA_QL = `
@@ -60,6 +59,7 @@ async function main() {
 
     const db = new Surreal();
     try {
+        const password = requireSurrealPassword();
         console.log(`Connecting to SurrealDB at ${endpoint}...`);
         await db.connect(endpoint, {
             namespace,

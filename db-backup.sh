@@ -32,11 +32,11 @@ if [ -z "$SSH_KEY" ]; then
     fi
 fi
 
-# SurrealDB
+# SurrealDB (senha obrigatória: defina SURREAL_PASS ou SURREALDB_PASS no front/.env)
 SURREAL_CONTAINER=${SURREAL_CONTAINER:-"surrealdb"}
 SURREAL_HOST=${SURREAL_HOST:-"ws://localhost:8000"}
 SURREAL_USER=${SURREAL_USER:-"admin"}
-SURREAL_PASS=${SURREAL_PASS:-"q1w2e3r4"}
+SURREAL_PASS="${SURREAL_PASS:-${SURREALDB_PASS:-}}"
 SURREAL_NS=${SURREAL_NS:-"pazini"}
 SURREAL_DB=${SURREAL_DB:-"core"}
 
@@ -50,6 +50,13 @@ LOCAL_BACKUPS="$SCRIPT_DIR/backups"
 check_remote() {
     if [ -z "$REMOTE_HOST" ]; then
         echo "[ERRO] REMOTE_HOST não definido — configure em front/.env.local"
+        exit 1
+    fi
+}
+
+check_surreal_pass() {
+    if [ -z "$SURREAL_PASS" ]; then
+        echo "[ERRO] SURREAL_PASS ou SURREALDB_PASS não definido — configure em front/.env ou front/.env.local (sem padrão no script)"
         exit 1
     fi
 }
@@ -79,6 +86,7 @@ header() {
 
 do_backup() {
     check_remote
+    check_surreal_pass
     mkdir -p "$LOCAL_BACKUPS"
 
     REMOTE_TMP="/tmp/pazini-db-$TIMESTAMP.surql"
@@ -113,6 +121,7 @@ do_backup() {
 
 do_backup_full() {
     check_remote
+    check_surreal_pass
     mkdir -p "$LOCAL_BACKUPS"
 
     FULL_DIR="$LOCAL_BACKUPS/pazini-full-$TIMESTAMP"
@@ -166,6 +175,7 @@ do_backup_full() {
 
 do_restore() {
     check_remote
+    check_surreal_pass
 
     BACKUP_FILE="${1:-}"
     if [ -z "$BACKUP_FILE" ] || [ ! -f "$BACKUP_FILE" ]; then
@@ -221,6 +231,7 @@ do_restore() {
 
 do_restore_full() {
     check_remote
+    check_surreal_pass
 
     FULL_DIR="${1:-}"
     if [ -z "$FULL_DIR" ] || [ ! -d "$FULL_DIR" ]; then
@@ -298,7 +309,7 @@ case "$CMD" in
         echo ""
         echo "Configuração via front/.env.local:"
         echo "  REMOTE_HOST, REMOTE_USER, REMOTE_PATH, SSH_KEY"
-        echo "  SURREAL_CONTAINER, SURREAL_USER, SURREAL_PASS, SURREAL_NS, SURREAL_DB"
+        echo "  SURREAL_CONTAINER, SURREAL_USER, SURREAL_PASS (ou SURREALDB_PASS), SURREAL_NS, SURREAL_DB"
         echo ""
         exit 1
         ;;

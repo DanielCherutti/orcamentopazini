@@ -1,37 +1,32 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { Stage, Layer, Image as KonvaImage, Arrow, Rect, Line, Circle } from 'react-konva';
-import { KonvaEventObject } from 'konva/lib/Node';
-import { ImageAnnotation, ToolType, DEFAULT_STYLE, StickerAnnotation, StepAnnotation, ANNOTATION_COLORS, TextAnnotation, ArrowAnnotation, RectAnnotation, PolylineAnnotation, Point } from './tools/types';
-import { toRelativeCoordinates, generateAnnotationId } from './utils/geometry';
-import { BudgetItem } from '@/types/budget-types';
-import { Toolbar } from './toolbar';
-import { AnnotationLayer } from './annotation-layer';
-import { CatalogDock } from './catalog-dock';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { toast } from '@/lib/toast';
-import { addItemAction } from '@/actions/budget-hierarchy-actions';
-import { Product } from '@/actions/product-actions';
-import Konva from 'konva';
+import { useState, useRef, useEffect, useCallback } from "react";
+import type { DragEvent } from "react";
+import { KonvaEventObject } from "konva/lib/Node";
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import { InsertImageDialog } from './insert-image-dialog';
+    ImageAnnotation,
+    ToolType,
+    DEFAULT_STYLE,
+    StickerAnnotation,
+    StepAnnotation,
+    TextAnnotation,
+    ArrowAnnotation,
+    PolylineAnnotation,
+    Point,
+} from "./tools/types";
+import { toRelativeCoordinates, generateAnnotationId } from "./utils/geometry";
+import { BudgetItem } from "@/types/budget-types";
+import { Toolbar } from "./toolbar";
+import { CatalogDock } from "./catalog-dock";
+import { toast } from "@/lib/toast";
+import { addItemAction } from "@/actions/budget-hierarchy-actions";
+import { Product } from "@/actions/product-actions";
+import type { ProductGroup } from "@/actions/product-group-actions";
+import Konva from "konva";
+import { InsertImageDialog } from "./insert-image-dialog";
+import { computeAnnotatorContentBBox } from "./annotator-compute-content-bbox";
+import { AnnotatorKonvaWorkspace } from "./annotator-konva-workspace";
+import { AnnotatorEditAnnotationDialog } from "./annotator-edit-annotation-dialog";
 
 export interface AdvancedImageAnnotatorProps {
     imageUrl: string;
@@ -254,7 +249,7 @@ export function AdvancedImageAnnotator({
             return prev.filter(a => a.id !== id);
         });
         setSelectedAnnotationId(null);
-    }, []);
+    }, [updateAnnotations]);
 
     const handleCreateLinkedArrow = useCallback((stickerId: string, startRel: Point, endRel: Point) => {
         const newArrow: ArrowAnnotation = {
@@ -268,7 +263,7 @@ export function AdvancedImageAnnotator({
         };
         updateAnnotations(prev => [...prev, newArrow]);
         setSelectedTool('select');
-    }, []);
+    }, [updateAnnotations]);
 
     // Keyboard support — Delete/Backspace para remover anotação selecionada
     useEffect(() => {
@@ -368,7 +363,7 @@ export function AdvancedImageAnnotator({
 
     // --- DRAG AND DROP HANDLERS (Product Dock) ---
 
-    const handleDragStartItem = (e: React.DragEvent, item: BudgetItem) => {
+    const handleDragStartItem = (e: DragEvent, item: BudgetItem) => {
         if (readOnly) return;
         const product = (typeof item.product_id === 'object' ? item.product_id : {}) as Record<string, string | undefined>;
         e.dataTransfer.setData('product_id', product.id || '');
@@ -379,7 +374,7 @@ export function AdvancedImageAnnotator({
         e.dataTransfer.effectAllowed = 'copy';
     };
 
-    const handleDragStartCatalogProduct = (e: React.DragEvent, product: Product) => {
+    const handleDragStartCatalogProduct = (e: DragEvent, product: Product) => {
         if (readOnly) return;
         e.dataTransfer.setData('product_id', product.id || '');
         e.dataTransfer.setData('image_url', product.imageUrl || '');
@@ -389,7 +384,7 @@ export function AdvancedImageAnnotator({
         e.dataTransfer.effectAllowed = 'copy';
     };
 
-    const handleDragStartCatalogGroup = (e: React.DragEvent, group: any) => {
+    const handleDragStartCatalogGroup = (e: DragEvent, group: ProductGroup) => {
         if (readOnly) return;
         e.dataTransfer.setData('product_id', ''); // Grupos não tem um produto final a adicionar
         e.dataTransfer.setData('image_url', group.image_url || '');
@@ -399,12 +394,12 @@ export function AdvancedImageAnnotator({
         e.dataTransfer.effectAllowed = 'copy';
     };
 
-    const handleDragOverStage = (e: React.DragEvent) => {
+    const handleDragOverStage = (e: DragEvent<HTMLDivElement>) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'copy';
     };
 
-    const handleDropOnStage = async (e: React.DragEvent) => {
+    const handleDropOnStage = async (e: DragEvent<HTMLDivElement>) => {
         e.preventDefault();
         if (readOnly) return;
 
@@ -745,74 +740,6 @@ export function AdvancedImageAnnotator({
         return () => window.removeEventListener('keydown', handleEscKey);
     }, [isDrawingPolyline]);
 
-    // Calcula o bounding box de todo o conteúdo (imagem + anotações) em coordenadas de stage
-    const computeContentBBox = () => {
-        const ANNO_MARGIN = 60;
-        let minX = imageOffset.x;
-        let minY = imageOffset.y;
-        let maxX = imageOffset.x + imageSize.width;
-        let maxY = imageOffset.y + imageSize.height;
-
-        const expand = (sx: number, sy: number, mw = ANNO_MARGIN, mh = ANNO_MARGIN) => {
-            minX = Math.min(minX, sx - mw);
-            minY = Math.min(minY, sy - mh);
-            maxX = Math.max(maxX, sx + mw);
-            maxY = Math.max(maxY, sy + mh);
-        };
-        const toStage = (p: Point) => ({
-            x: imageOffset.x + p.x * imageSize.width,
-            y: imageOffset.y + p.y * imageSize.height,
-        });
-
-        for (const ann of annotations) {
-            switch (ann.tool_type) {
-                case 'step_number': {
-                    const s = ann as StepAnnotation;
-                    const { x, y } = toStage(s.position);
-                    expand(x, y, s.radius + 16, s.radius + 16);
-                    break;
-                }
-                case 'arrow': {
-                    const a = ann as ArrowAnnotation;
-                    for (const p of a.points) { const { x, y } = toStage(p); expand(x, y, 24, 24); }
-                    break;
-                }
-                case 'text': {
-                    const t = ann as TextAnnotation;
-                    const { x, y } = toStage(t.position);
-                    const w = t.width || 100;
-                    const h = t.height || (t.fontSize || 14) * 3;
-                    expand(x + w / 2, y + h / 2, w / 2 + 16, h / 2 + 16);
-                    break;
-                }
-                case 'rect': {
-                    const r = ann as RectAnnotation;
-                    const x1 = imageOffset.x + r.position.x * imageSize.width;
-                    const y1 = imageOffset.y + r.position.y * imageSize.height;
-                    const x2 = imageOffset.x + (r.position.x + r.width) * imageSize.width;
-                    const y2 = imageOffset.y + (r.position.y + r.height) * imageSize.height;
-                    minX = Math.min(minX, x1 - 16); minY = Math.min(minY, y1 - 16);
-                    maxX = Math.max(maxX, x2 + 16); maxY = Math.max(maxY, y2 + 16);
-                    break;
-                }
-                case 'product_sticker': {
-                    const st = ann as StickerAnnotation;
-                    const { x, y } = toStage(st.position);
-                    const hw = ((st.width || 100) * (st.scaleX || 1)) / 2 + 16;
-                    const hh = ((st.height || 100) * (st.scaleY || 1)) / 2 + 16;
-                    expand(x, y, hw, hh);
-                    break;
-                }
-                case 'polyline': {
-                    const pl = ann as PolylineAnnotation;
-                    for (const p of pl.points) { const { x, y } = toStage(p); expand(x, y, 12, 12); }
-                    break;
-                }
-            }
-        }
-        return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-    };
-
     const handleSave = async (isAutoSave = false) => {
         if (!onSave || !stageRef.current) return;
         setIsSaving(true);
@@ -833,7 +760,7 @@ export function AdvancedImageAnnotator({
                     stage.position({ x: 0, y: 0 });
                     stage.batchDraw();
 
-                    const bbox = computeContentBBox();
+                    const bbox = computeAnnotatorContentBBox(annotations, imageOffset, imageSize);
                     const SAVE_MARGIN = 24;
                     const canvas = stage.toCanvas({
                         x: Math.floor(bbox.x - SAVE_MARGIN),
@@ -865,10 +792,27 @@ export function AdvancedImageAnnotator({
     };
 
     if (!image) {
-        return <div className="flex items-center justify-center h-96 bg-muted/10 rounded-lg"><p>Carregando imagem...</p></div>;
+        return (
+            <div className="flex items-center justify-center h-96 bg-muted/10 rounded-lg px-4 text-center">
+                <p className={imageLoadError ? "text-destructive text-sm" : "text-sm text-muted-foreground"}>
+                    {imageLoadError ?? "Carregando imagem..."}
+                </p>
+            </div>
+        );
     }
 
-    const dialogTitle = editToolType === 'text' ? "Editar Texto" : editToolType === 'polyline' ? "Estilo da Linha" : "Vincular Item";
+    const dialogTitle =
+        editToolType === "text"
+            ? "Editar Texto"
+            : editToolType === "polyline"
+              ? "Estilo da Linha"
+              : "Vincular Item";
+    const dialogDescription =
+        editToolType === "text"
+            ? "Digite o texto."
+            : editToolType === "polyline"
+              ? "Configure o estilo da linha poligonal."
+              : "Vincular esta anotação.";
 
     return (
         <div className="flex flex-col gap-4 h-full min-h-0">
@@ -901,323 +845,71 @@ export function AdvancedImageAnnotator({
                 )}
 
 
-                {/* CANVAS */}
-                <div
-                    ref={containerRef}
-                    className="border rounded-lg overflow-hidden bg-white relative flex-1 min-h-0"
+                <AnnotatorKonvaWorkspace
+                    containerRef={containerRef}
+                    readOnly={readOnly}
+                    isSpaceDown={isSpaceDown}
                     onDrop={handleDropOnStage}
                     onDragOver={handleDragOverStage}
-                    style={{ cursor: isSpaceDown ? 'grab' : undefined }}
-                >
-                    {imageSize.width > 0 && imageSize.height > 0 && <Stage
-                        ref={stageRef}
-                        width={stageSize.width}
-                        height={stageSize.height}
-                        onClick={handleStageClick}
-                        onDblClick={handleStageDblClick}
-                        onMouseDown={handleStageMouseDown}
-                        onMouseMove={handleStageMouseMove}
-                        onMouseUp={handleStageMouseUp}
-                        onWheel={handleWheel}
-                        draggable={isSpaceDown && !readOnly}
-                    >
-                        {/* Fundo branco infinito (acessível via pan) + imagem centralizada */}
-                        <Layer>
-                            <Rect
-                                name="background"
-                                x={imageOffset.x - 4000} y={imageOffset.y - 4000}
-                                width={imageSize.width + 8000} height={imageSize.height + 8000}
-                                fill="white"
-                            />
-                            <KonvaImage name="background" image={image} x={imageOffset.x} y={imageOffset.y} width={imageSize.width} height={imageSize.height} />
-                        </Layer>
-
-                        <AnnotationLayer
-                            annotations={annotations}
-                            imageSize={imageSize}
-                            imageOffset={imageOffset}
-                            selectedId={selectedAnnotationId}
-                            onSelect={handleAnnotationSelect}
-                            onUpdate={handleAnnotationUpdate}
-                            onEditStart={handleEditStart}
-                            onCreateLinkedArrow={handleCreateLinkedArrow}
-                            readOnly={readOnly}
-                        />
-
-                        {/* Layers temporários Arrow/Rect */}
-                        {isDrawingArrow && arrowStartPoint && tempArrowEnd && (
-                            <Layer x={imageOffset.x} y={imageOffset.y}>
-                                <Arrow points={[arrowStartPoint.x * imageSize.width, arrowStartPoint.y * imageSize.height, tempArrowEnd.x * imageSize.width, tempArrowEnd.y * imageSize.height]} stroke="#0EA5E9" strokeWidth={3} fill="#0EA5E9" pointerLength={15} pointerWidth={15} opacity={0.6} dash={[4, 4]} />
-                            </Layer>
-                        )}
-                        {isDrawingRect && rectStartPoint && tempRectEnd && (
-                            <Layer x={imageOffset.x} y={imageOffset.y}>
-                                <Rect x={Math.min(rectStartPoint.x, tempRectEnd.x) * imageSize.width} y={Math.min(rectStartPoint.y, tempRectEnd.y) * imageSize.height} width={Math.abs(tempRectEnd.x - rectStartPoint.x) * imageSize.width} height={Math.abs(tempRectEnd.y - rectStartPoint.y) * imageSize.height} stroke="#FF3333" strokeWidth={3} cornerRadius={4} dash={[4, 4]} opacity={0.6} fill="transparent" />
-                            </Layer>
-                        )}
-                        {isDrawingPolyline && polylinePoints.length >= 1 && (
-                            <Layer x={imageOffset.x} y={imageOffset.y}>
-                                {polylinePoints.length >= 2 && (
-                                    <Line
-                                        points={polylinePoints.flatMap(p => [p.x * imageSize.width, p.y * imageSize.height])}
-                                        stroke="#0EA5E9"
-                                        strokeWidth={2}
-                                        dash={[4, 4]}
-                                        opacity={0.7}
-                                        lineCap="round"
-                                        lineJoin="round"
-                                        listening={false}
-                                    />
-                                )}
-                                {polylineTempEnd && (
-                                    <Line
-                                        points={[
-                                            polylinePoints[polylinePoints.length - 1].x * imageSize.width,
-                                            polylinePoints[polylinePoints.length - 1].y * imageSize.height,
-                                            polylineTempEnd.x * imageSize.width,
-                                            polylineTempEnd.y * imageSize.height,
-                                        ]}
-                                        stroke="#0EA5E9"
-                                        strokeWidth={2}
-                                        dash={[4, 4]}
-                                        opacity={0.5}
-                                        lineCap="round"
-                                        lineJoin="round"
-                                        listening={false}
-                                    />
-                                )}
-                                {polylinePoints.map((p, i) => (
-                                    <Circle
-                                        key={i}
-                                        x={p.x * imageSize.width}
-                                        y={p.y * imageSize.height}
-                                        radius={4}
-                                        fill="#0EA5E9"
-                                        listening={false}
-                                    />
-                                ))}
-                            </Layer>
-                        )}
-                    </Stage>}
-
-                    {/* Indicador de zoom */}
-                    {stageScale !== 1 && (
-                        <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1.5 bg-black/60 text-white text-xs rounded-md px-2 py-1 select-none">
-                            <span>{Math.round(stageScale * 100)}%</span>
-                            <button
-                                className="hover:text-white/70 transition-colors font-bold leading-none"
-                                onClick={handleResetZoom}
-                                title="Resetar zoom"
-                            >
-                                ×
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Dica de pan (só em modo edição) */}
-                    {!readOnly && (
-                        <div className="absolute bottom-2 left-2 z-10 text-[10px] text-muted-foreground/60 select-none pointer-events-none">
-                            Scroll para zoom · Espaço+arrastar para mover
-                        </div>
-                    )}
-                </div>
-
+                    imageSize={imageSize}
+                    stageSize={stageSize}
+                    imageOffset={imageOffset}
+                    image={image}
+                    stageRef={stageRef}
+                    stageScale={stageScale}
+                    onResetZoom={handleResetZoom}
+                    onStageClick={handleStageClick}
+                    onStageDblClick={handleStageDblClick}
+                    onStageMouseDown={handleStageMouseDown}
+                    onStageMouseMove={handleStageMouseMove}
+                    onStageMouseUp={handleStageMouseUp}
+                    onWheel={handleWheel}
+                    stageDraggable={isSpaceDown && !readOnly}
+                    annotations={annotations}
+                    selectedAnnotationId={selectedAnnotationId}
+                    onAnnotationSelect={handleAnnotationSelect}
+                    onAnnotationUpdate={handleAnnotationUpdate}
+                    onEditStart={handleEditStart}
+                    onCreateLinkedArrow={handleCreateLinkedArrow}
+                    isDrawingArrow={isDrawingArrow}
+                    arrowStartPoint={arrowStartPoint}
+                    tempArrowEnd={tempArrowEnd}
+                    isDrawingRect={isDrawingRect}
+                    rectStartPoint={rectStartPoint}
+                    tempRectEnd={tempRectEnd}
+                    isDrawingPolyline={isDrawingPolyline}
+                    polylinePoints={polylinePoints}
+                    polylineTempEnd={polylineTempEnd}
+                />
             </div>
 
-            {/* Dialog Edit (Igual anterior) */}
-            <Dialog open={!!editingAnnotationId} onOpenChange={handleEditCancel}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>{dialogTitle}</DialogTitle>
-                        <DialogDescription>{editToolType === 'text' ? "Digite o texto." : editToolType === 'polyline' ? "Configure o estilo da linha poligonal." : "Vincular esta anotação."}</DialogDescription>
-                    </DialogHeader>
-                    <div className="flex flex-col gap-4 py-4">
-                        {editToolType === 'text' && (
-                            <>
-                                <Textarea value={editText} onChange={(e) => setEditText(e.target.value)} />
-                                <div>
-                                    <Label className="text-sm mb-1.5 block">Tamanho da fonte ({editFontSize}px)</Label>
-                                    <input
-                                        type="range"
-                                        min={10}
-                                        max={48}
-                                        step={1}
-                                        value={editFontSize}
-                                        onChange={(e) => setEditFontSize(Number(e.target.value))}
-                                        className="w-full"
-                                    />
-                                </div>
-                                <div className="space-y-3">
-                                    <div>
-                                        <Label className="text-sm mb-1.5 block">Cor do texto</Label>
-                                        <div className="flex gap-2 flex-wrap">
-                                            {Object.entries(ANNOTATION_COLORS).map(([name, color]) => (
-                                                <button
-                                                    key={name}
-                                                    type="button"
-                                                    className="w-7 h-7 rounded-full border-2 transition-transform hover:scale-110"
-                                                    style={{
-                                                        backgroundColor: color,
-                                                        borderColor: editFontColor === color ? '#0EA5E9' : '#d1d5db',
-                                                        transform: editFontColor === color ? 'scale(1.15)' : undefined
-                                                    }}
-                                                    onClick={() => setEditFontColor(color)}
-                                                    title={name}
-                                                />
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <Label className="text-sm mb-1.5 block">Contorno do texto</Label>
-                                        <div className="flex gap-2 flex-wrap">
-                                            <button
-                                                type="button"
-                                                className="w-7 h-7 rounded-full border-2 transition-transform hover:scale-110 flex items-center justify-center text-xs text-muted-foreground"
-                                                style={{
-                                                    borderColor: !editStrokeColor ? '#0EA5E9' : '#d1d5db',
-                                                    transform: !editStrokeColor ? 'scale(1.15)' : undefined
-                                                }}
-                                                onClick={() => { setEditStrokeColor(''); setEditTextStrokeWidth(0); }}
-                                                title="Sem contorno"
-                                            >
-                                                &#x2205;
-                                            </button>
-                                            {Object.entries(ANNOTATION_COLORS).map(([name, color]) => (
-                                                <button
-                                                    key={name}
-                                                    type="button"
-                                                    className="w-7 h-7 rounded-full border-2 transition-transform hover:scale-110"
-                                                    style={{
-                                                        backgroundColor: color,
-                                                        borderColor: editStrokeColor === color ? '#0EA5E9' : '#d1d5db',
-                                                        transform: editStrokeColor === color ? 'scale(1.15)' : undefined
-                                                    }}
-                                                    onClick={() => { setEditStrokeColor(color); if (!editTextStrokeWidth) setEditTextStrokeWidth(1); }}
-                                                    title={name}
-                                                />
-                                            ))}
-                                        </div>
-                                    </div>
-                                    {editStrokeColor && (
-                                        <div>
-                                            <Label className="text-sm mb-1.5 block">Espessura do contorno ({editTextStrokeWidth})</Label>
-                                            <input
-                                                type="range"
-                                                min={0}
-                                                max={5}
-                                                step={0.5}
-                                                value={editTextStrokeWidth}
-                                                onChange={(e) => setEditTextStrokeWidth(Number(e.target.value))}
-                                                className="w-full"
-                                            />
-                                        </div>
-                                    )}
-                                    <div>
-                                        <Label className="text-sm mb-1.5 block">Borda do box</Label>
-                                        <div className="flex gap-2 flex-wrap">
-                                            <button
-                                                type="button"
-                                                className="w-7 h-7 rounded-full border-2 transition-transform hover:scale-110 flex items-center justify-center text-xs text-muted-foreground"
-                                                style={{
-                                                    borderColor: !editBorderColor ? '#0EA5E9' : '#d1d5db',
-                                                    transform: !editBorderColor ? 'scale(1.15)' : undefined
-                                                }}
-                                                onClick={() => setEditBorderColor('')}
-                                                title="Sem borda"
-                                            >
-                                                &#x2205;
-                                            </button>
-                                            {Object.entries(ANNOTATION_COLORS).map(([name, color]) => (
-                                                <button
-                                                    key={name}
-                                                    type="button"
-                                                    className="w-7 h-7 rounded-full border-2 transition-transform hover:scale-110"
-                                                    style={{
-                                                        backgroundColor: color,
-                                                        borderColor: editBorderColor === color ? '#0EA5E9' : '#d1d5db',
-                                                        transform: editBorderColor === color ? 'scale(1.15)' : undefined
-                                                    }}
-                                                    onClick={() => setEditBorderColor(color)}
-                                                    title={name}
-                                                />
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            </>
-                        )}
-                        {editToolType === 'polyline' && (
-                            <div className="space-y-4">
-                                <div>
-                                    <Label className="text-sm mb-1.5 block">Cor da linha</Label>
-                                    <div className="flex gap-2 flex-wrap">
-                                        {Object.entries(ANNOTATION_COLORS).map(([name, color]) => (
-                                            <button
-                                                key={name}
-                                                type="button"
-                                                className="w-7 h-7 rounded-full border-2 transition-transform hover:scale-110"
-                                                style={{
-                                                    backgroundColor: color,
-                                                    borderColor: editFontColor === color ? '#0EA5E9' : '#d1d5db',
-                                                    transform: editFontColor === color ? 'scale(1.15)' : undefined
-                                                }}
-                                                onClick={() => setEditFontColor(color)}
-                                                title={name}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-                                <div>
-                                    <Label className="text-sm mb-1.5 block">Espessura ({editPolylineStrokeWidth}px)</Label>
-                                    <input
-                                        type="range"
-                                        min={1}
-                                        max={10}
-                                        step={1}
-                                        value={editPolylineStrokeWidth}
-                                        onChange={(e) => setEditPolylineStrokeWidth(Number(e.target.value))}
-                                        className="w-full"
-                                    />
-                                </div>
-                                <div>
-                                    <Label className="text-sm mb-1.5 block">Estilo</Label>
-                                    <div className="flex gap-2">
-                                        {(['solid', 'dashed', 'dotted'] as const).map((s) => (
-                                            <button
-                                                key={s}
-                                                type="button"
-                                                className="px-3 py-1.5 rounded border text-xs transition-colors"
-                                                style={{
-                                                    borderColor: editPolylineLineStyle === s ? '#0EA5E9' : '#d1d5db',
-                                                    backgroundColor: editPolylineLineStyle === s ? '#EFF6FF' : undefined,
-                                                    color: editPolylineLineStyle === s ? '#0EA5E9' : undefined,
-                                                }}
-                                                onClick={() => setEditPolylineLineStyle(s)}
-                                            >
-                                                {s === 'solid' ? 'Sólido' : s === 'dashed' ? 'Tracejado' : 'Pontilhado'}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                        {availableItems.length > 0 && editToolType !== 'text' && editToolType !== 'polyline' && (
-                            <Select value={editLinkedItemId || undefined} onValueChange={setEditLinkedItemId}>
-                                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none_selection_special_id">Nenhum</SelectItem>
-                                    {availableItems.map((item) => (
-                                        <SelectItem key={item.id} value={item.id!}>{(typeof item.product_id === 'object' ? (item.product_id as Record<string, string>).description : null) || "Item"}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        )}
-                    </div>
-                    <DialogFooter>
-                        <Button type="button" onClick={handleEditSave}>Salvar</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            <AnnotatorEditAnnotationDialog
+                open={!!editingAnnotationId}
+                onOpenChange={handleEditCancel}
+                dialogTitle={dialogTitle}
+                dialogDescription={dialogDescription}
+                editToolType={editToolType}
+                editText={editText}
+                setEditText={setEditText}
+                editFontSize={editFontSize}
+                setEditFontSize={setEditFontSize}
+                editFontColor={editFontColor}
+                setEditFontColor={setEditFontColor}
+                editStrokeColor={editStrokeColor}
+                setEditStrokeColor={setEditStrokeColor}
+                editTextStrokeWidth={editTextStrokeWidth}
+                setEditTextStrokeWidth={setEditTextStrokeWidth}
+                editBorderColor={editBorderColor}
+                setEditBorderColor={setEditBorderColor}
+                editPolylineStrokeWidth={editPolylineStrokeWidth}
+                setEditPolylineStrokeWidth={setEditPolylineStrokeWidth}
+                editPolylineLineStyle={editPolylineLineStyle}
+                setEditPolylineLineStyle={setEditPolylineLineStyle}
+                availableItems={availableItems}
+                editLinkedItemId={editLinkedItemId}
+                setEditLinkedItemId={setEditLinkedItemId}
+                onSave={handleEditSave}
+            />
 
             {/* Insert Image Dialog */}
             {!readOnly && (

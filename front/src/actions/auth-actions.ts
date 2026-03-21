@@ -1,8 +1,9 @@
 "use server";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { SESSION_COOKIE } from "@/lib/auth-constants";
+import { checkLoginRateLimitFromHeaders } from "@/lib/rate-limit";
 import { signSessionToken, verifySessionToken } from "@/lib/session-token";
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
 import { verifyPassword } from "@/lib/password";
@@ -18,6 +19,12 @@ export async function loginAction(formData: FormData) {
     const secret = getSessionSecret();
     if (!secret) {
         redirect("/?error=config");
+    }
+
+    const h = await headers();
+    const rl = checkLoginRateLimitFromHeaders(h);
+    if (!rl.ok) {
+        redirect("/?error=ratelimit");
     }
 
     const email = formData.get("email")?.toString().trim().toLowerCase();

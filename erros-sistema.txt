@@ -53,32 +53,43 @@ ALTO
 - Impacto (se regredir ou exigir multi-tenant):
   - Será necessário modelo de posse/tenant e checagens por recurso além de sessão + formato de id.
 
-5) Segredos e credenciais padrão expostos no código/configuração
-- Evidência:
-  - Fallback de senha em src/lib/surreal.ts e src/app/api/compositor/[budgetId]/live/route.ts.
-  - Valores sensíveis presentes em front/.env.example (senha de banco, host remoto, JWT_SECRET).
-- Problema:
-  - Configuração previsível e risco de vazamento operacional.
+5) Segredos e credenciais padrão expostos no código/configuração  [MITIGADO em 21/03/2026]
+- Evidência (histórico):
+  - Fallback de senha Surreal em surreal.ts, rota SSE live e init-db.ts.
+  - front/.env.example com senha de banco, host remoto real, JWT e credenciais de exemplo.
+- Correção:
+  - Senha Surreal apenas via SURREALDB_PASS / SURREAL_PASS (requireSurrealPassword em front/src/lib/surreal-env.ts); sem fallback no código da aplicação, init:db e SSE.
+  - front/.env.example só com placeholders e comentários; deploy/SSH como exemplos genéricos.
+  - db-backup.sh exige SURREAL_PASS ou SURREALDB_PASS (sem padrão).
+  - docker-compose local mantém --pass explícito para conveniência de dev; comentário exige alinhar front/.env.
+- Problema (se regredir):
+  - Commits com .env real ou novos fallbacks de segredo no código.
 - Impacto:
   - Facilita comprometimento do ambiente.
 
-6) Ausência de proteção antiautomação (rate limit)
-- Evidência:
-  - Não há limitação clara por IP/usuário em login, upload e rotas críticas.
-- Problema:
-  - Sistema vulnerável a força bruta e abuso de chamadas.
-- Impacto:
-  - Risco de DoS e exploração por tentativa massiva.
+6) Ausência de proteção antiautomação (rate limit)  [MITIGADO (v1) em 21/03/2026]
+- Evidência (histórico):
+  - Sem limite por IP em login, uploads e /api.
+- Correção:
+  - Login: janela fixa por IP em loginAction (front/src/lib/rate-limit.ts + checkLoginRateLimitFromHeaders); excesso redireciona a ?error=ratelimit.
+  - /api: no proxy, antes da auth — limites distintos para POST /api/upload/*, GET SSE compositor …/live e demais /api; resposta 429 + Retry-After.
+  - PAZINI_RATE_LIMIT_* e PAZINI_RATE_LIMIT_DISABLED documentados no .env.example; limite em memória por processo (réplicas múltiplas = contadores independentes).
+- Problema (fora do escopo v1):
+  - Limite global compartilhado entre instâncias (Redis / API gateway) não implementado.
+- Impacto (se regredir):
+  - Abuso por IP distribuído ou saturação entre réplicas sem store compartilhado.
 
-7) Componentes monolíticos (tamanho excessivo)
-- Evidência:
-  - src/components/budgets/scope/budget-scope.tsx (1669 linhas)
-  - src/components/annotator/advanced-image-annotator.tsx (1124 linhas)
-  - src/components/budgets/compositor/compositor-content.tsx (686 linhas)
-- Problema:
-  - Muitas responsabilidades no mesmo arquivo (UI, estado, regra e integração).
+7) Componentes monolíticos (tamanho excessivo)  [MITIGADO (refatoração modular) em 21/03/2026]
+- Evidência (histórico):
+  - budget-scope.tsx, advanced-image-annotator.tsx e compositor-content.tsx concentravam UI, estado e integrações.
+- Correção:
+  - Escopo: `budget-scope.tsx` virou shell (~120 linhas); lógica em `budget-scope-*.tsx` / `budget-scope-utils.ts` / `budget-scope-types.ts` sob `components/budgets/scope/`.
+  - Compositor: `compositor-content.tsx` reexporta módulos em `components/budgets/compositor/` (block-tree, item-row, hooks, utils).
+  - Annotator: `advanced-image-annotator.tsx` reduzido; extraídos `annotator-compute-content-bbox.ts`, `annotator-konva-workspace.tsx`, `annotator-edit-annotation-dialog.tsx`.
+- Problema (se regredir):
+  - Reunir de novo centenas de linhas num único arquivo sem modularização.
 - Impacto:
-  - Aumenta chance de regressão e dificulta correção segura.
+  - Manutenção e revisão continuam mais seguras com módulos coesos.
 
 8) Actions muito grandes e com múltiplas responsabilidades
 - Evidência:

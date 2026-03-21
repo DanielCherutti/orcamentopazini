@@ -121,13 +121,13 @@ Os scripts usam as variáveis de ambiente do arquivo `front/.env`:
 
 ```env
 SURREAL_URL=http://127.0.0.1:8000
-SURREAL_NS=dreibox
-SURREAL_DB=pazini
+SURREAL_NS=pazini
+SURREAL_DB=core
 SURREAL_USER=admin
-SURREAL_PASS=q1w2e3r4
+SURREAL_PASS=<mesma-senha-do-surreal-sem-padrao-no-codigo>
 ```
 
-**Importante:** Certifique-se de que essas credenciais correspondem ao `docker-compose.yml`.
+**Importante:** `SURREAL_PASS` ou `SURREALDB_PASS` é **obrigatório** (a app não define senha padrão). Em dev local, use o mesmo valor que `--pass` no `docker-compose.yml` da raiz do repositório.
 
 ---
 

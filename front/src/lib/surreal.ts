@@ -1,5 +1,6 @@
 
 import { Surreal } from "surrealdb";
+import { requireSurrealPassword } from "@/lib/surreal-env";
 
 // Suporta SURREAL_URL ou SURREALDB_HOST+SURREALDB_PORT
 const host = process.env.SURREALDB_HOST || "127.0.0.1";
@@ -8,7 +9,6 @@ const endpoint = process.env.SURREAL_URL || `http://${host}:${port}`;
 const namespace = process.env.SURREAL_NS || process.env.SURREALDB_NS || "dreibox";
 const database = process.env.SURREAL_DB || process.env.SURREALDB_DB || "pazini";
 const username = process.env.SURREAL_USER || process.env.SURREALDB_USER || "admin";
-const password = process.env.SURREAL_PASS || process.env.SURREALDB_PASS || "q1w2e3r4";
 
 // Reconecta proativamente antes do token expirar (SurrealDB default TTL = 1h)
 const MAX_CONNECTION_AGE_MS = 50 * 60 * 1000; // 50 minutos
@@ -123,6 +123,7 @@ export const getDb = async () => {
 
     // Connect and Auth for WebSocket/HTTP RPC
     dbReady = (async () => {
+        const password = requireSurrealPassword();
         console.log(`Connecting to SurrealDB at ${endpoint}...`);
         await db!.connect(endpoint, {
             namespace,

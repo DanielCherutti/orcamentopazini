@@ -1,5 +1,6 @@
 import { Surreal, Table } from "surrealdb";
 import type { LiveSubscription } from "surrealdb";
+import { requireSurrealPassword } from "@/lib/surreal-env";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,6 @@ function getWsEndpoint(): string {
 const namespace = process.env.SURREAL_NS || process.env.SURREALDB_NS || "dreibox";
 const database = process.env.SURREAL_DB || process.env.SURREALDB_DB || "pazini";
 const username = process.env.SURREAL_USER || process.env.SURREALDB_USER || "admin";
-const password = process.env.SURREAL_PASS || process.env.SURREALDB_PASS || "q1w2e3r4";
 
 export async function GET(
   req: Request,
@@ -40,6 +40,14 @@ export async function GET(
 
       // Conexão WebSocket dedicada por cliente SSE — LIVE SELECT exige WebSocket
       const db = new Surreal();
+      let password: string;
+      try {
+        password = requireSurrealPassword();
+      } catch {
+        console.error("[SSE] SURREALDB_PASS / SURREAL_PASS não configurado");
+        controller.close();
+        return;
+      }
       try {
         await db.connect(getWsEndpoint(), {
           namespace,

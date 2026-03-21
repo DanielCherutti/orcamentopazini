@@ -1,3 +1,5 @@
+# SurrealDB local (dev). A senha em --pass deve ser copiada para SURREALDB_PASS em front/.env
+# (a aplicação não usa senha padrão no código). Em produção, use credenciais fortes e segredos gerenciados.
 services:
   surrealdb:
     image: surrealdb/surrealdb:v3.0.4

@@ -21,6 +21,13 @@ export default async function LoginPage({
           </div>
         )}
 
+        {error === "ratelimit" && (
+          <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm text-center">
+            Muitas tentativas de login a partir deste endereço. Aguarde alguns minutos e tente
+            novamente.
+          </div>
+        )}
+
         {error === "expired" && (
           <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm text-center">
             Sua sessão expirou. Faça login novamente.
