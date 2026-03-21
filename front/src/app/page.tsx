@@ -28,10 +28,16 @@ export default async function LoginPage({
         )}
 
         {error === "config" && (
-          <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm text-center">
-            Autenticação não configurada: defina <code className="text-xs">JWT_SECRET</code> (mín. 32 caracteres) e{" "}
-            <code className="text-xs">PAZINI_LOGIN_EMAIL</code> /{" "}
-            <code className="text-xs">PAZINI_LOGIN_PASSWORD</code> no <code className="text-xs">.env</code>.
+          <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm text-center space-y-1">
+            <p>
+              Defina <code className="text-xs">JWT_SECRET</code> (mín. 32 caracteres) no{" "}
+              <code className="text-xs">.env</code>.
+            </p>
+            <p className="text-xs opacity-90">
+              O login usa usuários no banco. Crie o primeiro com{" "}
+              <code className="text-xs">bun run seed:portal-user</code> (usa{" "}
+              <code className="text-xs">PAZINI_LOGIN_*</code> no .env) ou pela tela Usuários após entrar.
+            </p>
           </div>
         )}
 

@@ -78,7 +78,7 @@ bun install
 cp .env.example .env
 # Editar .env com suas configurações
 
-**Login da aplicação web** (`front/.env`): defina `JWT_SECRET` (mínimo **32 caracteres**) para assinar o cookie de sessão, e `PAZINI_LOGIN_EMAIL` / `PAZINI_LOGIN_PASSWORD` para o usuário que acessa o sistema. Sem isso, a tela de login exibe erro de configuração.
+**Login da aplicação web** (`front/.env`): defina `JWT_SECRET` (mínimo **32 caracteres**) para assinar o cookie de sessão. Os usuários ficam no SurrealDB (`portal_user`). Para criar o primeiro usuário a partir do `.env`, rode em `front/`: `bun run seed:portal-user` (usa `PAZINI_LOGIN_EMAIL` / `PAZINI_LOGIN_PASSWORD`). Depois é possível cadastrar outros em **Configurações → Usuários**.
 
 # 4. Iniciar SurrealDB (Docker)
 cd ..

@@ -6,7 +6,21 @@ import { PanelLeftClose, LogOut, ChevronDown, ChevronRight } from "lucide-react"
 import { useSidebar } from "./sidebar-context";
 import { logoutAction } from "@/actions/auth-actions";
 
-export function Sidebar() {
+function initialsFromEmail(email: string | null | undefined): string {
+    if (!email) return "?";
+    const local = email.split("@")[0] ?? email;
+    const parts = local.split(/[.\s_-]+/).filter(Boolean);
+    if (parts.length >= 2) {
+        return (parts[0]![0]! + parts[1]![0]!).toUpperCase();
+    }
+    return local.slice(0, 2).toUpperCase();
+}
+
+export function Sidebar({
+    sessionEmail,
+}: {
+    sessionEmail: string | null;
+}) {
     const { collapsed, toggleSidebar } = useSidebar();
     const [productsOpen, setProductsOpen] = useState(false);
 
@@ -79,14 +93,26 @@ export function Sidebar() {
                 >
                     Configurações
                 </Link>
+                <Link
+                    href="/settings/users"
+                    className="block px-4 py-2 rounded-md hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors font-medium text-sidebar-foreground/70 hover:text-white"
+                >
+                    Usuários
+                </Link>
             </nav>
 
             <div className="p-4 border-t border-sidebar-border">
                 <div className="flex items-center gap-3">
-                    <div className="h-8 w-8 rounded-full bg-sidebar-accent flex items-center justify-center text-xs">HP</div>
-                    <div className="flex-1 text-sm">
-                        <p className="font-medium text-white">Henrico Pazini</p>
-                        <p className="text-xs text-muted-foreground">henrico@pazini.com</p>
+                    <div className="h-8 w-8 rounded-full bg-sidebar-accent flex items-center justify-center text-xs shrink-0">
+                        {initialsFromEmail(sessionEmail)}
+                    </div>
+                    <div className="flex-1 text-sm min-w-0">
+                        <p className="font-medium text-white truncate">
+                            {sessionEmail?.split("@")[0] ?? "Usuário"}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                            {sessionEmail ?? "—"}
+                        </p>
                     </div>
                     <form action={logoutAction}>
                         <button

@@ -88,6 +88,8 @@ async function ensureSchema(instance: Surreal): Promise<void> {
             DEFINE TABLE IF NOT EXISTS budget_image SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS image_annotation SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS proposal_settings SCHEMALESS;
+            DEFINE TABLE IF NOT EXISTS portal_user SCHEMALESS;
+            DEFINE INDEX IF NOT EXISTS idx_portal_user_email ON portal_user FIELDS email UNIQUE;
             INSERT IGNORE INTO company { id: company:0, name: 'Pazini', created_at: time::now() };
         `);
         dbInitialized = true;

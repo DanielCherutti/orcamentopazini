@@ -10,6 +10,7 @@
     "lint": "eslint",
     "init:db": "bun ./init-db.ts",
     "seed:products": "tsx seed-products.ts",
+    "seed:portal-user": "bun ./seed-portal-user.ts",
     "setup:surreal-schema": "tsx scripts/setup-surreal-schema.ts",
     "setup:clients": "tsx scripts/setup-clients.ts",
     "setup:annotations": "tsx scripts/setup-annotations-schema.ts",
