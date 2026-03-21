@@ -1,0 +1,10 @@
+services:
+  surrealdb:
+    image: surrealdb/surrealdb:v3.0.4
+    container_name: surrealdb
+    ports:
+      - "8000:8000"
+    # SurrealDB 3.x: surrealkv é o backend nativo
+    command: start --user admin --pass q1w2e3r4 --log info --bind 0.0.0.0:8000 surrealkv:/data/db
+    volumes:
+      - ./surreal-data:/data

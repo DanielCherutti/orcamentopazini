@@ -1,0 +1,15 @@
+# Para deploy: usa imagem pré-buildada (sem build no servidor)
+services:
+  pazini-app:
+    container_name: pazini-app
+    image: pazini-app:latest
+    restart: always
+    pull_policy: never
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./pazini-uploads:/app/uploads
+    environment:
+      - PORT=3001
+    networks:
+      - shared

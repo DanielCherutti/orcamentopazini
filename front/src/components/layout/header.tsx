@@ -1,0 +1,26 @@
+"use client";
+
+import { PanelLeft, PanelLeftClose } from "lucide-react";
+import { useSidebar } from "./sidebar-context";
+
+export function Header() {
+    const { collapsed, toggleSidebar } = useSidebar();
+
+    return (
+        <header className="h-16 border-b border-border bg-background px-6 flex items-center justify-between sticky top-0 z-10 w-full">
+            <div className="flex items-center gap-3">
+                <button
+                    onClick={toggleSidebar}
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label={collapsed ? "Abrir menu lateral" : "Fechar menu lateral"}
+                >
+                    {collapsed ? <PanelLeft className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+                </button>
+                <h1 className="text-lg font-semibold text-foreground">Pazini Engenharia</h1>
+            </div>
+            <div className="flex items-center gap-4">
+                {/* Placeholder for header actions */}
+            </div>
+        </header>
+    );
+}

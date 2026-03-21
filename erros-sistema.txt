@@ -1,0 +1,155 @@
+Levantamento de erros e riscos do sistema
+Data: 20/03/2026
+
+================================================================
+CRÍTICO
+================================================================
+
+1) Autenticação frágil por cookie previsível e credenciais fixas
+- Evidência:
+  - src/actions/auth-actions.ts usa email/senha hardcoded e grava cookie com valor fixo "authenticated".
+- Problema:
+  - A sessão não é assinada nem vinculada a um usuário real no servidor.
+- Impacto:
+  - Um atacante pode forjar cookie e burlar autenticação.
+
+2) Rotas /api liberadas sem bloqueio central de sessão
+- Evidência:
+  - src/proxy.ts permite caminho "/api" sem validação de sessão.
+- Problema:
+  - Endpoints sensíveis podem ser acessados fora do fluxo esperado de autenticação.
+- Impacto:
+  - Exposição direta da API para acesso não autorizado.
+
+================================================================
+ALTO
+================================================================
+
+3) Endpoints de upload sem proteção consistente
+- Evidência:
+  - Rotas de upload não verificam sessão explicitamente.
+  - src/app/api/upload/product/[id]/attachments/route.ts não aplica validação robusta de tipo e tamanho.
+- Problema:
+  - Upload pode ser usado para abuso de armazenamento e degradação de serviço.
+- Impacto:
+  - Risco de indisponibilidade e aumento da superfície de ataque.
+
+4) Ausência de autorização por recurso (IDOR lógico)
+- Evidência:
+  - Actions de alteração/exclusão usam IDs recebidos sem validação clara de posse/escopo por usuário.
+- Problema:
+  - Mesmo autenticado, um usuário pode conseguir operar sobre registros que não deveria.
+- Impacto:
+  - Acesso indevido e alteração de dados de terceiros.
+
+5) Segredos e credenciais padrão expostos no código/configuração
+- Evidência:
+  - Fallback de senha em src/lib/surreal.ts e src/app/api/compositor/[budgetId]/live/route.ts.
+  - Valores sensíveis presentes em front/.env.example (senha de banco, host remoto, JWT_SECRET).
+- Problema:
+  - Configuração previsível e risco de vazamento operacional.
+- Impacto:
+  - Facilita comprometimento do ambiente.
+
+6) Ausência de proteção antiautomação (rate limit)
+- Evidência:
+  - Não há limitação clara por IP/usuário em login, upload e rotas críticas.
+- Problema:
+  - Sistema vulnerável a força bruta e abuso de chamadas.
+- Impacto:
+  - Risco de DoS e exploração por tentativa massiva.
+
+7) Componentes monolíticos (tamanho excessivo)
+- Evidência:
+  - src/components/budgets/scope/budget-scope.tsx (1669 linhas)
+  - src/components/annotator/advanced-image-annotator.tsx (1124 linhas)
+  - src/components/budgets/compositor/compositor-content.tsx (686 linhas)
+- Problema:
+  - Muitas responsabilidades no mesmo arquivo (UI, estado, regra e integração).
+- Impacto:
+  - Aumenta chance de regressão e dificulta correção segura.
+
+8) Actions muito grandes e com múltiplas responsabilidades
+- Evidência:
+  - src/actions/budget-hierarchy-actions.ts (618 linhas)
+  - src/actions/budget-core-actions.ts (421 linhas)
+  - src/actions/budget-compositor-actions.ts (414 linhas)
+- Problema:
+  - Mistura de validação, persistência, regra de negócio e revalidação.
+- Impacto:
+  - Alto acoplamento e maior risco em mudanças.
+
+9) Acoplamento elevado entre camadas (UI <-> dados)
+- Evidência:
+  - src/components/budgets/scope/budget-scope.tsx importa muitas actions de domínios diferentes.
+  - src/components/budgets/workspace/budget-data-section.tsx chama action diretamente para buscar cliente.
+- Problema:
+  - Camada de interface dependente de detalhes de infraestrutura.
+- Impacto:
+  - Fragilidade da UI e menor previsibilidade de comportamento.
+
+================================================================
+MÉDIO
+================================================================
+
+10) CORS aberto para leitura de uploads
+- Evidência:
+  - src/app/api/uploads/[...path]/route.ts define Access-Control-Allow-Origin: "*".
+- Problema:
+  - Qualquer origem pode consumir os arquivos expostos por esse endpoint.
+- Impacto:
+  - Amplia risco de exfiltração e uso indevido de conteúdo.
+
+11) Ausência de validação CSRF explícita para rotas mutáveis
+- Evidência:
+  - Não há validação explícita de Origin/Referer/token CSRF nas rotas de API que alteram estado.
+- Problema:
+  - Em cenários com cookie de sessão válido, aumenta risco de requisições cruzadas indevidas.
+- Impacto:
+  - Possível execução de ações não intencionais em nome do usuário.
+
+12) Upload validado por metadado do cliente (MIME) em parte das rotas
+- Evidência:
+  - Validação baseada em file.type sem checagem de assinatura real do arquivo (magic bytes).
+- Problema:
+  - Tipo real do conteúdo pode divergir do metadado enviado.
+- Impacto:
+  - Aumenta risco de upload de conteúdo indevido.
+
+13) Uso de any e supressões de lint/tipo
+- Evidência:
+  - Ocorrências de any e eslint-disable em actions e componentes de produção.
+- Problema:
+  - Perda de garantias estáticas e ocultação de erros.
+- Impacto:
+  - Falhas podem aparecer apenas em runtime.
+
+14) Logs de depuração espalhados em fluxo funcional
+- Evidência:
+  - console.log em src/lib/surreal.ts, src/lib/surreal-schemas.ts,
+    src/components/budgets/workspace/budget-data-section.tsx,
+    src/actions/budget-core-actions.ts.
+- Problema:
+  - Debug misturado ao fluxo normal da aplicação.
+- Impacto:
+  - Ruído operacional e risco de exposição indevida de contexto.
+
+15) Código de demonstração misturado ao app principal
+- Evidência:
+  - Rota src/app/(main)/annotator-demo/page.tsx junto das rotas funcionais.
+- Problema:
+  - Artefato de demo em estrutura produtiva.
+- Impacto:
+  - Superfície extra de manutenção e risco de exposição acidental.
+
+16) Padrão inconsistente na camada de UI
+- Evidência:
+  - src/components/ui/checkbox.tsx usa "radix-ui", enquanto restante usa "@radix-ui/react-*".
+- Problema:
+  - Inconsistência de padrão técnico.
+- Impacto:
+  - Dificulta manutenção e padronização da base.
+
+Resumo executivo
+- O sistema concentra risco imediato em autenticação/autorização e exposição de API.
+- Em paralelo, há dívida estrutural alta que aumenta probabilidade de regressão e reduz capacidade de correção segura.
