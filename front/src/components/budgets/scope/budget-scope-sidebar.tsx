@@ -198,24 +198,50 @@ export function ScopeSidebar({
         else toast.error(result.error || "Erro ao duplicar local");
     };
 
+    const locationCount = localLocations.length;
+    const sectionCount = localLocations.reduce((n, l) => n + l.sections.length, 0);
+
     return (
-        <div className="w-72 shrink-0 flex flex-col border-r bg-card">
-            <div className="p-3 border-b border-primary/20 shrink-0 bg-primary/[0.04]">
-                <h3 className="text-sm font-semibold text-primary">Escopo</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">Locais e trechos</p>
+        <aside className="w-80 shrink-0 flex flex-col border-r border-primary/10 bg-gradient-to-b from-card via-card to-primary/[0.02] shadow-[inset_-1px_0_0_0_hsl(var(--border))]">
+            <div className="shrink-0 border-b border-primary/10 bg-primary/[0.06] px-3 py-3">
+                <div className="flex items-start gap-2.5">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
+                        <MapIcon className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1 pt-0.5">
+                        <h3 className="text-sm font-semibold tracking-tight text-foreground">Índice do escopo</h3>
+                        <p className="text-[11px] leading-snug text-muted-foreground mt-0.5">
+                            Locais e trechos do orçamento
+                        </p>
+                        {(locationCount > 0 || sectionCount > 0) && (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                                <span className="inline-flex items-center rounded-md bg-background/80 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border/60">
+                                    {locationCount} {locationCount === 1 ? "local" : "locais"}
+                                </span>
+                                <span className="inline-flex items-center rounded-md bg-background/80 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border/60">
+                                    {sectionCount} {sectionCount === 1 ? "trecho" : "trechos"}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto min-h-0">
+            <div className="flex-1 overflow-y-auto min-h-0 [scrollbar-gutter:stable]">
                 <DndContext
                     sensors={dndSensors}
                     collisionDetection={closestCenter}
                     onDragEnd={handleSectionDragEnd}
                 >
-                    <nav className="p-1.5 space-y-0.5">
+                    <nav className="p-2.5 space-y-2">
                         {localLocations.length === 0 && !addingLocation && (
-                            <p className="text-xs text-muted-foreground px-2 py-4 text-center">
-                                Nenhum local. Adicione um para começar.
-                            </p>
+                            <div className="mx-1 rounded-lg border border-dashed border-primary/20 bg-primary/[0.03] px-3 py-6 text-center">
+                                <Layers className="mx-auto h-8 w-8 text-primary/25 mb-2" />
+                                <p className="text-xs font-medium text-foreground/80">Nenhum local ainda</p>
+                                <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                                    Use o botão abaixo para criar o primeiro local do escopo.
+                                </p>
+                            </div>
                         )}
                         {localLocations.map((loc, locIdx) => (
                             <LocationNode
@@ -239,9 +265,9 @@ export function ScopeSidebar({
             </div>
 
             {!isReadOnly && (
-                <div className="p-2 border-t shrink-0">
+                <div className="shrink-0 border-t border-primary/10 bg-muted/20 p-2.5">
                     {addingLocation ? (
-                        <div className="space-y-1.5">
+                        <div className="space-y-2 rounded-lg border border-border bg-card p-2 shadow-sm">
                             <Input
                                 autoFocus
                                 placeholder="Nome do local..."
@@ -254,12 +280,12 @@ export function ScopeSidebar({
                                         setNewLocationName("");
                                     }
                                 }}
-                                className="h-7 text-xs"
+                                className="h-8 text-xs"
                             />
-                            <div className="flex gap-1">
+                            <div className="flex gap-1.5">
                                 <Button
                                     size="sm"
-                                    className="h-7 flex-1 text-xs"
+                                    className="h-8 flex-1 text-xs"
                                     type="button"
                                     onClick={handleAddLocation}
                                     disabled={!newLocationName.trim()}
@@ -269,7 +295,7 @@ export function ScopeSidebar({
                                 <Button
                                     size="sm"
                                     variant="ghost"
-                                    className="h-7 px-2 text-xs"
+                                    className="h-8 px-2 text-xs"
                                     type="button"
                                     onClick={() => {
                                         setAddingLocation(false);
@@ -282,14 +308,14 @@ export function ScopeSidebar({
                         </div>
                     ) : (
                         <Button
-                            variant="outline"
+                            variant="default"
                             size="sm"
-                            className="w-full text-xs gap-1.5"
+                            className="w-full h-9 text-xs gap-2 font-medium shadow-sm"
                             type="button"
                             onClick={() => setAddingLocation(true)}
                         >
-                            <Plus className="h-3.5 w-3.5" />
-                            Adicionar Local
+                            <Plus className="h-4 w-4" />
+                            Novo local
                         </Button>
                     )}
                 </div>
@@ -335,7 +361,7 @@ export function ScopeSidebar({
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </div>
+        </aside>
     );
 }
 
@@ -391,10 +417,12 @@ function SortableSectionRow({
     return (
         <div
             ref={setNodeRef}
-            style={{ transform: CSS.Transform.toString(transform), transition, paddingLeft: "20px" }}
+            style={{ transform: CSS.Transform.toString(transform), transition }}
             className={cn(
-                "group flex items-center gap-1 pr-1 py-1.5 cursor-pointer rounded-sm transition-colors",
-                isSectionSelected ? "bg-primary text-primary-foreground" : "hover:bg-muted",
+                "group ml-1 flex items-center gap-1 border-l-2 border-primary/15 pl-2 pr-1 py-1.5 cursor-pointer rounded-md transition-colors",
+                isSectionSelected
+                    ? "border-primary/40 bg-primary text-primary-foreground shadow-sm"
+                    : "hover:bg-background/80",
                 isDragging && "opacity-40"
             )}
             onClick={() => onSelect({ type: "section", id: sec.id, locationId })}
@@ -408,20 +436,32 @@ function SortableSectionRow({
                         "shrink-0 cursor-grab active:cursor-grabbing p-0.5 rounded touch-none",
                         isSectionSelected
                             ? "text-primary-foreground/40 hover:text-primary-foreground"
-                            : "text-muted-foreground/30 hover:text-muted-foreground"
+                            : "text-muted-foreground/35 hover:text-muted-foreground"
                     )}
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <GripVertical className="h-3 w-3" />
+                    <GripVertical className="h-3.5 w-3.5" />
                 </button>
             )}
-            <Layers className="h-3.5 w-3.5 shrink-0 opacity-60" />
+            <Layers
+                className={cn(
+                    "h-3.5 w-3.5 shrink-0",
+                    isSectionSelected ? "opacity-90" : "text-primary/50"
+                )}
+            />
             {scopeNumber && (
-                <span className="shrink-0 text-xs font-mono opacity-40">
+                <span
+                    className={cn(
+                        "shrink-0 rounded px-1 py-0.5 text-[10px] font-mono font-medium tabular-nums",
+                        isSectionSelected
+                            ? "bg-primary-foreground/15 text-primary-foreground/90"
+                            : "bg-muted/80 text-muted-foreground"
+                    )}
+                >
                     {scopeNumber}.{locationIndex}.{sectionIndex}.
                 </span>
             )}
-            <span className="flex-1 truncate text-xs">{sec.name}</span>
+            <span className="flex-1 truncate text-[12.5px] leading-snug">{sec.name}</span>
             {!isReadOnly && (
                 <>
                     <button
@@ -501,6 +541,8 @@ function LocationNode({
     const [duplicating, setDuplicating] = useState(false);
 
     const isSelected = selected?.type === "location" && selected.id === location.id;
+    const hasBodyBelow =
+        (expanded && location.sections.length > 0) || addingSection;
 
     const handleAddSection = async () => {
         const name = sectionName
@@ -547,36 +589,58 @@ function LocationNode({
     };
 
     return (
-        <div>
+        <div className="rounded-lg border border-border/80 bg-background/60 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.04]">
             <div
                 className={cn(
-                    "group flex items-center gap-1 pr-1 py-1.5 cursor-pointer rounded-sm transition-colors",
-                    isSelected ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                    "group flex items-center gap-1.5 px-2 py-2 cursor-pointer transition-colors",
+                    hasBodyBelow ? "rounded-t-lg" : "rounded-lg",
+                    isSelected
+                        ? "bg-primary text-primary-foreground"
+                        : "hover:bg-muted/70"
                 )}
-                style={{ paddingLeft: "8px" }}
                 onClick={() => onSelect({ type: "location", id: location.id })}
             >
                 <button
                     type="button"
-                    className="shrink-0 opacity-60 hover:opacity-100"
+                    className={cn(
+                        "shrink-0 rounded p-0.5 transition-colors",
+                        isSelected
+                            ? "text-primary-foreground/80 hover:bg-primary-foreground/15"
+                            : "text-muted-foreground hover:bg-muted"
+                    )}
                     onClick={(e) => {
                         e.stopPropagation();
                         onToggleExpand();
                     }}
+                    title={expanded ? "Recolher trechos" : "Expandir trechos"}
                 >
                     {expanded && location.sections.length > 0 ? (
-                        <ChevronDown className="h-3.5 w-3.5" />
+                        <ChevronDown className="h-4 w-4" />
                     ) : (
-                        <ChevronRight className="h-3.5 w-3.5" />
+                        <ChevronRight className="h-4 w-4" />
                     )}
                 </button>
-                <MapIcon className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                <div
+                    className={cn(
+                        "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
+                        isSelected ? "bg-primary-foreground/15" : "bg-primary/10 text-primary"
+                    )}
+                >
+                    <MapIcon className="h-3.5 w-3.5 opacity-90" />
+                </div>
                 {scopeNumber && (
-                    <span className="shrink-0 text-xs font-mono opacity-40">
+                    <span
+                        className={cn(
+                            "shrink-0 rounded px-1 py-0.5 text-[10px] font-mono font-medium tabular-nums",
+                            isSelected
+                                ? "bg-primary-foreground/15 text-primary-foreground/90"
+                                : "bg-muted text-muted-foreground"
+                        )}
+                    >
                         {scopeNumber}.{locIndex}.
                     </span>
                 )}
-                <span className="flex-1 truncate text-xs font-medium">{location.name}</span>
+                <span className="flex-1 truncate text-[13px] font-semibold leading-tight">{location.name}</span>
                 {!isReadOnly && (
                     <>
                         <button
@@ -634,6 +698,7 @@ function LocationNode({
                         items={location.sections.map((s) => s.id)}
                         strategy={verticalListSortingStrategy}
                     >
+                        <div className="border-t border-border/60 bg-muted/20 px-1.5 py-1.5 rounded-b-lg">
                         {location.sections.map((sec, secIdx) => (
                             <SortableSectionRow
                                 key={sec.id}
@@ -650,12 +715,13 @@ function LocationNode({
                                 scopeNumber={scopeNumber}
                             />
                         ))}
+                        </div>
                     </SortableContext>
                 )}
             </DroppableLocationSections>
 
             {addingSection && !isReadOnly && (
-                <div className="py-1.5 space-y-1" style={{ paddingLeft: "28px", paddingRight: "8px" }}>
+                <div className="border-t border-border/60 bg-muted/10 px-2 py-2 space-y-1.5 rounded-b-lg">
                     <Input
                         autoFocus
                         placeholder="Nome do trecho..."
@@ -668,22 +734,22 @@ function LocationNode({
                                 setSectionName("");
                             }
                         }}
-                        className="h-7 text-xs"
+                        className="h-8 text-xs"
                     />
-                    <div className="flex gap-1">
+                    <div className="flex gap-1.5">
                         <Button
                             size="sm"
-                            className="h-7 flex-1 text-xs"
+                            className="h-8 flex-1 text-xs"
                             type="button"
                             onClick={handleAddSection}
                             disabled={!sectionName.trim()}
                         >
-                            OK
+                            Adicionar trecho
                         </Button>
                         <Button
                             size="sm"
                             variant="ghost"
-                            className="h-7 px-2 text-xs"
+                            className="h-8 px-2 text-xs"
                             type="button"
                             onClick={() => {
                                 setAddingSection(false);
