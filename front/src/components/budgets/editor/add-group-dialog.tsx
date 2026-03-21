@@ -20,6 +20,7 @@ import {
   type ProductGroup,
 } from "@/actions/product-group-actions";
 import { cn } from "@/lib/utils";
+import { canonicalTableRecordId } from "@/lib/surreal-record-ids";
 
 // Chave composta: groupIdx (posição no array) + productId — garante unicidade
 // independentemente de como o SDK SurrealDB serializa os IDs de grupo.
@@ -47,7 +48,7 @@ interface AddGroupDialogProps {
     groupName: string,
     productQuantities: Record<string, number>,
     selectedProductIds: string[]
-  ) => Promise<{ success: boolean; error?: string }>;
+  ) => Promise<{ success: boolean; error?: string; addedCount?: number }>;
 }
 
 export function AddGroupDialog({
@@ -85,14 +86,16 @@ export function AddGroupDialog({
           list.map(async (g, idx) => {
             const prodsRes = await getProductGroupProductsAction(g.id);
             if (prodsRes.success && prodsRes.data && prodsRes.data.length > 0) {
-              productsMap[idx] = prodsRes.data.map((p) => ({
-                id: typeof p.id === "string" ? p.id : String(p.id),
-                code: p.code,
-                description: p.description,
-                unit: p.unit,
-                equipmentPrice: p.equipmentPrice,
-                assemblyPrice: p.assemblyPrice,
-              }));
+              productsMap[idx] = prodsRes.data
+                .map((p) => ({
+                  id: canonicalTableRecordId("product", p.id),
+                  code: p.code,
+                  description: p.description,
+                  unit: p.unit,
+                  equipmentPrice: p.equipmentPrice,
+                  assemblyPrice: p.assemblyPrice,
+                }))
+                .filter((p) => p.id.length > 0);
             }
           })
         );
@@ -204,14 +207,20 @@ export function AddGroupDialog({
         );
         if (!result.success) {
           toast.error(result.error ?? "Erro ao adicionar grupo");
-          setAdding(false);
           return;
         }
-        added += selectedInGroup.length;
+        added += result.addedCount ?? 0;
+      }
+      if (added === 0) {
+        toast.error("Nenhum produto foi adicionado. Verifique a seleção e tente novamente.");
+        return;
       }
       toast.success(`${added} produto(s) adicionado(s)`);
       onOpenChange(false);
       onSuccess();
+    } catch (e) {
+      console.error("handleAdd group products:", e);
+      toast.error("Erro ao adicionar produtos. Tente novamente.");
     } finally {
       setAdding(false);
     }
@@ -333,10 +342,10 @@ export function AddGroupDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button onClick={handleAdd} disabled={adding || totalSelected === 0}>
+          <Button type="button" onClick={() => void handleAdd()} disabled={adding || totalSelected === 0}>
             {adding ? "Adicionando..." : `Adicionar${totalSelected > 0 ? ` (${totalSelected})` : ""}`}
           </Button>
         </DialogFooter>

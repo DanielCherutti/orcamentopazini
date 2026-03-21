@@ -63,6 +63,12 @@ export function ScopeItemRow({
             productFallback?.description ??
             productFallback?.name ??
             productFallback?.code) as string | undefined;
+    const productUnit = (
+        (item as Record<string, unknown>).product_unit as string | undefined ??
+        (productData?.unit as string | undefined) ??
+        (productFallback?.unit as string | undefined) ??
+        ""
+    ).trim();
     const unitPrice = Number(item.unit_price) || 0;
     const laborCost = Number(item.labor_cost) || 0;
     const total = (unitPrice + laborCost) * qty;
@@ -121,17 +127,32 @@ export function ScopeItemRow({
                 )}
                 <span className="truncate text-xs">{productName || "Produto"}</span>
             </div>
-            <div className="col-span-2 flex justify-center">
+            <div className="col-span-2 flex items-center justify-center gap-1 min-w-0">
                 {isReadOnly ? (
-                    <span className="text-xs">{qty}</span>
+                    <span className="text-xs tabular-nums">
+                        {qty}
+                        {productUnit ? (
+                            <span className="text-muted-foreground font-normal ml-1">{productUnit}</span>
+                        ) : null}
+                    </span>
                 ) : (
-                    <input
-                        type="number"
-                        min={1}
-                        value={qty}
-                        onChange={(e) => handleQtyChange(Number(e.target.value))}
-                        className="w-12 text-center border rounded text-xs h-6"
-                    />
+                    <>
+                        <input
+                            type="number"
+                            min={1}
+                            value={qty}
+                            onChange={(e) => handleQtyChange(Number(e.target.value))}
+                            className="w-11 shrink-0 text-center border rounded text-xs h-6"
+                        />
+                        {productUnit ? (
+                            <span
+                                className="text-[10px] sm:text-xs text-muted-foreground shrink-0 max-w-[5rem] truncate leading-tight"
+                                title={productUnit}
+                            >
+                                {productUnit}
+                            </span>
+                        ) : null}
+                    </>
                 )}
             </div>
             <div className="col-span-2 text-right text-xs text-muted-foreground">

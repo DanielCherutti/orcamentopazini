@@ -5,7 +5,12 @@ import { assertActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
 import { revalidatePath } from "next/cache";
 import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
-import { InvalidRecordIdError, requireRecordId, safeStringRecordId } from "@/lib/surreal-record-ids";
+import {
+    InvalidRecordIdError,
+    canonicalTableRecordId,
+    requireRecordId,
+    safeStringRecordId,
+} from "@/lib/surreal-record-ids";
 
 async function recalculateCompositorTotal(db: Awaited<ReturnType<typeof getDb>>, budgetId: string) {
     const budgetRecordId = requireRecordId("budget", budgetId);
@@ -87,13 +92,13 @@ export async function addGroupToBlockAction(
     groupName: string,
     productQuantities: Record<string, number>,
     selectedProductIds: string[]
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; addedCount?: number }> {
     const auth = await assertActionSession();
-    if (!auth.ok) return { success: false, error: auth.error };
+    if (!auth.ok) return { success: false, error: auth.error, addedCount: 0 };
 
     const groupRecordId = safeStringRecordId("product_group", groupId);
     if (!groupRecordId) {
-        return { success: false, error: "Identificador inválido" };
+        return { success: false, error: "Identificador inválido", addedCount: 0 };
     }
 
     const db = await getDb();
@@ -101,18 +106,27 @@ export async function addGroupToBlockAction(
         const { getProductGroupProductsAction } = await import("@/actions/product-group-actions");
         const productsRes = await getProductGroupProductsAction(groupId);
         if (!productsRes.success || !productsRes.data?.length) {
-            return { success: false, error: "Este grupo não possui produtos cadastrados." };
+            return { success: false, error: "Este grupo não possui produtos cadastrados.", addedCount: 0 };
         }
 
-        const selectedSet = new Set(selectedProductIds);
+        const selectedSet = new Set(
+            selectedProductIds.map((id) => canonicalTableRecordId("product", id)).filter(Boolean)
+        );
+        const normalizedQty: Record<string, number> = {};
+        for (const [k, v] of Object.entries(productQuantities)) {
+            const canon = canonicalTableRecordId("product", k);
+            if (canon) normalizedQty[canon] = v;
+        }
+
         let orderIndex = await nextOrderIndex(db, blockId);
+        let inserted = 0;
         for (const product of productsRes.data) {
-            const productId = typeof product.id === "string" ? product.id : String(product.id);
-            if (!selectedSet.has(productId)) continue;
+            const productId = canonicalTableRecordId("product", product.id);
+            if (!productId || !selectedSet.has(productId)) continue;
 
             const unitPrice = Number(product.equipmentPrice || 0);
             const laborCost = Number(product.assemblyPrice || 0);
-            const quantity = Math.max(1, productQuantities[productId] ?? 1);
+            const quantity = Math.max(1, normalizedQty[productId] ?? 1);
 
             await db.create(new Table("budget_item")).content({
                 block_id: requireRecordId("budget_block", blockId),
@@ -126,18 +140,28 @@ export async function addGroupToBlockAction(
                 order_index: orderIndex++,
                 created_at: new Date().toISOString(),
             });
+            inserted += 1;
+        }
+
+        if (inserted === 0 && selectedProductIds.length > 0) {
+            return {
+                success: false,
+                error:
+                    "Não foi possível associar os produtos selecionados. Atualize a página e tente novamente.",
+                addedCount: 0,
+            };
         }
 
         await recalculateCompositorTotal(db, budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
-        return { success: true };
+        return { success: true, addedCount: inserted };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
-            return { success: false, error: error.message };
+            return { success: false, error: error.message, addedCount: 0 };
         }
         console.error("addGroupToBlockAction error:", error);
         if (isTokenExpiredError(error)) resetDb();
-        return { success: false, error: "Erro ao adicionar grupo" };
+        return { success: false, error: "Erro ao adicionar grupo", addedCount: 0 };
     }
 }
 

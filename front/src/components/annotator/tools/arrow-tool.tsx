@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Arrow, Circle, Group } from 'react-konva';
+import Konva from 'konva';
 import { KonvaEventObject } from 'konva/lib/Node';
 import { ArrowAnnotation, TOOL_CONFIG, Point } from './types';
 import { toAbsoluteCoordinates } from '../utils/geometry';
@@ -12,7 +13,8 @@ interface ArrowToolProps {
     isSelected: boolean;
     onSelect: () => void;
     onUpdate: (updates: Partial<ArrowAnnotation>) => void;
-    stickerCenters?: Map<string, Point>;
+    /** Origem da seta quando vinculada a um sticker (borda direita do ícone, coords relativas). */
+    stickerArrowStarts?: Map<string, Point>;
     readOnly?: boolean;
 }
 
@@ -22,7 +24,7 @@ export function ArrowTool({
     isSelected,
     onSelect,
     onUpdate,
-    stickerCenters,
+    stickerArrowStarts,
     readOnly = false
 }: ArrowToolProps) {
     const [isDragging, setIsDragging] = useState(false);
@@ -31,13 +33,13 @@ export function ArrowTool({
     const config = TOOL_CONFIG.arrow;
     const style = annotation.style;
 
-    // Calcular pontos efetivos: substituir points[0] pelo centro do sticker quando vinculado
-    const linkedCenter = annotation.linked_from_sticker_id
-        ? stickerCenters?.get(annotation.linked_from_sticker_id)
+    // Seta vinculada: origem segue a borda direita do ícone (não o centro do retângulo).
+    const linkedStart = annotation.linked_from_sticker_id
+        ? stickerArrowStarts?.get(annotation.linked_from_sticker_id)
         : undefined;
 
-    const effectiveRelPoints: Point[] = linkedCenter
-        ? [linkedCenter, annotation.points[1] ?? annotation.points[0]]
+    const effectiveRelPoints: Point[] = linkedStart
+        ? [linkedStart, annotation.points[1] ?? annotation.points[0]]
         : annotation.points;
 
     // Converter pontos relativos para absolutos
@@ -55,6 +57,26 @@ export function ArrowTool({
         setDraggedPoint(pointType);
     };
 
+    const applyPointFromNode = (node: Konva.Node, pointType: 'start' | 'end', unlink?: boolean) => {
+        const newX = node.x();
+        const newY = node.y();
+        const relativeX = newX / imageSize.width;
+        const relativeY = newY / imageSize.height;
+        const newPoints = [...annotation.points];
+        const pointIndex = pointType === 'start' ? 0 : 1;
+        newPoints[pointIndex] = { x: relativeX, y: relativeY };
+        if (unlink) {
+            onUpdate({ points: newPoints, linked_from_sticker_id: undefined });
+        } else {
+            onUpdate({ points: newPoints });
+        }
+    };
+
+    const handlePointDragMove = (e: KonvaEventObject<DragEvent>, pointType: 'start' | 'end') => {
+        if (readOnly) return;
+        applyPointFromNode(e.target, pointType, false);
+    };
+
     const handlePointDragEnd = (e: KonvaEventObject<DragEvent>, pointType: 'start' | 'end') => {
         if (readOnly) return;
 
@@ -62,25 +84,9 @@ export function ArrowTool({
         setDraggedPoint(null);
 
         const node = e.target;
-        let newX = node.x();
-        let newY = node.y();
-
-        // Limitar dentro da imagem
-
-
-        node.x(newX);
-        node.y(newY);
-
-        // Converter para coordenadas relativas
-        const relativeX = newX / imageSize.width;
-        const relativeY = newY / imageSize.height;
-
-        // Atualizar o ponto correto
-        const newPoints = [...annotation.points];
-        const pointIndex = pointType === 'start' ? 0 : 1;
-        newPoints[pointIndex] = { x: relativeX, y: relativeY };
-
-        onUpdate({ points: newPoints });
+        // Ao mover a origem de uma seta vinculada, desvincula para não “puxar” de volta ao ícone.
+        const unlink = pointType === 'start' && !!annotation.linked_from_sticker_id;
+        applyPointFromNode(node, pointType, unlink);
     };
 
     const handleGroupDragStart = () => {
@@ -170,37 +176,49 @@ export function ArrowTool({
             {/* Pontos de controle (apenas quando selecionado) */}
             {isSelected && !readOnly && (
                 <>
-                    {/* Ponto inicial — oculto em setas vinculadas (o sticker controla a origem) */}
-                    {!isLinked && (
-                        <Circle
-                            x={points[0].x}
-                            y={points[0].y}
-                            radius={6}
-                            fill="#0EA5E9"
-                            stroke="#FFFFFF"
-                            strokeWidth={2}
-                            draggable
-                            onDragStart={(e) => {
-                                e.cancelBubble = true;
-                                handlePointDragStart('start');
-                            }}
-                            onDragEnd={(e) => {
-                                e.cancelBubble = true;
-                                handlePointDragEnd(e, 'start');
-                            }}
-                            onMouseEnter={(e) => {
-                                e.cancelBubble = true;
-                                const container = e.target.getStage()?.container();
-                                if (container) container.style.cursor = 'crosshair';
-                            }}
-                            onMouseLeave={(e) => {
-                                const container = e.target.getStage()?.container();
-                                if (container) container.style.cursor = 'default';
-                            }}
-                        />
-                    )}
+                    {/* Origem: em setas vinculadas, arrastar aqui desvincula do ícone e permite mover a ponta. */}
+                    <Circle
+                        x={points[0].x}
+                        y={points[0].y}
+                        radius={6}
+                        fill="#0EA5E9"
+                        stroke="#FFFFFF"
+                        strokeWidth={2}
+                        draggable
+                        onDragStart={(e) => {
+                            e.cancelBubble = true;
+                            handlePointDragStart('start');
+                            if (isLinked && linkedStart) {
+                                const endRel =
+                                    effectiveRelPoints[1] ??
+                                    annotation.points[1] ??
+                                    annotation.points[0];
+                                onUpdate({
+                                    linked_from_sticker_id: undefined,
+                                    points: [linkedStart, endRel],
+                                });
+                            }
+                        }}
+                        onDragMove={(e) => {
+                            e.cancelBubble = true;
+                            handlePointDragMove(e, 'start');
+                        }}
+                        onDragEnd={(e) => {
+                            e.cancelBubble = true;
+                            handlePointDragEnd(e, 'start');
+                        }}
+                        onMouseEnter={(e) => {
+                            e.cancelBubble = true;
+                            const container = e.target.getStage()?.container();
+                            if (container) container.style.cursor = 'crosshair';
+                        }}
+                        onMouseLeave={(e) => {
+                            const container = e.target.getStage()?.container();
+                            if (container) container.style.cursor = 'default';
+                        }}
+                    />
 
-                    {/* Ponto final */}
+                    {/* Ponta (comprimento e direção) */}
                     <Circle
                         x={points[1].x}
                         y={points[1].y}
@@ -212,6 +230,10 @@ export function ArrowTool({
                         onDragStart={(e) => {
                             e.cancelBubble = true;
                             handlePointDragStart('end');
+                        }}
+                        onDragMove={(e) => {
+                            e.cancelBubble = true;
+                            handlePointDragMove(e, 'end');
                         }}
                         onDragEnd={(e) => {
                             e.cancelBubble = true;

@@ -6,7 +6,7 @@ import { Table } from "surrealdb";
 import { assertActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
 import { saveFile, deleteFile } from "@/lib/upload";
-import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
+import { InvalidRecordIdError, recordIdToString, requireRecordId } from "@/lib/surreal-record-ids";
 
 export type ProductGroup = {
   id: string;
@@ -277,7 +277,7 @@ export async function getProductGroupProductsAction(groupId: string) {
     );
     const rawProducts = Array.isArray(result[0]) ? result[0] : [];
     const products = rawProducts.map((p: Record<string, unknown>) => ({
-      id: typeof p.id === "string" ? p.id : `${(p.id as Record<string, unknown>).tb}:${(p.id as Record<string, unknown>).id}`,
+      id: recordIdToString(p.id),
       code: p.code as string,
       description: p.description as string,
       unit: p.unit as string,

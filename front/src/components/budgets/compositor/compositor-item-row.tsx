@@ -90,10 +90,13 @@ export function CompositorItemRow({
         else onRefresh();
     };
 
-    const unit =
-        typeof item.product_id === "object"
-            ? ((item.product_id as Record<string, unknown>).unit as string)
-            : "";
+    const unit = (
+        item.product_unit ??
+        (typeof item.product_id === "object"
+            ? ((item.product_id as Record<string, unknown>).unit as string | undefined)
+            : undefined) ??
+        ""
+    ).trim();
     const name =
         typeof item.product_id === "object"
             ? (((item.product_id as Record<string, unknown>).description as string) ??

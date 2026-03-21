@@ -30,7 +30,13 @@ interface ToolbarProps {
 const TOOLS = [
     { type: 'select' as ToolType, icon: MousePointer2, label: 'Selecionar', shortcut: 'V' },
     { type: 'step_number' as ToolType, icon: Hash, label: 'Numeração', shortcut: 'N' },
-    { type: 'arrow' as ToolType, icon: ArrowRight, label: 'Seta', shortcut: 'A' },
+    {
+        type: 'arrow' as ToolType,
+        icon: ArrowRight,
+        label: 'Seta',
+        shortcut: 'A',
+        hint: 'Clique e arraste na imagem do início ao fim',
+    },
     { type: 'text' as ToolType, icon: Type, label: 'Texto', shortcut: 'T' },
     { type: 'rect' as ToolType, icon: Square, label: 'Retângulo', shortcut: 'R' },
     { type: 'polyline' as ToolType, icon: Spline, label: 'Linha', shortcut: 'L' },
@@ -54,7 +60,11 @@ export function Toolbar({ selectedTool, onToolSelect, onDelete, canDelete, onIns
                                 "h-9 w-9 p-0",
                                 isSelected && "bg-primary text-primary-foreground"
                             )}
-                            title={`${tool.label} (${tool.shortcut})`}
+                            title={
+                                "hint" in tool && tool.hint
+                                    ? `${tool.label} (${tool.shortcut}) — ${tool.hint}`
+                                    : `${tool.label} (${tool.shortcut})`
+                            }
                         >
                             <Icon className="h-4 w-4" />
                         </Button>

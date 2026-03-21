@@ -40,7 +40,7 @@ export interface BudgetsRepository {
   updateSection(sectionId: string, budgetId: string, patch: { name?: string; description?: string }): Promise<{ success: boolean; error?: string }>;
   addItem(sectionId: string, budgetId: string, productId: string, quantity: number): Promise<{ success: boolean; error?: string }>;
   updateItemQuantity(itemId: string, budgetId: string, quantity: number): Promise<{ success: boolean; error?: string }>;
-  addGroupToSection(sectionId: string, budgetId: string, groupId: string, groupName: string, productQuantities: Record<string, number>, selectedProductIds: string[]): Promise<{ success: boolean; error?: string }>;
+  addGroupToSection(sectionId: string, budgetId: string, groupId: string, groupName: string, productQuantities: Record<string, number>, selectedProductIds: string[]): Promise<{ success: boolean; error?: string; addedCount?: number }>;
 
   deleteLocation(locationId: string, budgetId: string): Promise<{ success: boolean; error?: string }>;
   deleteSection(sectionId: string, budgetId: string): Promise<{ success: boolean; error?: string }>;

@@ -99,8 +99,8 @@ export function StickerTool({
             {handleDragging && handleDragAbs && (
                 <Arrow
                     points={[
-                        absX + width * sx / 2,
-                        absY + height * sy / 2,
+                        handleInitX,
+                        handleInitY,
                         handleDragAbs.x,
                         handleDragAbs.y
                     ]}
@@ -187,6 +187,7 @@ export function StickerTool({
                     fill="#0EA5E9"
                     stroke="#FFFFFF"
                     strokeWidth={2}
+                    title="Arraste para criar seta a partir da borda do ícone"
                     draggable
                     onDragStart={(e) => {
                         e.cancelBubble = true;
@@ -202,9 +203,10 @@ export function StickerTool({
                         const endX = e.target.x();
                         const endY = e.target.y();
 
-                        const stickerCenterRel: Point = {
-                            x: (absX + width * sx / 2) / imageSize.width,
-                            y: (absY + height * sy / 2) / imageSize.height,
+                        // Origem na borda direita do ícone (mesmo ponto do handle), não no centro do PNG
+                        const startRel: Point = {
+                            x: handleInitX / imageSize.width,
+                            y: handleInitY / imageSize.height,
                         };
                         const endRel: Point = {
                             x: endX / imageSize.width,
@@ -212,11 +214,11 @@ export function StickerTool({
                         };
 
                         const dist = Math.sqrt(
-                            Math.pow(endRel.x - stickerCenterRel.x, 2) +
-                            Math.pow(endRel.y - stickerCenterRel.y, 2)
+                            Math.pow(endRel.x - startRel.x, 2) +
+                            Math.pow(endRel.y - startRel.y, 2)
                         );
                         if (dist > 0.02) {
-                            onCreateLinkedArrow?.(stickerCenterRel, endRel);
+                            onCreateLinkedArrow?.(startRel, endRel);
                         }
 
                         // Resetar posição do handle para a posição inicial

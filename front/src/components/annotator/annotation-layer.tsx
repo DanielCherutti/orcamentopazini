@@ -32,8 +32,9 @@ export function AnnotationLayer({
     onCreateLinkedArrow,
     readOnly = false
 }: AnnotationLayerProps) {
-    // Computar centros dos stickers (em coordenadas relativas) para setas vinculadas
-    const stickerCenters = new Map<string, Point>();
+    // Ponto de origem da seta vinculada ao ícone: borda direita, centro vertical
+    // (onde fica o handle azul) — evita “sair do meio” do PNG com fundo branco.
+    const stickerArrowStarts = new Map<string, Point>();
     annotations.forEach(a => {
         if (a.tool_type === 'product_sticker') {
             const s = a as StickerAnnotation;
@@ -41,23 +42,20 @@ export function AnnotationLayer({
             const h = s.height || 100;
             const sx = s.scaleX || 1;
             const sy = s.scaleY || 1;
-            stickerCenters.set(s.id, {
-                x: s.position.x + (w * sx) / (2 * imageSize.width),
+            stickerArrowStarts.set(s.id, {
+                x: s.position.x + (w * sx) / imageSize.width,
                 y: s.position.y + (h * sy) / (2 * imageSize.height),
             });
         }
     });
 
-    // Ordenação para garantir o z-index correto das formas:
-    // 1. Formas de fundo (retângulos, linhas)
-    // 2. Setas
-    // 3. Imagens (stickers)
-    // 4. Textos e Numeradores (frente)
+    // Ordenação (z-index): retângulos/polylines → stickers → setas (por cima do ícone)
+    // → texto e numeração.
     const sortedAnnotations = [...annotations].sort((a, b) => {
         const getZIndex = (type: string) => {
             if (type === 'rect' || type === 'polyline') return 1;
-            if (type === 'arrow') return 2;
-            if (type === 'product_sticker') return 3;
+            if (type === 'product_sticker') return 2;
+            if (type === 'arrow') return 3;
             return 4; // text, step_number
         };
         return getZIndex(a.tool_type) - getZIndex(b.tool_type);
@@ -92,7 +90,7 @@ export function AnnotationLayer({
                                 isSelected={isSelected}
                                 onSelect={() => onSelect(annotation.id)}
                                 onUpdate={(updates) => onUpdate(annotation.id, updates)}
-                                stickerCenters={stickerCenters}
+                                stickerArrowStarts={stickerArrowStarts}
                                 readOnly={readOnly}
                             />
                         );

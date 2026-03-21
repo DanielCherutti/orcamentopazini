@@ -10,6 +10,7 @@ import { serializeBudgetEntity } from "@/actions/budget-shared";
 import { getProductGroupProductsAction } from "@/actions/product-group-actions";
 import {
     InvalidRecordIdError,
+    canonicalTableRecordId,
     requireRecordId,
     safeStringRecordId,
 } from "@/lib/surreal-record-ids";
@@ -22,7 +23,8 @@ async function upsertBudgetItem(
     productName: string,
     unitPrice: number,
     laborCost: number,
-    quantity: number
+    quantity: number,
+    productUnit?: string
 ) {
     const sectionIdStr = sectionId.startsWith("budget_section:") ? sectionId : `budget_section:${sectionId}`;
 
@@ -44,10 +46,12 @@ async function upsertBudgetItem(
             total: (unitPrice + laborCost) * newQty,
         });
     } else {
+        const unitLabel = productUnit?.trim();
         await db.create(new Table("budget_item")).content({
             section_id: requireRecordId("budget_section", sectionId),
             product_id: requireRecordId("product", productId),
             product_name: productName,
+            ...(unitLabel ? { product_unit: unitLabel } : {}),
             quantity,
             unit_price: unitPrice,
             labor_cost: laborCost,
@@ -149,10 +153,15 @@ export async function getItemsBySectionAction(sectionId: string) {
 
         items = items.map((it) => {
             const r = it as Record<string, unknown>;
-            if (r.product_name) return it;
             const pd = r.product_data as Record<string, unknown> | undefined;
-            const resolved = String(pd?.description ?? pd?.name ?? pd?.code ?? "");
-            if (resolved) r.product_name = resolved;
+            if (!r.product_name) {
+                const resolved = String(pd?.description ?? pd?.name ?? pd?.code ?? "");
+                if (resolved) r.product_name = resolved;
+            }
+            const u = pd?.unit;
+            if (u != null && String(u).trim() !== "" && !r.product_unit) {
+                r.product_unit = String(u);
+            }
             return it;
         });
 
@@ -181,8 +190,18 @@ export async function addItemAction(sectionId: string, budgetId: string, product
         const unitPrice = Number(product.equipmentPrice || 0);
         const laborCost = Number(product.assemblyPrice || 0);
         const productName = String(product.description || product.code || "");
+        const productUnit = String((product as Record<string, unknown>).unit ?? "").trim();
 
-        await upsertBudgetItem(db, sectionId, productId, productName, unitPrice, laborCost, quantity);
+        await upsertBudgetItem(
+            db,
+            sectionId,
+            productId,
+            productName,
+            unitPrice,
+            laborCost,
+            quantity,
+            productUnit || undefined
+        );
 
         await recalculateBudgetTotal(budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
@@ -206,34 +225,45 @@ export async function addGroupToSectionAction(
     selectedProductIds: string[]
 ) {
     const auth = await assertActionSession();
-    if (!auth.ok) return { success: false, error: auth.error };
+    if (!auth.ok) return { success: false, error: auth.error, addedCount: 0 };
 
     const groupRecordId = safeStringRecordId("product_group", groupId);
     if (!groupRecordId) {
-        return { success: false, error: "Identificador inválido" };
+        return { success: false, error: "Identificador inválido", addedCount: 0 };
     }
 
     const productsRes = await getProductGroupProductsAction(groupId);
     if (!productsRes.success || !productsRes.data?.length) {
-        return { success: false, error: "Este grupo não possui produtos cadastrados." };
+        return { success: false, error: "Este grupo não possui produtos cadastrados.", addedCount: 0 };
     }
 
     const db = await getDb();
     try {
-        const selectedSet = new Set(selectedProductIds);
+        const selectedSet = new Set(
+            selectedProductIds.map((id) => canonicalTableRecordId("product", id)).filter(Boolean)
+        );
+        const normalizedQty: Record<string, number> = {};
+        for (const [k, v] of Object.entries(productQuantities)) {
+            const canon = canonicalTableRecordId("product", k);
+            if (canon) normalizedQty[canon] = v;
+        }
+
+        let inserted = 0;
         for (const product of productsRes.data) {
-            const productId = typeof product.id === "string" ? product.id : String(product.id);
-            if (!selectedSet.has(productId)) continue;
+            const productId = canonicalTableRecordId("product", product.id);
+            if (!productId || !selectedSet.has(productId)) continue;
 
             const unitPrice = Number(product.equipmentPrice || 0);
             const laborCost = Number(product.assemblyPrice || 0);
-            const quantity = Math.max(1, productQuantities[productId] ?? 1);
+            const quantity = Math.max(1, normalizedQty[productId] ?? 1);
             const productName = String(product.description || product.code || "");
+            const productUnit = String(product.unit ?? "").trim();
 
             await db.create(new Table("budget_item")).content({
                 section_id: requireRecordId("budget_section", sectionId),
                 product_id: requireRecordId("product", productId),
                 product_name: productName,
+                ...(productUnit ? { product_unit: productUnit } : {}),
                 quantity,
                 unit_price: unitPrice,
                 labor_cost: laborCost,
@@ -242,18 +272,28 @@ export async function addGroupToSectionAction(
                 group_name: groupName,
                 created_at: new Date().toISOString(),
             });
+            inserted += 1;
+        }
+
+        if (inserted === 0 && selectedProductIds.length > 0) {
+            return {
+                success: false,
+                error:
+                    "Não foi possível associar os produtos selecionados. Atualize a página e tente novamente.",
+                addedCount: 0,
+            };
         }
 
         await recalculateBudgetTotal(budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
-        return { success: true };
+        return { success: true, addedCount: inserted };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
-            return { success: false, error: error.message };
+            return { success: false, error: error.message, addedCount: 0 };
         }
         console.error("Error adding group to section:", error);
         if (isTokenExpiredError(error)) resetDb();
-        return { success: false, error: "Falha ao adicionar grupo" };
+        return { success: false, error: "Falha ao adicionar grupo", addedCount: 0 };
     }
 }
 

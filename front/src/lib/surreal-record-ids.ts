@@ -31,6 +31,39 @@ const ALLOWED_TABLES = new Set([
 const SUFFIX_RE = /^[A-Za-z0-9_-]+$/;
 
 /**
+ * Converte valor vindo do Surreal/JSON (string, RecordId ou `{ tb, id }`) em `table:suffix`.
+ */
+export function recordIdToString(id: unknown): string {
+    if (id == null) return "";
+    if (typeof id === "string") return id;
+    if (typeof id === "object" && id !== null) {
+        const o = id as Record<string, unknown>;
+        if (typeof o.tb === "string" && o.id != null) {
+            const inner = o.id;
+            const innerStr =
+                typeof inner === "string"
+                    ? inner
+                    : typeof inner === "object" && inner !== null && "tb" in inner
+                      ? recordIdToString(inner)
+                      : String(inner);
+            return `${o.tb}:${innerStr}`;
+        }
+    }
+    return String(id);
+}
+
+/**
+ * Forma canônica para comparar IDs da mesma tabela (ex.: `uuid` → `product:uuid`).
+ */
+export function canonicalTableRecordId(table: string, id: unknown): string {
+    const s = recordIdToString(id).trim();
+    if (!s) return "";
+    if (s.startsWith(`${table}:`)) return s;
+    if (!s.includes(":") && SUFFIX_RE.test(s)) return `${table}:${s}`;
+    return s;
+}
+
+/**
  * Monta `StringRecordId` só se tabela e sufixo forem seguros.
  */
 export function safeStringRecordId(

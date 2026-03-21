@@ -283,7 +283,7 @@ export function SectionDetail({
                 {items.length > 0 && (
                     <div className="grid grid-cols-12 gap-2 px-2 py-1 text-xs text-muted-foreground font-medium">
                         <div className="col-span-3">Produto</div>
-                        <div className="col-span-2 text-center">Qtd</div>
+                        <div className="col-span-2 text-center">Qtd / un.</div>
                         <div className="col-span-2 text-right">Equipto.</div>
                         <div className="col-span-2 text-right">MO unit.</div>
                         <div className="col-span-1 text-right">Total</div>

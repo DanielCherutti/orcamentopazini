@@ -531,7 +531,7 @@ export function AdvancedImageAnnotator({
                     pointerWidth: 15,
                     style: { ...DEFAULT_STYLE }
                 };
-                updateAnnotations([...annotations, newAnnotation]);
+                updateAnnotations((prev) => [...prev, newAnnotation]);
             }
             setIsDrawingArrow(false); setArrowStartPoint(null); setTempArrowEnd(null); setSelectedTool('select');
         } else if (isDrawingRect && rectStartPoint && tempRectEnd) {
@@ -547,7 +547,7 @@ export function AdvancedImageAnnotator({
                     height,
                     style: { ...DEFAULT_STYLE, color: '#FF3333', strokeWidth: 3 }
                 };
-                updateAnnotations([...annotations, newAnnotation]);
+                updateAnnotations((prev) => [...prev, newAnnotation]);
             }
             setIsDrawingRect(false); setRectStartPoint(null); setTempRectEnd(null); setSelectedTool('select');
         }
