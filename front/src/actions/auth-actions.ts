@@ -99,3 +99,16 @@ export async function getSessionEmail(): Promise<string | null> {
 
     return verifySessionToken(raw, secret);
 }
+
+/**
+ * Uso em Server Actions mutáveis/consulta de dados: exige sessão válida (mitigação IDOR item 4).
+ * Escopo v1: qualquer usuário autenticado acessa todos os recursos da instância (sem tenant por linha).
+ */
+export async function assertActionSession(): Promise<
+    { ok: true } | { ok: false; error: string }
+> {
+    if (!(await getSession())) {
+        return { ok: false, error: "Não autorizado" };
+    }
+    return { ok: true };
+}

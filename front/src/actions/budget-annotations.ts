@@ -1,9 +1,11 @@
 "use server";
 
+import { assertActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
-import { StringRecordId, Table } from "surrealdb";
+import { Table } from "surrealdb";
 import { revalidatePath } from "next/cache";
 import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
+import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
 import { TOOL_CONFIG } from "@/components/annotator/tools/types";
 import type { ImageAnnotation, ArrowAnnotation, RectAnnotation, StickerAnnotation, TextAnnotation, PolylineAnnotation } from "@/components/annotator/tools/types";
 
@@ -102,7 +104,7 @@ async function fetchAnnotationsForImages(db: Surreal, images: DbImage[]) {
         // img.id pode ser um RecordId object — garantir StringRecordId para bater
         // com o valor gravado em image_annotation.image_id (RecordId)
         const imgIdStr = String(img.id);
-        const imgRecordId = new StringRecordId(imgIdStr.startsWith("budget_image:") ? imgIdStr : `budget_image:${imgIdStr}`);
+        const imgRecordId = requireRecordId("budget_image", imgIdStr);
         const [rows] = await db.query<[Record<string, unknown>[]]>(`
             SELECT * FROM image_annotation
             WHERE image_id = $imageId
@@ -122,6 +124,9 @@ async function fetchAnnotationsForImages(db: Surreal, images: DbImage[]) {
 }
 
 export async function saveBudgetImageWithAnnotations(params: SaveBudgetImageParams) {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
     const db = await getDb();
 
     const hasSection = !!params.sectionId;
@@ -136,21 +141,14 @@ export async function saveBudgetImageWithAnnotations(params: SaveBudgetImagePara
         let imageId: string;
         let image: DbImage;
 
-        // Helpers para normalizar IDs como StringRecordId (obrigatório para relações no SurrealDB)
-        const toRecordId = (table: string, id: string) => {
-            const decoded = decodeURIComponent(id);
-            const full = decoded.startsWith(`${table}:`) ? decoded : `${table}:${decoded}`;
-            return new StringRecordId(full);
-        };
-
-        const budgetRecordId = toRecordId("budget", params.budgetId);
-        const sectionRecordId = params.sectionId ? toRecordId("budget_section", params.sectionId) : null;
-        const locationRecordId = params.locationId ? toRecordId("budget_location", params.locationId) : null;
-        const blockRecordId = params.blockId ? toRecordId("budget_block", params.blockId) : null;
+        const budgetRecordId = requireRecordId("budget", params.budgetId);
+        const sectionRecordId = params.sectionId ? requireRecordId("budget_section", params.sectionId) : null;
+        const locationRecordId = params.locationId ? requireRecordId("budget_location", params.locationId) : null;
+        const blockRecordId = params.blockId ? requireRecordId("budget_block", params.blockId) : null;
 
         if (params.imageId) {
             // Modo atualização: deletar anotações antigas e atualizar imagem
-            const imageRecordId = toRecordId("budget_image", params.imageId);
+            const imageRecordId = requireRecordId("budget_image", params.imageId);
             const [existing] = await db.query<[DbImage[]]>(
                 "SELECT * FROM budget_image WHERE id = $imageId AND budget_id = $budgetId",
                 { imageId: imageRecordId, budgetId: budgetRecordId }
@@ -160,7 +158,7 @@ export async function saveBudgetImageWithAnnotations(params: SaveBudgetImagePara
             }
 
             await db.query("DELETE image_annotation WHERE image_id = $imageId", { imageId: imageRecordId });
-            await db.update(toRecordId("budget_image", params.imageId)).merge({
+            await db.update(requireRecordId("budget_image", params.imageId)).merge({
                 url: params.url,
                 composed_url: params.composedUrl,
                 width: params.width,
@@ -233,7 +231,7 @@ export async function saveBudgetImageWithAnnotations(params: SaveBudgetImagePara
                 }
             };
 
-            const imageIdRecord = toRecordId("budget_image", imageId);
+            const imageIdRecord = requireRecordId("budget_image", imageId);
             const annotationPromises = params.annotations.map(ann => {
                 const content = ann.tool_type === 'step_number' ? String(ann.number) : ann.content;
                 const record: Record<string, unknown> = {
@@ -267,6 +265,9 @@ export async function saveBudgetImageWithAnnotations(params: SaveBudgetImagePara
         revalidatePath(budgetRevalidatePath(params.budgetId));
         return { success: true, imageId };
     } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
         console.error("Erro ao salvar imagem e anotações:", error);
         if (isTokenExpiredError(error)) resetDb();
         return { success: false, error: String(error) };
@@ -274,15 +275,13 @@ export async function saveBudgetImageWithAnnotations(params: SaveBudgetImagePara
 }
 
 export async function deleteBudgetImage(imageId: string, budgetId: string) {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
     const db = await getDb();
-    const toRecordId = (table: string, id: string) => {
-        const decoded = decodeURIComponent(id);
-        const full = decoded.startsWith(`${table}:`) ? decoded : `${table}:${decoded}`;
-        return new StringRecordId(full);
-    };
     try {
-        const imageRecordId = toRecordId("budget_image", imageId);
-        const budgetRecordId = toRecordId("budget", budgetId);
+        const imageRecordId = requireRecordId("budget_image", imageId);
+        const budgetRecordId = requireRecordId("budget", budgetId);
         const [rows] = await db.query<[DbImage[]]>(
             "SELECT * FROM budget_image WHERE id = $imageId AND budget_id = $budgetId",
             { imageId: imageRecordId, budgetId: budgetRecordId }
@@ -296,6 +295,9 @@ export async function deleteBudgetImage(imageId: string, budgetId: string) {
         revalidatePath(budgetRevalidatePath(budgetId));
         return { success: true };
     } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
         console.error("Erro ao excluir imagem:", error);
         if (isTokenExpiredError(error)) resetDb();
         return { success: false, error: String(error) };
@@ -303,11 +305,12 @@ export async function deleteBudgetImage(imageId: string, budgetId: string) {
 }
 
 export async function getBudgetImagesBySection(sectionId: string) {
+    const auth = await assertActionSession();
+    if (!auth.ok) return [];
+
     const db = await getDb();
     try {
-        const decoded = decodeURIComponent(sectionId);
-        const full = decoded.startsWith("budget_section:") ? decoded : `budget_section:${decoded}`;
-        const sectionRecordId = new StringRecordId(full);
+        const sectionRecordId = requireRecordId("budget_section", sectionId);
         const [images] = await db.query<[DbImage[]]>(`
             SELECT * FROM budget_image
             WHERE section_id = $sectionId
@@ -316,6 +319,7 @@ export async function getBudgetImagesBySection(sectionId: string) {
         if (!images) return [];
         return fetchAnnotationsForImages(db, images);
     } catch (error) {
+        if (error instanceof InvalidRecordIdError) return [];
         console.error("Erro ao buscar imagens do trecho:", error);
         if (isTokenExpiredError(error)) resetDb();
         return [];
@@ -323,11 +327,12 @@ export async function getBudgetImagesBySection(sectionId: string) {
 }
 
 export async function getBudgetImagesByLocation(locationId: string) {
+    const auth = await assertActionSession();
+    if (!auth.ok) return [];
+
     const db = await getDb();
     try {
-        const decoded = decodeURIComponent(locationId);
-        const full = decoded.startsWith("budget_location:") ? decoded : `budget_location:${decoded}`;
-        const locationRecordId = new StringRecordId(full);
+        const locationRecordId = requireRecordId("budget_location", locationId);
         const [images] = await db.query<[DbImage[]]>(`
             SELECT * FROM budget_image
             WHERE location_id = $locationId
@@ -336,6 +341,7 @@ export async function getBudgetImagesByLocation(locationId: string) {
         if (!images) return [];
         return fetchAnnotationsForImages(db, images);
     } catch (error) {
+        if (error instanceof InvalidRecordIdError) return [];
         console.error("Erro ao buscar imagens do local:", error);
         if (isTokenExpiredError(error)) resetDb();
         return [];
@@ -343,16 +349,21 @@ export async function getBudgetImagesByLocation(locationId: string) {
 }
 
 export async function getBudgetImages(budgetId: string) {
+    const auth = await assertActionSession();
+    if (!auth.ok) return [];
+
     const db = await getDb();
     try {
+        const budgetRecordId = requireRecordId("budget", budgetId);
         const [images] = await db.query<[DbImage[]]>(`
             SELECT * FROM budget_image
             WHERE budget_id = $budgetId
             ORDER BY order_index ASC, created_at ASC
-        `, { budgetId });
+        `, { budgetId: budgetRecordId });
         if (!images) return [];
         return fetchAnnotationsForImages(db, images);
     } catch (error) {
+        if (error instanceof InvalidRecordIdError) return [];
         console.error("Erro ao buscar imagens:", error);
         if (isTokenExpiredError(error)) resetDb();
         return [];
@@ -360,11 +371,12 @@ export async function getBudgetImages(budgetId: string) {
 }
 
 export async function getBudgetImagesByBlock(blockId: string) {
+    const auth = await assertActionSession();
+    if (!auth.ok) return [];
+
     const db = await getDb();
     try {
-        const decoded = decodeURIComponent(blockId);
-        const full = decoded.startsWith("budget_block:") ? decoded : `budget_block:${decoded}`;
-        const blockRecordId = new StringRecordId(full);
+        const blockRecordId = requireRecordId("budget_block", blockId);
         const [images] = await db.query<[DbImage[]]>(`
             SELECT * FROM budget_image
             WHERE block_id = $blockId
@@ -373,6 +385,7 @@ export async function getBudgetImagesByBlock(blockId: string) {
         if (!images) return [];
         return fetchAnnotationsForImages(db, images);
     } catch (error) {
+        if (error instanceof InvalidRecordIdError) return [];
         console.error("Erro ao buscar imagens do bloco:", error);
         if (isTokenExpiredError(error)) resetDb();
         return [];
@@ -382,12 +395,12 @@ export async function getBudgetImagesByBlock(blockId: string) {
 /** Carrega imagens de múltiplos blocos em uma única query (usado pelo compositor). */
 export async function getBudgetImagesByBlocks(blockIds: string[]): Promise<Record<string, Awaited<ReturnType<typeof fetchAnnotationsForImages>>[number][]>> {
     if (!blockIds.length) return {};
+    const auth = await assertActionSession();
+    if (!auth.ok) return {};
+
     const db = await getDb();
     try {
-        const blockRecordIds = blockIds.map(id => {
-            const full = id.startsWith("budget_block:") ? id : `budget_block:${id}`;
-            return new StringRecordId(full);
-        });
+        const blockRecordIds = blockIds.map((id) => requireRecordId("budget_block", id));
         const [images] = await db.query<[DbImage[]]>(`
             SELECT * FROM budget_image
             WHERE block_id INSIDE $blockIds
@@ -404,6 +417,7 @@ export async function getBudgetImagesByBlocks(blockIds: string[]): Promise<Recor
         }
         return result;
     } catch (error) {
+        if (error instanceof InvalidRecordIdError) return {};
         console.error("Erro ao buscar imagens dos blocos em batch:", error);
         if (isTokenExpiredError(error)) resetDb();
         return {};

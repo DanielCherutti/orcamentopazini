@@ -2,9 +2,11 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { StringRecordId, Table } from "surrealdb";
+import { Table } from "surrealdb";
+import { assertActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
 import { saveFile, deleteFile } from "@/lib/upload";
+import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
 
 export type ProductGroup = {
   id: string;
@@ -47,6 +49,9 @@ function serializeGroup(raw: Record<string, unknown>): ProductGroup {
 }
 
 export async function listProductGroupsAction() {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error, data: [] };
+
   const db = await getDb();
   try {
     const result = await db.query<[ProductGroup[]]>(
@@ -63,15 +68,20 @@ export async function listProductGroupsAction() {
 }
 
 export async function getProductGroupAction(id: string) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
-    const decodedId = decodeURIComponent(id);
-    const formattedId = decodedId.startsWith("product_group:") ? decodedId : `product_group:${decodedId}`;
-    const result = await db.select<ProductGroup>(new StringRecordId(formattedId));
+    const recordId = requireRecordId(TABLE_NAME, id);
+    const result = await db.select<ProductGroup>(recordId);
     const data = Array.isArray(result) ? result[0] : result;
     if (!data) return { success: false, error: "Grupo não encontrado" };
     return { success: true, data: serializeGroup(data as Record<string, unknown>) };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("Error getting product group:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Grupo não encontrado" };
@@ -79,6 +89,9 @@ export async function getProductGroupAction(id: string) {
 }
 
 export async function createProductGroupAction(formData: FormData) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   const name = formData.get("name") as string;
   const validated = groupNameSchema.safeParse({ name });
@@ -122,6 +135,9 @@ export async function createProductGroupAction(formData: FormData) {
 }
 
 export async function updateProductGroupAction(id: string, formData: FormData) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   const name = formData.get("name") as string;
   const validated = groupNameSchema.safeParse({ name });
@@ -159,12 +175,11 @@ export async function updateProductGroupAction(id: string, formData: FormData) {
   }
 
   try {
-    const decodedId = decodeURIComponent(id);
-    const formattedId = decodedId.startsWith(`${TABLE_NAME}:`) ? decodedId : `${TABLE_NAME}:${decodedId}`;
+    const recordId = requireRecordId(TABLE_NAME, id);
     const updated = await db.query<[ProductGroup[]]>(
       `UPDATE $record SET name = $name, image_url = $image_url, updated_at = $updated_at`,
       {
-        record: new StringRecordId(formattedId),
+        record: recordId,
         name: validated.data.name,
         image_url: image_url ?? null,
         updated_at: new Date().toISOString(),
@@ -178,6 +193,9 @@ export async function updateProductGroupAction(id: string, formData: FormData) {
     revalidatePath("/dashboard/products/groups");
     return { success: true, data: serializeGroup(group as Record<string, unknown>) };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("Error updating product group:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Falha ao atualizar grupo" };
@@ -185,11 +203,12 @@ export async function updateProductGroupAction(id: string, formData: FormData) {
 }
 
 export async function deleteProductGroupAction(id: string) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
-    const decodedId = decodeURIComponent(id);
-    const formattedId = decodedId.startsWith(`${TABLE_NAME}:`) ? decodedId : `${TABLE_NAME}:${decodedId}`;
-    const recordId = new StringRecordId(formattedId);
+    const recordId = requireRecordId(TABLE_NAME, id);
 
     // Get group first to delete image file
     const existingRes = await getProductGroupAction(id);
@@ -214,6 +233,9 @@ export async function deleteProductGroupAction(id: string) {
     revalidatePath("/dashboard/products/groups");
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("Error deleting product group:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Falha ao excluir grupo" };
@@ -222,8 +244,14 @@ export async function deleteProductGroupAction(id: string) {
 
 /** Retorna apenas grupos que possuem pelo menos 1 produto (para seletor no orçamento). */
 export async function listProductGroupsWithProductsAction() {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error, data: [] };
+
   const listRes = await listProductGroupsAction();
-  if (!listRes.success || !listRes.data) return { success: true, data: [] };
+  if (!listRes.success) {
+    return { success: false, error: listRes.error ?? "Falha ao listar grupos", data: [] };
+  }
+  if (!listRes.data?.length) return { success: true, data: [] };
 
   const withProducts: ProductGroup[] = [];
   for (const g of listRes.data) {
@@ -236,11 +264,12 @@ export async function listProductGroupsWithProductsAction() {
 }
 
 export async function getProductGroupProductsAction(groupId: string) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error, data: [] };
+
   const db = await getDb();
   try {
-    const decodedGroupId = decodeURIComponent(groupId);
-    const formattedGroupId = decodedGroupId.startsWith(`${TABLE_NAME}:`) ? decodedGroupId : `${TABLE_NAME}:${decodedGroupId}`;
-    const groupRecordId = new StringRecordId(formattedGroupId);
+    const groupRecordId = requireRecordId(TABLE_NAME, groupId);
 
     const result = await db.query(
       `SELECT id, code, description, unit, equipmentPrice, assemblyPrice, imageUrl FROM product WHERE group_ids CONTAINS $groupId`,
@@ -258,6 +287,9 @@ export async function getProductGroupProductsAction(groupId: string) {
     }));
     return { success: true, data: products };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message, data: [] };
+    }
     console.error("Error fetching group products:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: true, data: [] };

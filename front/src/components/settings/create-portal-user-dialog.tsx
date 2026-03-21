@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { submitCreatePortalUser } from "@/actions/portal-user-actions";
+import { PasswordRequirementsHint } from "@/components/settings/password-requirements-hint";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -27,11 +28,13 @@ export function CreatePortalUserDialog({ open, onOpenChange }: Props) {
     const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>(
         {},
     );
+    const [password, setPassword] = useState("");
 
     function handleOpenChange(next: boolean) {
         if (!next) {
             setError(null);
             setFieldErrors({});
+            setPassword("");
         }
         onOpenChange(next);
     }
@@ -47,6 +50,7 @@ export function CreatePortalUserDialog({ open, onOpenChange }: Props) {
             const r = await submitCreatePortalUser(fd);
             if (r.success) {
                 form.reset();
+                setPassword("");
                 handleOpenChange(false);
                 router.refresh();
                 return;
@@ -58,12 +62,12 @@ export function CreatePortalUserDialog({ open, onOpenChange }: Props) {
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogContent className="sm:max-w-md" showCloseButton>
+            <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto" showCloseButton>
                 <DialogHeader>
                     <DialogTitle>Novo usuário</DialogTitle>
                     <DialogDescription>
-                        O e-mail será usado no login. Senha com no mínimo 8
-                        caracteres; será armazenada com hash.
+                        O e-mail será usado no login. Defina uma senha forte
+                        conforme os requisitos abaixo.
                     </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -91,15 +95,20 @@ export function CreatePortalUserDialog({ open, onOpenChange }: Props) {
                             name="password"
                             type="password"
                             required
-                            minLength={8}
+                            minLength={12}
                             autoComplete="new-password"
-                            placeholder="Mínimo 8 caracteres"
+                            placeholder="Senha forte (mín. 12 caracteres)"
                             disabled={pending}
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
                         />
-                        {fieldErrors.password?.[0] && (
-                            <p className="text-sm text-destructive">
-                                {fieldErrors.password[0]}
-                            </p>
+                        <PasswordRequirementsHint password={password} />
+                        {fieldErrors.password && fieldErrors.password.length > 0 && (
+                            <ul className="text-sm text-destructive space-y-1 list-disc pl-4">
+                                {fieldErrors.password.map((msg, i) => (
+                                    <li key={i}>{msg}</li>
+                                ))}
+                            </ul>
                         )}
                     </div>
                     {error && (

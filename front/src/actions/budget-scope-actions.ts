@@ -1,14 +1,9 @@
 "use server";
 
+import { assertActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
-import { StringRecordId } from "surrealdb";
 import { serializeBudgetEntity } from "@/actions/budget-shared";
-
-function toRecordId(table: string, id: string): StringRecordId {
-  const decoded = decodeURIComponent(id);
-  const full = decoded.startsWith(`${table}:`) ? decoded : `${table}:${decoded}`;
-  return new StringRecordId(full);
-}
+import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
 
 export interface ScopeSection {
   id: string;
@@ -35,9 +30,12 @@ export async function getLocationsAction(budgetId: string): Promise<{
   data?: ScopeLocation[];
   error?: string;
 }> {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
-    const budgetRecordId = toRecordId("budget", budgetId);
+    const budgetRecordId = requireRecordId("budget", budgetId);
 
     const locResult = await db.query<[Array<Record<string, unknown>>]>(
       `SELECT * FROM budget_location WHERE budget_id = $budgetId AND deleted_at IS NONE ORDER BY order_index ASC`,
@@ -47,7 +45,7 @@ export async function getLocationsAction(budgetId: string): Promise<{
 
     const result: ScopeLocation[] = [];
     for (const loc of locations) {
-      const locRecordId = toRecordId("budget_location", String(loc.id));
+      const locRecordId = requireRecordId("budget_location", String(loc.id));
       const secResult = await db.query<[Array<Record<string, unknown>>]>(
         `SELECT * FROM budget_section WHERE location_id = $locId AND deleted_at IS NONE ORDER BY order_index ASC`,
         { locId: locRecordId }
@@ -64,6 +62,9 @@ export async function getLocationsAction(budgetId: string): Promise<{
 
     return { success: true, data: toPlain(result) };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("getLocationsAction error:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao carregar locais" };
@@ -75,9 +76,12 @@ export async function getScopeStatsAction(budgetId: string): Promise<{
   data?: { locations: number; sections: number; items: number };
   error?: string;
 }> {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
-    const budgetRecordId = toRecordId("budget", budgetId);
+    const budgetRecordId = requireRecordId("budget", budgetId);
 
     const [locRes, secRes, itemRes] = await Promise.all([
       db.query<[Array<{ count: number }>]>(
@@ -103,6 +107,9 @@ export async function getScopeStatsAction(budgetId: string): Promise<{
       },
     };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("getScopeStatsAction error:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao carregar estatísticas" };

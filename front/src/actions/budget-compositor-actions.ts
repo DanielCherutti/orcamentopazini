@@ -1,6 +1,7 @@
 "use server";
 
-import { StringRecordId, Table } from "surrealdb";
+import { Table } from "surrealdb";
+import { assertActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { revalidatePath } from "next/cache";
 import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
@@ -8,12 +9,11 @@ import type { BudgetBlockFlat } from "@/types/budget-compositor-types";
 import type { BudgetItem } from "@/types/budget-types";
 import { serializeBudgetEntity } from "@/actions/budget-shared";
 import { getBudgetImagesByBlocks } from "@/actions/budget-annotations";
-
-function toRecordId(table: string, id: string): StringRecordId {
-  const decoded = decodeURIComponent(id);
-  const full = decoded.startsWith(`${table}:`) ? decoded : `${table}:${decoded}`;
-  return new StringRecordId(full);
-}
+import {
+  InvalidRecordIdError,
+  requireRecordId,
+  safeStringRecordId,
+} from "@/lib/surreal-record-ids";
 
 // ─── Leitura ──────────────────────────────────────────────────────────────────
 
@@ -24,9 +24,12 @@ export async function getCompositorTreeAction(budgetId: string): Promise<{
   imagesByBlock?: Record<string, unknown[]>;
   error?: string;
 }> {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
-    const budgetRecordId = toRecordId("budget", budgetId);
+    const budgetRecordId = requireRecordId("budget", budgetId);
 
     // Carrega blocos — query principal, nunca pode falhar
     const blocksRes = await db.query<[BudgetBlockFlat[]]>(
@@ -45,7 +48,7 @@ export async function getCompositorTreeAction(budgetId: string): Promise<{
     const itemsByBlock: Record<string, BudgetItem[]> = {};
     if (blocks.length > 0) {
       try {
-        const blockIds = blocks.map((b) => new StringRecordId(b.id));
+        const blockIds = blocks.map((b) => requireRecordId("budget_block", b.id));
         const itemsRes = await db.query<[Array<Record<string, unknown>>]>(
           "SELECT * FROM budget_item WHERE block_id INSIDE $blockIds AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC FETCH product_id",
           { blockIds }
@@ -73,6 +76,9 @@ export async function getCompositorTreeAction(budgetId: string): Promise<{
 
     return { success: true, blocks: toPlain(blocks), items: toPlain(itemsByBlock), imagesByBlock: toPlain(imagesByBlock) };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("getCompositorTreeAction error:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao carregar compositor" };
@@ -88,10 +94,13 @@ export async function addBlockAction(params: {
   label: string;
   props?: Record<string, unknown>;
 }): Promise<{ success: boolean; blockId?: string; error?: string }> {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
     const { budgetId, parentId, type, label, props = {} } = params;
-    const budgetRecordId = toRecordId("budget", budgetId);
+    const budgetRecordId = requireRecordId("budget", budgetId);
 
     // Calcula próximo order_index entre os irmãos
     // Calcula order_index: pega o maior entre os irmãos e incrementa
@@ -102,7 +111,7 @@ export async function addBlockAction(params: {
           ? "SELECT order_index FROM budget_block WHERE parent_id = $parentId ORDER BY order_index DESC LIMIT 1"
           : "SELECT order_index FROM budget_block WHERE budget_id = $budgetId AND parent_id IS NONE ORDER BY order_index DESC LIMIT 1",
         parentId
-          ? { parentId: toRecordId("budget_block", parentId) }
+          ? { parentId: requireRecordId("budget_block", parentId) }
           : { budgetId: budgetRecordId }
       );
       const lastIndex = siblingsRes[0]?.[0]?.order_index ?? -1;
@@ -115,7 +124,7 @@ export async function addBlockAction(params: {
     const raw = await db.create(new Table("budget_block")).content({
       budget_id: budgetRecordId,
       // parent_id omitido (NONE) quando bloco é raiz — null causa erro em option<record<T>>
-      ...(parentId ? { parent_id: toRecordId("budget_block", parentId) } : {}),
+      ...(parentId ? { parent_id: requireRecordId("budget_block", parentId) } : {}),
       type,
       label,
       order_index: orderIndex,
@@ -127,6 +136,9 @@ export async function addBlockAction(params: {
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true, blockId: String(created.id) };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("addBlockAction error:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao adicionar bloco" };
@@ -140,9 +152,12 @@ export async function updateBlockAction(
   budgetId: string,
   patch: { label?: string; props?: Record<string, unknown> }
 ): Promise<{ success: boolean; error?: string }> {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
-    const blockRecordId = toRecordId("budget_block", blockId);
+    const blockRecordId = requireRecordId("budget_block", blockId);
 
     if (patch.props !== undefined) {
       // Merge parcial de props: lê props existentes e mescla
@@ -164,6 +179,9 @@ export async function updateBlockAction(
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("updateBlockAction error:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao atualizar bloco" };
@@ -173,7 +191,7 @@ export async function updateBlockAction(
 // ─── Exclusão em cascata ──────────────────────────────────────────────────────
 
 async function deleteBlockCascade(db: Awaited<ReturnType<typeof getDb>>, blockId: string) {
-  const blockRecordId = toRecordId("budget_block", blockId);
+  const blockRecordId = requireRecordId("budget_block", blockId);
 
   // Busca filhos diretos
   const childrenRes = await db.query<[Array<{ id: string }>]>(
@@ -201,12 +219,18 @@ export async function deleteBlockAction(
   blockId: string,
   budgetId: string
 ): Promise<{ success: boolean; error?: string }> {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
     await deleteBlockCascade(db, blockId);
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("deleteBlockAction error:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao remover bloco" };
@@ -216,7 +240,7 @@ export async function deleteBlockAction(
 // ─── Itens em blocos 'section' ────────────────────────────────────────────────
 
 async function recalculateCompositorTotal(db: Awaited<ReturnType<typeof getDb>>, budgetId: string) {
-  const budgetRecordId = toRecordId("budget", budgetId);
+  const budgetRecordId = requireRecordId("budget", budgetId);
   try {
     const result = await db.query<[{ grand_total: number }[]]>(
       "SELECT math::sum(total) as grand_total FROM budget_item WHERE block_id.budget_id = $budgetId GROUP ALL",
@@ -233,7 +257,7 @@ async function nextOrderIndex(db: Awaited<ReturnType<typeof getDb>>, blockId: st
   try {
     const res = await db.query<[Array<{ order_index: number }>]>(
       "SELECT order_index FROM budget_item WHERE block_id = $blockId ORDER BY order_index DESC LIMIT 1",
-      { blockId: toRecordId("budget_block", blockId) }
+      { blockId: requireRecordId("budget_block", blockId) }
     );
     return (res[0]?.[0]?.order_index ?? -1) + 1;
   } catch {
@@ -247,9 +271,12 @@ export async function addItemToBlockAction(
   productId: string,
   quantity: number
 ): Promise<{ success: boolean; error?: string }> {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
-    const productRecordId = toRecordId("product", productId);
+    const productRecordId = requireRecordId("product", productId);
     const productResult = await db.select(productRecordId);
     const product = (Array.isArray(productResult) ? productResult[0] : productResult) as Record<string, unknown>;
     if (!product) throw new Error("Produto não encontrado");
@@ -259,7 +286,7 @@ export async function addItemToBlockAction(
     const orderIndex = await nextOrderIndex(db, blockId);
 
     await db.create(new Table("budget_item")).content({
-      block_id: toRecordId("budget_block", blockId),
+      block_id: requireRecordId("budget_block", blockId),
       product_id: productRecordId,
       quantity,
       unit_price: unitPrice,
@@ -273,6 +300,9 @@ export async function addItemToBlockAction(
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("addItemToBlockAction error:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao adicionar item" };
@@ -287,6 +317,14 @@ export async function addGroupToBlockAction(
   productQuantities: Record<string, number>,
   selectedProductIds: string[]
 ): Promise<{ success: boolean; error?: string }> {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
+  const groupRecordId = safeStringRecordId("product_group", groupId);
+  if (!groupRecordId) {
+    return { success: false, error: "Identificador inválido" };
+  }
+
   const db = await getDb();
   try {
     const { getProductGroupProductsAction } = await import("@/actions/product-group-actions");
@@ -306,13 +344,13 @@ export async function addGroupToBlockAction(
       const quantity = Math.max(1, productQuantities[productId] ?? 1);
 
       await db.create(new Table("budget_item")).content({
-        block_id: toRecordId("budget_block", blockId),
-        product_id: toRecordId("product", productId),
+        block_id: requireRecordId("budget_block", blockId),
+        product_id: requireRecordId("product", productId),
         quantity,
         unit_price: unitPrice,
         labor_cost: laborCost,
         total: (unitPrice + laborCost) * quantity,
-        group_id: groupId,
+        group_id: groupRecordId,
         group_name: groupName,
         order_index: orderIndex++,
         created_at: new Date().toISOString(),
@@ -323,6 +361,9 @@ export async function addGroupToBlockAction(
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("addGroupToBlockAction error:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao adicionar grupo" };
@@ -333,13 +374,19 @@ export async function deleteItemFromBlockAction(
   itemId: string,
   budgetId: string
 ): Promise<{ success: boolean; error?: string }> {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
-    await db.update(toRecordId("budget_item", itemId)).merge({ deleted_at: new Date().toISOString() });
+    await db.update(requireRecordId("budget_item", itemId)).merge({ deleted_at: new Date().toISOString() });
     await recalculateCompositorTotal(db, budgetId);
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("deleteItemFromBlockAction error:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao remover item" };
@@ -351,9 +398,12 @@ export async function updateItemQuantityInBlockAction(
   budgetId: string,
   quantity: number
 ): Promise<{ success: boolean; error?: string }> {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
-    const itemRecordId = toRecordId("budget_item", itemId);
+    const itemRecordId = requireRecordId("budget_item", itemId);
     const raw = await db.select(itemRecordId);
     const item = (Array.isArray(raw) ? raw[0] : raw) as Record<string, unknown>;
     if (!item) throw new Error("Item não encontrado");
@@ -366,6 +416,9 @@ export async function updateItemQuantityInBlockAction(
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("updateItemQuantityInBlockAction error:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao atualizar quantidade" };
@@ -379,20 +432,27 @@ export async function updateItemGroupInBlockAction(
   groupId: string | null,
   groupName?: string
 ): Promise<{ success: boolean; error?: string }> {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
-    const itemRecordId = toRecordId("budget_item", itemId);
+    const itemRecordId = requireRecordId("budget_item", itemId);
     if (groupId === null) {
       await db.query("UPDATE $item SET group_id = NONE, group_name = NONE", { item: itemRecordId });
     } else {
+      const groupRecordId = requireRecordId("product_group", groupId);
       await db.update(itemRecordId).merge({
-        group_id: groupId,
+        group_id: groupRecordId,
         group_name: groupName ?? "",
       });
     }
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("updateItemGroupInBlockAction error:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao atualizar grupo do item" };
@@ -403,13 +463,19 @@ export async function reorderItemsInBlockAction(
   blockId: string,
   itemIds: string[]
 ): Promise<{ success: boolean; error?: string }> {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
     for (let i = 0; i < itemIds.length; i++) {
-      await db.update(toRecordId("budget_item", itemIds[i])).merge({ order_index: i });
+      await db.update(requireRecordId("budget_item", itemIds[i])).merge({ order_index: i });
     }
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("reorderItemsInBlockAction error:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao reordenar itens" };
@@ -421,17 +487,23 @@ export async function moveBlockToParentAction(
   newParentId: string | null,
   budgetId: string
 ): Promise<{ success: boolean; error?: string }> {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
-    const blockRecordId = toRecordId("budget_block", blockId);
+    const blockRecordId = requireRecordId("budget_block", blockId);
     if (newParentId) {
-      await db.update(blockRecordId).merge({ parent_id: toRecordId("budget_block", newParentId) });
+      await db.update(blockRecordId).merge({ parent_id: requireRecordId("budget_block", newParentId) });
     } else {
       await db.query("UPDATE $block SET parent_id = NONE", { block: blockRecordId });
     }
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("moveBlockToParentAction error:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao mover bloco" };
@@ -442,16 +514,20 @@ export async function reorderBlocksAction(
   blockIds: string[],
   budgetId: string
 ): Promise<{ success: boolean; error?: string }> {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
     for (let i = 0; i < blockIds.length; i++) {
-      await db.update(toRecordId("budget_block", blockIds[i])).merge({ order_index: i });
+      await db.update(requireRecordId("budget_block", blockIds[i])).merge({ order_index: i });
     }
-    const decodedId = decodeURIComponent(budgetId);
-    const fmtId = decodedId.startsWith("budget:") ? decodedId : `budget:${decodedId}`;
-    revalidatePath(budgetRevalidatePath(fmtId));
+    revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("reorderBlocksAction error:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao reordenar blocos" };

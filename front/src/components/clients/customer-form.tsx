@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -19,6 +19,7 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import type { CustomerFull, CustomerFormInput } from "@/actions/client-actions";
+import { lookupCnpjAction } from "@/actions/client-actions";
 
 // ─── Mask helpers ────────────────────────────────────────────────────────────
 
@@ -89,6 +90,9 @@ export function CustomerForm({
 }: CustomerFormProps) {
     const [cepLoading, setCepLoading] = useState(false);
     const [cepError, setCepError] = useState<string | null>(null);
+    const [cnpjLoading, setCnpjLoading] = useState(false);
+    const [cnpjError, setCnpjError] = useState<string | null>(null);
+    const lastFetchedCnpjRef = useRef<string | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
 
     const {
@@ -120,6 +124,37 @@ export function CustomerForm({
     });
 
     const busy = isSubmitting || formSubmitting || isDeleting;
+    const cnpjFieldReg = register("cnpj");
+
+    const handleCnpjBlur = async () => {
+        const raw = getValues("cnpj")?.replace(/\D/g, "") ?? "";
+        if (raw.length !== 14) {
+            lastFetchedCnpjRef.current = null;
+            return;
+        }
+        if (lastFetchedCnpjRef.current === raw) return;
+
+        setCnpjLoading(true);
+        setCnpjError(null);
+
+        try {
+            const r = await lookupCnpjAction(raw);
+            if (r.success && r.name) {
+                setValue("name", r.name, { shouldValidate: true, shouldDirty: true });
+                lastFetchedCnpjRef.current = raw;
+                setFocus("name");
+                setCnpjError(null);
+            } else {
+                setCnpjError(r.error ?? "Não foi possível consultar o CNPJ.");
+                lastFetchedCnpjRef.current = null;
+            }
+        } catch {
+            setCnpjError("Consulta de CNPJ indisponível. Tente mais tarde.");
+            lastFetchedCnpjRef.current = null;
+        } finally {
+            setCnpjLoading(false);
+        }
+    };
 
     const handleCepBlur = async () => {
         const cep = getValues("address.cep")?.replace(/\D/g, "");
@@ -182,37 +217,43 @@ export function CustomerForm({
                 <h2 className="text-base font-semibold tracking-tight">Dados da Empresa</h2>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Nome */}
-                    <div className="md:col-span-2 space-y-1.5">
-                        <Label htmlFor="name">Nome / Razão Social *</Label>
-                        <Input
-                            id="name"
-                            {...register("name")}
-                            placeholder="Empresa Exemplo Ltda"
-                            disabled={busy}
-                            className="rounded-sm"
-                        />
-                        {(errors.name?.message || fieldErrors?.name?.[0]) && (
-                            <p className="text-xs text-destructive">
-                                {errors.name?.message || fieldErrors?.name?.[0]}
-                            </p>
-                        )}
-                    </div>
-
                     {/* CNPJ */}
                     <div className="space-y-1.5">
                         <Label htmlFor="cnpj">CNPJ</Label>
-                        <Input
-                            id="cnpj"
-                            {...register("cnpj")}
-                            placeholder="00.000.000/0000-00"
-                            disabled={busy}
-                            className="rounded-sm"
-                            onChange={(e) => {
-                                const masked = maskCnpj(e.target.value);
-                                setValue("cnpj", masked);
-                            }}
-                        />
+                        <div className="relative">
+                            <Input
+                                id="cnpj"
+                                name={cnpjFieldReg.name}
+                                ref={cnpjFieldReg.ref}
+                                onBlur={(e) => {
+                                    cnpjFieldReg.onBlur(e);
+                                    void handleCnpjBlur();
+                                }}
+                                placeholder="00.000.000/0000-00"
+                                disabled={busy || cnpjLoading}
+                                className="rounded-sm"
+                                onChange={(e) => {
+                                    cnpjFieldReg.onChange(e);
+                                    const masked = maskCnpj(e.target.value);
+                                    setValue("cnpj", masked, {
+                                        shouldValidate: true,
+                                        shouldDirty: true,
+                                    });
+                                    setCnpjError(null);
+                                    if (masked.replace(/\D/g, "").length !== 14) {
+                                        lastFetchedCnpjRef.current = null;
+                                    }
+                                }}
+                            />
+                            {cnpjLoading && (
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                                </div>
+                            )}
+                        </div>
+                        {cnpjError && (
+                            <p className="text-xs text-destructive">{cnpjError}</p>
+                        )}
                         {(errors.cnpj?.message || fieldErrors?.cnpj?.[0]) && (
                             <p className="text-xs text-destructive">
                                 {errors.cnpj?.message || fieldErrors?.cnpj?.[0]}
@@ -230,6 +271,23 @@ export function CustomerForm({
                             disabled={busy}
                             className="rounded-sm"
                         />
+                    </div>
+
+                    {/* Nome */}
+                    <div className="md:col-span-2 space-y-1.5">
+                        <Label htmlFor="name">Nome / Razão Social *</Label>
+                        <Input
+                            id="name"
+                            {...register("name")}
+                            placeholder="Empresa Exemplo Ltda"
+                            disabled={busy}
+                            className="rounded-sm"
+                        />
+                        {(errors.name?.message || fieldErrors?.name?.[0]) && (
+                            <p className="text-xs text-destructive">
+                                {errors.name?.message || fieldErrors?.name?.[0]}
+                            </p>
+                        )}
                     </div>
                 </div>
             </div>

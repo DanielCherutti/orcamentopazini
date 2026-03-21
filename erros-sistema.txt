@@ -13,11 +13,14 @@ CRÍTICO
 - Impacto:
   - Um atacante pode forjar cookie e burlar autenticação.
 
-2) Rotas /api liberadas sem bloqueio central de sessão
-- Evidência:
-  - src/proxy.ts permite caminho "/api" sem validação de sessão.
-- Problema:
-  - Endpoints sensíveis podem ser acessados fora do fluxo esperado de autenticação.
+2) Rotas /api liberadas sem bloqueio central de sessão  [MITIGADO em 21/03/2026]
+- Evidência (histórico):
+  - src/proxy.ts permitia caminho "/api" sem validação de sessão.
+- Correção:
+  - Todas as requisições /api/* passam por verifySessionToken + cookie pazini_session;
+    sem sessão válida retorna 401 JSON (não redireciona HTML).
+- Problema (se regredir):
+  - Endpoints sensíveis acessíveis sem autenticação.
 - Impacto:
   - Exposição direta da API para acesso não autorizado.
 
@@ -25,22 +28,30 @@ CRÍTICO
 ALTO
 ================================================================
 
-3) Endpoints de upload sem proteção consistente
-- Evidência:
-  - Rotas de upload não verificam sessão explicitamente.
-  - src/app/api/upload/product/[id]/attachments/route.ts não aplica validação robusta de tipo e tamanho.
-- Problema:
-  - Upload pode ser usado para abuso de armazenamento e degradação de serviço.
+3) Endpoints de upload sem proteção consistente  [MITIGADO em 21/03/2026]
+- Evidência (histórico):
+  - Rotas de upload não verificavam sessão explicitamente.
+  - attachments não aplicava validação robusta de tipo e tamanho.
+- Correção:
+  - Todas as rotas POST em /api/upload/* chamam requireApiSession (além do proxy).
+  - Limite de tamanho: imagens 5MB (produto/biblioteca/pendente), 20MB (orçamento), anexos 15MB.
+  - Tipo validado por magic bytes (JPEG/PNG/GIF/WEBP; anexos também PDF), não só file.type.
+  - Uma leitura do arquivo + saveUploadBuffer em lib/upload.ts.
+- Problema (se regredir):
+  - Upload como vetor de abuso de armazenamento ou DoS.
 - Impacto:
   - Risco de indisponibilidade e aumento da superfície de ataque.
 
-4) Ausência de autorização por recurso (IDOR lógico)
-- Evidência:
-  - Actions de alteração/exclusão usam IDs recebidos sem validação clara de posse/escopo por usuário.
-- Problema:
-  - Mesmo autenticado, um usuário pode conseguir operar sobre registros que não deveria.
-- Impacto:
-  - Acesso indevido e alteração de dados de terceiros.
+4) Ausência de autorização por recurso (IDOR lógico)  [MITIGADO (escopo v1) em 21/03/2026]
+- Evidência (histórico):
+  - Actions de alteração/exclusão usavam IDs recebidos sem checagem explícita de sessão nem formato estrito de record id.
+- Correção (instância single-tenant):
+  - Todas as Server Actions mutáveis/consulta de dados sensíveis chamam assertActionSession (além do proxy).
+  - IDs vindos do cliente viram StringRecordId apenas via allowlist de tabela + sufixo [A-Za-z0-9_-]{1,128} (requireRecordId / safeStringRecordId).
+- Problema (fora do escopo v1):
+  - Não há tenant por linha: qualquer usuário autenticado continua podendo operar todos os registros da instância.
+- Impacto (se regredir ou exigir multi-tenant):
+  - Será necessário modelo de posse/tenant e checagens por recurso além de sessão + formato de id.
 
 5) Segredos e credenciais padrão expostos no código/configuração
 - Evidência:

@@ -3,17 +3,21 @@
 import { Table } from "surrealdb";
 import { revalidatePath } from "next/cache";
 import { StringRecordId } from "surrealdb";
+import { assertActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError, isDbConnectionError, toPlain } from "@/lib/surreal";
 import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
 import type { Budget } from "@/types/budget-types";
 import { serializeBudgetEntity } from "@/actions/budget-shared";
 import { addBlockAction } from "@/actions/budget-compositor-actions";
+import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
 
 export async function getBudgetAction(id: string, retryCount = 0): Promise<{ success: boolean; data?: Budget; error?: string }> {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
-    const decodedId = decodeURIComponent(id);
-    const formattedId = decodedId.startsWith("budget:") ? decodedId : `budget:${decodedId}`;
+    const budgetRecordId = requireRecordId("budget", id);
 
     const sql = `
       SELECT *,
@@ -49,13 +53,16 @@ export async function getBudgetAction(id: string, retryCount = 0): Promise<{ suc
       FETCH client_id
     `;
 
-    const result = await db.query<[Budget[]]>(sql, { id: new StringRecordId(formattedId) });
+    const result = await db.query<[Budget[]]>(sql, { id: budgetRecordId });
     const data = result[0]?.[0];
     if (!data) return { success: false, error: "Orçamento não encontrado" };
 
     const serialized = serializeBudgetEntity(data);
     return { success: true, data: serialized };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("Error fetching budget:", error);
 
     // Tenta reconectar se for erro de conexão e ainda não tentou
@@ -75,6 +82,9 @@ export async function getBudgetAction(id: string, retryCount = 0): Promise<{ suc
 }
 
 export async function getNextBudgetNumberAction() {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
     const countQuery = await db.query<[{ count: number }[]]>("SELECT count() FROM budget GROUP ALL");
@@ -97,6 +107,9 @@ export async function getNextBudgetNumberAction() {
 }
 
 export async function createBudgetAction(title: string, code: string) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
     const numberResult = await getNextBudgetNumberAction();
@@ -135,6 +148,9 @@ export async function createBudgetAction(title: string, code: string) {
 }
 
 export async function updateBudgetAction(budgetId: string, updates: Partial<Budget>) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
     const allowedFields = [
@@ -149,10 +165,7 @@ export async function updateBudgetAction(budgetId: string, updates: Partial<Budg
       "issue_date",
     ];
 
-    // Normaliza budgetId conforme padrão SurrealDB do projeto
-    const decodedBudgetId = decodeURIComponent(budgetId);
-    const formattedBudgetId = decodedBudgetId.startsWith("budget:") ? decodedBudgetId : `budget:${decodedBudgetId}`;
-    const budgetRecordId = new StringRecordId(formattedBudgetId);
+    const budgetRecordId = requireRecordId("budget", budgetId);
 
     const safeUpdates: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
@@ -171,8 +184,7 @@ export async function updateBudgetAction(budgetId: string, updates: Partial<Budg
       if (typeof rawClientId === "object" && rawClientId !== null && "id" in (rawClientId as Record<string, unknown>)) {
         safeUpdates.client_id = new StringRecordId(String((rawClientId as Record<string, unknown>).id));
       } else if (typeof rawClientId === "string" && rawClientId.trim().length > 0) {
-        const clientIdStr = rawClientId.startsWith("client:") ? rawClientId : `client:${rawClientId}`;
-        safeUpdates.client_id = new StringRecordId(clientIdStr);
+        safeUpdates.client_id = requireRecordId("client", rawClientId);
       }
     }
 
@@ -195,6 +207,9 @@ export async function updateBudgetAction(budgetId: string, updates: Partial<Budg
 
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("Error updating budget:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Falha ao atualizar orçamento" };
@@ -202,12 +217,18 @@ export async function updateBudgetAction(budgetId: string, updates: Partial<Budg
 }
 
 export async function deleteBudgetAction(budgetId: string) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
-    await db.delete(new StringRecordId(budgetId));
+    await db.delete(requireRecordId("budget", budgetId));
     revalidatePath("/budgets");
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("Error deleting budget:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Falha ao excluir orçamento" };
@@ -217,11 +238,12 @@ export async function deleteBudgetAction(budgetId: string) {
 export async function syncDraftPricesAction(
   budgetId: string
 ): Promise<{ success: boolean; updatedCount: number; error?: string }> {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, updatedCount: 0, error: auth.error };
+
   const db = await getDb();
   try {
-    const decodedId = decodeURIComponent(budgetId);
-    const formattedId = decodedId.startsWith("budget:") ? decodedId : `budget:${decodedId}`;
-    const budgetRecordId = new StringRecordId(formattedId);
+    const budgetRecordId = requireRecordId("budget", budgetId);
 
     // Busca todos os itens do compositor com dados do produto
     const itemsRes = await db.query<[Array<Record<string, unknown>>]>(
@@ -242,7 +264,7 @@ export async function syncDraftPricesAction(
 
       if (currentUnitPrice !== storedUnitPrice || currentLaborCost !== storedLaborCost) {
         const quantity = Number(item.quantity || 1);
-        const itemRecordId = new StringRecordId(String(item.id));
+        const itemRecordId = requireRecordId("budget_item", String(item.id));
         await db.update(itemRecordId).merge({
           unit_price: currentUnitPrice,
           labor_cost: currentLaborCost,
@@ -263,6 +285,9 @@ export async function syncDraftPricesAction(
 
     return { success: true, updatedCount };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, updatedCount: 0, error: error.message };
+    }
     console.error("syncDraftPricesAction error:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, updatedCount: 0, error: "Erro ao sincronizar preços" };
@@ -346,11 +371,12 @@ async function duplicateCompositorBlocks(
 }
 
 export async function duplicateBudgetAction(budgetId: string, newTitle?: string): Promise<{ success: boolean; newBudgetId?: string; error?: string }> {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
-    const decodedId = decodeURIComponent(budgetId);
-    const formattedId = decodedId.startsWith("budget:") ? decodedId : `budget:${decodedId}`;
-    const budgetRecordId = new StringRecordId(formattedId);
+    const budgetRecordId = requireRecordId("budget", budgetId);
 
     // Busca orçamento original via query explícita (garante todos os campos)
     const originalRes = await db.query<[Array<Record<string, unknown>>]>(
@@ -468,6 +494,9 @@ export async function duplicateBudgetAction(budgetId: string, newTitle?: string)
     revalidatePath("/budgets");
     return { success: true, newBudgetId };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("Error duplicating budget:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao duplicar orçamento" };

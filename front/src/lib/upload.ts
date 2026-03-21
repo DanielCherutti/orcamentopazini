@@ -1,16 +1,18 @@
-
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 
-export async function saveFile(file: File, folder: string): Promise<string> {
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
-    // Ensure unique filename
-    const ext = path.extname(file.name);
+/**
+ * Persiste bytes já validados (uma única leitura do arquivo no handler).
+ */
+export async function saveUploadBuffer(
+    buffer: Buffer,
+    folder: string,
+    originalName: string,
+): Promise<string> {
+    const ext = path.extname(originalName) || ".bin";
     const hash = crypto.randomUUID();
     const filename = `${hash}${ext}`;
 
@@ -24,6 +26,11 @@ export async function saveFile(file: File, folder: string): Promise<string> {
         console.error("Error saving file:", error);
         throw new Error("Failed to save file");
     }
+}
+
+export async function saveFile(file: File, folder: string): Promise<string> {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    return saveUploadBuffer(buffer, folder, file.name);
 }
 
 export async function deleteFile(relativePath: string): Promise<void> {

@@ -5,14 +5,16 @@ import { StringRecordId, Table } from "surrealdb";
 import { revalidatePath } from "next/cache";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { hashPassword } from "@/lib/password";
+import { assertPasswordPolicy } from "@/lib/password-pwned";
+import { PASSWORD_MAX_LENGTH } from "@/lib/password-strength";
 import { getSession, getSessionEmail } from "@/actions/auth-actions";
 
 const createUserSchema = z.object({
     email: z.string().trim().email("E-mail inválido"),
     password: z
         .string()
-        .min(8, "Senha deve ter no mínimo 8 caracteres")
-        .max(128, "Senha muito longa"),
+        .min(1, "Informe a senha")
+        .max(PASSWORD_MAX_LENGTH, "Senha muito longa"),
 });
 
 export type PortalUserPublic = {
@@ -42,8 +44,8 @@ const resetPasswordSchema = z
         userId: z.string().min(1),
         password: z
             .string()
-            .min(8, "Senha deve ter no mínimo 8 caracteres")
-            .max(128, "Senha muito longa"),
+            .min(1, "Informe a senha")
+            .max(PASSWORD_MAX_LENGTH, "Senha muito longa"),
         passwordConfirm: z.string().min(1, "Confirme a senha"),
     })
     .refine((d) => d.password === d.passwordConfirm, {
@@ -101,6 +103,14 @@ export async function createPortalUserAction(
             string[] | undefined
         >;
         return { success: false, fieldErrors: fieldErrors as Record<string, string[]> };
+    }
+
+    const policy = await assertPasswordPolicy(parsed.data.password);
+    if (!policy.ok) {
+        return {
+            success: false,
+            fieldErrors: { password: policy.errors },
+        };
     }
 
     const email = parsed.data.email.trim().toLowerCase();
@@ -255,6 +265,14 @@ export async function resetPortalUserPasswordAction(formData: FormData): Promise
         return { success: false, error: "Identificador de usuário inválido" };
     }
 
+    const policy = await assertPasswordPolicy(password);
+    if (!policy.ok) {
+        return {
+            success: false,
+            fieldErrors: { password: policy.errors },
+        };
+    }
+
     const db = await getDb();
     const rid = new StringRecordId(userId);
     try {
@@ -278,5 +296,78 @@ export async function resetPortalUserPasswordAction(formData: FormData): Promise
         console.error("resetPortalUserPasswordAction:", e);
         if (isTokenExpiredError(e)) resetDb();
         return { success: false, error: "Erro ao alterar senha" };
+    }
+}
+
+export async function deletePortalUserAction(formData: FormData): Promise<{
+    success: boolean;
+    error?: string;
+}> {
+    if (!(await requireLoggedIn())) {
+        return { success: false, error: "Não autorizado" };
+    }
+
+    const userId = formData.get("userId")?.toString().trim() ?? "";
+    if (!isSafePortalUserRecordId(userId)) {
+        return { success: false, error: "Identificador de usuário inválido" };
+    }
+
+    const sessionEmail = await getSessionEmail();
+    if (!sessionEmail) {
+        return { success: false, error: "Sessão inválida" };
+    }
+
+    const db = await getDb();
+    const rid = new StringRecordId(userId);
+    try {
+        const raw = await db.select<{ email: string; active?: boolean }>(rid);
+        const row = (Array.isArray(raw) ? raw[0] : raw) as
+            | { email: string; active?: boolean }
+            | undefined;
+        if (!row?.email) {
+            return { success: false, error: "Usuário não encontrado" };
+        }
+
+        const targetEmail = row.email.trim().toLowerCase();
+        if (targetEmail === sessionEmail.trim().toLowerCase()) {
+            return {
+                success: false,
+                error: "Você não pode remover a sua própria conta.",
+            };
+        }
+
+        const allRaw = await db.select(new Table("portal_user"));
+        const list = toPlain(
+            (Array.isArray(allRaw) ? allRaw : []) as Array<{
+                id: unknown;
+                email: string;
+                active?: boolean;
+            }>,
+        );
+
+        const others = list.filter((u) => String(u.id) !== userId);
+        if (others.length === 0) {
+            return {
+                success: false,
+                error: "Não é possível remover o único usuário do portal.",
+            };
+        }
+
+        const activeOthers = others.filter((u) => u.active !== false);
+        if (activeOthers.length === 0) {
+            return {
+                success: false,
+                error: "Deve existir pelo menos um usuário ativo.",
+            };
+        }
+
+        await db.delete(rid);
+
+        revalidatePath("/settings/users");
+        return { success: true };
+    } catch (e) {
+        console.error("deletePortalUserAction:", e);
+        if (isTokenExpiredError(e)) resetDb();
+        return { success: false, error: "Erro ao remover usuário" };
     }
 }

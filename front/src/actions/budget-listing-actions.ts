@@ -1,5 +1,6 @@
 "use server";
 
+import { assertActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
 import type { Budget } from "@/types/budget-types";
 import { serializeBudgetEntity } from "@/actions/budget-shared";
@@ -11,6 +12,9 @@ export async function getBudgetsAction(params?: {
   sortBy?: string;
   sortOrder?: "asc" | "desc";
 }) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   const page = params?.page || 1;
   const limit = params?.limit || 10;

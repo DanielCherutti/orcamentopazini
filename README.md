@@ -78,7 +78,9 @@ bun install
 cp .env.example .env
 # Editar .env com suas configurações
 
-**Login da aplicação web** (`front/.env`): defina `JWT_SECRET` (mínimo **32 caracteres**) para assinar o cookie de sessão. Os usuários ficam no SurrealDB (`portal_user`). Para criar o primeiro usuário a partir do `.env`, rode em `front/`: `bun run seed:portal-user` (usa `PAZINI_LOGIN_EMAIL` / `PAZINI_LOGIN_PASSWORD`). Depois é possível cadastrar outros em **Configurações → Usuários**.
+**Login da aplicação web** (`front/.env`): defina `JWT_SECRET` (mínimo **32 caracteres**) para assinar o cookie de sessão. As rotas **`/api/*`** só respondem com sessão válida (mesmo cookie `httpOnly`); sem autenticação, retornam **401** em JSON. Os **uploads** (`/api/upload/*`) também validam sessão no handler e impõem **tamanho máximo** e **tipo real do arquivo** (assinatura binária), não apenas o MIME enviado pelo navegador. Os usuários ficam no SurrealDB (`portal_user`). Para criar o primeiro usuário a partir do `.env`, rode em `front/`: `bun run seed:portal-user` (usa `PAZINI_LOGIN_EMAIL` / `PAZINI_LOGIN_PASSWORD`). Depois é possível cadastrar, inativar/reativar e alterar senha no modal da linha; a **remoção** é feita pelo ícone de lixeira na lista, com confirmação e as mesmas regras de “pelo menos um usuário ativo” e de não remover a própria conta.
+
+**Senhas no portal:** ao criar usuário ou redefinir senha na UI, a senha precisa ser forte (mínimo 12 caracteres, maiúscula, minúscula, número e símbolo) e é verificada contra a base pública **Have I Been Pwned** (apenas um trecho do hash SHA-1 é enviado, não a senha literal). Variáveis opcionais em `front/.env`: `PAZINI_SKIP_PWNED_PASSWORD_CHECK=true` desliga só a checagem HIBP; `PAZINI_ALLOW_PASSWORD_IF_PWNED_CHECK_FAILS=true` aceita a senha se a API estiver indisponível (útil em rede restrita, com trade-off de segurança). O script `seed:portal-user` grava a senha do `.env` diretamente no banco **sem** essa política (só para bootstrap); use uma senha forte também no `.env` se for ambiente compartilhado.
 
 # 4. Iniciar SurrealDB (Docker)
 cd ..
@@ -152,6 +154,8 @@ Utilizamos **shadcn/ui** como base. Componentes são instalados sob demanda em `
 
 - Validação com Zod em todas as entradas
 - Server Actions para operações sensíveis
+- **Sessão nas actions:** operações que leem ou alteram dados exigem `assertActionSession()` (complementa o proxy em `/api`).
+- **IDs de registros:** parâmetros de ID passam por allowlist de tabela + formato estrito (`front/src/lib/surreal-record-ids.ts`), reduzindo injeção e uso de record ids malformados. **Escopo atual:** instância single-tenant — não há segregação por cliente/empresa por linha; qualquer usuário autenticado acessa todos os recursos da base.
 - Sanitização de HTML no editor Tiptap
 - Variáveis de ambiente para credenciais
 

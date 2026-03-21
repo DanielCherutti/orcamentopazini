@@ -2,8 +2,10 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { StringRecordId, Table } from "surrealdb";
+import { Table } from "surrealdb";
+import { assertActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
+import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
 
 // Basic type for client selector (kept for backward compatibility)
 export type Client = {
@@ -111,6 +113,9 @@ function serializeCustomer(record: Record<string, unknown>): CustomerFull {
 }
 
 export async function searchClientsAction(query: string) {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error, data: [] };
+
     const db = await getDb();
     try {
         const sql = `
@@ -148,6 +153,9 @@ export async function listCustomersAction(params?: {
     sortBy?: string;
     sortOrder?: "asc" | "desc";
 }) {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
     const db = await getDb();
     const page = params?.page || 1;
     const limit = params?.limit || 10;
@@ -198,22 +206,110 @@ export async function listCustomersAction(params?: {
 }
 
 export async function getCustomerAction(id: string) {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
     const db = await getDb();
     try {
-        const decodedId = decodeURIComponent(id);
-        const formattedId = decodedId.startsWith("client:") ? decodedId : `client:${decodedId}`;
-        const result = await db.select<Record<string, unknown>>(new StringRecordId(formattedId));
+        const recordId = requireRecordId("client", id);
+        const result = await db.select<Record<string, unknown>>(recordId);
         const data = Array.isArray(result) ? result[0] : result;
         if (!data) return { success: false, error: "Cliente não encontrado" };
         return { success: true, data: serializeCustomer(data) };
     } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
         console.error("Error fetching customer:", error);
         if (isTokenExpiredError(error)) resetDb();
         return { success: false, error: "Cliente não encontrado" };
     }
 }
 
+const CNPJ_LOOKUP_TIMEOUT_MS = 8000;
+
+type BrasilApiCnpjJson = {
+    razao_social?: string;
+    nome_fantasia?: string;
+    message?: string;
+};
+
+/**
+ * Consulta pública de CNPJ (Brasil API) para preencher razão social no cadastro.
+ * Não substitui validação fiscal; apenas auxilia o preenchimento.
+ */
+export async function lookupCnpjAction(cnpj: string): Promise<{
+    success: boolean;
+    name?: string;
+    error?: string;
+}> {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const digits = cnpj.replace(/\D/g, "");
+    if (digits.length !== 14) {
+        return { success: false, error: "CNPJ incompleto" };
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), CNPJ_LOOKUP_TIMEOUT_MS);
+
+    try {
+        const res = await fetch(
+            `https://brasilapi.com.br/api/cnpj/v1/${digits}`,
+            {
+                method: "GET",
+                signal: controller.signal,
+                headers: {
+                    Accept: "application/json",
+                    "User-Agent": "Pazini/1.0 (client-form)",
+                },
+                cache: "no-store",
+            },
+        );
+        clearTimeout(timer);
+
+        if (res.status === 404) {
+            return {
+                success: false,
+                error: "CNPJ não encontrado. Verifique os dígitos.",
+            };
+        }
+
+        if (!res.ok) {
+            return {
+                success: false,
+                error: "Consulta de CNPJ indisponível. Tente mais tarde.",
+            };
+        }
+
+        const data = (await res.json()) as BrasilApiCnpjJson;
+        const name = (
+            data.razao_social ||
+            data.nome_fantasia ||
+            ""
+        ).trim();
+        if (!name) {
+            return {
+                success: false,
+                error: "Não foi possível obter a razão social deste CNPJ.",
+            };
+        }
+
+        return { success: true, name };
+    } catch {
+        clearTimeout(timer);
+        return {
+            success: false,
+            error: "Consulta de CNPJ indisponível. Tente mais tarde.",
+        };
+    }
+}
+
 export async function createCustomerAction(data: CustomerFormInput) {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
     const db = await getDb();
 
     const validated = customerSchema.safeParse(data);
@@ -262,6 +358,9 @@ export async function createCustomerAction(data: CustomerFormInput) {
 }
 
 export async function updateCustomerAction(id: string, data: CustomerFormInput) {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
     const db = await getDb();
 
     const validated = customerSchema.safeParse(data);
@@ -271,14 +370,13 @@ export async function updateCustomerAction(id: string, data: CustomerFormInput) 
     }
 
     const d = validated.data;
-    const decodedId = decodeURIComponent(id);
-    const formattedId = decodedId.startsWith("client:") ? decodedId : `client:${decodedId}`;
 
     try {
+        const recordId = requireRecordId("client", id);
         if (d.cnpj) {
             const existing = await db.query<[{ id: unknown }[]]>(
                 "SELECT id FROM client WHERE cnpj = $cnpj AND id != $id",
-                { cnpj: d.cnpj, id: new StringRecordId(formattedId) }
+                { cnpj: d.cnpj, id: recordId }
             );
             if (existing[0] && existing[0].length > 0) {
                 return {
@@ -289,7 +387,7 @@ export async function updateCustomerAction(id: string, data: CustomerFormInput) 
             }
         }
 
-        await db.update(new StringRecordId(formattedId)).merge({
+        await db.update(recordId).merge({
             name: d.name,
             cnpj: d.cnpj || null,
             stateRegistration: d.stateRegistration || null,
@@ -304,6 +402,9 @@ export async function updateCustomerAction(id: string, data: CustomerFormInput) 
         revalidatePath("/customers");
         return { success: true };
     } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
         console.error("Error updating customer:", error);
         if (isTokenExpiredError(error)) resetDb();
         return { success: false, error: "Falha ao atualizar cliente" };
@@ -311,14 +412,16 @@ export async function updateCustomerAction(id: string, data: CustomerFormInput) 
 }
 
 export async function deleteCustomerAction(id: string) {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
     const db = await getDb();
     try {
-        const decodedId = decodeURIComponent(id);
-        const formattedId = decodedId.startsWith("client:") ? decodedId : `client:${decodedId}`;
+        const recordId = requireRecordId("client", id);
 
         const refs = await db.query<[{ id: unknown }[]]>(
             "SELECT id FROM budget WHERE client = $id LIMIT 1",
-            { id: new StringRecordId(formattedId) }
+            { id: recordId }
         );
         if (refs[0] && refs[0].length > 0) {
             return {
@@ -327,10 +430,13 @@ export async function deleteCustomerAction(id: string) {
             };
         }
 
-        await db.delete(new StringRecordId(formattedId));
+        await db.delete(recordId);
         revalidatePath("/customers");
         return { success: true };
     } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
         console.error("Error deleting customer:", error);
         if (isTokenExpiredError(error)) resetDb();
         return { success: false, error: "Falha ao excluir cliente" };

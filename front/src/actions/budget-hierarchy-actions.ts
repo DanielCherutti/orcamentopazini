@@ -2,17 +2,17 @@
 
 import { revalidatePath } from "next/cache";
 import { StringRecordId, Table } from "surrealdb";
+import { assertActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
 import type { BudgetItem } from "@/types/budget-types";
 import { serializeBudgetEntity } from "@/actions/budget-shared";
 import { getProductGroupProductsAction } from "@/actions/product-group-actions";
-
-function toRecordId(table: string, id: string): StringRecordId {
-  const decoded = decodeURIComponent(id);
-  const full = decoded.startsWith(`${table}:`) ? decoded : `${table}:${decoded}`;
-  return new StringRecordId(full);
-}
+import {
+    InvalidRecordIdError,
+    requireRecordId,
+    safeStringRecordId,
+} from "@/lib/surreal-record-ids";
 
 /** Extrai product_id como string para lookup (suporta RecordId, string, objeto) */
 function extractProductId(pid: unknown): string | null {
@@ -32,10 +32,8 @@ function extractProductId(pid: unknown): string | null {
 async function recalculateBudgetTotal(budgetId: string) {
   const db = await getDb();
   try {
-    // Normaliza budgetId para StringRecordId (obrigatório para comparações e merges no SurrealDB)
-    const decodedId = decodeURIComponent(budgetId);
-    const formattedId = decodedId.startsWith("budget:") ? decodedId : `budget:${decodedId}`;
-    const budgetRecordId = new StringRecordId(formattedId);
+    const budgetRecordId = safeStringRecordId("budget", budgetId);
+    if (!budgetRecordId) return;
 
     const result = await db.query<[{ grand_total: number }[]]>(
       `SELECT math::sum(total) as grand_total FROM budget_item WHERE section_id.budget_id = $budgetId GROUP ALL`,
@@ -55,9 +53,12 @@ async function recalculateBudgetTotal(budgetId: string) {
 }
 
 export async function getItemsBySectionAction(sectionId: string) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
-    const sectionRecordId = toRecordId("budget_section", sectionId);
+    const sectionRecordId = requireRecordId("budget_section", sectionId);
     const result = await db.query<[Array<Record<string, unknown>>]>(
       `SELECT * FROM budget_item WHERE section_id = $sectionId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC FETCH product_id`,
       { sectionId: sectionRecordId }
@@ -97,8 +98,10 @@ export async function getItemsBySectionAction(sectionId: string) {
       const productsMap = new Map<string, Record<string, unknown>>();
       for (const rawId of productIds) {
         const cleanId = rawId.replace(/^product:/, "");
+        const pr = safeStringRecordId("product", cleanId);
+        if (!pr) continue;
         try {
-          const res = await db.select(toRecordId("product", cleanId));
+          const res = await db.select(pr);
           const p = Array.isArray(res) ? res[0] : res;
           if (p && typeof p === "object") {
             const prod = p as Record<string, unknown>;
@@ -141,6 +144,9 @@ export async function getItemsBySectionAction(sectionId: string) {
 
     return { success: true, data: toPlain(items) };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("getItemsBySectionAction error:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao carregar itens" };
@@ -152,15 +158,21 @@ export async function updateLocationAction(
   budgetId: string,
   patch: { name?: string; description?: string }
 ) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
-    await db.update(toRecordId("budget_location", locationId)).merge({
+    await db.update(requireRecordId("budget_location", locationId)).merge({
       ...patch,
       updated_at: new Date().toISOString(),
     });
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("Error updating location:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Falha ao atualizar local" };
@@ -168,10 +180,13 @@ export async function updateLocationAction(
 }
 
 export async function addLocationAction(budgetId: string, name: string) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
     const raw = await db.create(new Table("budget_location")).content({
-      budget_id: toRecordId("budget", budgetId),
+      budget_id: requireRecordId("budget", budgetId),
       name,
       order_index: Date.now(),
       created_at: new Date().toISOString(),
@@ -181,6 +196,9 @@ export async function addLocationAction(budgetId: string, name: string) {
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true, data: toPlain(serializeBudgetEntity(created)) };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("Error adding location:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Falha ao adicionar local" };
@@ -192,15 +210,21 @@ export async function updateSectionAction(
   budgetId: string,
   patch: { name?: string; description?: string }
 ) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
-    await db.update(toRecordId("budget_section", sectionId)).merge({
+    await db.update(requireRecordId("budget_section", sectionId)).merge({
       ...patch,
       updated_at: new Date().toISOString(),
     });
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("Error updating section:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Falha ao atualizar trecho" };
@@ -208,11 +232,14 @@ export async function updateSectionAction(
 }
 
 export async function addSectionAction(locationId: string, budgetId: string, name: string) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
     const raw = await db.create(new Table("budget_section")).content({
-      location_id: toRecordId("budget_location", locationId),
-      budget_id: toRecordId("budget", budgetId),
+      location_id: requireRecordId("budget_location", locationId),
+      budget_id: requireRecordId("budget", budgetId),
       name,
       order_index: Date.now(),
       created_at: new Date().toISOString(),
@@ -222,6 +249,9 @@ export async function addSectionAction(locationId: string, budgetId: string, nam
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true, data: toPlain(serializeBudgetEntity(created)) };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("Error adding section:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Falha ao adicionar trecho" };
@@ -261,8 +291,8 @@ async function upsertBudgetItem(
     });
   } else {
     await db.create(new Table("budget_item")).content({
-      section_id: toRecordId("budget_section", sectionId),
-      product_id: toRecordId("product", productId),
+      section_id: requireRecordId("budget_section", sectionId),
+      product_id: requireRecordId("product", productId),
       product_name: productName,
       quantity,
       unit_price: unitPrice,
@@ -274,9 +304,12 @@ async function upsertBudgetItem(
 }
 
 export async function addItemAction(sectionId: string, budgetId: string, productId: string, quantity: number) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
-    const productRecordId = toRecordId("product", productId);
+    const productRecordId = requireRecordId("product", productId);
     const productResult = await db.select(productRecordId);
     const product = Array.isArray(productResult) ? productResult[0] : productResult;
     if (!product) throw new Error("Produto não encontrado");
@@ -291,6 +324,9 @@ export async function addItemAction(sectionId: string, budgetId: string, product
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("Error adding item:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Falha ao adicionar item" };
@@ -305,6 +341,14 @@ export async function addGroupToSectionAction(
   productQuantities: Record<string, number>, // productId → quantity
   selectedProductIds: string[]              // quais produtos incluir
 ) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
+  const groupRecordId = safeStringRecordId("product_group", groupId);
+  if (!groupRecordId) {
+    return { success: false, error: "Identificador inválido" };
+  }
+
   const productsRes = await getProductGroupProductsAction(groupId);
   if (!productsRes.success || !productsRes.data?.length) {
     return { success: false, error: "Este grupo não possui produtos cadastrados." };
@@ -323,14 +367,14 @@ export async function addGroupToSectionAction(
       const productName = String(product.description || product.code || "");
 
       await db.create(new Table("budget_item")).content({
-        section_id: toRecordId("budget_section", sectionId),
-        product_id: toRecordId("product", productId),
+        section_id: requireRecordId("budget_section", sectionId),
+        product_id: requireRecordId("product", productId),
         product_name: productName,
         quantity,
         unit_price: unitPrice,
         labor_cost: laborCost,
         total: (unitPrice + laborCost) * quantity,
-        group_id: groupId,
+        group_id: groupRecordId,
         group_name: groupName,
         created_at: new Date().toISOString(),
       });
@@ -340,6 +384,9 @@ export async function addGroupToSectionAction(
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("Error adding group to section:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Falha ao adicionar grupo" };
@@ -347,14 +394,20 @@ export async function addGroupToSectionAction(
 }
 
 export async function deleteItemAction(itemId: string, budgetId: string) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
-    const itemRecordId = toRecordId("budget_item", itemId);
+    const itemRecordId = requireRecordId("budget_item", itemId);
     await db.update(itemRecordId).merge({ deleted_at: new Date().toISOString() });
     await recalculateBudgetTotal(budgetId);
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("Error deleting item:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao remover item" };
@@ -362,9 +415,12 @@ export async function deleteItemAction(itemId: string, budgetId: string) {
 }
 
 export async function updateItemQuantityAction(itemId: string, budgetId: string, quantity: number) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
-    const itemRecordId = toRecordId("budget_item", itemId);
+    const itemRecordId = requireRecordId("budget_item", itemId);
     const itemResult = (await db.select(itemRecordId)) as unknown as BudgetItem[];
     const item = Array.isArray(itemResult) ? itemResult[0] : itemResult;
     if (!item) throw new Error("Item not found");
@@ -379,6 +435,9 @@ export async function updateItemQuantityAction(itemId: string, budgetId: string,
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("Error updating item:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao atualizar item" };
@@ -386,9 +445,12 @@ export async function updateItemQuantityAction(itemId: string, budgetId: string,
 }
 
 export async function updateItemLaborCostAction(itemId: string, budgetId: string, laborCost: number) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
-    const itemRecordId = toRecordId("budget_item", itemId);
+    const itemRecordId = requireRecordId("budget_item", itemId);
     const itemResult = (await db.select(itemRecordId)) as unknown as BudgetItem[];
     const item = Array.isArray(itemResult) ? itemResult[0] : itemResult;
     if (!item) throw new Error("Item not found");
@@ -403,6 +465,9 @@ export async function updateItemLaborCostAction(itemId: string, budgetId: string
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("Error updating labor cost:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao atualizar mão de obra" };
@@ -416,20 +481,27 @@ export async function updateItemGroupInSectionAction(
   groupId: string | null,
   groupName?: string
 ) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
-    const itemRecordId = toRecordId("budget_item", itemId);
+    const itemRecordId = requireRecordId("budget_item", itemId);
     if (groupId === null) {
       await db.query("UPDATE $item SET group_id = NONE, group_name = NONE", { item: itemRecordId });
     } else {
+      const groupRecordId = requireRecordId("product_group", groupId);
       await db.update(itemRecordId).merge({
-        group_id: groupId,
+        group_id: groupRecordId,
         group_name: groupName ?? "",
       });
     }
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("updateItemGroupInSectionAction error:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao atualizar grupo do item" };
@@ -437,43 +509,51 @@ export async function updateItemGroupInSectionAction(
 }
 
 export async function deleteLocationAction(locationId: string, budgetId: string) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
+    const locationRecordId = requireRecordId("budget_location", locationId);
     const now = new Date().toISOString();
 
     // Soft delete de seções e seus itens/imagens
     const sectionsRes = await db.query<[Array<{ id: string }>]>(
       "SELECT id FROM budget_section WHERE location_id = $locationId AND deleted_at IS NONE",
-      { locationId }
+      { locationId: locationRecordId }
     );
     const sections = sectionsRes?.[0] || [];
 
     for (const sec of sections) {
-      const sectionId = sec.id?.toString?.() ? sec.id.toString() : sec.id;
+      const sectionIdRaw = sec.id?.toString?.() ? sec.id.toString() : String(sec.id);
+      const sectionRecordId = requireRecordId("budget_section", sectionIdRaw);
       await db.query(
         "UPDATE budget_item SET deleted_at = $now WHERE section_id = $sectionId AND deleted_at IS NONE",
-        { sectionId, now }
+        { sectionId: sectionRecordId, now }
       );
       await db.query(
         "UPDATE budget_image SET deleted_at = $now WHERE section_id = $sectionId AND deleted_at IS NONE",
-        { sectionId, now }
+        { sectionId: sectionRecordId, now }
       );
-      await db.update(toRecordId("budget_section", sectionId)).merge({ deleted_at: now });
+      await db.update(sectionRecordId).merge({ deleted_at: now });
     }
 
     // Soft delete de imagens do local
     await db.query(
       "UPDATE budget_image SET deleted_at = $now WHERE location_id = $locationId AND deleted_at IS NONE",
-      { locationId, now }
+      { locationId: locationRecordId, now }
     );
 
     // Soft delete do local
-    await db.update(toRecordId("budget_location", locationId)).merge({ deleted_at: now });
+    await db.update(locationRecordId).merge({ deleted_at: now });
     await recalculateBudgetTotal(budgetId);
 
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("Error deleting location:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao remover local" };
@@ -481,25 +561,32 @@ export async function deleteLocationAction(locationId: string, budgetId: string)
 }
 
 export async function deleteSectionAction(sectionId: string, budgetId: string) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
+    const sectionRecordId = requireRecordId("budget_section", sectionId);
     const now = new Date().toISOString();
     // Soft delete de itens e imagens do trecho
     await db.query(
       "UPDATE budget_item SET deleted_at = $now WHERE section_id = $sectionId AND deleted_at IS NONE",
-      { sectionId, now }
+      { sectionId: sectionRecordId, now }
     );
     await db.query(
       "UPDATE budget_image SET deleted_at = $now WHERE section_id = $sectionId AND deleted_at IS NONE",
-      { sectionId, now }
+      { sectionId: sectionRecordId, now }
     );
     // Soft delete do trecho
-    await db.update(toRecordId("budget_section", sectionId)).merge({ deleted_at: now });
+    await db.update(sectionRecordId).merge({ deleted_at: now });
     await recalculateBudgetTotal(budgetId);
 
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("Error deleting section:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao remover trecho" };
@@ -507,9 +594,12 @@ export async function deleteSectionAction(sectionId: string, budgetId: string) {
 }
 
 export async function duplicateSectionAction(sectionId: string, budgetId: string, newName?: string) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
-    const secRecordId = toRecordId("budget_section", sectionId);
+    const secRecordId = requireRecordId("budget_section", sectionId);
 
     // Busca seção original — usando db.select com StringRecordId (WHERE id = string quebra)
     const originalRaw = await db.select(secRecordId);
@@ -525,7 +615,7 @@ export async function duplicateSectionAction(sectionId: string, budgetId: string
     // Cria nova seção com nome customizado ou sufixo padrão
     const newSection = await db.create(new Table("budget_section")).content({
       location_id: original.location_id,
-      budget_id: toRecordId("budget", budgetId),
+      budget_id: requireRecordId("budget", budgetId),
       name: newName || `${original.name} - Cópia`,
       description: original.description,
       order_index: Date.now(),
@@ -553,6 +643,9 @@ export async function duplicateSectionAction(sectionId: string, budgetId: string
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true, newSectionId };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("Error duplicating section:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao duplicar trecho" };
@@ -560,14 +653,20 @@ export async function duplicateSectionAction(sectionId: string, budgetId: string
 }
 
 export async function reorderSectionsAction(orderedSectionIds: string[], budgetId: string) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
     for (let i = 0; i < orderedSectionIds.length; i++) {
-      await db.update(toRecordId("budget_section", orderedSectionIds[i])).merge({ order_index: i * 10 });
+      await db.update(requireRecordId("budget_section", orderedSectionIds[i])).merge({ order_index: i * 10 });
     }
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("Error reordering sections:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao reordenar trechos" };
@@ -575,15 +674,21 @@ export async function reorderSectionsAction(orderedSectionIds: string[], budgetI
 }
 
 export async function moveSectionAction(sectionId: string, newLocationId: string, budgetId: string) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
-    await db.update(toRecordId("budget_section", sectionId)).merge({
-      location_id: toRecordId("budget_location", newLocationId),
+    await db.update(requireRecordId("budget_section", sectionId)).merge({
+      location_id: requireRecordId("budget_location", newLocationId),
       updated_at: new Date().toISOString(),
     });
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("Error moving section:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao mover trecho" };
@@ -591,16 +696,22 @@ export async function moveSectionAction(sectionId: string, newLocationId: string
 }
 
 export async function reorderSectionItemsAction(orderedItemIds: string[], budgetId: string) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
     for (let i = 0; i < orderedItemIds.length; i++) {
-      await db.update(toRecordId("budget_item", orderedItemIds[i])).merge({
+      await db.update(requireRecordId("budget_item", orderedItemIds[i])).merge({
         order_index: i * 10,
       });
     }
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("Error reordering items:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao reordenar itens" };
@@ -608,9 +719,12 @@ export async function reorderSectionItemsAction(orderedItemIds: string[], budget
 }
 
 export async function duplicateLocationAction(locationId: string, budgetId: string, newName?: string) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   try {
-    const locRecordId = toRecordId("budget_location", locationId);
+    const locRecordId = requireRecordId("budget_location", locationId);
 
     // Busca local original — usando db.select com StringRecordId
     const originalRaw = await db.select(locRecordId);
@@ -619,7 +733,7 @@ export async function duplicateLocationAction(locationId: string, budgetId: stri
 
     // Cria novo local
     const newLocation = await db.create(new Table("budget_location")).content({
-      budget_id: toRecordId("budget", budgetId),
+      budget_id: requireRecordId("budget", budgetId),
       name: newName || `${original.name} - Cópia`,
       description: original.description,
       order_index: Date.now(),
@@ -636,12 +750,12 @@ export async function duplicateLocationAction(locationId: string, budgetId: stri
     const sections = sectionsRes?.[0] || [];
 
     for (const sec of sections) {
-      const origSecRecordId = toRecordId("budget_section", String(sec.id));
+      const origSecRecordId = requireRecordId("budget_section", String(sec.id));
 
       // Cria novo trecho
       const newSection = await db.create(new Table("budget_section")).content({
         location_id: new StringRecordId(newLocationId),
-        budget_id: toRecordId("budget", budgetId),
+        budget_id: requireRecordId("budget", budgetId),
         name: sec.name,
         description: sec.description,
         order_index: Date.now(),
@@ -675,6 +789,9 @@ export async function duplicateLocationAction(locationId: string, budgetId: stri
     revalidatePath(budgetRevalidatePath(budgetId));
     return { success: true };
   } catch (error) {
+    if (error instanceof InvalidRecordIdError) {
+      return { success: false, error: error.message };
+    }
     console.error("Error duplicating location:", error);
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao duplicar local" };

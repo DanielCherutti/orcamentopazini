@@ -1,9 +1,11 @@
 "use server";
 
-import { Table, StringRecordId } from "surrealdb";
+import { Table } from "surrealdb";
 import { z } from "zod";
+import { assertActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { deleteFile } from "@/lib/upload";
+import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
 
 export type LibraryImage = {
     id: string;
@@ -56,6 +58,9 @@ export async function getLibraryImagesAction(params?: {
     limit?: number;
     page?: number;
 }) {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
     const db = await getDb();
     const page = params?.page || 1;
     const limit = params?.limit || 50;
@@ -92,6 +97,9 @@ export async function createLibraryImageAction(data: {
     width?: number;
     height?: number;
 }) {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
     const db = await getDb();
 
     const validated = createSchema.safeParse(data);
@@ -116,14 +124,16 @@ export async function createLibraryImageAction(data: {
 }
 
 export async function deleteLibraryImageAction(id: string) {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
     const db = await getDb();
 
     try {
-        // Fetch to get the file URL before deleting
-        const formattedId = id.startsWith("image_library:") ? id : `image_library:${id}`;
+        const recordId = requireRecordId(TABLE_NAME, id);
         const result = await db.query<[LibraryImage[]]>(
             `SELECT url FROM ${TABLE_NAME} WHERE id = $id`,
-            { id: formattedId }
+            { id: recordId }
         );
 
         const image = result[0]?.[0];
@@ -131,10 +141,13 @@ export async function deleteLibraryImageAction(id: string) {
             await deleteFile(image.url);
         }
 
-        await db.delete(new StringRecordId(formattedId));
+        await db.delete(recordId);
 
         return { success: true };
     } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
         console.error("Error deleting library image:", error);
         if (isTokenExpiredError(error)) resetDb();
         return { success: false, error: "Falha ao excluir imagem" };

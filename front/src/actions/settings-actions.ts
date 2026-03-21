@@ -1,8 +1,10 @@
 "use server";
 
-import { Table, StringRecordId } from "surrealdb";
+import { Table } from "surrealdb";
+import { assertActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { revalidatePath } from "next/cache";
+import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
 
 export interface ProposalSettings {
     id?: string;
@@ -15,6 +17,9 @@ export interface ProposalSettings {
 }
 
 export async function getProposalSettingsAction() {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
     const db = await getDb();
     try {
         const result = await db.query<[ProposalSettings[]]>("SELECT * FROM proposal_settings LIMIT 1");
@@ -49,6 +54,9 @@ Nossa proposta contempla materiais de altíssima qualidade, acabamento impecáve
 }
 
 export async function updateProposalSettingsAction(data: ProposalSettings) {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
     const db = await getDb();
     try {
         const cleanData = { ...data };
@@ -58,7 +66,7 @@ export async function updateProposalSettingsAction(data: ProposalSettings) {
 
         if (result[0] && result[0].length > 0) {
             const id = result[0][0].id; // SurrealDB ID
-            await db.update(new StringRecordId(String(id!))).merge(cleanData);
+            await db.update(requireRecordId("proposal_settings", String(id!))).merge(cleanData);
         } else {
             await db.create(new Table("proposal_settings")).content(cleanData);
         }
@@ -66,6 +74,9 @@ export async function updateProposalSettingsAction(data: ProposalSettings) {
         revalidatePath("/settings");
         return { success: true };
     } catch (e) {
+        if (e instanceof InvalidRecordIdError) {
+            return { success: false, error: e.message };
+        }
         console.error("Erro update settings:", e);
         if (isTokenExpiredError(e)) resetDb();
         return { success: false, error: e instanceof Error ? e.message : "Erro ao salvar configurações" };

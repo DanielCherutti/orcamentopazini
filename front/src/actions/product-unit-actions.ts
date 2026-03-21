@@ -3,6 +3,7 @@
 import { Table } from "surrealdb";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { assertActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
 
 export type ProductUnit = {
@@ -42,6 +43,9 @@ function serializeUnit(raw: Record<string, unknown>): ProductUnit {
 }
 
 export async function listProductUnitsAction() {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error, data: [] };
+
   const db = await getDb();
   try {
     const result = await db.query<[ProductUnit[]]>(
@@ -58,6 +62,9 @@ export async function listProductUnitsAction() {
 }
 
 export async function createProductUnitAction(data: { name: string }) {
+  const auth = await assertActionSession();
+  if (!auth.ok) return { success: false, error: auth.error };
+
   const db = await getDb();
   const validated = createUnitSchema.safeParse(data);
   if (!validated.success) {

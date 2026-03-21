@@ -3,10 +3,12 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { StringRecordId, Table } from "surrealdb";
+import { Table } from "surrealdb";
+import { assertActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError, isDbConnectionError } from "@/lib/surreal";
 import { Attachment } from "@/components/products/attachment-manager";
 import { saveFile } from "@/lib/upload";
+import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
 
 // Type definition based on V1 Spec
 export type Product = {
@@ -92,6 +94,16 @@ export async function getProductsAction(params?: {
     sortBy?: string;
     sortOrder?: "asc" | "desc";
 }) {
+    const auth = await assertActionSession();
+    if (!auth.ok) {
+        return {
+            success: false,
+            error: auth.error,
+            data: [],
+            meta: { total: 0, page: params?.page || 1, limit: params?.limit || 10, totalPages: 0 },
+        };
+    }
+
     const page = params?.page || 1;
     const limit = params?.limit || 10;
     const start = (page - 1) * limit;
@@ -168,19 +180,24 @@ export async function getProductsAction(params?: {
 
 
 export async function getProductAction(id: string) {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
     const db = await getDb();
     try {
-        const decodedId = decodeURIComponent(id);
-        const formattedId = decodedId.startsWith('product:') ? decodedId : `product:${decodedId}`;
+        const recordId = requireRecordId(TABLE_NAME, id);
 
         // db.select precisa de RecordId; string é interpretada como nome de tabela
-        const result = await db.select<Product>(new StringRecordId(formattedId));
+        const result = await db.select<Product>(recordId);
         const data = Array.isArray(result) ? result[0] : result;
 
         if (!data) return { success: false, error: "Produto não encontrado" };
 
         return { success: true, data: serializeProduct(data) };
     } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
         console.error("Error fetching product:", error);
         if (isTokenExpiredError(error)) resetDb();
         return { success: false, error: "Produto não encontrado" };
@@ -199,6 +216,9 @@ const parsePrice = (value: string | number) => {
 };
 
 export async function createProductAction(formData: FormData) {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
     const db = await getDb();
 
     // Raw data extraction
@@ -249,11 +269,9 @@ export async function createProductAction(formData: FormData) {
         }
 
         // Converte group_ids para StringRecordId para que CONTAINS funcione no SurrealDB
-        const groupRecordIds = (data.group_ids || []).map((gid) => {
-            const decoded = decodeURIComponent(gid);
-            const full = decoded.startsWith("product_group:") ? decoded : `product_group:${decoded}`;
-            return new StringRecordId(full);
-        });
+        const groupRecordIds = (data.group_ids || []).map((gid) =>
+            requireRecordId("product_group", gid)
+        );
 
         // Create product first to get ID
         const created = await db.create(new Table(TABLE_NAME)).content({
@@ -283,7 +301,7 @@ export async function createProductAction(formData: FormData) {
         if (imageFile && imageFile.size > 0 && !data.imageUrl) {
             try {
                 const savedUrl = await saveFile(imageFile, `products/${sanitizedId}`);
-                await db.update(new StringRecordId(newId)).merge({ imageUrl: savedUrl });
+                await db.update(requireRecordId(TABLE_NAME, newId)).merge({ imageUrl: savedUrl });
                 product.imageUrl = savedUrl;
             } catch (e) {
                 console.error("Failed to save image after product creation:", e);
@@ -299,6 +317,9 @@ export async function createProductAction(formData: FormData) {
 
         return { success: true, data: returnData };
     } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
         console.error("Error creating product:", error);
         if (isTokenExpiredError(error)) resetDb();
         return { success: false, error: "Falha ao criar produto" };
@@ -306,10 +327,10 @@ export async function createProductAction(formData: FormData) {
 }
 
 export async function updateProductAction(id: string, formData: FormData) {
-    const db = await getDb();
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
 
-    // Garantir ID no formato product:xxx para SurrealDB
-    const formattedId = id.startsWith("product:") ? id : `product:${id}`;
+    const db = await getDb();
 
     // Raw data extraction (similar to create)
     const rawData = {
@@ -347,6 +368,9 @@ export async function updateProductAction(id: string, formData: FormData) {
     const data = validated.data;
 
     try {
+        const productRecordId = requireRecordId(TABLE_NAME, id);
+        const formattedId = String(productRecordId);
+
         // Handle file upload if new file provided via form submit (fallback)
         if (imageFile && imageFile.size > 0) {
             const sanitizedId = formattedId.replace(":", "_");
@@ -354,13 +378,11 @@ export async function updateProductAction(id: string, formData: FormData) {
         }
 
         // Converte group_ids para StringRecordId para que CONTAINS funcione no SurrealDB
-        const groupRecordIds = (data.group_ids || []).map((gid) => {
-            const decoded = decodeURIComponent(gid);
-            const full = decoded.startsWith("product_group:") ? decoded : `product_group:${decoded}`;
-            return new StringRecordId(full);
-        });
+        const groupRecordIds = (data.group_ids || []).map((gid) =>
+            requireRecordId("product_group", gid)
+        );
 
-        await db.update(new StringRecordId(formattedId)).merge({
+        await db.update(productRecordId).merge({
             ...data,
             group_ids: groupRecordIds,
             updated_at: new Date().toISOString()
@@ -372,6 +394,9 @@ export async function updateProductAction(id: string, formData: FormData) {
 
         return { success: true };
     } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
         console.error("Error updating product:", error);
         if (isTokenExpiredError(error)) resetDb();
         return { success: false, error: "Falha ao atualizar produto" };
@@ -379,14 +404,21 @@ export async function updateProductAction(id: string, formData: FormData) {
 }
 
 export async function updateProductImageUrlAction(productId: string, imageUrl: string) {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
     const db = await getDb();
     try {
-        await db.update(new StringRecordId(productId)).merge({ imageUrl, updated_at: new Date().toISOString() });
-        const pathId = productId.includes(":") ? productId.split(":")[1] : productId;
+        const recordId = requireRecordId(TABLE_NAME, productId);
+        await db.update(recordId).merge({ imageUrl, updated_at: new Date().toISOString() });
+        const pathId = String(recordId).includes(":") ? String(recordId).split(":")[1] : String(recordId);
         revalidatePath("/dashboard/products");
         revalidatePath(`/dashboard/products/${pathId}`);
         return { success: true };
     } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
         console.error("Error updating product image:", error);
         if (isTokenExpiredError(error)) resetDb();
         return { success: false, error: "Falha ao atualizar imagem" };
@@ -394,6 +426,9 @@ export async function updateProductImageUrlAction(productId: string, imageUrl: s
 }
 
 export async function getNextProductCodeAction() {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error, data: "0001" };
+
     const db = await getDb();
     try {
         const result = await db.query<[Array<{ code: string }>]>(
@@ -416,16 +451,19 @@ export async function getNextProductCodeAction() {
 }
 
 export async function deleteProductAction(id: string) {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
     const db = await getDb();
     try {
-        const decodedId = decodeURIComponent(id);
-        const formattedId = decodedId.startsWith("product:") ? decodedId : `product:${decodedId}`;
-
-        await db.delete(new StringRecordId(formattedId));
+        await db.delete(requireRecordId(TABLE_NAME, id));
 
         revalidatePath("/dashboard/products");
         return { success: true };
     } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
         console.error("Error deleting product:", error);
         if (isTokenExpiredError(error)) resetDb();
         return { success: false, error: "Falha ao excluir produto" };
