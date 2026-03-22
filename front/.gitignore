@@ -30,6 +30,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# Volume local de uploads (docker-compose.prod: ./pazini-uploads:/app/uploads)
+/pazini-uploads/
+# Pasta de uploads em dev (em produção systemd monta /root/docker/pazini-uploads em /app/uploads)
+/uploads/
+
 # env files (can opt-in for committing if needed)
 .env
 

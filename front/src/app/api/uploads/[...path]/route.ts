@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "node:fs/promises";
 import path from "node:path";
-
-const UPLOADS_DIR = path.join(process.cwd(), "uploads");
+import { getUploadsRoot } from "@/lib/upload";
 
 const MIME_TYPES: Record<string, string> = {
     ".jpg": "image/jpeg",
@@ -37,10 +36,11 @@ export async function GET(
         return NextResponse.json({ error: "Invalid path" }, { status: 400 });
     }
 
-    const filePath = path.join(UPLOADS_DIR, ...segments);
+    const uploadsRoot = path.resolve(getUploadsRoot());
+    const filePath = path.resolve(uploadsRoot, ...segments);
 
     // Double-check resolved path is within uploads dir
-    if (!filePath.startsWith(UPLOADS_DIR)) {
+    if (!filePath.startsWith(uploadsRoot + path.sep)) {
         return NextResponse.json({ error: "Invalid path" }, { status: 400 });
     }
 
