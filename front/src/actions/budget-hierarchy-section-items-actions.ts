@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { StringRecordId, Table } from "surrealdb";
+import { Table } from "surrealdb";
 import { assertActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
@@ -16,7 +16,29 @@ import {
 } from "@/lib/surreal-record-ids";
 import { extractProductId, recalculateBudgetTotal } from "@/actions/budget-hierarchy-helpers";
 
-async function upsertBudgetItem(
+/** Próximo `order_index` na seção (múltiplos de 10, alinhado a `reorderSectionItemsAction`). */
+async function nextSectionItemOrderIndex(
+    db: Awaited<ReturnType<typeof getDb>>,
+    sectionId: string
+): Promise<number> {
+    const sectionRecordId = requireRecordId("budget_section", sectionId);
+    try {
+        const res = await db.query<[Array<{ m: number | null }>]>(
+            `SELECT math::max(order_index) AS m FROM budget_item WHERE section_id = $sectionId AND deleted_at IS NONE GROUP ALL`,
+            { sectionId: sectionRecordId }
+        );
+        const max = res[0]?.[0]?.m;
+        const n = max == null || Number.isNaN(Number(max)) ? -10 : Number(max);
+        return n + 10;
+    } catch {
+        return 0;
+    }
+}
+
+/**
+ * Sempre cria uma nova linha no escopo (mesmo produto repetido = linhas separadas).
+ */
+async function createBudgetItemInSection(
     db: Awaited<ReturnType<typeof getDb>>,
     sectionId: string,
     productId: string,
@@ -26,39 +48,20 @@ async function upsertBudgetItem(
     quantity: number,
     productUnit?: string
 ) {
-    const sectionIdStr = sectionId.startsWith("budget_section:") ? sectionId : `budget_section:${sectionId}`;
-
-    const existing = await db.query<[Array<{ id: unknown; quantity: number }>]>(
-        `SELECT id, quantity FROM budget_item
-     WHERE type::string(section_id) = $sectionIdStr
-       AND product_name = $productName
-       AND group_id IS NONE
-       AND deleted_at IS NONE
-     LIMIT 1`,
-        { sectionIdStr, productName }
-    );
-    const existingItem = existing[0]?.[0];
-
-    if (existingItem) {
-        const newQty = existingItem.quantity + quantity;
-        await db.update(new StringRecordId(String(existingItem.id))).merge({
-            quantity: newQty,
-            total: (unitPrice + laborCost) * newQty,
-        });
-    } else {
-        const unitLabel = productUnit?.trim();
-        await db.create(new Table("budget_item")).content({
-            section_id: requireRecordId("budget_section", sectionId),
-            product_id: requireRecordId("product", productId),
-            product_name: productName,
-            ...(unitLabel ? { product_unit: unitLabel } : {}),
-            quantity,
-            unit_price: unitPrice,
-            labor_cost: laborCost,
-            total: (unitPrice + laborCost) * quantity,
-            created_at: new Date().toISOString(),
-        });
-    }
+    const unitLabel = productUnit?.trim();
+    const orderIndex = await nextSectionItemOrderIndex(db, sectionId);
+    await db.create(new Table("budget_item")).content({
+        section_id: requireRecordId("budget_section", sectionId),
+        product_id: requireRecordId("product", productId),
+        product_name: productName,
+        ...(unitLabel ? { product_unit: unitLabel } : {}),
+        quantity,
+        unit_price: unitPrice,
+        labor_cost: laborCost,
+        total: (unitPrice + laborCost) * quantity,
+        order_index: orderIndex,
+        created_at: new Date().toISOString(),
+    });
 }
 
 export async function getItemsBySectionAction(sectionId: string) {
@@ -192,7 +195,7 @@ export async function addItemAction(sectionId: string, budgetId: string, product
         const productName = String(product.description || product.code || "");
         const productUnit = String((product as Record<string, unknown>).unit ?? "").trim();
 
-        await upsertBudgetItem(
+        await createBudgetItemInSection(
             db,
             sectionId,
             productId,
