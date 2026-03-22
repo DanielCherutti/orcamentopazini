@@ -148,7 +148,7 @@ Todas as telas de listagem seguem o padrão definido em `specs/02-listing-ui-pat
 
 No workspace do orçamento, o índice de **Ambientes** segue o mesmo padrão da aba **Escopo**: ao **selecionar o ambiente (pai)**, o painel mostra **todos os trechos empilhados** (fotos, produtos e descrição com editor rico por trecho); ao **selecionar um trecho (filho)**, o painel mostra **somente aquele trecho** — **o índice lateral continua listando todos os trechos** do ambiente. Em telas pequenas, um único seletor lista ambiente e trechos.
 
-**Orçamento com compositor (aba Orçamento):** o índice continua mostrando a árvore inteira. No painel principal, ao selecionar um bloco **Local**, a visualização fica **só naquele local e seus trechos**; ao selecionar um bloco **Trecho**, **só aquele trecho**. Para voltar ao **documento completo**, selecione no índice uma **sessão**, **texto**, **ESCOPO** ou outro tipo que não seja Local/Trecho.
+**Orçamento com compositor (aba Orçamento):** o índice continua mostrando a árvore inteira. A **visualização** segue o Escopo: **Sessão** (pai) → painel com essa sessão e **tudo abaixo** (subsessões, locais, trechos); **subsessão** (filha, também tipo sessão) → **só aquele ramo**; **Local** → local + trechos; **Trecho** → só aquele trecho. Para o **documento completo** (todas as raízes), selecione **ESCOPO**, **texto** ou outro tipo que não seja sessão/local/trecho.
 
 ### Commits
 

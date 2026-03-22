@@ -656,8 +656,11 @@ export interface CompositorContentProps {
     scrollRef: RefObject<HTMLDivElement | null>;
     isReadOnly?: boolean;
     /**
-     * Bloco selecionado no índice: para `location` ou `section`, o painel mostra só essa subárvore
-     * (local + trechos empilhados, ou um trecho). Demais tipos ou `null` = documento completo.
+     * Bloco selecionado no índice — mesmo padrão do Escopo (pai = tudo abaixo, filho = só aquele ramo):
+     * - `session`: essa sessão e todos os descendentes (subsessões, locais, trechos…)
+     * - `location`: local + trechos
+     * - `section`: só aquele trecho
+     * Demais tipos ou `null` = documento completo (todas as raízes).
      */
     selectedId?: string | null;
 }
@@ -689,7 +692,9 @@ export function CompositorContent({
             : null;
     const useFocusedSubtree =
         focused &&
-        (focused.type === "location" || focused.type === "section");
+        (focused.type === "session" ||
+            focused.type === "location" ||
+            focused.type === "section");
 
     const blocksToRender = useFocusedSubtree && focused ? [focused] : roots;
 
