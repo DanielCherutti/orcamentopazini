@@ -6,6 +6,7 @@ import { CompositorSidebar } from "./compositor-sidebar";
 import { CompositorContent } from "./compositor-content";
 import { getCompositorTreeAction } from "@/actions/budget-compositor-tree-actions";
 import { buildTree } from "@/types/budget-compositor-types";
+import { findBlockInTree } from "@/components/budgets/compositor/compositor-content-utils";
 import type { BudgetBlock, CompositorTree } from "@/types/budget-compositor-types";
 import type { BudgetItem, BudgetImage } from "@/types/budget-types";
 import { useLiveCompositor } from "@/hooks/use-live-compositor";
@@ -103,6 +104,7 @@ export function BudgetCompositor({ budgetId, isReadOnly = false }: BudgetComposi
           onRefresh={handleRefresh}
           scrollRef={scrollRef}
           isReadOnly={isReadOnly}
+          selectedId={selectedId}
         />
       </div>
     </div>

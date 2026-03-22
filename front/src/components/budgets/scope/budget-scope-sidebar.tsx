@@ -129,14 +129,40 @@ export function ScopeSidebar({
         () => new Set(locations.map((l) => l.id))
     );
 
+    /** Evita reexpandir todos os locais a cada refresh de `locations` (ex.: ao selecionar um trecho). */
+    const prevLocationIdSetRef = useRef<Set<string> | null>(null);
+
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- expande novos locais ao chegarem da API
-        setExpandedLocations((prev) => {
-            const next = new Set(prev);
-            locations.forEach((l) => next.add(l.id));
+        const currentIds = new Set(locations.map((l) => l.id));
+        const prevIds = prevLocationIdSetRef.current;
+
+        setExpandedLocations((expanded) => {
+            const next = new Set(expanded);
+            for (const id of [...next]) {
+                if (!currentIds.has(id)) next.delete(id);
+            }
+            if (prevIds === null) {
+                for (const id of currentIds) next.add(id);
+            } else {
+                for (const id of currentIds) {
+                    if (!prevIds.has(id)) next.add(id);
+                }
+            }
             return next;
         });
+
+        prevLocationIdSetRef.current = currentIds;
     }, [locations]);
+
+    /** Local (pai): só ele expandido e todos os trechos visíveis. Trecho: só o pai expandido e só aquele trecho na lista. */
+    useEffect(() => {
+        if (!selected) return;
+        if (selected.type === "location") {
+            setExpandedLocations(new Set([selected.id]));
+        } else if (selected.type === "section") {
+            setExpandedLocations(new Set([selected.locationId]));
+        }
+    }, [selected]);
 
     const toggleExpanded = (locationId: string) => {
         setExpandedLocations((prev) => {
@@ -541,6 +567,7 @@ function LocationNode({
     const [duplicating, setDuplicating] = useState(false);
 
     const isSelected = selected?.type === "location" && selected.id === location.id;
+    /** Índice sempre lista todos os trechos; só o painel principal muda (todos empilhados vs um trecho). */
     const hasBodyBelow =
         (expanded && location.sections.length > 0) || addingSection;
 
@@ -614,7 +641,7 @@ function LocationNode({
                     }}
                     title={expanded ? "Recolher trechos" : "Expandir trechos"}
                 >
-                    {expanded && location.sections.length > 0 ? (
+                    {expanded ? (
                         <ChevronDown className="h-4 w-4" />
                     ) : (
                         <ChevronRight className="h-4 w-4" />
@@ -699,7 +726,10 @@ function LocationNode({
                         strategy={verticalListSortingStrategy}
                     >
                         <div className="border-t border-border/60 bg-muted/20 px-1.5 py-1.5 rounded-b-lg">
-                        {location.sections.map((sec, secIdx) => (
+                        {location.sections.map((sec) => {
+                            const sectionIndex =
+                                location.sections.findIndex((s) => s.id === sec.id) + 1;
+                            return (
                             <SortableSectionRow
                                 key={sec.id}
                                 sec={sec}
@@ -710,11 +740,12 @@ function LocationNode({
                                 onDuplicate={openDuplicateDialog}
                                 onDelete={handleDeleteSection}
                                 isReadOnly={isReadOnly}
-                                sectionIndex={secIdx + 1}
+                                sectionIndex={sectionIndex}
                                 locationIndex={locIndex}
                                 scopeNumber={scopeNumber}
                             />
-                        ))}
+                            );
+                        })}
                         </div>
                     </SortableContext>
                 )}

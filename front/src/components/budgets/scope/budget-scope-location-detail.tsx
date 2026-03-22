@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Map as MapIcon, Layers, ChevronRight, Copy, Trash2, Pencil } from "lucide-react";
+import { Map as MapIcon, Copy, Trash2, Pencil } from "lucide-react";
 import {
     Dialog,
     DialogContent,
@@ -26,6 +26,7 @@ import {
     duplicateLocationAction,
 } from "@/actions/budget-hierarchy-scope-structure-actions";
 import { getBudgetImagesByLocation, deleteBudgetImage } from "@/actions/budget-annotations";
+import { SectionDetail } from "./budget-scope-section-detail";
 
 interface LocationDetailProps {
     locationId: string;
@@ -33,7 +34,8 @@ interface LocationDetailProps {
     budgetId: string;
     isReadOnly: boolean;
     onRefresh: () => void;
-    onSelectSection?: (sectionId: string) => void;
+    /** Lista completa de locais (repassada aos trechos quando necessário). */
+    locations?: ScopeLocation[];
 }
 
 export function LocationDetail({
@@ -42,7 +44,7 @@ export function LocationDetail({
     budgetId,
     isReadOnly,
     onRefresh,
-    onSelectSection,
+    locations = [],
 }: LocationDetailProps) {
     const [name, setName] = useState(location?.name ?? "");
     const [editingName, setEditingName] = useState(false);
@@ -255,22 +257,20 @@ export function LocationDetail({
             </CollapsibleEditorSection>
 
             {location.sections.length > 0 && (
-                <CollapsibleEditorSection label={`Trechos (${location.sections.length})`} defaultOpen>
-                    <div className="space-y-1.5">
-                        {location.sections.map((sec) => (
-                            <button
-                                key={sec.id}
-                                type="button"
-                                onClick={() => onSelectSection?.(sec.id)}
-                                className="w-full flex items-center gap-2 px-3 py-2.5 rounded-md border border-border bg-white hover:bg-primary/[0.04] hover:border-primary/30 text-sm transition-colors group text-left"
-                            >
-                                <Layers className="h-4 w-4 text-primary/50 shrink-0 group-hover:text-primary transition-colors" />
-                                <span className="flex-1 font-medium">{sec.name}</span>
-                                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-primary/60 transition-colors" />
-                            </button>
-                        ))}
-                    </div>
-                </CollapsibleEditorSection>
+                <div className="space-y-6 pt-2">
+                    {location.sections.map((sec) => (
+                        <SectionDetail
+                            key={sec.id}
+                            sectionId={sec.id}
+                            locationId={locationId}
+                            section={sec}
+                            budgetId={budgetId}
+                            isReadOnly={isReadOnly}
+                            onRefresh={onRefresh}
+                            locations={locations.length > 0 ? locations : [location]}
+                        />
+                    ))}
+                </div>
             )}
 
             <BudgetPhotoAnnotatorDialog

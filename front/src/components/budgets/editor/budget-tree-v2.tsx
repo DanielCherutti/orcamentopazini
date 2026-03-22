@@ -29,13 +29,18 @@ export function BudgetTreeV2({ budget, onRefresh }: BudgetTreeV2Props) {
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(
     null
   );
+  /** `null` = painel mostra todos os trechos do ambiente; definido = só esse trecho. */
+  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
   const pendingSelectLastRef = useRef(false);
 
   // Ao adicionar novo local, selecionar o último após refresh
   useEffect(() => {
     if (pendingSelectLastRef.current && locations.length > 0) {
       const last = locations[locations.length - 1];
-      if (last?.id) setSelectedLocationId(last.id as string);
+      if (last?.id) {
+        setSelectedLocationId(last.id as string);
+        setSelectedSectionId(null);
+      }
       pendingSelectLastRef.current = false;
     }
   }, [locations]);
@@ -44,13 +49,25 @@ export function BudgetTreeV2({ budget, onRefresh }: BudgetTreeV2Props) {
   useEffect(() => {
     if (locations.length === 0) {
       setSelectedLocationId(null);
+      setSelectedSectionId(null);
     } else if (!selectedLocationId) {
       setSelectedLocationId(locations[0].id as string);
     } else {
       const stillExists = locations.some((l) => (l.id as string) === selectedLocationId);
-      if (!stillExists) setSelectedLocationId(locations[0].id as string);
+      if (!stillExists) {
+        setSelectedLocationId(locations[0].id as string);
+        setSelectedSectionId(null);
+      }
     }
   }, [locations, selectedLocationId]);
+
+  // Trecho selecionado deixou de existir após refresh
+  useEffect(() => {
+    if (!selectedSectionId || !selectedLocationId) return;
+    const loc = locations.find((l) => (l.id as string) === selectedLocationId);
+    const stillThere = loc?.sections?.some((s) => (s.id as string) === selectedSectionId);
+    if (!stillThere) setSelectedSectionId(null);
+  }, [locations, selectedLocationId, selectedSectionId]);
 
   const handleDeleteLocation = async (id: string, name: string) => {
     if (!confirm(`Tem certeza que deseja excluir o local "${name}" e todos os seus itens?`))
@@ -59,6 +76,7 @@ export function BudgetTreeV2({ budget, onRefresh }: BudgetTreeV2Props) {
       if (!budgetId) throw new Error("ID do orçamento inválido");
       await repo.deleteLocation(id, budgetId);
       if (selectedLocationId === id) {
+        setSelectedSectionId(null);
         const idx = locations.findIndex((l) => (l.id as string) === id);
         const prevLocation = idx > 0 ? locations[idx - 1] : null;
         setSelectedLocationId(prevLocation ? (prevLocation.id as string) : null);
@@ -92,27 +110,60 @@ export function BudgetTreeV2({ budget, onRefresh }: BudgetTreeV2Props) {
       ? locations.find((l) => (l.id as string) === selectedLocationId) ?? null
       : null;
 
+  const n = budget.section_number ?? 1;
+  const mobileOptions = useMemo(() => {
+    const opts: { value: string; label: string }[] = [];
+    locations.forEach((loc, idx) => {
+      const locId = loc.id as string;
+      opts.push({ value: `l:${locId}`, label: `${n}.${idx + 1} — ${loc.name}` });
+      (loc.sections || []).forEach((sec, j) => {
+        const sid = sec.id as string;
+        opts.push({
+          value: `s:${locId}:${sid}`,
+          label: `${n}.${idx + 1}.${j + 1} — ${sec.name}`,
+        });
+      });
+    });
+    return opts;
+  }, [locations, n]);
+
+  const mobileSelectValue =
+    selectedSectionId && selectedLocationId
+      ? `s:${selectedLocationId}:${selectedSectionId}`
+      : selectedLocationId
+        ? `l:${selectedLocationId}`
+        : "";
+
   return (
     <div className="flex flex-col md:flex-row h-full min-h-0">
       {/* Mobile: dropdown + adicionar local no topo */}
       <div className="md:hidden shrink-0 flex flex-col gap-2 p-2 border-b bg-background">
         {locations.length > 0 && (
           <Select
-            value={selectedLocationId ?? ""}
-            onValueChange={(v) => setSelectedLocationId(v || null)}
+            value={mobileSelectValue}
+            onValueChange={(v) => {
+              if (!v) return;
+              if (v.startsWith("l:")) {
+                setSelectedLocationId(v.slice(2));
+                setSelectedSectionId(null);
+              } else if (v.startsWith("s:")) {
+                const rest = v.slice(2);
+                const colon = rest.indexOf(":");
+                if (colon === -1) return;
+                setSelectedLocationId(rest.slice(0, colon));
+                setSelectedSectionId(rest.slice(colon + 1));
+              }
+            }}
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Selecione um ambiente" />
+              <SelectValue placeholder="Selecione ambiente ou trecho" />
             </SelectTrigger>
-            <SelectContent>
-              {locations.map((loc, idx) => {
-                const n = budget.section_number ?? 1;
-                return (
-                  <SelectItem key={loc.id} value={loc.id as string}>
-                    {n}.{idx + 1} — {loc.name}
-                  </SelectItem>
-                );
-              })}
+            <SelectContent className="max-h-[min(70vh,320px)]">
+              {mobileOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         )}
@@ -124,12 +175,21 @@ export function BudgetTreeV2({ budget, onRefresh }: BudgetTreeV2Props) {
         <LocationSidebar
           locations={locations}
           selectedLocationId={selectedLocationId}
+          selectedSectionId={selectedSectionId}
           budgetId={budgetId}
           sectionNumber={budget.section_number ?? 1}
-          onSelect={setSelectedLocationId}
+          onSelectLocation={(locId) => {
+            setSelectedLocationId(locId);
+            setSelectedSectionId(null);
+          }}
+          onSelectSection={(locId, sectionId) => {
+            setSelectedLocationId(locId);
+            setSelectedSectionId(sectionId);
+          }}
           onDelete={handleDeleteLocation}
           onDuplicate={handleDuplicateLocation}
           onAddSuccess={handleAddSuccess}
+          onRefresh={onRefresh}
         />
       </div>
 
@@ -140,6 +200,8 @@ export function BudgetTreeV2({ budget, onRefresh }: BudgetTreeV2Props) {
           locationIndex={selectedLocation ? locations.findIndex((l) => (l.id as string) === (selectedLocation.id as string)) : -1}
           budgetId={budgetId}
           sectionNumber={budget.section_number ?? 1}
+          selectedSectionId={selectedSectionId}
+          allLocations={locations}
           onRefresh={onRefresh}
           onDeleteLocation={handleDeleteLocation}
           onDuplicateLocation={handleDuplicateLocation}

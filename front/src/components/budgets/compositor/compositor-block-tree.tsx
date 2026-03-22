@@ -41,6 +41,7 @@ import { toAbsoluteImageUrl } from "@/lib/utils";
 import {
     buildItemSegments,
     EMPTY_ITEMS,
+    findBlockInTree,
     formatCurrency,
 } from "./compositor-content-utils";
 import { useBlockDescription, useBlockLabel } from "./compositor-content-hooks";
@@ -654,6 +655,11 @@ export interface CompositorContentProps {
     onRefresh: () => void;
     scrollRef: RefObject<HTMLDivElement | null>;
     isReadOnly?: boolean;
+    /**
+     * Bloco selecionado no índice: para `location` ou `section`, o painel mostra só essa subárvore
+     * (local + trechos empilhados, ou um trecho). Demais tipos ou `null` = documento completo.
+     */
+    selectedId?: string | null;
 }
 
 export function CompositorContent({
@@ -664,6 +670,7 @@ export function CompositorContent({
     onRefresh,
     scrollRef,
     isReadOnly,
+    selectedId = null,
 }: CompositorContentProps) {
     if (roots.length === 0) {
         return (
@@ -676,13 +683,23 @@ export function CompositorContent({
         );
     }
 
+    const focused =
+        selectedId != null && selectedId !== ""
+            ? findBlockInTree(roots, selectedId)
+            : null;
+    const useFocusedSubtree =
+        focused &&
+        (focused.type === "location" || focused.type === "section");
+
+    const blocksToRender = useFocusedSubtree && focused ? [focused] : roots;
+
     return (
         <div
             ref={scrollRef}
             className="flex-1 overflow-y-auto min-h-0 bg-primary/[0.015]"
         >
             <div className="w-full p-6 space-y-2">
-                {roots.map((block) => (
+                {blocksToRender.map((block) => (
                     <BlockDocument
                         key={block.id}
                         block={block}

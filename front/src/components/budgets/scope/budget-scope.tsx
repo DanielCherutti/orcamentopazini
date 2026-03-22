@@ -60,6 +60,7 @@ export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) 
         <div className="flex flex-1 min-h-0 overflow-hidden">
             {sidebarOpen && (
                 <ScopeSidebar
+                    key={budgetId}
                     budgetId={budgetId}
                     locations={locations}
                     selected={selected}
@@ -101,9 +102,7 @@ export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) 
                             budgetId={budgetId}
                             isReadOnly={isReadOnly}
                             onRefresh={loadLocations}
-                            onSelectSection={(sectionId) => {
-                                setSelected({ type: "section", id: sectionId, locationId: selected.id });
-                            }}
+                            locations={locations}
                         />
                     ) : (
                         <SectionDetail
