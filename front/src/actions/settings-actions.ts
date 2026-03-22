@@ -19,7 +19,21 @@ export interface ProposalSettings {
     company_logo_url?: string;
     primary_color?: string;
     secondary_color?: string;
+    /** URL pública do site (links do convite por e-mail), ex.: https://portal.empresa.com */
+    app_public_url?: string;
+    smtp_host?: string;
+    smtp_port?: number;
+    smtp_secure?: boolean;
+    smtp_user?: string;
+    smtp_from?: string;
+    /** Só leitura (servidor): indica se já existe senha SMTP gravada — nunca envie de volta no salvamento. */
+    smtp_pass_configured?: boolean;
 }
+
+/** Payload do formulário ao salvar (senha nova opcional). */
+export type UpdateProposalSettingsInput = ProposalSettings & {
+    smtp_pass_new?: string;
+};
 
 /** Dados de marca legíveis sem sessão (apenas para tela de login / branding). */
 export type PublicProposalBranding = {
@@ -100,12 +114,29 @@ export async function getProposalSettingsAction() {
     try {
         const result = await db.query<[ProposalSettings[]]>("SELECT * FROM proposal_settings LIMIT 1");
 
-        const settings = result[0]?.[0] || { ...PROPOSAL_SETTINGS_DEFAULTS };
+        const raw = result[0]?.[0] || { ...PROPOSAL_SETTINGS_DEFAULTS };
+        const plain = toPlain(raw) as Record<string, unknown>;
 
-        // Serializar ID se existir
-        if (settings.id) settings.id = String(settings.id);
+        const smtp_pass_configured =
+            typeof plain.smtp_pass === "string" && plain.smtp_pass.length > 0;
+        delete plain.smtp_pass;
 
-        return { success: true, data: toPlain(settings) };
+        const settings: ProposalSettings = {
+            ...(plain as unknown as ProposalSettings),
+            id: plain.id != null ? String(plain.id) : undefined,
+            smtp_pass_configured,
+        };
+
+        if (settings.smtp_port != null && typeof settings.smtp_port !== "number") {
+            settings.smtp_port = Number(settings.smtp_port) || undefined;
+        }
+        if (settings.smtp_secure != null && typeof settings.smtp_secure !== "boolean") {
+            const s = settings.smtp_secure as unknown;
+            settings.smtp_secure =
+                s === true || s === "true" || s === 1 || s === "1";
+        }
+
+        return { success: true, data: settings };
     } catch (e) {
         console.error("Erro settings:", e);
         if (isTokenExpiredError(e)) resetDb();
@@ -113,14 +144,29 @@ export async function getProposalSettingsAction() {
     }
 }
 
-export async function updateProposalSettingsAction(data: ProposalSettings) {
+export async function updateProposalSettingsAction(data: UpdateProposalSettingsInput) {
     const auth = await assertActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();
     try {
-        const cleanData = { ...data };
-        delete cleanData.id;
+        const { smtp_pass_new, smtp_pass_configured: _cfg, id: _id, ...rest } = data;
+        const cleanData: Record<string, unknown> = { ...rest };
+        delete cleanData.smtp_pass;
+
+        if (smtp_pass_new != null && String(smtp_pass_new).trim() !== "") {
+            cleanData.smtp_pass = String(smtp_pass_new).trim();
+        }
+
+        if (cleanData.smtp_port === "" || cleanData.smtp_port === undefined) {
+            delete cleanData.smtp_port;
+        } else {
+            cleanData.smtp_port = Number(cleanData.smtp_port) || 587;
+        }
+
+        if (typeof cleanData.smtp_secure === "string") {
+            cleanData.smtp_secure = cleanData.smtp_secure === "true";
+        }
 
         const result = await db.query<[ProposalSettings[]]>("SELECT * FROM proposal_settings LIMIT 1");
 

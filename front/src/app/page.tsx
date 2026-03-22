@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { LoginHighlightsCard } from "@/components/auth/login-highlights-card";
 import { DashboardWelcomeLogo } from "@/components/dashboard/dashboard-welcome-logo";
 import { brandingCSSProperties } from "@/lib/branding-theme";
-import { AlertCircle, Lock, Mail } from "lucide-react";
+import { AlertCircle, CheckCircle2, Lock, Mail } from "lucide-react";
 
 export const metadata: Metadata = {
     title: "Entrar",
@@ -17,9 +17,9 @@ export const metadata: Metadata = {
 export default async function LoginPage({
     searchParams,
 }: {
-    searchParams: Promise<{ error?: string }>;
+    searchParams: Promise<{ error?: string; success?: string }>;
 }) {
-    const { error } = await searchParams;
+    const { error, success } = await searchParams;
     const branding = await getPublicProposalBrandingAction();
     const themeStyle = brandingCSSProperties(branding.primary_color, branding.secondary_color);
 
@@ -75,11 +75,42 @@ export default async function LoginPage({
                         </div>
 
                         <div className="mt-8 space-y-4">
+                            {success === "invite" && (
+                                <Alert className="rounded-xl border-green-500/35 bg-green-500/10 text-green-950 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-50">
+                                    <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                                    <AlertTitle className="text-green-950 dark:text-green-50">
+                                        Senha criada
+                                    </AlertTitle>
+                                    <AlertDescription className="text-green-900/90 dark:text-green-100/90">
+                                        Agora você pode entrar com seu e-mail e a nova senha.
+                                    </AlertDescription>
+                                </Alert>
+                            )}
+
                             {error === "invalid" && (
                                 <Alert variant="destructive" className="rounded-xl border-destructive/40">
                                     <AlertCircle className="h-4 w-4" />
                                     <AlertTitle>Falha no acesso</AlertTitle>
                                     <AlertDescription>Email ou senha incorretos.</AlertDescription>
+                                </Alert>
+                            )}
+
+                            {error === "pending" && (
+                                <Alert
+                                    className="rounded-xl border-amber-500/35 bg-amber-500/10 text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-50"
+                                    role="alert"
+                                >
+                                    <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                                    <AlertTitle className="text-amber-950 dark:text-amber-50">
+                                        Conta ainda não ativada
+                                    </AlertTitle>
+                                    <AlertDescription className="text-amber-900/90 dark:text-amber-100/90 space-y-2">
+                                        <p>
+                                            Use o link enviado por e-mail para criar sua senha. Se
+                                            expirou ou não recebeu, peça um novo convite ao
+                                            administrador.
+                                        </p>
+                                    </AlertDescription>
                                 </Alert>
                             )}
 

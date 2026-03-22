@@ -21,6 +21,20 @@ export const LOGIN_HIGHLIGHTS_SUBTITLE =
 /** Ordem: mais recente primeiro (para leitura). */
 export const loginHighlights: LoginHighlight[] = [
   {
+    kind: "fix",
+    date: "2026-03-21",
+    title: "Grupo no escopo na ordem certa",
+    description:
+      "Ao adicionar um grupo de produtos em um trecho do escopo, os itens do grupo passam a entrar depois dos que já estavam naquele trecho — não mais no topo da lista.",
+  },
+  {
+    kind: "feature",
+    date: "2026-03-25",
+    title: "Novos usuários por convite no e-mail",
+    description:
+      "Em Configurações → Usuários, informe o e-mail; a pessoa recebe um link para criar a senha. A URL pública do site e o SMTP ficam em Configurações da empresa → E-mail (convites). O administrador pode definir ou alterar senha pelo painel quando precisar.",
+  },
+  {
     kind: "feature",
     date: "2026-03-25",
     title: "Status do orçamento: Em andamento e Finalizado",

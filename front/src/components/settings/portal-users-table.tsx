@@ -85,7 +85,7 @@ export function PortalUsersTable({
             <div className="rounded-lg border border-dashed border-border bg-muted/20 px-6 py-10 text-center">
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
                     Nenhum usuário cadastrado. Use{" "}
-                    <strong className="text-foreground">Cadastrar usuário</strong>{" "}
+                    <strong className="text-foreground">Convidar usuário</strong>{" "}
                     ou rode no terminal{" "}
                     <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
                         bun run seed:portal-user
@@ -99,8 +99,8 @@ export function PortalUsersTable({
     return (
         <>
             <p className="text-xs text-muted-foreground mb-3">
-                Clique na linha para acesso e senha. Use o ícone da lixeira para
-                excluir.
+                Clique na linha para gerenciar acesso e senha. Convites pendentes
+                aguardam o link no e-mail. Use o ícone da lixeira para excluir.
             </p>
             <Table>
                 <TableHeader>
@@ -137,18 +137,28 @@ export function PortalUsersTable({
                                     {u.email}
                                 </TableCell>
                                 <TableCell className="py-3">
-                                    {u.active === false ? (
-                                        <Badge variant="destructive">
-                                            Inativo
-                                        </Badge>
-                                    ) : (
-                                        <Badge
-                                            variant="secondary"
-                                            className="bg-green-500/15 text-green-700 border-green-500/30 dark:text-green-400"
-                                        >
-                                            Ativo
-                                        </Badge>
-                                    )}
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {u.active === false ? (
+                                            <Badge variant="destructive">
+                                                Inativo
+                                            </Badge>
+                                        ) : (
+                                            <Badge
+                                                variant="secondary"
+                                                className="bg-green-500/15 text-green-700 border-green-500/30 dark:text-green-400"
+                                            >
+                                                Ativo
+                                            </Badge>
+                                        )}
+                                        {u.pending_setup && (
+                                            <Badge
+                                                variant="outline"
+                                                className="border-amber-500/50 text-amber-800 dark:text-amber-200"
+                                            >
+                                                Convite pendente
+                                            </Badge>
+                                        )}
+                                    </div>
                                 </TableCell>
                                 <TableCell
                                     className="py-3 pr-1"

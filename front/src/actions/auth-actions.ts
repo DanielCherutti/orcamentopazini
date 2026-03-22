@@ -7,6 +7,7 @@ import { checkLoginRateLimitFromHeaders } from "@/lib/rate-limit";
 import { signSessionToken, verifySessionToken } from "@/lib/session-token";
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
 import { verifyPassword } from "@/lib/password";
+import { passwordHashLooksValid } from "@/lib/password-hash-present";
 
 const SESSION_MAX_AGE = 60 * 60 * 8; // 8 hours
 
@@ -49,9 +50,15 @@ export async function loginAction(formData: FormData) {
         );
         const row = rows[0]?.[0];
         const inactive = row?.active === false;
+
+        if (row && !inactive && !passwordHashLooksValid(row.password_hash)) {
+            redirect("/?error=pending");
+        }
+
         const ok =
             row &&
             !inactive &&
+            passwordHashLooksValid(row.password_hash) &&
             (await verifyPassword(password, row.password_hash));
 
         if (!ok) {

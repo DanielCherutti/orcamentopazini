@@ -1,5 +1,6 @@
 "use server";
 
+import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { StringRecordId, Table } from "surrealdb";
 import { revalidatePath } from "next/cache";
@@ -8,13 +9,14 @@ import { hashPassword } from "@/lib/password";
 import { assertPasswordPolicy } from "@/lib/password-pwned";
 import { PASSWORD_MAX_LENGTH } from "@/lib/password-strength";
 import { getSession, getSessionEmail } from "@/actions/auth-actions";
+import { passwordHashLooksValid } from "@/lib/password-hash-present";
+import { sendPortalInviteEmail } from "@/lib/portal-invite-mail";
+import { resolveInviteAppBaseUrl } from "@/lib/proposal-mail-settings";
+
+const INVITE_TTL_MS = 48 * 60 * 60 * 1000;
 
 const createUserSchema = z.object({
     email: z.string().trim().email("E-mail inválido"),
-    password: z
-        .string()
-        .min(1, "Informe a senha")
-        .max(PASSWORD_MAX_LENGTH, "Senha muito longa"),
 });
 
 export type PortalUserPublic = {
@@ -22,6 +24,8 @@ export type PortalUserPublic = {
     email: string;
     created_at?: string;
     active?: boolean;
+    /** Ainda não definiu senha pelo link enviado ao e-mail */
+    pending_setup?: boolean;
 };
 
 async function requireLoggedIn(): Promise<boolean> {
@@ -65,13 +69,21 @@ export async function listPortalUsersAction(): Promise<{
     const db = await getDb();
     try {
         const result = await db.query<
-            [PortalUserPublic[]]
-        >(`SELECT id, email, created_at, active FROM portal_user ORDER BY email`);
+            [
+                (PortalUserPublic & {
+                    password_hash?: string;
+                })[],
+            ]
+        >(`SELECT id, email, created_at, active, password_hash FROM portal_user ORDER BY email`);
         const rows = result[0] ?? [];
-        const users = toPlain(rows).map((u) => ({
-            ...u,
-            id: String(u.id),
-        }));
+        const users = toPlain(rows).map((u) => {
+            const { password_hash: _ph, ...rest } = u;
+            return {
+                ...rest,
+                id: String(u.id),
+                pending_setup: !passwordHashLooksValid(u.password_hash),
+            };
+        });
         return { success: true, users };
     } catch (e) {
         console.error("listPortalUsersAction:", e);
@@ -86,6 +98,7 @@ export async function createPortalUserAction(
 ): Promise<{
     success: boolean;
     error?: string;
+    message?: string;
     fieldErrors?: Record<string, string[]>;
 }> {
     if (!(await requireLoggedIn())) {
@@ -94,7 +107,6 @@ export async function createPortalUserAction(
 
     const parsed = createUserSchema.safeParse({
         email: formData.get("email"),
-        password: formData.get("password"),
     });
 
     if (!parsed.success) {
@@ -105,16 +117,18 @@ export async function createPortalUserAction(
         return { success: false, fieldErrors: fieldErrors as Record<string, string[]> };
     }
 
-    const policy = await assertPasswordPolicy(parsed.data.password);
-    if (!policy.ok) {
+    const baseUrl = await resolveInviteAppBaseUrl();
+    if (!baseUrl) {
         return {
             success: false,
-            fieldErrors: { password: policy.errors },
+            error:
+                "Defina a URL pública do sistema em Configurações da empresa (E-mail / convites) ou APP_URL / NEXT_PUBLIC_APP_URL no .env.",
         };
     }
 
     const email = parsed.data.email.trim().toLowerCase();
-    const password_hash = await hashPassword(parsed.data.password);
+    const invite_token = randomBytes(32).toString("hex");
+    const invite_expires_at = new Date(Date.now() + INVITE_TTL_MS).toISOString();
 
     const db = await getDb();
     try {
@@ -129,16 +143,39 @@ export async function createPortalUserAction(
             };
         }
 
-        await db.insert(new Table("portal_user"), {
+        const insertPayload = {
             email,
-            password_hash,
             active: true,
+            invite_token,
+            invite_expires_at,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-        });
+        };
+
+        const insertResult = await db.insert(new Table("portal_user"), insertPayload);
+        const createdRecord = Array.isArray(insertResult) ? insertResult[0] : insertResult;
+        const newId = createdRecord?.id != null ? String(createdRecord.id) : null;
+        if (!newId) {
+            return { success: false, error: "Erro ao criar usuário" };
+        }
+
+        const inviteUrl = `${baseUrl}/convite?token=${encodeURIComponent(invite_token)}`;
+        const mail = await sendPortalInviteEmail({ to: email, inviteUrl });
+
+        if (!mail.ok) {
+            try {
+                await db.delete(new StringRecordId(newId));
+            } catch (delErr) {
+                console.error("createPortalUserAction rollback delete:", delErr);
+            }
+            return { success: false, error: mail.error };
+        }
 
         revalidatePath("/settings/users");
-        return { success: true };
+        return {
+            success: true,
+            message: `Convite enviado para ${email}. A pessoa deve abrir o link no e-mail para criar a senha.`,
+        };
     } catch (e) {
         console.error("createPortalUserAction:", e);
         if (isTokenExpiredError(e)) resetDb();
@@ -285,10 +322,14 @@ export async function resetPortalUserPasswordAction(formData: FormData): Promise
         }
 
         const password_hash = await hashPassword(password);
-        await db.update(rid).merge({
-            password_hash,
-            updated_at: new Date().toISOString(),
-        });
+        await db.query(
+            "UPDATE $rid MERGE { password_hash: $ph, updated_at: $u, invite_token: NONE, invite_expires_at: NONE }",
+            {
+                rid,
+                ph: password_hash,
+                u: new Date().toISOString(),
+            },
+        );
 
         revalidatePath("/settings/users");
         return { success: true };

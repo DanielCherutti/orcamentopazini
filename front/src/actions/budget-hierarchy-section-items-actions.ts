@@ -252,6 +252,9 @@ export async function addGroupToSectionAction(
             if (canon) normalizedQty[canon] = v;
         }
 
+        /** Mesma regra que itens avulsos: após o maior order_index da seção (múltiplos de 10). */
+        let orderIndex = await nextSectionItemOrderIndex(db, sectionId);
+
         let inserted = 0;
         for (const product of productsRes.data) {
             const productId = canonicalTableRecordId("product", product.id);
@@ -274,8 +277,10 @@ export async function addGroupToSectionAction(
                 total: (unitPrice + laborCost) * quantity,
                 group_id: groupRecordId,
                 group_name: groupName,
+                order_index: orderIndex,
                 created_at: new Date().toISOString(),
             });
+            orderIndex += 10;
             inserted += 1;
         }
 

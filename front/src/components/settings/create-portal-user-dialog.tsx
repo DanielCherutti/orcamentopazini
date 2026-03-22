@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { submitCreatePortalUser } from "@/actions/portal-user-actions";
-import { PasswordRequirementsHint } from "@/components/settings/password-requirements-hint";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -15,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toast } from "@/lib/toast";
 
 type Props = {
     open: boolean;
@@ -28,13 +28,11 @@ export function CreatePortalUserDialog({ open, onOpenChange }: Props) {
     const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>(
         {},
     );
-    const [password, setPassword] = useState("");
 
     function handleOpenChange(next: boolean) {
         if (!next) {
             setError(null);
             setFieldErrors({});
-            setPassword("");
         }
         onOpenChange(next);
     }
@@ -50,9 +48,12 @@ export function CreatePortalUserDialog({ open, onOpenChange }: Props) {
             const r = await submitCreatePortalUser(fd);
             if (r.success) {
                 form.reset();
-                setPassword("");
                 handleOpenChange(false);
                 router.refresh();
+                toast.success(
+                    r.message ??
+                        "Convite enviado. A pessoa deve abrir o link no e-mail para criar a senha.",
+                );
                 return;
             }
             if (r.error) setError(r.error);
@@ -66,8 +67,8 @@ export function CreatePortalUserDialog({ open, onOpenChange }: Props) {
                 <DialogHeader>
                     <DialogTitle>Novo usuário</DialogTitle>
                     <DialogDescription>
-                        O e-mail será usado no login. Defina uma senha forte
-                        conforme os requisitos abaixo.
+                        Informe apenas o e-mail. Enviaremos um link para a pessoa
+                        criar a senha e acessar o portal (válido por 48 horas).
                     </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -88,29 +89,6 @@ export function CreatePortalUserDialog({ open, onOpenChange }: Props) {
                             </p>
                         )}
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="portal-new-password">Senha</Label>
-                        <Input
-                            id="portal-new-password"
-                            name="password"
-                            type="password"
-                            required
-                            minLength={12}
-                            autoComplete="new-password"
-                            placeholder="Senha forte (mín. 12 caracteres)"
-                            disabled={pending}
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                        />
-                        <PasswordRequirementsHint password={password} />
-                        {fieldErrors.password && fieldErrors.password.length > 0 && (
-                            <ul className="text-sm text-destructive space-y-1 list-disc pl-4">
-                                {fieldErrors.password.map((msg, i) => (
-                                    <li key={i}>{msg}</li>
-                                ))}
-                            </ul>
-                        )}
-                    </div>
                     {error && (
                         <p className="text-sm text-destructive">{error}</p>
                     )}
@@ -124,7 +102,7 @@ export function CreatePortalUserDialog({ open, onOpenChange }: Props) {
                             Cancelar
                         </Button>
                         <Button type="submit" disabled={pending}>
-                            {pending ? "Cadastrando…" : "Cadastrar"}
+                            {pending ? "Enviando…" : "Enviar convite"}
                         </Button>
                     </DialogFooter>
                 </form>

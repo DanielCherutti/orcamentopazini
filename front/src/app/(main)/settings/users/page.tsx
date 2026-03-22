@@ -41,8 +41,13 @@ export default async function SettingsUsersPage() {
                         Usuários do sistema
                     </h1>
                     <p className="text-sm text-muted-foreground max-w-xl">
-                        Quem pode acessar o portal. As senhas são guardadas com hash;
-                        use a lista abaixo para ativar, inativar ou redefinir senha.
+                        Novos acessos: envie só o e-mail — a pessoa recebe um link para criar a
+                        senha. Configure a URL pública e o SMTP em{" "}
+                        <Link href="/settings" className="text-primary font-medium hover:underline">
+                            Configurações da empresa
+                        </Link>{" "}
+                        (seção E-mail / convites). Use a lista para ativar, inativar ou definir senha
+                        manualmente.
                     </p>
                 </div>
             </div>
