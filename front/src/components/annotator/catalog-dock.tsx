@@ -23,6 +23,10 @@ interface CatalogDockProps {
      */
     budgetUsedGroupIds?: string[];
     budgetUsedGroupIdsLoading?: boolean;
+    /** Quando true (botão na toolbar com orçamento), lista a aba Grupo com todos os grupos do catálogo, não só os do orçamento. */
+    showAllProductGroups?: boolean;
+    /** Incrementado pela toolbar: vai à aba Grupo e expande/carrega conforme a lista visível (filtrada ou completa). */
+    expandAllGroupsSignal?: number;
 }
 
 type GroupProduct = {
@@ -82,8 +86,12 @@ export function CatalogDock({
     onDragStartCatalogGroup,
     budgetUsedGroupIds,
     budgetUsedGroupIdsLoading = false,
+    showAllProductGroups = false,
+    expandAllGroupsSignal = 0,
 }: CatalogDockProps) {
-    const defaultTab = availableItems.length > 0 ? "budget" : "groups";
+    const [activeTab, setActiveTab] = useState<"budget" | "groups">(() =>
+        availableItems.length > 0 ? "budget" : "groups"
+    );
 
     // Estado do catálogo
     const [searchQuery, setSearchQuery] = useState("");
@@ -93,9 +101,9 @@ export function CatalogDock({
     // Estado dos grupos
     const [groups, setGroups] = useState<ProductGroup[]>([]);
     const [groupsLoaded, setGroupsLoaded] = useState(false);
-    const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
+    const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(() => new Set());
     const [groupProducts, setGroupProducts] = useState<Record<string, GroupProduct[]>>({});
-    const [loadingGroupId, setLoadingGroupId] = useState<string | null>(null);
+    const [loadingGroupIds, setLoadingGroupIds] = useState<Set<string>>(() => new Set());
 
     // Carregar grupos ao abrir aba catálogo
     const loadGroups = useCallback(async () => {
@@ -133,39 +141,84 @@ export function CatalogDock({
         }
     };
 
-    // Expandir grupo e carregar produtos sob demanda
+    // Expandir / recolher grupo e carregar produtos sob demanda
     const toggleGroup = async (groupId: string) => {
-        if (expandedGroupId === groupId) {
-            setExpandedGroupId(null);
+        const isOpen = expandedGroupIds.has(groupId);
+        if (isOpen) {
+            setExpandedGroupIds((prev) => {
+                const n = new Set(prev);
+                n.delete(groupId);
+                return n;
+            });
             return;
         }
-        setExpandedGroupId(groupId);
-        if (!groupProducts[groupId]) {
-            setLoadingGroupId(groupId);
+        setExpandedGroupIds((prev) => new Set([...prev, groupId]));
+        if (groupProducts[groupId]) return;
+        setLoadingGroupIds((prev) => new Set(prev).add(groupId));
+        try {
             const res = await getProductGroupProductsAction(groupId);
             if (res.success && res.data) {
-                setGroupProducts(prev => ({ ...prev, [groupId]: res.data as GroupProduct[] }));
+                setGroupProducts((prev) => ({ ...prev, [groupId]: res.data as GroupProduct[] }));
             }
-            setLoadingGroupId(null);
+        } finally {
+            setLoadingGroupIds((prev) => {
+                const n = new Set(prev);
+                n.delete(groupId);
+                return n;
+            });
         }
     };
 
-    // Ao montar aba catálogo, carrega grupos
     const handleTabChange = (value: string) => {
-        if (value === "groups") {
-            loadGroups();
-        }
+        const v = value as "budget" | "groups";
+        setActiveTab(v);
+        if (v === "groups") loadGroups();
     };
 
-    // Se default é grupos, carregar lista ao montar
     useEffect(() => {
-        if (defaultTab === "groups") {
-            loadGroups();
-        }
-    }, [defaultTab, loadGroups]);
+        if (activeTab === "groups") loadGroups();
+    }, [activeTab, loadGroups]);
+
+    // Toolbar do anotador: aba Grupo + expandir todos conforme lista atual (só orçamento ou catálogo completo).
+    useEffect(() => {
+        if (!expandAllGroupsSignal) return;
+        if (!showAllProductGroups && budgetUsedGroupIdsLoading) return;
+        setActiveTab("groups");
+        void (async () => {
+            const res = await listProductGroupsWithProductsAction();
+            const list = res.success && res.data ? res.data : [];
+            setGroups(list);
+            setGroupsLoaded(true);
+            const filtered =
+                showAllProductGroups || budgetUsedGroupIds === undefined
+                    ? list
+                    : list.filter((g) => g.id && groupIdInAllowlist(g.id, budgetUsedGroupIds));
+            const ids = filtered.map((g) => g.id).filter(Boolean) as string[];
+            if (ids.length === 0) {
+                setExpandedGroupIds(new Set());
+                return;
+            }
+            setExpandedGroupIds(new Set(ids));
+            await Promise.all(
+                ids.map(async (id) => {
+                    const resProducts = await getProductGroupProductsAction(id);
+                    if (resProducts.success && resProducts.data?.length) {
+                        setGroupProducts((prev) =>
+                            prev[id] ? prev : { ...prev, [id]: resProducts.data as GroupProduct[] }
+                        );
+                    }
+                })
+            );
+        })();
+    }, [
+        expandAllGroupsSignal,
+        showAllProductGroups,
+        budgetUsedGroupIdsLoading,
+        budgetUsedGroupIds,
+    ]);
 
     const filteredGroups =
-        budgetUsedGroupIds === undefined
+        showAllProductGroups || budgetUsedGroupIds === undefined
             ? groups
             : groups.filter((g) => g.id && groupIdInAllowlist(g.id, budgetUsedGroupIds));
 
@@ -173,7 +226,7 @@ export function CatalogDock({
 
     return (
         <div className="w-56 flex-shrink-0 h-full min-h-0">
-            <Tabs defaultValue={defaultTab} onValueChange={handleTabChange} className="h-full flex flex-col">
+            <Tabs value={activeTab} onValueChange={handleTabChange} className="h-full flex flex-col">
                 <TabsList className="w-full shrink-0">
                     <TabsTrigger value="budget" className="flex-1 text-xs">
                         Do Orçamento
@@ -261,21 +314,23 @@ export function CatalogDock({
                                 {/* Grupos (quando não há busca ativa) */}
                                 {!showSearchResults && (
                                     <>
-                                        {(!groupsLoaded || budgetUsedGroupIdsLoading) && (
+                                        {(!groupsLoaded ||
+                                            (!showAllProductGroups && budgetUsedGroupIdsLoading)) && (
                                             <div className="flex items-center justify-center py-4">
                                                 <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                                             </div>
                                         )}
                                         {groupsLoaded &&
-                                            !budgetUsedGroupIdsLoading &&
+                                            (showAllProductGroups || !budgetUsedGroupIdsLoading) &&
                                             groups.length === 0 && (
                                             <p className="text-xs text-muted-foreground text-center py-4 italic">
                                                 Nenhum grupo com produtos.
                                             </p>
                                         )}
                                         {groupsLoaded &&
-                                            !budgetUsedGroupIdsLoading &&
+                                            (showAllProductGroups || !budgetUsedGroupIdsLoading) &&
                                             budgetUsedGroupIds !== undefined &&
+                                            !showAllProductGroups &&
                                             groups.length > 0 &&
                                             filteredGroups.length === 0 && (
                                                 <p className="text-xs text-muted-foreground text-center py-4 italic">
@@ -283,11 +338,11 @@ export function CatalogDock({
                                                 </p>
                                             )}
                                         {groupsLoaded &&
-                                            !budgetUsedGroupIdsLoading &&
+                                            (showAllProductGroups || !budgetUsedGroupIdsLoading) &&
                                             filteredGroups.map((group) => {
-                                            const isExpanded = expandedGroupId === group.id;
+                                            const isExpanded = expandedGroupIds.has(group.id);
                                             const products = groupProducts[group.id];
-                                            const isLoading = loadingGroupId === group.id;
+                                            const isLoading = loadingGroupIds.has(group.id);
 
                                             return (
                                                 <div key={group.id} className="border rounded-md overflow-hidden">

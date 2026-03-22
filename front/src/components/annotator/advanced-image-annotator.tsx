@@ -72,6 +72,10 @@ export function AdvancedImageAnnotator({
     const [stepCounter, setStepCounter] = useState(1);
     const [isSaving, setIsSaving] = useState(false);
     const [catalogDockOpen, setCatalogDockOpen] = useState(true);
+    /** Incrementado pelo botão da toolbar: aba Grupo + expandir (lista filtrada ou catálogo completo). */
+    const [expandAllGroupsSignal, setExpandAllGroupsSignal] = useState(0);
+    /** Com orçamento: true = aba Grupo mostra todos os grupos do cadastro, não só os do orçamento. */
+    const [showAllCatalogGroups, setShowAllCatalogGroups] = useState(false);
     /** Com `budgetId`: IDs de grupo usados no orçamento para filtrar a aba Grupo. */
     const [budgetUsedGroupIds, setBudgetUsedGroupIds] = useState<string[] | undefined>(undefined);
     const [budgetUsedGroupIdsLoading, setBudgetUsedGroupIdsLoading] = useState(false);
@@ -82,6 +86,7 @@ export function AdvancedImageAnnotator({
         if (!budgetId) {
             setBudgetUsedGroupIds(undefined);
             setBudgetUsedGroupIdsLoading(false);
+            setShowAllCatalogGroups(false);
             return;
         }
         let cancelled = false;
@@ -853,6 +858,12 @@ export function AdvancedImageAnnotator({
                     onInsertImage={() => setInsertImageDialogOpen(true)}
                     onToggleCatalog={() => setCatalogDockOpen((v) => !v)}
                     catalogOpen={catalogDockOpen}
+                    onExpandAllCatalogGroups={() => {
+                        if (budgetId) setShowAllCatalogGroups((v) => !v);
+                        setExpandAllGroupsSignal((n) => n + 1);
+                    }}
+                    catalogShowAllGroupsActive={!!budgetId && showAllCatalogGroups}
+                    catalogHasBudgetFilter={!!budgetId}
                     isSaving={isSaving}
                     onSave={() => handleSave(false)}
                 />
@@ -870,6 +881,8 @@ export function AdvancedImageAnnotator({
                             onDragStartCatalogGroup={handleDragStartCatalogGroup}
                             budgetUsedGroupIds={budgetId ? budgetUsedGroupIds : undefined}
                             budgetUsedGroupIdsLoading={!!budgetId && budgetUsedGroupIdsLoading}
+                            showAllProductGroups={!!budgetId && showAllCatalogGroups}
+                            expandAllGroupsSignal={expandAllGroupsSignal}
                         />
                     </div>
                 )}

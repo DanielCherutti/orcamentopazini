@@ -11,7 +11,8 @@ import {
     Square,
     ImagePlus,
     Spline,
-    Library
+    Library,
+    ListChecks,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -23,6 +24,12 @@ interface ToolbarProps {
     onInsertImage?: () => void;
     onToggleCatalog?: () => void;
     catalogOpen?: boolean;
+    /** Aba Grupo + expandir grupos; com orçamento costuma alternar catálogo completo × só grupos do orçamento. */
+    onExpandAllCatalogGroups?: () => void;
+    /** Indica modo “todos os grupos do catálogo” (só relevante com orçamento). */
+    catalogShowAllGroupsActive?: boolean;
+    /** Existe filtro por orçamento na aba Grupo (há `budgetId` no anotador). */
+    catalogHasBudgetFilter?: boolean;
     isSaving?: boolean;
     onSave?: () => void;
 }
@@ -42,7 +49,20 @@ const TOOLS = [
     { type: 'polyline' as ToolType, icon: Spline, label: 'Linha', shortcut: 'L' },
 ];
 
-export function Toolbar({ selectedTool, onToolSelect, onDelete, canDelete, onInsertImage, onToggleCatalog, catalogOpen, isSaving, onSave }: ToolbarProps) {
+export function Toolbar({
+    selectedTool,
+    onToolSelect,
+    onDelete,
+    canDelete,
+    onInsertImage,
+    onToggleCatalog,
+    catalogOpen,
+    onExpandAllCatalogGroups,
+    catalogShowAllGroupsActive = false,
+    catalogHasBudgetFilter = false,
+    isSaving,
+    onSave,
+}: ToolbarProps) {
     return (
         <div className="flex items-center gap-2 p-2 bg-card border rounded-lg">
             <div className="flex items-center gap-1">
@@ -97,6 +117,25 @@ export function Toolbar({ selectedTool, onToolSelect, onDelete, canDelete, onIns
             )}
 
             <div className="h-6 w-px bg-border mx-1" />
+
+            {onExpandAllCatalogGroups != null && (
+                <Button
+                    variant={catalogShowAllGroupsActive ? "default" : "ghost"}
+                    size="sm"
+                    type="button"
+                    onClick={onExpandAllCatalogGroups}
+                    className="h-9 w-9 p-0"
+                    title={
+                        catalogShowAllGroupsActive
+                            ? "Voltar a mostrar só os grupos usados neste orçamento"
+                            : catalogHasBudgetFilter
+                              ? "Ver todos os grupos do catálogo e expandir (aba Grupo)"
+                              : "Ir à aba Grupo e expandir todos os grupos"
+                    }
+                >
+                    <ListChecks className="h-4 w-4" />
+                </Button>
+            )}
 
             <Button
                 variant="ghost"
