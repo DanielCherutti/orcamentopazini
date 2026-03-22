@@ -21,6 +21,13 @@ export const LOGIN_HIGHLIGHTS_SUBTITLE =
 /** Ordem: mais recente primeiro (para leitura). */
 export const loginHighlights: LoginHighlight[] = [
   {
+    kind: "improvement",
+    date: "2026-03-23",
+    title: "Editor de fotos do trecho: aba Grupo e atalho no catálogo",
+    description:
+      "A aba Grupo mostra os grupos ligados ao orçamento (com carregamento corrigido). O ícone na barra ao lado da lixeira exibe todos os grupos cadastrados quando precisar, expande vários de uma vez, deixa vários abertos ao mesmo tempo e não altera a visibilidade do painel lateral de itens.",
+  },
+  {
     kind: "fix",
     date: "2026-03-22",
     title: "Seleção de produto no orçamento mais estável",
