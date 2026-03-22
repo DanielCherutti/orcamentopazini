@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 
+/** Pasta dentro do app Next (`front/uploads/` em dev). Listada em `front/.gitignore` e raiz `.gitignore`. */
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 
 /**

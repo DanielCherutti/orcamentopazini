@@ -14,6 +14,27 @@ export const LOGIN_HIGHLIGHTS_SUBTITLE =
 export const loginHighlights: LoginHighlight[] = [
   {
     kind: "fix",
+    date: "2026-03-26",
+    title: "Primeiro acesso pelo convite",
+    description:
+      "Quem recebe o e-mail de convite consegue definir a senha e concluir o cadastro pelo link sem a mensagem genérica de falha que aparecia antes.",
+  },
+  {
+    kind: "improvement",
+    date: "2026-03-26",
+    title: "Clientes: CNPJ completa o endereço",
+    description:
+      "Ao informar o CNPJ e sair do campo, além da razão social o sistema preenche CEP, logradouro, número, complemento, bairro, cidade e UF quando a consulta pública trouxer esses dados.",
+  },
+  {
+    kind: "improvement",
+    date: "2026-03-26",
+    title: "Clientes: ordem do formulário",
+    description:
+      "Depois de Dados da empresa vem Endereço; a seção Contato (responsável, telefone e e-mail) fica por último, antes de salvar.",
+  },
+  {
+    kind: "fix",
     date: "2026-03-21",
     title: "Grupo no escopo na ordem certa",
     description:

@@ -20,6 +20,9 @@
 # production
 /build
 
+# uploads gerados em runtime (API /api/upload/* → disco local, não versionar)
+/uploads/
+
 # misc
 .DS_Store
 *.pem

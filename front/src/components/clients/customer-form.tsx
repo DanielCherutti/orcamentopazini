@@ -139,11 +139,32 @@ export function CustomerForm({
 
         try {
             const r = await lookupCnpjAction(raw);
-            if (r.success && r.name) {
+            if (r.success) {
                 setValue("name", r.name, { shouldValidate: true, shouldDirty: true });
+                const prev = getValues("address") ?? {};
+                // Campos `cnpj_*` vêm no nível raiz da action (Flight costuma apagar chaves em objetos aninhados).
+                setValue(
+                    "address",
+                    {
+                        cep: r.cnpj_cep ? maskCep(r.cnpj_cep) : (prev.cep ?? ""),
+                        street: r.cnpj_logradouro || (prev.street ?? ""),
+                        number: r.cnpj_numero || (prev.number ?? ""),
+                        complement: r.cnpj_complemento || (prev.complement ?? ""),
+                        neighborhood: r.cnpj_bairro || (prev.neighborhood ?? ""),
+                        city: r.cnpj_municipio || (prev.city ?? ""),
+                        state: r.cnpj_uf
+                            ? r.cnpj_uf.toUpperCase().slice(0, 2)
+                            : (prev.state ?? ""),
+                    },
+                    { shouldValidate: true, shouldDirty: true, shouldTouch: true },
+                );
                 lastFetchedCnpjRef.current = raw;
-                setFocus("name");
                 setCnpjError(null);
+                if (r.cnpj_logradouro) {
+                    setFocus("address.number");
+                } else {
+                    setFocus("name");
+                }
             } else {
                 setCnpjError(r.error ?? "Não foi possível consultar o CNPJ.");
                 lastFetchedCnpjRef.current = null;
@@ -292,59 +313,6 @@ export function CustomerForm({
                 </div>
             </div>
 
-            {/* ── Contato ── */}
-            <div className="bg-card rounded-xl border border-border shadow-sm p-6 space-y-4">
-                <h2 className="text-base font-semibold tracking-tight">Contato</h2>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Responsável */}
-                    <div className="space-y-1.5">
-                        <Label htmlFor="contact">Responsável / Contato</Label>
-                        <Input
-                            id="contact"
-                            {...register("contact")}
-                            placeholder="João Silva"
-                            disabled={busy}
-                            className="rounded-sm"
-                        />
-                    </div>
-
-                    {/* Telefone */}
-                    <div className="space-y-1.5">
-                        <Label htmlFor="phone">Telefone</Label>
-                        <Input
-                            id="phone"
-                            {...register("phone")}
-                            placeholder="(42) 99999-9999"
-                            disabled={busy}
-                            className="rounded-sm"
-                            onChange={(e) => {
-                                const masked = maskPhone(e.target.value);
-                                setValue("phone", masked);
-                            }}
-                        />
-                    </div>
-
-                    {/* E-mail */}
-                    <div className="md:col-span-2 space-y-1.5">
-                        <Label htmlFor="email">E-mail</Label>
-                        <Input
-                            id="email"
-                            type="email"
-                            {...register("email")}
-                            placeholder="contato@empresa.com.br"
-                            disabled={busy}
-                            className="rounded-sm"
-                        />
-                        {(errors.email?.message || fieldErrors?.email?.[0]) && (
-                            <p className="text-xs text-destructive">
-                                {errors.email?.message || fieldErrors?.email?.[0]}
-                            </p>
-                        )}
-                    </div>
-                </div>
-            </div>
-
             {/* ── Endereço ── */}
             <div className="bg-card rounded-xl border border-border shadow-sm p-6 space-y-4">
                 <h2 className="text-base font-semibold tracking-tight">Endereço</h2>
@@ -449,6 +417,59 @@ export function CustomerForm({
                                 setValue("address.state", e.target.value.toUpperCase());
                             }}
                         />
+                    </div>
+                </div>
+            </div>
+
+            {/* ── Contato ── */}
+            <div className="bg-card rounded-xl border border-border shadow-sm p-6 space-y-4">
+                <h2 className="text-base font-semibold tracking-tight">Contato</h2>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Responsável */}
+                    <div className="space-y-1.5">
+                        <Label htmlFor="contact">Responsável / Contato</Label>
+                        <Input
+                            id="contact"
+                            {...register("contact")}
+                            placeholder="João Silva"
+                            disabled={busy}
+                            className="rounded-sm"
+                        />
+                    </div>
+
+                    {/* Telefone */}
+                    <div className="space-y-1.5">
+                        <Label htmlFor="phone">Telefone</Label>
+                        <Input
+                            id="phone"
+                            {...register("phone")}
+                            placeholder="(42) 99999-9999"
+                            disabled={busy}
+                            className="rounded-sm"
+                            onChange={(e) => {
+                                const masked = maskPhone(e.target.value);
+                                setValue("phone", masked);
+                            }}
+                        />
+                    </div>
+
+                    {/* E-mail */}
+                    <div className="md:col-span-2 space-y-1.5">
+                        <Label htmlFor="email">E-mail</Label>
+                        <Input
+                            id="email"
+                            type="email"
+                            {...register("email")}
+                            placeholder="contato@empresa.com.br"
+                            disabled={busy}
+                            className="rounded-sm"
+                        />
+                        {(errors.email?.message || fieldErrors?.email?.[0]) && (
+                            <p className="text-xs text-destructive">
+                                {errors.email?.message || fieldErrors?.email?.[0]}
+                            </p>
+                        )}
                     </div>
                 </div>
             </div>
