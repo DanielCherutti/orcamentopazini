@@ -11,6 +11,7 @@ import { toast } from "@/lib/toast";
 import { useBudgetsRepository } from "@/lib/budgets/use-budgets-repository";
 import { getBudgetAction } from "@/actions/budget-actions";
 import { budgetPdfUrl } from "@/lib/budgets/budget-path";
+import { getBudgetStatusLabel, isBudgetEditableStatus } from "@/lib/budgets/budget-status";
 import { cn } from "@/lib/utils";
 import { WorkspaceContext, type ActiveTab } from "./workspace-context";
 
@@ -32,7 +33,7 @@ type EnvironmentsContextType = {
 
 const EnvironmentsContext = createContext<EnvironmentsContextType | null>(null);
 
-export function BudgetWorkspace({ initialBudget, mode = 'edit' }: BudgetWorkspaceProps) {
+export function BudgetWorkspace({ initialBudget, mode: _mode = 'edit' }: BudgetWorkspaceProps) {
     const [budget, setBudget] = useState<Budget>(initialBudget);
     const [hasChanges, setHasChanges] = useState(false);
     const [environmentsExpanded, setEnvironmentsExpanded] = useState(false);
@@ -45,7 +46,7 @@ export function BudgetWorkspace({ initialBudget, mode = 'edit' }: BudgetWorkspac
         setBudget(initialBudget);
     }, [initialBudget]);
 
-    const isReadOnly = budget.status !== 'draft';
+    const isReadOnly = !isBudgetEditableStatus(budget.status);
 
     const handleRefresh = async () => {
         const id = budget.id as string;
@@ -87,16 +88,25 @@ export function BudgetWorkspace({ initialBudget, mode = 'edit' }: BudgetWorkspac
                         hasChanges={hasChanges}
                         onSave={handleSave}
                         onOpenPreview={() => window.open(pdfUrl, "_blank")}
+                        onBudgetRefresh={handleRefresh}
                         activeTab={activeTab}
                         onTabChange={setActiveTab}
                         tabs={TABS}
                     />
 
-                    {/* Banner para orçamentos não-rascunho */}
+                    {/* Banner para orçamentos fora de “em andamento” */}
                     {isReadOnly && (
                         <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center gap-2 text-sm text-amber-800 shrink-0">
                             <Info className="h-4 w-4 shrink-0" />
-                            Este orçamento foi enviado e não pode mais ser editado. Duplique para criar uma nova versão em Rascunho.
+                            {budget.status === "finalized" ? (
+                                <>
+                                    Este orçamento está <strong>finalizado</strong> e não pode mais ser editado — apenas visualizado, pré-visualização e PDF. Duplique para criar uma nova versão em andamento.
+                                </>
+                            ) : (
+                                <>
+                                    Este orçamento está em status <strong>{getBudgetStatusLabel(String(budget.status))}</strong> e não pode mais ser editado. Duplique para criar uma nova versão em andamento.
+                                </>
+                            )}
                         </div>
                     )}
 
@@ -149,7 +159,7 @@ export function BudgetWorkspace({ initialBudget, mode = 'edit' }: BudgetWorkspac
                                 </p>
                             </div>
                             <div className="flex-1 min-h-0 overflow-y-auto">
-                                <BudgetTreeV2 budget={budget} onRefresh={handleRefresh} />
+                                <BudgetTreeV2 budget={budget} onRefresh={handleRefresh} isReadOnly={isReadOnly} />
                             </div>
                         </div>
                     )}

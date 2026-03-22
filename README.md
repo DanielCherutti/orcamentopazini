@@ -150,6 +150,18 @@ No workspace do orçamento, o índice de **Ambientes** segue o mesmo padrão da 
 
 **Orçamento com compositor (aba Orçamento):** o índice continua mostrando a árvore inteira. A **visualização** segue o Escopo: **Sessão** (pai) → painel com essa sessão e **tudo abaixo** (subsessões, locais, trechos); **subsessão** (filha, também tipo sessão) → **só aquele ramo**; **Local** → local + trechos; **Trecho** → só aquele trecho. Para o **documento completo** (todas as raízes), selecione **ESCOPO**, **texto** ou outro tipo que não seja sessão/local/trecho.
 
+### Status do orçamento (em andamento / finalizado)
+
+- **Em andamento** (`draft`): orçamento **editável** — ambientes, trechos, produtos, cliente, título etc.
+- **Finalizado** (`finalized`): **somente leitura** no workspace (visualização, pré-visualização e PDF). Use **Finalizar** na barra do workspace para marcar como finalizado (com confirmação). Para voltar a editar, **duplique** o orçamento na lista (nova cópia em andamento).
+- **Enviado / Aprovado / Recusado**: também **somente leitura**, como antes.
+
+Na lista de orçamentos, `draft` aparece como badge **Em andamento**; orçamentos não editáveis abrem com ação **Abrir** (ícone de olho) em vez de **Editar**.
+
+### Preço do produto e orçamentos em andamento
+
+Ao **salvar** o cadastro do produto com novo preço de equipamento ou mão de obra, o sistema **atualiza** todas as linhas desse produto nos orçamentos **em andamento** (`draft`) — incluindo aba Orçamento com compositor e trechos no escopo/ambientes. Orçamentos **finalizados, enviados, aprovados ou rejeitados** não são alterados. O **total** de cada orçamento afetado é recalculado.
+
 ### Commits
 
 Seguimos **Conventional Commits** em português:

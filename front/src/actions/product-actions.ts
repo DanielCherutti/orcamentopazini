@@ -9,6 +9,7 @@ import { getDb, resetDb, isTokenExpiredError, isDbConnectionError } from "@/lib/
 import { Attachment } from "@/components/products/attachment-manager";
 import { saveFile } from "@/lib/upload";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
+import { syncProductPricesToDraftBudgetsAction } from "@/actions/budget-core-write-actions";
 
 // Type definition based on V1 Spec
 export type Product = {
@@ -387,6 +388,15 @@ export async function updateProductAction(id: string, formData: FormData) {
             group_ids: groupRecordIds,
             updated_at: new Date().toISOString()
         });
+
+        const syncBudgets = await syncProductPricesToDraftBudgetsAction(
+            id,
+            data.equipmentPrice,
+            data.assemblyPrice
+        );
+        if (!syncBudgets.success) {
+            console.warn("Propagação de preço para orçamentos em rascunho:", syncBudgets.error);
+        }
 
         revalidatePath("/dashboard/products");
         const pathId = formattedId.includes(":") ? formattedId.split(":")[1] : formattedId;

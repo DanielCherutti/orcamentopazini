@@ -9,6 +9,7 @@ import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
 import type { Budget } from "@/types/budget-types";
 import { addBlockAction } from "@/actions/budget-compositor-block-actions";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
+import { isBudgetEditableStatus } from "@/lib/budgets/budget-status";
 import { getNextBudgetNumberAction } from "@/actions/budget-core-read-actions";
 
 export async function createBudgetAction(title: string, code: string) {
@@ -110,8 +111,11 @@ export async function updateBudgetAction(budgetId: string, updates: Partial<Budg
                 unknown
             >;
             const currentStatus = currentBudget?.status as string;
-            if (["sent", "approved", "rejected"].includes(currentStatus)) {
-                return { success: false, error: "Orçamento enviado não pode ser editado." };
+            if (!isBudgetEditableStatus(currentStatus)) {
+                return {
+                    success: false,
+                    error: "Este orçamento está finalizado ou fechado e não pode ser alterado.",
+                };
             }
         }
 
@@ -207,5 +211,131 @@ export async function syncDraftPricesAction(
         console.error("syncDraftPricesAction error:", error);
         if (isTokenExpiredError(error)) resetDb();
         return { success: false, updatedCount: 0, error: "Erro ao sincronizar preços" };
+    }
+}
+
+function nestedBudgetFromItem(item: Record<string, unknown>): Record<string, unknown> | null {
+    const block = item.block_id;
+    if (block && typeof block === "object" && !Array.isArray(block)) {
+        const b = block as Record<string, unknown>;
+        const budget = b.budget_id;
+        if (budget && typeof budget === "object" && !Array.isArray(budget)) {
+            return budget as Record<string, unknown>;
+        }
+    }
+    const section = item.section_id;
+    if (section && typeof section === "object" && !Array.isArray(section)) {
+        const s = section as Record<string, unknown>;
+        const budget = s.budget_id;
+        if (budget && typeof budget === "object" && !Array.isArray(budget)) {
+            return budget as Record<string, unknown>;
+        }
+    }
+    return null;
+}
+
+function budgetIdStringFromRecord(budget: Record<string, unknown>): string | null {
+    const id = budget.id;
+    if (id == null) return null;
+    return String(id);
+}
+
+/** Recalcula total do orçamento somando itens ligados por bloco (compositor) e por trecho (legado). */
+async function recalculateBudgetTotalCombined(
+    db: Awaited<ReturnType<typeof getDb>>,
+    budgetId: string
+): Promise<void> {
+    const budgetRecordId = requireRecordId("budget", budgetId);
+    let sum = 0;
+    const queries: [string, Record<string, unknown>][] = [
+        [
+            "SELECT math::sum(total) AS grand_total FROM budget_item WHERE block_id.budget_id = $bid AND deleted_at IS NONE GROUP ALL",
+            { bid: budgetRecordId },
+        ],
+        [
+            "SELECT math::sum(total) AS grand_total FROM budget_item WHERE section_id.budget_id = $bid AND deleted_at IS NONE GROUP ALL",
+            { bid: budgetRecordId },
+        ],
+    ];
+    for (const [q, vars] of queries) {
+        try {
+            const res = await db.query<[{ grand_total: number | null }[]]>(q, vars);
+            const g = res[0]?.[0]?.grand_total;
+            if (g != null && !Number.isNaN(Number(g))) sum += Number(g);
+        } catch {
+            /* consulta pode falhar em esquemas antigos — ignora */
+        }
+    }
+    await db.update(budgetRecordId).merge({
+        total_value: sum,
+        updated_at: new Date().toISOString(),
+    });
+}
+
+/**
+ * Após alterar preço de equipamento / mão de obra no cadastro do produto,
+ * propaga `unit_price`, `labor_cost` e `total` nos itens de orçamentos em **rascunho** (não fechados).
+ */
+export async function syncProductPricesToDraftBudgetsAction(
+    productId: string,
+    unitPrice: number,
+    laborCost: number
+): Promise<{ success: boolean; updatedItems: number; error?: string }> {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, updatedItems: 0, error: auth.error };
+
+    const db = await getDb();
+    try {
+        const productRecordId = requireRecordId("product", productId);
+        const itemsRes = await db.query<[Array<Record<string, unknown>>]>(
+            "SELECT * FROM budget_item WHERE product_id = $pid AND deleted_at IS NONE FETCH block_id, section_id, block_id.budget_id, section_id.budget_id",
+            { pid: productRecordId }
+        );
+        const items = itemsRes[0] || [];
+        const budgetIdsToRecalc = new Set<string>();
+        let updatedItems = 0;
+
+        for (const item of items) {
+            const budget = nestedBudgetFromItem(item);
+            if (!budget) continue;
+            const status = String(budget.status ?? "");
+            if (status !== "draft") continue;
+
+            const curU = Number(item.unit_price ?? 0);
+            const curL = Number(item.labor_cost ?? 0);
+            if (curU === unitPrice && curL === laborCost) continue;
+
+            const qty = Math.max(1, Number(item.quantity || 1));
+            const newTotal = (unitPrice + laborCost) * qty;
+            const itemRecordId = requireRecordId("budget_item", String(item.id));
+
+            await db.update(itemRecordId).merge({
+                unit_price: unitPrice,
+                labor_cost: laborCost,
+                total: newTotal,
+            });
+            updatedItems++;
+
+            const bid = budgetIdStringFromRecord(budget);
+            if (bid) budgetIdsToRecalc.add(bid);
+        }
+
+        for (const bid of budgetIdsToRecalc) {
+            await recalculateBudgetTotalCombined(db, bid);
+            revalidatePath(budgetRevalidatePath(bid));
+        }
+
+        if (updatedItems > 0) {
+            revalidatePath("/budgets");
+        }
+
+        return { success: true, updatedItems };
+    } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, updatedItems: 0, error: error.message };
+        }
+        console.error("syncProductPricesToDraftBudgetsAction error:", error);
+        if (isTokenExpiredError(error)) resetDb();
+        return { success: false, updatedItems: 0, error: "Erro ao propagar preços aos orçamentos" };
     }
 }

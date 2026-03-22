@@ -4,18 +4,22 @@ import { useState, useRef, useEffect } from "react";
 import { Budget } from "@/types/budget-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Save, Eye, Pencil } from "lucide-react";
+import { ArrowLeft, Save, Eye, Pencil, Lock } from "lucide-react";
 import { updateBudgetAction } from "@/actions/budget-core-write-actions";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { ClientSelector } from "./client-selector";
 import type { ActiveTab } from "@/components/budgets/workspace-context";
+import { isBudgetEditableStatus } from "@/lib/budgets/budget-status";
+import { toast } from "@/lib/toast";
 
 interface BudgetWorkspaceHeaderProps {
     budget: Budget;
     hasChanges?: boolean;
     onSave?: () => void;
     onOpenPreview?: () => void;
+    /** Recarrega o orçamento após mudança de status (ex.: finalizar). */
+    onBudgetRefresh?: () => void | Promise<void>;
     activeTab: ActiveTab;
     onTabChange: (tab: ActiveTab) => void;
     tabs: { id: ActiveTab; label: string; icon: React.ReactNode }[];
@@ -26,6 +30,7 @@ export function BudgetWorkspaceHeader({
     hasChanges = false,
     onSave,
     onOpenPreview,
+    onBudgetRefresh,
     activeTab,
     onTabChange,
     tabs,
@@ -39,6 +44,10 @@ export function BudgetWorkspaceHeader({
     }, [editingTitle]);
 
     const handleTitleSave = async () => {
+        if (!isBudgetEditableStatus(budget.status)) {
+            setEditingTitle(false);
+            return;
+        }
         const trimmed = titleValue.trim();
         if (trimmed && trimmed !== budget.title) {
             await updateBudgetAction(budget.id!, { title: trimmed });
@@ -51,10 +60,11 @@ export function BudgetWorkspaceHeader({
 
     const getStatusBadge = (status: string) => {
         const variants: Record<string, { bg: string; text: string; label: string }> = {
-            draft:    { bg: 'bg-gray-100',  text: 'text-gray-700',  label: 'Rascunho' },
-            sent:     { bg: 'bg-blue-100',  text: 'text-blue-700',  label: 'Enviado'  },
-            approved: { bg: 'bg-green-100', text: 'text-green-700', label: 'Aprovado' },
-            rejected: { bg: 'bg-red-100',   text: 'text-red-700',   label: 'Recusado' },
+            draft:      { bg: 'bg-emerald-50',  text: 'text-emerald-800',  label: 'Em andamento' },
+            finalized:  { bg: 'bg-slate-200',   text: 'text-slate-800',    label: 'Finalizado' },
+            sent:       { bg: 'bg-blue-100',    text: 'text-blue-700',     label: 'Enviado' },
+            approved:   { bg: 'bg-green-100',   text: 'text-green-700',    label: 'Aprovado' },
+            rejected:   { bg: 'bg-red-100',     text: 'text-red-700',      label: 'Recusado' },
         };
         const v = variants[status] || variants.draft;
         return (
@@ -64,7 +74,7 @@ export function BudgetWorkspaceHeader({
         );
     };
 
-    const isDraft = budget.status === 'draft';
+    const editable = isBudgetEditableStatus(budget.status);
 
     return (
         <header className="border-b bg-card shrink-0 flex items-stretch h-12 overflow-hidden">
@@ -91,27 +101,37 @@ export function BudgetWorkspaceHeader({
                 ) : (
                     <button
                         type="button"
-                        className="group flex items-center gap-1 hover:text-primary transition-colors min-w-0"
-                        onDoubleClick={() => { setTitleValue(budget.title || ""); setEditingTitle(true); }}
-                        title="Duplo clique para editar"
+                        className={cn(
+                            "group flex items-center gap-1 min-w-0",
+                            editable && "hover:text-primary transition-colors cursor-pointer",
+                            !editable && "cursor-default"
+                        )}
+                        onDoubleClick={() => {
+                            if (!editable) return;
+                            setTitleValue(budget.title || "");
+                            setEditingTitle(true);
+                        }}
+                        title={editable ? "Duplo clique para editar" : "Somente leitura"}
                     >
                         <span className="font-semibold text-sm truncate">
                             {budget.title || budget.code || "Novo Orçamento"}
                         </span>
-                        <Pencil className="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-40 transition-opacity" />
+                        {editable && (
+                            <Pencil className="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-40 transition-opacity" />
+                        )}
                     </button>
                 )}
 
                 {budget.status && getStatusBadge(budget.status)}
 
-                {hasChanges && isDraft && (
+                {hasChanges && editable && (
                     <span className="text-xs text-orange-600 font-medium shrink-0">• Não salvo</span>
                 )}
 
                 <ClientSelector
                     budgetId={budget.id!}
                     clientId={budget.client_id || ""}
-                    isReadOnly={!isDraft}
+                    isReadOnly={!editable}
                 />
 
                 <span className="text-sm font-semibold text-foreground shrink-0 ml-1">
@@ -140,7 +160,7 @@ export function BudgetWorkspaceHeader({
 
             {/* Right: actions */}
             <div className="flex items-center gap-2 px-3 shrink-0">
-                {isDraft && onSave && (
+                {editable && onSave && (
                     <Button
                         size="sm"
                         onClick={onSave}
@@ -149,6 +169,32 @@ export function BudgetWorkspaceHeader({
                     >
                         <Save className="h-3.5 w-3.5 mr-1.5" />
                         Salvar
+                    </Button>
+                )}
+                {editable && onBudgetRefresh && (
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-primary/40"
+                        onClick={async () => {
+                            if (
+                                !confirm(
+                                    "Finalizar este orçamento? Depois disso ele não poderá mais ser editado — apenas visualizado, pré-visualização e PDF."
+                                )
+                            ) {
+                                return;
+                            }
+                            const res = await updateBudgetAction(budget.id!, { status: "finalized" });
+                            if (res.success) {
+                                toast.success("Orçamento finalizado.");
+                                await onBudgetRefresh();
+                            } else {
+                                toast.error(res.error || "Não foi possível finalizar.");
+                            }
+                        }}
+                    >
+                        <Lock className="h-3.5 w-3.5 mr-1.5" />
+                        Finalizar
                     </Button>
                 )}
                 {onOpenPreview && (

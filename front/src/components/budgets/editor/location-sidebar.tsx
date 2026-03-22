@@ -22,6 +22,7 @@ interface LocationSidebarProps {
     onDuplicate: (id: string) => void;
     onAddSuccess: () => void;
     onRefresh: () => void;
+    isReadOnly?: boolean;
 }
 
 /**
@@ -40,6 +41,7 @@ export function LocationSidebar({
     onDuplicate,
     onAddSuccess,
     onRefresh,
+    isReadOnly = false,
 }: LocationSidebarProps) {
     const repo = useBudgetsRepository();
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -175,6 +177,7 @@ export function LocationSidebar({
                                     <span className="flex-1 truncate text-[13px] font-semibold leading-tight">
                                         {location.name}
                                     </span>
+                                    {!isReadOnly && (
                                     <button
                                         type="button"
                                         onClick={(e) => {
@@ -192,6 +195,8 @@ export function LocationSidebar({
                                     >
                                         <Plus className="h-3.5 w-3.5" />
                                     </button>
+                                    )}
+                                    {!isReadOnly && (
                                     <button
                                         type="button"
                                         onClick={(e) => {
@@ -208,6 +213,8 @@ export function LocationSidebar({
                                     >
                                         <Copy className="h-3 w-3" />
                                     </button>
+                                    )}
+                                    {!isReadOnly && (
                                     <button
                                         type="button"
                                         onClick={(e) => {
@@ -224,6 +231,7 @@ export function LocationSidebar({
                                     >
                                         <Trash2 className="h-3 w-3" />
                                     </button>
+                                    )}
                                 </div>
 
                                 {expanded && sections.length > 0 && (
@@ -271,6 +279,7 @@ export function LocationSidebar({
                                                         {secLabel}
                                                     </span>
                                                     <span className="flex-1 truncate font-medium">{sec.name}</span>
+                                                    {!isReadOnly && (
                                                     <button
                                                         type="button"
                                                         title="Duplicar trecho"
@@ -284,6 +293,8 @@ export function LocationSidebar({
                                                     >
                                                         <Copy className="h-3 w-3" />
                                                     </button>
+                                                    )}
+                                                    {!isReadOnly && (
                                                     <button
                                                         type="button"
                                                         title="Excluir trecho"
@@ -297,6 +308,7 @@ export function LocationSidebar({
                                                     >
                                                         <Trash2 className="h-3 w-3" />
                                                     </button>
+                                                    )}
                                                 </div>
                                             );
                                         })}
@@ -309,7 +321,7 @@ export function LocationSidebar({
                                     </div>
                                 )}
 
-                                {addingForLocationId === locId && (
+                                {!isReadOnly && addingForLocationId === locId && (
                                     <div className="border-t border-border/60 bg-muted/10 px-2 py-2 space-y-1.5 rounded-b-lg">
                                         <Input
                                             autoFocus
@@ -355,9 +367,11 @@ export function LocationSidebar({
                     })}
                 </nav>
 
+                {!isReadOnly && (
                 <div className="p-2 border-t">
                     <InlineLocationCreator budgetId={budgetId} onSuccess={onAddSuccess} compact />
                 </div>
+                )}
             </div>
         </div>
     );

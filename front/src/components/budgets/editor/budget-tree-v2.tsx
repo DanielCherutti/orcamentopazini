@@ -19,9 +19,10 @@ import {
 interface BudgetTreeV2Props {
   budget: Budget;
   onRefresh: () => void;
+  isReadOnly?: boolean;
 }
 
-export function BudgetTreeV2({ budget, onRefresh }: BudgetTreeV2Props) {
+export function BudgetTreeV2({ budget, onRefresh, isReadOnly = false }: BudgetTreeV2Props) {
   const locations = useMemo(() => budget.locations || [], [budget.locations]);
   const budgetId = budget.id as string;
   const repo = useBudgetsRepository();
@@ -167,7 +168,9 @@ export function BudgetTreeV2({ budget, onRefresh }: BudgetTreeV2Props) {
             </SelectContent>
           </Select>
         )}
-        <InlineLocationCreator budgetId={budgetId} onSuccess={handleAddSuccess} compact />
+        {!isReadOnly && (
+          <InlineLocationCreator budgetId={budgetId} onSuccess={handleAddSuccess} compact />
+        )}
       </div>
 
       {/* Desktop: sidebar à esquerda */}
@@ -190,6 +193,7 @@ export function BudgetTreeV2({ budget, onRefresh }: BudgetTreeV2Props) {
           onDuplicate={handleDuplicateLocation}
           onAddSuccess={handleAddSuccess}
           onRefresh={onRefresh}
+          isReadOnly={isReadOnly}
         />
       </div>
 
@@ -203,8 +207,9 @@ export function BudgetTreeV2({ budget, onRefresh }: BudgetTreeV2Props) {
           selectedSectionId={selectedSectionId}
           allLocations={locations}
           onRefresh={onRefresh}
-          onDeleteLocation={handleDeleteLocation}
-          onDuplicateLocation={handleDuplicateLocation}
+          onDeleteLocation={isReadOnly ? undefined : handleDeleteLocation}
+          onDuplicateLocation={isReadOnly ? undefined : handleDuplicateLocation}
+          isReadOnly={isReadOnly}
         />
       </div>
     </div>

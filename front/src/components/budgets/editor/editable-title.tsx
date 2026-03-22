@@ -7,9 +7,11 @@ interface EditableTitleProps {
   value: string;
   onSave: (newValue: string) => void;
   className?: string;
+  /** Somente leitura (sem edição). */
+  disabled?: boolean;
 }
 
-export function EditableTitle({ value, onSave, className = "" }: EditableTitleProps) {
+export function EditableTitle({ value, onSave, className = "", disabled = false }: EditableTitleProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -34,6 +36,10 @@ export function EditableTitle({ value, onSave, className = "" }: EditableTitlePr
       setDraft(value);
     }
   };
+
+  if (disabled) {
+    return <span className={className}>{value}</span>;
+  }
 
   if (editing) {
     return (

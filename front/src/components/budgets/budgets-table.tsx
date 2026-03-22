@@ -13,11 +13,13 @@ import {
     DialogFooter,
     DialogDescription,
 } from "@/components/ui/dialog";
-import { ArrowDown, ArrowUp, ArrowUpDown, Copy, Edit2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Copy, Edit2, Eye } from "lucide-react";
 import { useBudgetsRepository } from "@/lib/budgets/use-budgets-repository";
 import { budgetEditUrl } from "@/lib/budgets/budget-path";
 import { toast } from "@/lib/toast";
 import type { Budget } from "@/types/budget-types";
+import { getBudgetStatusLabel, isBudgetEditableStatus } from "@/lib/budgets/budget-status";
+import { cn } from "@/lib/utils";
 
 interface BudgetsTableProps {
     initialBudgets: Budget[];
@@ -140,12 +142,28 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
         }).format(value || 0);
     };
 
+    const statusBadgeClass = "whitespace-nowrap shrink-0";
+
     const getStatusBadge = (status: string) => {
         switch (status) {
-            case 'approved': return <Badge className="bg-green-500">Aprovado</Badge>;
-            case 'rejected': return <Badge variant="destructive">Recusado</Badge>;
-            case 'sent': return <Badge className="bg-blue-500">Enviado</Badge>;
-            default: return <Badge variant="secondary">Rascunho</Badge>;
+            case "approved":
+                return <Badge className={cn("bg-green-500", statusBadgeClass)}>Aprovado</Badge>;
+            case "rejected":
+                return <Badge variant="destructive" className={statusBadgeClass}>
+                    Recusado
+                </Badge>;
+            case "sent":
+                return <Badge className={cn("bg-blue-500", statusBadgeClass)}>Enviado</Badge>;
+            case "finalized":
+                return <Badge className={cn("bg-slate-600 text-white", statusBadgeClass)}>Finalizado</Badge>;
+            case "draft":
+                return <Badge className={cn("bg-emerald-600 text-white", statusBadgeClass)}>Em andamento</Badge>;
+            default:
+                return (
+                    <Badge variant="secondary" className={statusBadgeClass}>
+                        {getBudgetStatusLabel(status)}
+                    </Badge>
+                );
         }
     };
 
@@ -197,10 +215,10 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                                 </div>
                             </th>
                             <th
-                                className="h-10 px-4 text-left font-medium text-muted-foreground w-[140px] cursor-pointer hover:bg-muted/50 transition-colors group"
+                                className="h-10 px-4 text-center font-medium text-muted-foreground min-w-[168px] w-[168px] cursor-pointer hover:bg-muted/50 transition-colors group"
                                 onClick={() => handleSort("status")}
                             >
-                                <div className="flex items-center">
+                                <div className="flex items-center justify-center gap-1">
                                     Status
                                     {getSortIcon("status")}
                                 </div>
@@ -232,12 +250,14 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                         {budgets && budgets.length > 0 ? (
                             budgets.map((budget) => (
                                 <tr key={budget.id} className="border-b border-border hover:bg-muted/20 transition-colors">
-                                    <td className="p-4 font-medium">{budget.code || "---"}</td>
-                                    <td className="p-4">{budget.title || "---"}</td>
-                                    <td className="p-4">{getStatusBadge(budget.status)}</td>
-                                    <td className="p-4">{formatCurrency(budget.total_value)}</td>
-                                    <td className="p-4">{formatDate(budget.created_at)}</td>
-                                    <td className="p-4">
+                                    <td className="p-4 align-middle font-medium">{budget.code || "---"}</td>
+                                    <td className="p-4 align-middle">{budget.title || "---"}</td>
+                                    <td className="p-4 align-middle">
+                                        <div className="flex justify-center">{getStatusBadge(budget.status)}</div>
+                                    </td>
+                                    <td className="p-4 align-middle">{formatCurrency(budget.total_value)}</td>
+                                    <td className="p-4 align-middle">{formatDate(budget.created_at)}</td>
+                                    <td className="p-4 align-middle">
                                         <div className="flex items-center justify-end gap-2">
                                             <Button
                                                 variant="outline"
@@ -250,8 +270,19 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                                                 <Copy className="h-4 w-4" />
                                             </Button>
                                             <Button variant="outline" size="icon" className="rounded-sm h-8 w-8" asChild>
-                                                <a href={budgetEditUrl(String(budget.id))}>
-                                                    <Edit2 className="h-4 w-4" />
+                                                <a
+                                                    href={budgetEditUrl(String(budget.id))}
+                                                    title={
+                                                        isBudgetEditableStatus(budget.status)
+                                                            ? "Editar orçamento"
+                                                            : "Abrir orçamento (somente leitura)"
+                                                    }
+                                                >
+                                                    {isBudgetEditableStatus(budget.status) ? (
+                                                        <Edit2 className="h-4 w-4" />
+                                                    ) : (
+                                                        <Eye className="h-4 w-4" />
+                                                    )}
                                                 </a>
                                             </Button>
                                         </div>
@@ -274,12 +305,12 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                 {budgets && budgets.length > 0 ? (
                     budgets.map((b) => (
                         <div key={b.id} className="border border-border rounded-sm p-4 bg-card space-y-2">
-                            <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center justify-between gap-3">
                                 <div className="min-w-0">
                                     <div className="font-semibold truncate">{b.title || "Sem título"}</div>
                                     <div className="text-xs text-muted-foreground truncate">{b.code || "---"}</div>
                                 </div>
-                                <div className="flex-shrink-0">{getStatusBadge(b.status)}</div>
+                                <div className="flex shrink-0 items-center">{getStatusBadge(b.status)}</div>
                             </div>
                             <div className="flex items-center justify-between text-sm">
                                 <div className="text-muted-foreground">Total</div>
@@ -301,8 +332,17 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                                 </Button>
                                 <Button variant="outline" className="rounded-sm" asChild>
                                     <a href={budgetEditUrl(String(b.id))}>
-                                        <Edit2 className="h-4 w-4 mr-2" />
-                                        Editar
+                                        {isBudgetEditableStatus(b.status) ? (
+                                            <>
+                                                <Edit2 className="h-4 w-4 mr-2" />
+                                                Editar
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Eye className="h-4 w-4 mr-2" />
+                                                Abrir
+                                            </>
+                                        )}
                                     </a>
                                 </Button>
                             </div>

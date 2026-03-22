@@ -28,6 +28,8 @@ interface LocationDetailPanelProps {
   onRefresh: () => void;
   onDeleteLocation?: (id: string, name: string) => void;
   onDuplicateLocation?: (id: string) => void;
+  /** Orçamento finalizado / fechado — só visualização. */
+  isReadOnly?: boolean;
 }
 
 /**
@@ -44,6 +46,7 @@ export function LocationDetailPanel({
   onRefresh,
   onDeleteLocation,
   onDuplicateLocation,
+  isReadOnly = false,
 }: LocationDetailPanelProps) {
   const repo = useBudgetsRepository();
   const { environmentsExpanded } = useEnvironmentsExpanded();
@@ -138,6 +141,11 @@ export function LocationDetailPanel({
     }
   }, [repo, budgetId, onRefresh]);
 
+  const scopeLocations = useMemo(
+    () => budgetLocationsToScopeLocations(allLocations, budgetId),
+    [allLocations, budgetId]
+  );
+
   if (!location) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 bg-muted/10 rounded-lg border-2 border-dashed border-muted min-h-[300px]">
@@ -152,11 +160,6 @@ export function LocationDetailPanel({
   const sections = location.sections || [];
   const locationImages = location.images || [];
   const availableItems = sections.flatMap((s) => s.items || []);
-
-  const scopeLocations = useMemo(
-    () => budgetLocationsToScopeLocations(allLocations, budgetId),
-    [allLocations, budgetId]
-  );
 
   const sectionsToRender = selectedSectionId
     ? sections.filter((s) => (s.id as string) === selectedSectionId)
@@ -176,10 +179,11 @@ export function LocationDetailPanel({
             <EditableTitle
               value={location.name}
               onSave={handleNameSave}
+              disabled={isReadOnly}
               className={`${environmentsExpanded ? 'text-2xl' : 'text-lg'} font-bold text-primary tracking-tight`}
             />
           </div>
-          {environmentsExpanded && (
+          {environmentsExpanded && !isReadOnly && (
             <div className="flex gap-1">
               {onDuplicateLocation && (
                 <Button
@@ -222,19 +226,33 @@ export function LocationDetailPanel({
             </button>
             {notesOpen && (
               <div className="mt-2 space-y-2">
-                <RichTextEditor
-                  key={locationId}
-                  value={currentDescription}
-                  onChange={handleDescriptionChange}
-                  placeholder="Observações sobre o ambiente..."
-                />
-                {isDirty && (
-                  <div className="flex justify-end">
-                    <Button size="sm" variant="default" onClick={handleSaveDescription}>
-                      <Save className="w-3 h-3 mr-1.5" />
-                      Salvar observações
-                    </Button>
-                  </div>
+                {isReadOnly ? (
+                  <div
+                    className="prose prose-sm max-w-none border rounded-md p-3 bg-muted/20 text-sm"
+                    dangerouslySetInnerHTML={{
+                      __html:
+                        currentDescription && currentDescription !== "<p></p>"
+                          ? currentDescription
+                          : "<p class=\"text-muted-foreground\">Sem observações.</p>",
+                    }}
+                  />
+                ) : (
+                  <>
+                    <RichTextEditor
+                      key={locationId}
+                      value={currentDescription}
+                      onChange={handleDescriptionChange}
+                      placeholder="Observações sobre o ambiente..."
+                    />
+                    {isDirty && (
+                      <div className="flex justify-end">
+                        <Button size="sm" variant="default" onClick={handleSaveDescription}>
+                          <Save className="w-3 h-3 mr-1.5" />
+                          Salvar observações
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -252,6 +270,7 @@ export function LocationDetailPanel({
               onDelete={handleDeleteImage}
               emptyMessage="Nenhuma foto. Clique em Adicionar Foto para começar."
               addButtonLabel="Adicionar Foto"
+              readOnly={isReadOnly}
             />
           </div>
         )}
@@ -303,13 +322,13 @@ export function LocationDetailPanel({
               locationId={locationId}
               section={budgetSectionToScopeSection(section, budgetId, locationId)}
               budgetId={budgetId}
-              isReadOnly={false}
+              isReadOnly={isReadOnly}
               onRefresh={onRefresh}
               locations={scopeLocations}
             />
           ))}
 
-          {!selectedSectionId && (
+          {!selectedSectionId && !isReadOnly && (
             <div className="pt-2">
               <InlineSectionCreator
                 locationId={locationId}
