@@ -21,6 +21,20 @@ export const LOGIN_HIGHLIGHTS_SUBTITLE =
 /** Ordem: mais recente primeiro (para leitura). */
 export const loginHighlights: LoginHighlight[] = [
   {
+    kind: "feature",
+    date: "2026-03-25",
+    title: "Status do orçamento: Em andamento e Finalizado",
+    description:
+      "Na lista, cada orçamento exibe o status com badges (Em andamento, Finalizado, Enviado…), com a coluna Status centralizada. No workspace, o botão Finalizar encerra a edição: dali em diante é só visualização, pré-visualização e PDF — como nos outros status fechados. Para voltar a editar, duplique na lista.",
+  },
+  {
+    kind: "feature",
+    date: "2026-03-25",
+    title: "Excluir orçamento em andamento",
+    description:
+      "Na lista de orçamentos, a lixeira aparece só para quem está Em andamento e pede confirmação antes de apagar. Orçamentos finalizados ou já fechados (enviado, aprovado, recusado) não podem ser excluídos por essa via.",
+  },
+  {
     kind: "improvement",
     date: "2026-03-24",
     title: "Escopo e orçamento: mesma lógica de pai e filho na tela",
