@@ -33,8 +33,10 @@ if [ -z "$SSH_KEY" ]; then
 fi
 
 # SurrealDB (senha obrigatória: defina SURREAL_PASS ou SURREALDB_PASS no front/.env)
+# Imagem v3: binário em /surreal; CLI usa -e http://... (não --conn ws://...)
 SURREAL_CONTAINER=${SURREAL_CONTAINER:-"surrealdb"}
-SURREAL_HOST=${SURREAL_HOST:-"ws://localhost:8000"}
+SURREAL_BIN=${SURREAL_BIN:-/surreal}
+SURREAL_ENDPOINT=${SURREAL_ENDPOINT:-"http://127.0.0.1:8000"}
 SURREAL_USER=${SURREAL_USER:-"admin"}
 SURREAL_PASS="${SURREAL_PASS:-${SURREALDB_PASS:-}}"
 SURREAL_NS=${SURREAL_NS:-"pazini"}
@@ -96,13 +98,13 @@ do_backup() {
     echo "  Destino  : $LOCAL_FILE"
     echo ""
 
-    echo "[1/3] Exportando banco (surreal export no container $SURREAL_CONTAINER)..."
-    ssh_exec "docker exec $SURREAL_CONTAINER surreal export \
-        --conn $SURREAL_HOST \
-        --user $SURREAL_USER \
-        --pass $SURREAL_PASS \
-        --ns $SURREAL_NS \
-        --db $SURREAL_DB \
+    echo "[1/3] Exportando banco ($SURREAL_BIN export no container $SURREAL_CONTAINER)..."
+    ssh_exec "docker exec $SURREAL_CONTAINER $SURREAL_BIN export \
+        -e $SURREAL_ENDPOINT \
+        -u $SURREAL_USER \
+        -p \"$SURREAL_PASS\" \
+        --namespace $SURREAL_NS \
+        --database $SURREAL_DB \
         $REMOTE_TMP"
     echo "  OK"
 
@@ -136,12 +138,12 @@ do_backup_full() {
     LOCAL_DB="$FULL_DIR/database.surql"
 
     echo "[1/4] Exportando banco..."
-    ssh_exec "docker exec $SURREAL_CONTAINER surreal export \
-        --conn $SURREAL_HOST \
-        --user $SURREAL_USER \
-        --pass $SURREAL_PASS \
-        --ns $SURREAL_NS \
-        --db $SURREAL_DB \
+    ssh_exec "docker exec $SURREAL_CONTAINER $SURREAL_BIN export \
+        -e $SURREAL_ENDPOINT \
+        -u $SURREAL_USER \
+        -p \"$SURREAL_PASS\" \
+        --namespace $SURREAL_NS \
+        --database $SURREAL_DB \
         $REMOTE_TMP"
     echo "  OK"
 
@@ -200,23 +202,22 @@ do_restore() {
     echo "  OK"
 
     echo "[2/4] Removendo dados existentes (REMOVE DATABASE)..."
-    ssh_exec "docker exec $SURREAL_CONTAINER surreal sql \
-        --conn $SURREAL_HOST \
-        --user $SURREAL_USER \
-        --pass $SURREAL_PASS \
-        --ns $SURREAL_NS \
-        --db $SURREAL_DB \
-        --hide-welcome \
-        -q 'REMOVE DATABASE \`$SURREAL_DB\`; USE NS \`$SURREAL_NS\`; DEFINE DATABASE \`$SURREAL_DB\`;'"
+    ssh_exec "printf '%s\n' 'REMOVE DATABASE \`$SURREAL_DB\`;' 'USE NS \`$SURREAL_NS\`;' 'DEFINE DATABASE \`$SURREAL_DB\`;' | docker exec -i $SURREAL_CONTAINER $SURREAL_BIN sql \
+        -e $SURREAL_ENDPOINT \
+        -u $SURREAL_USER \
+        -p \"$SURREAL_PASS\" \
+        --namespace $SURREAL_NS \
+        --database $SURREAL_DB \
+        --hide-welcome"
     echo "  OK"
 
     echo "[3/4] Importando backup..."
-    ssh_exec "docker exec $SURREAL_CONTAINER surreal import \
-        --conn $SURREAL_HOST \
-        --user $SURREAL_USER \
-        --pass $SURREAL_PASS \
-        --ns $SURREAL_NS \
-        --db $SURREAL_DB \
+    ssh_exec "docker exec $SURREAL_CONTAINER $SURREAL_BIN import \
+        -e $SURREAL_ENDPOINT \
+        -u $SURREAL_USER \
+        -p \"$SURREAL_PASS\" \
+        --namespace $SURREAL_NS \
+        --database $SURREAL_DB \
         $REMOTE_TMP"
     echo "  OK"
 
@@ -309,7 +310,8 @@ case "$CMD" in
         echo ""
         echo "Configuração via front/.env.local:"
         echo "  REMOTE_HOST, REMOTE_USER, REMOTE_PATH, SSH_KEY"
-        echo "  SURREAL_CONTAINER, SURREAL_USER, SURREAL_PASS (ou SURREALDB_PASS), SURREAL_NS, SURREAL_DB"
+        echo "  SURREAL_CONTAINER, SURREAL_BIN (padrão /surreal), SURREAL_ENDPOINT (padrão http://127.0.0.1:8000)"
+        echo "  SURREAL_USER, SURREAL_PASS (ou SURREALDB_PASS), SURREAL_NS, SURREAL_DB"
         echo ""
         exit 1
         ;;

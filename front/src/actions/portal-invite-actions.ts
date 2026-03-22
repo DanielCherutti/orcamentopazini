@@ -7,6 +7,7 @@ import { hashPassword } from "@/lib/password";
 import { assertPasswordPolicy } from "@/lib/password-pwned";
 import { PASSWORD_MAX_LENGTH } from "@/lib/password-strength";
 import { passwordHashLooksValid } from "@/lib/password-hash-present";
+import { recordIdToString } from "@/lib/surreal-record-ids";
 
 const completeInviteSchema = z
     .object({
@@ -67,8 +68,8 @@ export async function completePortalInviteAction(formData: FormData): Promise<{
                 }[],
             ]
         >(
-            "SELECT id, invite_token, invite_expires_at, password_hash, active FROM portal_user WHERE invite_token = $token LIMIT 1",
-            { token },
+            "SELECT id, invite_token, invite_expires_at, password_hash, active FROM portal_user WHERE invite_token = $invite_link_token LIMIT 1",
+            { invite_link_token: token },
         );
         const row = rows[0]?.[0];
         if (!row?.id) {
@@ -104,10 +105,19 @@ export async function completePortalInviteAction(formData: FormData): Promise<{
         }
 
         const password_hash = await hashPassword(password);
-        const rid = new StringRecordId(String(row.id));
+        const idStr = recordIdToString(row.id);
+        if (!idStr.startsWith("portal_user:")) {
+            console.error("completePortalInviteAction: id inesperado", row.id);
+            return {
+                success: false,
+                error: "Não foi possível concluir o cadastro.",
+            };
+        }
+        const rid = new StringRecordId(idStr);
 
+        // SurrealDB 3: NONE em MERGE pode falhar; o projeto usa SET … = NONE em outros fluxos.
         await db.query(
-            "UPDATE $rid MERGE { password_hash: $ph, updated_at: $u, invite_token: NONE, invite_expires_at: NONE }",
+            "UPDATE $rid SET password_hash = $ph, updated_at = $u, invite_token = NONE, invite_expires_at = NONE",
             {
                 rid,
                 ph: password_hash,
@@ -119,6 +129,13 @@ export async function completePortalInviteAction(formData: FormData): Promise<{
     } catch (e) {
         console.error("completePortalInviteAction:", e);
         if (isTokenExpiredError(e)) resetDb();
-        return { success: false, error: "Não foi possível concluir o cadastro." };
+        const hint =
+            process.env.NODE_ENV === "development" && e instanceof Error
+                ? ` (${e.message})`
+                : "";
+        return {
+            success: false,
+            error: `Não foi possível concluir o cadastro.${hint}`,
+        };
     }
 }

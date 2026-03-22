@@ -323,7 +323,7 @@ export async function resetPortalUserPasswordAction(formData: FormData): Promise
 
         const password_hash = await hashPassword(password);
         await db.query(
-            "UPDATE $rid MERGE { password_hash: $ph, updated_at: $u, invite_token: NONE, invite_expires_at: NONE }",
+            "UPDATE $rid SET password_hash = $ph, updated_at = $u, invite_token = NONE, invite_expires_at = NONE",
             {
                 rid,
                 ph: password_hash,
