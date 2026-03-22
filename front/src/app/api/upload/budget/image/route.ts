@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiSession } from "@/lib/api-session";
-import { saveUploadBuffer } from "@/lib/upload";
+import { saveUploadBuffer, uploadPersistErrorResponse } from "@/lib/upload";
 import {
     BUDGET_IMAGE_MAX_BYTES,
     validateImageBuffer,
@@ -28,18 +28,6 @@ export async function POST(request: NextRequest) {
         const url = await saveUploadBuffer(buffer, "budgets/images", file.name);
         return NextResponse.json({ url });
     } catch (error) {
-        const err = error as NodeJS.ErrnoException;
-        console.error(
-            "Erro no upload de imagem do orçamento:",
-            err?.code ?? err?.message ?? error,
-            err?.stack,
-        );
-        if (err?.code === "EACCES") {
-            console.error(
-                "Dica: Se usar Docker, o diretório uploads precisa ser gravável. " +
-                    "No host: chown -R 1001:1001 pazini-uploads",
-            );
-        }
-        return NextResponse.json({ error: "Falha no upload" }, { status: 500 });
+        return uploadPersistErrorResponse(error);
     }
 }

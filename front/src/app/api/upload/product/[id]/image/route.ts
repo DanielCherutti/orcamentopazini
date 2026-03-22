@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiSession } from "@/lib/api-session";
-import { saveUploadBuffer } from "@/lib/upload";
+import { saveUploadBuffer, uploadPersistErrorResponse } from "@/lib/upload";
 import {
     IMAGE_UPLOAD_MAX_BYTES,
     validateImageBuffer,
@@ -34,7 +34,6 @@ export async function POST(
 
         return NextResponse.json({ url });
     } catch (error) {
-        console.error("Upload error:", error);
-        return NextResponse.json({ error: "Falha no upload" }, { status: 500 });
+        return uploadPersistErrorResponse(error);
     }
 }
