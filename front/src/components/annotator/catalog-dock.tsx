@@ -10,12 +10,19 @@ import { GripVertical, ChevronRight, ChevronDown, Loader2, Search } from "lucide
 import { BudgetItem } from "@/types/budget-types";
 import { getProductsAction, Product } from "@/actions/product-actions";
 import { listProductGroupsWithProductsAction, getProductGroupProductsAction, ProductGroup } from "@/actions/product-group-actions";
+import { canonicalTableRecordId } from "@/lib/surreal-record-ids";
 
 interface CatalogDockProps {
     availableItems: BudgetItem[];
     onDragStartBudgetItem: (e: React.DragEvent, item: BudgetItem) => void;
     onDragStartCatalogProduct: (e: React.DragEvent, product: Product) => void;
     onDragStartCatalogGroup?: (e: React.DragEvent, group: ProductGroup) => void;
+    /**
+     * Com orçamento: lista de IDs de grupo usados nos itens do orçamento (filtra a árvore de grupos).
+     * `undefined` = sem filtro (ex.: demo). Enquanto `budgetUsedGroupIdsLoading`, a lista ainda não está pronta.
+     */
+    budgetUsedGroupIds?: string[];
+    budgetUsedGroupIdsLoading?: boolean;
 }
 
 type GroupProduct = {
@@ -58,8 +65,25 @@ function ProductCard({ name, imageUrl, hint, onDragStart }: {
     );
 }
 
-export function CatalogDock({ availableItems, onDragStartBudgetItem, onDragStartCatalogProduct, onDragStartCatalogGroup }: CatalogDockProps) {
-    const defaultTab = availableItems.length > 0 ? "budget" : "catalog";
+function productGroupKey(id: string): string {
+    const c = canonicalTableRecordId("product_group", id);
+    return c.startsWith("product_group:") ? c.slice("product_group:".length) : c;
+}
+
+function groupIdInAllowlist(groupId: string, allowlist: string[]): boolean {
+    const gKey = productGroupKey(groupId);
+    return allowlist.some((id) => productGroupKey(id) === gKey);
+}
+
+export function CatalogDock({
+    availableItems,
+    onDragStartBudgetItem,
+    onDragStartCatalogProduct,
+    onDragStartCatalogGroup,
+    budgetUsedGroupIds,
+    budgetUsedGroupIdsLoading = false,
+}: CatalogDockProps) {
+    const defaultTab = availableItems.length > 0 ? "budget" : "groups";
 
     // Estado do catálogo
     const [searchQuery, setSearchQuery] = useState("");
@@ -128,17 +152,22 @@ export function CatalogDock({ availableItems, onDragStartBudgetItem, onDragStart
 
     // Ao montar aba catálogo, carrega grupos
     const handleTabChange = (value: string) => {
-        if (value === "catalog") {
+        if (value === "groups") {
             loadGroups();
         }
     };
 
-    // Se default é catalog, carregar grupos imediatamente
+    // Se default é grupos, carregar lista ao montar
     useEffect(() => {
-        if (defaultTab === "catalog") {
+        if (defaultTab === "groups") {
             loadGroups();
         }
     }, [defaultTab, loadGroups]);
+
+    const filteredGroups =
+        budgetUsedGroupIds === undefined
+            ? groups
+            : groups.filter((g) => g.id && groupIdInAllowlist(g.id, budgetUsedGroupIds));
 
     const showSearchResults = searchQuery.trim().length > 0;
 
@@ -149,8 +178,8 @@ export function CatalogDock({ availableItems, onDragStartBudgetItem, onDragStart
                     <TabsTrigger value="budget" className="flex-1 text-xs">
                         Do Orçamento
                     </TabsTrigger>
-                    <TabsTrigger value="catalog" className="flex-1 text-xs">
-                        Catálogo
+                    <TabsTrigger value="groups" className="flex-1 text-xs">
+                        Grupo
                     </TabsTrigger>
                 </TabsList>
 
@@ -186,8 +215,8 @@ export function CatalogDock({ availableItems, onDragStartBudgetItem, onDragStart
                     </div>
                 </TabsContent>
 
-                {/* Aba: Catálogo Completo */}
-                <TabsContent value="catalog" className="flex-1 min-h-0 mt-0">
+                {/* Aba: Grupos do orçamento (filtrados) + busca global de produto */}
+                <TabsContent value="groups" className="flex-1 min-h-0 mt-0">
                     <div className="bg-muted/30 border rounded-lg h-full min-h-0 flex flex-col">
                         {/* Busca */}
                         <div className="p-2 border-b bg-muted/50">
@@ -232,17 +261,30 @@ export function CatalogDock({ availableItems, onDragStartBudgetItem, onDragStart
                                 {/* Grupos (quando não há busca ativa) */}
                                 {!showSearchResults && (
                                     <>
-                                        {!groupsLoaded && (
+                                        {(!groupsLoaded || budgetUsedGroupIdsLoading) && (
                                             <div className="flex items-center justify-center py-4">
                                                 <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                                             </div>
                                         )}
-                                        {groupsLoaded && groups.length === 0 && (
+                                        {groupsLoaded &&
+                                            !budgetUsedGroupIdsLoading &&
+                                            groups.length === 0 && (
                                             <p className="text-xs text-muted-foreground text-center py-4 italic">
                                                 Nenhum grupo com produtos.
                                             </p>
                                         )}
-                                        {groups.map((group) => {
+                                        {groupsLoaded &&
+                                            !budgetUsedGroupIdsLoading &&
+                                            budgetUsedGroupIds !== undefined &&
+                                            groups.length > 0 &&
+                                            filteredGroups.length === 0 && (
+                                                <p className="text-xs text-muted-foreground text-center py-4 italic">
+                                                    Nenhum grupo usado nos itens deste orçamento.
+                                                </p>
+                                            )}
+                                        {groupsLoaded &&
+                                            !budgetUsedGroupIdsLoading &&
+                                            filteredGroups.map((group) => {
                                             const isExpanded = expandedGroupId === group.id;
                                             const products = groupProducts[group.id];
                                             const isLoading = loadingGroupId === group.id;
@@ -301,7 +343,8 @@ export function CatalogDock({ availableItems, onDragStartBudgetItem, onDragStart
                                                     )}
                                                 </div>
                                             );
-                                        })}
+                                        })
+                                        }
                                     </>
                                 )}
                             </div>

@@ -11,6 +11,7 @@ import { getProductGroupProductsAction } from "@/actions/product-group-actions";
 import {
     InvalidRecordIdError,
     canonicalTableRecordId,
+    recordIdToString,
     requireRecordId,
     safeStringRecordId,
 } from "@/lib/surreal-record-ids";
@@ -435,5 +436,75 @@ export async function reorderSectionItemsAction(orderedItemIds: string[], budget
         console.error("Error reordering items:", error);
         if (isTokenExpiredError(error)) resetDb();
         return { success: false, error: "Erro ao reordenar itens" };
+    }
+}
+
+/**
+ * IDs de `product_group` referenciados por itens do orçamento (escopo via seção/local
+ * e compositor via bloco). Usado para restringir o painel de grupos no anotador de fotos.
+ */
+export async function getBudgetUsedProductGroupIdsAction(
+    budgetId: string
+): Promise<{ success: boolean; data?: string[]; error?: string }> {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const db = await getDb();
+    try {
+        const budgetRecordId = requireRecordId("budget", budgetId);
+        const set = new Set<string>();
+
+        const mergeGroupRows = (rows: Array<{ group_id: unknown }> | undefined) => {
+            for (const row of rows ?? []) {
+                const gid = canonicalTableRecordId("product_group", row.group_id);
+                if (gid) set.add(gid);
+            }
+        };
+
+        // Escopo: Surreal costuma não casar bem `IN (SELECT …)` com record ids — usamos INSIDE como no compositor.
+        const locRes = await db.query<[Array<{ id: unknown }>]>(
+            `SELECT id FROM budget_location WHERE budget_id = $bid AND deleted_at IS NONE`,
+            { bid: budgetRecordId }
+        );
+        const locStrings = (locRes[0] ?? []).map((r) => recordIdToString(r.id)).filter(Boolean);
+        if (locStrings.length > 0) {
+            const locIds = locStrings.map((s) => requireRecordId("budget_location", s));
+            const secRes = await db.query<[Array<{ id: unknown }>]>(
+                `SELECT id FROM budget_section WHERE location_id INSIDE $locIds AND deleted_at IS NONE`,
+                { locIds }
+            );
+            const secStrings = (secRes[0] ?? []).map((r) => recordIdToString(r.id)).filter(Boolean);
+            if (secStrings.length > 0) {
+                const secIds = secStrings.map((s) => requireRecordId("budget_section", s));
+                const itemRes = await db.query<[Array<{ group_id: unknown }>]>(
+                    `SELECT group_id FROM budget_item WHERE section_id INSIDE $secIds AND deleted_at IS NONE AND group_id IS NOT NONE`,
+                    { secIds }
+                );
+                mergeGroupRows(itemRes[0]);
+            }
+        }
+
+        const blockRes = await db.query<[Array<{ id: unknown }>]>(
+            `SELECT id FROM budget_block WHERE budget_id = $bid AND deleted_at IS NONE`,
+            { bid: budgetRecordId }
+        );
+        const blockStrings = (blockRes[0] ?? []).map((r) => recordIdToString(r.id)).filter(Boolean);
+        if (blockStrings.length > 0) {
+            const blockIds = blockStrings.map((s) => requireRecordId("budget_block", s));
+            const itemRes = await db.query<[Array<{ group_id: unknown }>]>(
+                `SELECT group_id FROM budget_item WHERE block_id INSIDE $blockIds AND deleted_at IS NONE AND group_id IS NOT NONE`,
+                { blockIds }
+            );
+            mergeGroupRows(itemRes[0]);
+        }
+
+        return { success: true, data: [...set] };
+    } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
+        console.error("getBudgetUsedProductGroupIdsAction error:", error);
+        if (isTokenExpiredError(error)) resetDb();
+        return { success: false, error: "Erro ao carregar grupos do orçamento" };
     }
 }

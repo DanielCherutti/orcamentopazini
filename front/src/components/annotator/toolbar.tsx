@@ -90,7 +90,7 @@ export function Toolbar({ selectedTool, onToolSelect, onDelete, canDelete, onIns
                     size="sm"
                     onClick={onToggleCatalog}
                     className="h-9 w-9 p-0"
-                    title={catalogOpen ? 'Ocultar Catálogo' : 'Mostrar Catálogo'}
+                    title={catalogOpen ? 'Ocultar itens e grupos' : 'Mostrar itens e grupos'}
                 >
                     <Library className="h-4 w-4" />
                 </Button>

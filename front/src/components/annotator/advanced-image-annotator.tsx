@@ -19,7 +19,10 @@ import { BudgetItem } from "@/types/budget-types";
 import { Toolbar } from "./toolbar";
 import { CatalogDock } from "./catalog-dock";
 import { toast } from "@/lib/toast";
-import { addItemAction } from "@/actions/budget-hierarchy-section-items-actions";
+import {
+    addItemAction,
+    getBudgetUsedProductGroupIdsAction,
+} from "@/actions/budget-hierarchy-section-items-actions";
 import { Product } from "@/actions/product-actions";
 import type { ProductGroup } from "@/actions/product-group-actions";
 import Konva from "konva";
@@ -69,6 +72,30 @@ export function AdvancedImageAnnotator({
     const [stepCounter, setStepCounter] = useState(1);
     const [isSaving, setIsSaving] = useState(false);
     const [catalogDockOpen, setCatalogDockOpen] = useState(true);
+    /** Com `budgetId`: IDs de grupo usados no orçamento para filtrar a aba Grupo. */
+    const [budgetUsedGroupIds, setBudgetUsedGroupIds] = useState<string[] | undefined>(undefined);
+    const [budgetUsedGroupIdsLoading, setBudgetUsedGroupIdsLoading] = useState(false);
+    /** Incrementado após mutar itens do orçamento a partir do anotador (atualiza filtro de grupos). */
+    const [budgetUsedGroupIdsVersion, setBudgetUsedGroupIdsVersion] = useState(0);
+
+    useEffect(() => {
+        if (!budgetId) {
+            setBudgetUsedGroupIds(undefined);
+            setBudgetUsedGroupIdsLoading(false);
+            return;
+        }
+        let cancelled = false;
+        setBudgetUsedGroupIds(undefined);
+        setBudgetUsedGroupIdsLoading(true);
+        getBudgetUsedProductGroupIdsAction(budgetId).then((res) => {
+            if (cancelled) return;
+            setBudgetUsedGroupIdsLoading(false);
+            setBudgetUsedGroupIds(res.success && res.data ? res.data : []);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [budgetId, budgetUsedGroupIdsVersion]);
 
     // Zoom e pan
     const [stageScale, setStageScale] = useState(1);
@@ -437,6 +464,7 @@ export function AdvancedImageAnnotator({
                     if (res.success) {
                         toast.success(`"${productName}" adicionado ao orçamento`);
                         onProductAddedToBudget?.();
+                        setBudgetUsedGroupIdsVersion((v) => v + 1);
                     } else {
                         toast.error(res.error || "Erro ao adicionar produto ao orçamento");
                     }
@@ -832,7 +860,7 @@ export function AdvancedImageAnnotator({
 
             <div className="flex gap-4 flex-1 min-h-0">
 
-                {/* DOCK LATERAL - Catálogo com abas (Orçamento + Catálogo Completo); visível via botão na barra */}
+                {/* DOCK LATERAL — abas Orçamento + Grupo (grupos filtrados pelos itens do orçamento quando há budgetId) */}
                 {!readOnly && (
                     <div className={catalogDockOpen ? 'flex min-w-0' : 'w-0 overflow-hidden min-w-0'}>
                         <CatalogDock
@@ -840,6 +868,8 @@ export function AdvancedImageAnnotator({
                             onDragStartBudgetItem={handleDragStartItem}
                             onDragStartCatalogProduct={handleDragStartCatalogProduct}
                             onDragStartCatalogGroup={handleDragStartCatalogGroup}
+                            budgetUsedGroupIds={budgetId ? budgetUsedGroupIds : undefined}
+                            budgetUsedGroupIdsLoading={!!budgetId && budgetUsedGroupIdsLoading}
                         />
                     </div>
                 )}
