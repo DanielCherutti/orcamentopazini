@@ -252,7 +252,6 @@ export async function addGroupToSectionAction(
             if (canon) normalizedQty[canon] = v;
         }
 
-        /** Mesma regra que itens avulsos: após o maior order_index da seção (múltiplos de 10). */
         let orderIndex = await nextSectionItemOrderIndex(db, sectionId);
 
         let inserted = 0;

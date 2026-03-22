@@ -80,9 +80,6 @@ function HighlightRow({ item }: { item: LoginHighlight }) {
   );
 }
 
-/**
- * Card lateral (desktop) / abaixo (mobile) com novidades na página de login.
- */
 export function LoginHighlightsCard({ className }: { className?: string }) {
   if (!loginHighlights.length) return null;
 

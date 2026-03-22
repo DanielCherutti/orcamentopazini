@@ -1,16 +1,9 @@
-/**
- * Novidades exibidas no login (`/`). Atualize este arquivo a cada release ou entrega relevante.
- * Mantenha textos curtos e em linguagem de usuário (sem jargão técnico desnecessário).
- */
 export type LoginHighlightKind = "feature" | "improvement" | "fix";
 
 export type LoginHighlight = {
-  /** Título curto (uma linha) */
   title: string;
-  /** Detalhe opcional (1–2 frases) */
   description?: string;
   kind?: LoginHighlightKind;
-  /** ISO date YYYY-MM-DD — exibida em pt-BR quando presente */
   date?: string;
 };
 
@@ -18,7 +11,6 @@ export const LOGIN_HIGHLIGHTS_TITLE = "Novidades no sistema";
 export const LOGIN_HIGHLIGHTS_SUBTITLE =
   "Confira o que melhoramos recentemente para o dia a dia da operação.";
 
-/** Ordem: mais recente primeiro (para leitura). */
 export const loginHighlights: LoginHighlight[] = [
   {
     kind: "fix",

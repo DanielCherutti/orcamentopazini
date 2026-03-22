@@ -58,7 +58,7 @@ Implementar `deleteBudgetAction(budgetId: string)` — operação que existia im
 Remover `NEXT_PUBLIC_BUDGETS_MODE` de:
 - `.env.local` (se existir)
 - `.env.example` (se existir)
-- Documentação (CLAUDE.md, README)
+- Documentação do projeto (variáveis de ambiente / exemplos), se aplicável
 
 ## 3. Contratos e Interfaces
 
