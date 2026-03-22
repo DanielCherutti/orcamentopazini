@@ -49,5 +49,7 @@ export interface BudgetsRepository {
   duplicateSection(sectionId: string, budgetId: string): Promise<{ success: boolean; error?: string; newSectionId?: string }>;
   duplicateLocation(locationId: string, budgetId: string): Promise<{ success: boolean; error?: string }>;
   duplicateBudget(budgetId: string, newTitle?: string): Promise<{ success: boolean; newBudgetId?: string; error?: string }>;
+  /** Apenas orçamentos em andamento (`draft`). */
+  deleteBudget(budgetId: string): Promise<{ success: boolean; error?: string }>;
 }
 

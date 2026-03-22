@@ -13,7 +13,7 @@ import {
     DialogFooter,
     DialogDescription,
 } from "@/components/ui/dialog";
-import { ArrowDown, ArrowUp, ArrowUpDown, Copy, Edit2, Eye } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Copy, Edit2, Eye, Trash2 } from "lucide-react";
 import { useBudgetsRepository } from "@/lib/budgets/use-budgets-repository";
 import { budgetEditUrl } from "@/lib/budgets/budget-path";
 import { toast } from "@/lib/toast";
@@ -42,6 +42,7 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
     const [meta, setMeta] = useState(initialMeta);
     const [isLoading, setIsLoading] = useState(false);
     const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
     const [duplicateDialog, setDuplicateDialog] = useState<{ budgetId: string; defaultTitle: string } | null>(null);
     const [duplicateTitle, setDuplicateTitle] = useState("");
 
@@ -94,6 +95,38 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
             setIsLoading(false);
         } else {
             toast.error(res.error || "Erro ao duplicar orçamento");
+        }
+    };
+
+    const handleDeleteBudget = async (budget: Budget) => {
+        const id = String(budget.id);
+        const label = budget.title || budget.code || "este orçamento";
+        if (
+            !confirm(
+                `Excluir permanentemente o orçamento "${label}"? Esta ação não pode ser desfeita.`
+            )
+        ) {
+            return;
+        }
+        setDeletingId(id);
+        const res = await repo.deleteBudget(id);
+        setDeletingId(null);
+        if (res.success) {
+            toast.success("Orçamento excluído.");
+            setIsLoading(true);
+            const result = await repo.list({ page, query, limit, sortBy, sortOrder });
+            if (result.success && result.data && result.meta) {
+                setBudgets(result.data);
+                setMeta(result.meta);
+                if (result.data.length === 0 && page > 1) {
+                    const params = new URLSearchParams(searchParams.toString());
+                    params.set("page", String(page - 1));
+                    startTransition(() => router.push(`?${params.toString()}`, { scroll: false }));
+                }
+            }
+            setIsLoading(false);
+        } else {
+            toast.error(res.error || "Erro ao excluir orçamento");
         }
     };
 
@@ -241,7 +274,7 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                                     {getSortIcon("created_at")}
                                 </div>
                             </th>
-                            <th className="h-10 px-4 text-right font-medium text-muted-foreground w-[100px]">
+                            <th className="h-10 px-4 text-right font-medium text-muted-foreground min-w-[132px] w-[132px]">
                                 Ações
                             </th>
                         </tr>
@@ -259,17 +292,44 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                                     <td className="p-4 align-middle">{formatDate(budget.created_at)}</td>
                                     <td className="p-4 align-middle">
                                         <div className="flex items-center justify-end gap-2">
+                                            {isBudgetEditableStatus(budget.status) && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="icon"
+                                                    className="rounded-sm h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                    title="Excluir orçamento"
+                                                    disabled={
+                                                        deletingId === String(budget.id) ||
+                                                        duplicatingId === String(budget.id)
+                                                    }
+                                                    onClick={() => handleDeleteBudget(budget)}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            )}
                                             <Button
                                                 variant="outline"
                                                 size="icon"
                                                 className="rounded-sm h-8 w-8"
                                                 title="Duplicar orçamento"
-                                                disabled={duplicatingId === String(budget.id)}
+                                                disabled={
+                                                    duplicatingId === String(budget.id) ||
+                                                    deletingId === String(budget.id)
+                                                }
                                                 onClick={() => openDuplicateDialog(budget)}
                                             >
                                                 <Copy className="h-4 w-4" />
                                             </Button>
-                                            <Button variant="outline" size="icon" className="rounded-sm h-8 w-8" asChild>
+                                            <Button
+                                                variant="outline"
+                                                size="icon"
+                                                className="rounded-sm h-8 w-8"
+                                                asChild
+                                                disabled={
+                                                    deletingId === String(budget.id) ||
+                                                    duplicatingId === String(budget.id)
+                                                }
+                                            >
                                                 <a
                                                     href={budgetEditUrl(String(budget.id))}
                                                     title={
@@ -320,17 +380,39 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                                 <div>Criado em</div>
                                 <div>{formatDate(b.created_at)}</div>
                             </div>
-                            <div className="pt-2 flex justify-end gap-2">
+                            <div className="pt-2 flex flex-wrap justify-end gap-2">
+                                {isBudgetEditableStatus(b.status) && (
+                                    <Button
+                                        variant="outline"
+                                        className="rounded-sm text-destructive hover:text-destructive hover:bg-destructive/10"
+                                        disabled={
+                                            deletingId === String(b.id) || duplicatingId === String(b.id)
+                                        }
+                                        onClick={() => handleDeleteBudget(b)}
+                                    >
+                                        <Trash2 className="h-4 w-4 mr-2" />
+                                        {deletingId === String(b.id) ? "Excluindo..." : "Excluir"}
+                                    </Button>
+                                )}
                                 <Button
                                     variant="outline"
                                     className="rounded-sm"
-                                    disabled={duplicatingId === String(b.id)}
+                                    disabled={
+                                        duplicatingId === String(b.id) || deletingId === String(b.id)
+                                    }
                                     onClick={() => openDuplicateDialog(b)}
                                 >
                                     <Copy className="h-4 w-4 mr-2" />
                                     {duplicatingId === String(b.id) ? "Duplicando..." : "Duplicar"}
                                 </Button>
-                                <Button variant="outline" className="rounded-sm" asChild>
+                                <Button
+                                    variant="outline"
+                                    className="rounded-sm"
+                                    asChild
+                                    disabled={
+                                        deletingId === String(b.id) || duplicatingId === String(b.id)
+                                    }
+                                >
                                     <a href={budgetEditUrl(String(b.id))}>
                                         {isBudgetEditableStatus(b.status) ? (
                                             <>

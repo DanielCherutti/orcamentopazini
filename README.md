@@ -152,7 +152,7 @@ No workspace do orçamento, o índice de **Ambientes** segue o mesmo padrão da 
 
 ### Status do orçamento (em andamento / finalizado)
 
-- **Em andamento** (`draft`): orçamento **editável** — ambientes, trechos, produtos, cliente, título etc.
+- **Em andamento** (`draft`): orçamento **editável** — ambientes, trechos, produtos, cliente, título etc. Na **lista de orçamentos**, use **Excluir** (ícone de lixeira) para apagar permanentemente, com confirmação — **somente** em andamento; o servidor também bloqueia exclusão de outros status.
 - **Finalizado** (`finalized`): **somente leitura** no workspace (visualização, pré-visualização e PDF). Use **Finalizar** na barra do workspace para marcar como finalizado (com confirmação). Para voltar a editar, **duplique** o orçamento na lista (nova cópia em andamento).
 - **Enviado / Aprovado / Recusado**: também **somente leitura**, como antes.
 

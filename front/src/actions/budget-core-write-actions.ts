@@ -141,8 +141,26 @@ export async function deleteBudgetAction(budgetId: string) {
 
     const db = await getDb();
     try {
-        await db.delete(requireRecordId("budget", budgetId));
+        const budgetRecordId = requireRecordId("budget", budgetId);
+        const currentRaw = await db.select(budgetRecordId);
+        const currentBudget = (Array.isArray(currentRaw) ? currentRaw[0] : currentRaw) as
+            | Record<string, unknown>
+            | undefined
+            | null;
+        if (!currentBudget) {
+            return { success: false, error: "Orçamento não encontrado." };
+        }
+        const currentStatus = String(currentBudget.status ?? "");
+        if (!isBudgetEditableStatus(currentStatus)) {
+            return {
+                success: false,
+                error: "Só é possível excluir orçamentos em andamento.",
+            };
+        }
+
+        await db.delete(budgetRecordId);
         revalidatePath("/budgets");
+        revalidatePath("/dashboard");
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {

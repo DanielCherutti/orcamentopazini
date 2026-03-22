@@ -6,6 +6,7 @@ import {
   getBudgetsAction,
   getBudgetAction,
   createBudgetAction,
+  deleteBudgetAction,
   updateBudgetAction,
   addLocationAction,
   updateLocationAction,
@@ -96,6 +97,10 @@ export const realBudgetsRepository: BudgetsRepository = {
 
   async duplicateBudget(budgetId: string, newTitle?: string) {
     return await duplicateBudgetAction(budgetId, newTitle);
+  },
+
+  async deleteBudget(budgetId: string) {
+    return await deleteBudgetAction(budgetId);
   },
 };
 
