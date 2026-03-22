@@ -25,11 +25,27 @@ interface ProductSelectorProps {
     onSelect: (productId: string, product?: Product) => void;
     className?: string;
     selectedProduct?: Product | null;
+    /** `sm` alinha ao `Button size="sm"` (ex.: barra do escopo ao lado de “Adicionar Grupo”). */
+    triggerSize?: "default" | "sm";
+    /** Ícone de pacote à esquerda, no mesmo espírito do “+” do botão de grupo. */
+    showPackageIcon?: boolean;
+    /**
+     * `dialog`: painel compacto para uso dentro de `Dialog` (altura limitada, scroll na lista, não ultrapassa a tela).
+     */
+    popoverLayout?: "default" | "dialog";
 }
 
 const PAGE_LIMIT = 300;
 
-export function ProductSelector({ onSelect, className, selectedProduct }: ProductSelectorProps) {
+export function ProductSelector({
+    onSelect,
+    className,
+    selectedProduct,
+    triggerSize = "default",
+    showPackageIcon = false,
+    popoverLayout = "default",
+}: ProductSelectorProps) {
+    const inDialog = popoverLayout === "dialog";
     const [open, setOpen] = React.useState(false);
     const [products, setProducts] = React.useState<Product[]>([]);
     const [loading, setLoading] = React.useState(false);
@@ -82,24 +98,43 @@ export function ProductSelector({ onSelect, className, selectedProduct }: Produc
                     variant="outline"
                     role="combobox"
                     aria-expanded={open}
-                    className={cn("w-full justify-between", className)}
-                >
-                    {selectedProduct ? (
-                        <span className="truncate">{selectedProduct.description}</span>
-                    ) : (
-                        "Selecione um produto..."
+                    size={triggerSize === "sm" ? "sm" : "default"}
+                    className={cn(
+                        "w-full justify-between gap-1.5",
+                        triggerSize === "sm" && "font-normal",
+                        className
                     )}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                >
+                    <span className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
+                        {showPackageIcon ? (
+                            <Package className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+                        ) : null}
+                        {selectedProduct ? (
+                            <span className="truncate">{selectedProduct.description}</span>
+                        ) : (
+                            <span className="truncate">
+                                Selecione um produto...
+                            </span>
+                        )}
+                    </span>
+                    <ChevronsUpDown
+                        className={cn(
+                            "ml-1 shrink-0 opacity-50",
+                            triggerSize === "sm" ? "h-3.5 w-3.5" : "h-4 w-4"
+                        )}
+                    />
                 </Button>
             </PopoverTrigger>
             <PopoverContent
                 align="start"
                 side="bottom"
                 sideOffset={8}
-                collisionPadding={16}
+                collisionPadding={inDialog ? 24 : 16}
                 className={cn(
-                    "z-[200] w-[min(92vw,42rem)] max-w-[calc(100vw-1rem)] overflow-hidden p-0 shadow-lg",
-                    "max-h-[min(78vh,calc(100dvh-4rem))]"
+                    "z-[200] overflow-hidden p-0 shadow-lg",
+                    inDialog
+                        ? "max-h-[min(48dvh,calc(100dvh-10rem))] w-[min(22rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)]"
+                        : "max-h-[min(78vh,calc(100dvh-4rem))] w-[min(92vw,42rem)] max-w-[calc(100vw-1rem)]"
                 )}
             >
                 <Command shouldFilter={false} className="overflow-hidden rounded-md">
@@ -108,16 +143,24 @@ export function ProductSelector({ onSelect, className, selectedProduct }: Produc
                             placeholder="Buscar por nome, código ou parte do texto..."
                             value={searchValue}
                             onValueChange={handleValueChange}
-                            className="h-11"
+                            className={inDialog ? "h-9" : "h-11"}
                         />
-                        <p className="border-b px-3 pb-2.5 pt-0 text-[11px] leading-snug text-muted-foreground">
-                            A busca filtra todo o catálogo. Com muitos produtos, use termos mais específicos.
-                        </p>
+                        {!inDialog ? (
+                            <p className="border-b px-3 pb-2.5 pt-0 text-[11px] leading-snug text-muted-foreground">
+                                A busca filtra todo o catálogo. Com muitos produtos, use termos mais específicos.
+                            </p>
+                        ) : (
+                            <p className="border-b px-3 py-1.5 text-[10px] leading-snug text-muted-foreground">
+                                Digite para filtrar o catálogo.
+                            </p>
+                        )}
                     </div>
                     <CommandList
                         className={cn(
-                            "!max-h-[min(52vh,calc(100dvh-15rem))] min-h-[9rem] overflow-y-auto overflow-x-hidden overscroll-contain py-1",
-                            "[scrollbar-gutter:stable]"
+                            "overflow-y-auto overflow-x-hidden overscroll-contain py-1 [scrollbar-gutter:stable]",
+                            inDialog
+                                ? "!max-h-[min(30dvh,12.5rem)] min-h-0"
+                                : "!max-h-[min(52vh,calc(100dvh-15rem))] min-h-[9rem]"
                         )}
                     >
                         {loading && (

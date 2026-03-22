@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/lib/toast";
-import { ProductSelector } from "@/components/products/product-selector";
 import { AddGroupDialog } from "@/components/budgets/editor/add-group-dialog";
-import type { Product } from "@/actions/product-actions";
-import { addItemAction, addGroupToSectionAction } from "@/actions/budget-hierarchy-section-items-actions";
+import { AddProductScopeDialog } from "@/components/budgets/scope/add-product-scope-dialog";
+import { addGroupToSectionAction } from "@/actions/budget-hierarchy-section-items-actions";
+import { cn } from "@/lib/utils";
+
+/** Base visual comum: `Button variant="outline" size="sm"` do escopo (produto + grupo). */
+const SCOPE_OUTLINE_CONTROL_CLASS = "h-8 w-full gap-1.5 text-xs sm:w-auto";
 
 export function ScopeItemCreator({
     sectionId,
@@ -18,53 +20,26 @@ export function ScopeItemCreator({
     budgetId: string;
     onSuccess: () => void;
 }) {
-    const [selected, setSelected] = useState<Product | null>(null);
-    const [qty, setQty] = useState(1);
-    const [loading, setLoading] = useState(false);
-
-    const handleAdd = async () => {
-        if (!selected) {
-            toast.error("Selecione um produto");
-            return;
-        }
-        setLoading(true);
-        const result = await addItemAction(sectionId, budgetId, selected.id!, qty);
-        setLoading(false);
-        if (result.success) {
-            setSelected(null);
-            setQty(1);
-            onSuccess();
-        } else {
-            toast.error(result.error || "Erro ao adicionar produto");
-        }
-    };
-
+    const [open, setOpen] = useState(false);
     return (
-        <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/30">
-            <div className="flex-1">
-                <ProductSelector
-                    selectedProduct={selected}
-                    onSelect={(_id, product) => {
-                        if (product) setSelected(product);
-                    }}
-                />
-            </div>
-            <input
-                type="number"
-                min={1}
-                value={qty}
-                onChange={(e) => setQty(Math.max(1, Number(e.target.value)))}
-                className="w-16 text-center border rounded text-xs h-8"
-                disabled={!selected}
-            />
-            <Button size="sm" className="h-8 text-xs" onClick={handleAdd} disabled={!selected || loading}>
-                {loading ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                    <Plus className="h-3.5 w-3.5" />
-                )}
+        <>
+            <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                className={cn("shrink-0", SCOPE_OUTLINE_CONTROL_CLASS)}
+                onClick={() => setOpen(true)}
+            >
+                <Plus className="h-3.5 w-3.5 shrink-0" /> Adicionar produto
             </Button>
-        </div>
+            <AddProductScopeDialog
+                open={open}
+                onOpenChange={setOpen}
+                sectionId={sectionId}
+                budgetId={budgetId}
+                onSuccess={onSuccess}
+            />
+        </>
     );
 }
 
@@ -83,11 +58,11 @@ export function ScopeGroupAdder({
             <Button
                 variant="outline"
                 size="sm"
-                className="text-xs gap-1.5"
                 type="button"
+                className={cn("shrink-0", SCOPE_OUTLINE_CONTROL_CLASS)}
                 onClick={() => setOpen(true)}
             >
-                <Plus className="h-3.5 w-3.5" /> Adicionar Grupo de Produtos
+                <Plus className="h-3.5 w-3.5 shrink-0" /> Adicionar Grupo de Produtos
             </Button>
             <AddGroupDialog
                 open={open}

@@ -298,7 +298,7 @@ export function SectionDetail({
                     groups={groups}
                 />
                 {!isReadOnly && (
-                    <div className="mt-2 space-y-2">
+                    <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
                         <ScopeItemCreator sectionId={sectionId} budgetId={budgetId} onSuccess={loadItems} />
                         <ScopeGroupAdder sectionId={sectionId} budgetId={budgetId} onSuccess={loadItems} />
                     </div>
