@@ -49,15 +49,15 @@ function HighlightRow({ item }: { item: LoginHighlight }) {
   const kind = item.kind ?? "improvement";
 
   return (
-    <li className="group relative rounded-xl border border-border/60 bg-gradient-to-br from-muted/40 via-background/80 to-background/40 p-3.5 shadow-sm transition-colors hover:border-primary/20 hover:bg-muted/50">
+    <li className="group relative rounded-xl border border-border/30 bg-gradient-to-br from-muted/12 via-background/22 to-background/12 p-3.5 shadow-sm backdrop-blur-sm transition-colors hover:border-primary/30 hover:from-muted/20 hover:via-background/32">
       <div className="flex flex-wrap items-center gap-2">
         <span
           className={cn(
-            "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+            "inline-flex items-center gap-1 rounded-md border border-transparent px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide backdrop-blur-sm",
             kind === "feature" &&
-              "bg-[color:rgb(var(--brand-secondary-rgb)/0.15)] text-[color:var(--brand-secondary)]",
-            kind === "improvement" && "bg-primary/10 text-primary",
-            kind === "fix" && "bg-muted text-muted-foreground"
+              "border-[color:rgb(var(--brand-secondary-rgb)/0.12)] bg-[color:rgb(var(--brand-secondary-rgb)/0.08)] text-[color:var(--brand-secondary)]",
+            kind === "improvement" && "border-primary/10 bg-primary/5 text-primary",
+            kind === "fix" && "border-border/30 bg-muted/40 text-muted-foreground"
           )}
         >
           <KindIcon kind={kind} />
@@ -89,14 +89,14 @@ export function LoginHighlightsCard({ className }: { className?: string }) {
   return (
     <aside
       className={cn(
-        "flex flex-col rounded-2xl border border-border/80 bg-card/90 p-6 shadow-[0_8px_32px_-12px_rgb(var(--primary-rgb)/0.12)] ring-1 ring-black/[0.04] backdrop-blur-sm dark:bg-card/85 dark:ring-white/[0.06]",
+        "flex flex-col rounded-2xl border border-border/35 bg-card/28 p-6 shadow-[0_8px_32px_-12px_rgb(var(--primary-rgb)/0.08)] ring-1 ring-black/[0.02] backdrop-blur-xl dark:bg-card/22 dark:ring-white/[0.04]",
         className
       )}
       aria-labelledby="login-highlights-heading"
     >
       <div className="mb-4 flex items-start gap-3">
         <div
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/15 bg-primary/5 text-primary backdrop-blur-sm dark:bg-primary/10"
           aria-hidden
         >
           <Sparkles className="h-5 w-5" />
@@ -115,7 +115,7 @@ export function LoginHighlightsCard({ className }: { className?: string }) {
         ))}
       </ul>
 
-      <p className="mt-4 border-t border-border/60 pt-3 text-center text-[10px] text-muted-foreground">
+      <p className="mt-4 border-t border-border/25 pt-3 text-center text-[10px] text-muted-foreground">
         Melhorias contínuas — em caso de dúvida, fale com o administrador do sistema.
       </p>
     </aside>

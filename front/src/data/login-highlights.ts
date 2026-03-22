@@ -21,6 +21,13 @@ export const LOGIN_HIGHLIGHTS_SUBTITLE =
 /** Ordem: mais recente primeiro (para leitura). */
 export const loginHighlights: LoginHighlight[] = [
   {
+    kind: "fix",
+    date: "2026-03-22",
+    title: "Seleção de produto no orçamento mais estável",
+    description:
+      "Ao adicionar produto no escopo do orçamento, a busca não fecha o modal ao clicar na lista; o painel de resultados fica compacto, com rolagem e dentro da tela.",
+  },
+  {
     kind: "feature",
     date: "2026-03-21",
     title: "Painel Início com números e atalhos",
