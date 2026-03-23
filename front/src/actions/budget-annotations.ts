@@ -8,6 +8,7 @@ import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
 import { TOOL_CONFIG } from "@/components/annotator/tools/types";
 import type { ImageAnnotation, ArrowAnnotation, RectAnnotation, StickerAnnotation, TextAnnotation, PolylineAnnotation } from "@/components/annotator/tools/types";
+import type { AnnotatorViewportState } from "@/components/annotator/annotator-viewport-types";
 
 import type { Surreal } from "surrealdb";
 
@@ -23,6 +24,8 @@ export interface SaveBudgetImageParams {
     width: number;
     height: number;
     annotations: ImageAnnotation[];
+    /** Zoom/pan do editor ao salvar — restaurado ao reabrir o anotador. */
+    editorViewport?: AnnotatorViewportState | null;
 }
 
 interface DbImage {
@@ -166,6 +169,9 @@ export async function saveBudgetImageWithAnnotations(params: SaveBudgetImagePara
                 section_id: sectionRecordId,
                 location_id: locationRecordId,
                 ...(blockRecordId !== null ? { block_id: blockRecordId } : {}),
+                ...(params.editorViewport !== undefined
+                    ? { editor_viewport: params.editorViewport }
+                    : {}),
             });
             imageId = params.imageId;
             image = { id: imageId };
@@ -184,7 +190,8 @@ export async function saveBudgetImageWithAnnotations(params: SaveBudgetImagePara
                 width: params.width,
                 height: params.height,
                 order_index: nextOrder,
-                created_at: new Date()
+                created_at: new Date(),
+                ...(params.editorViewport != null ? { editor_viewport: params.editorViewport } : {}),
             });
             // surrealdb.js pode retornar array ou objeto — normaliza para objeto
             const created = Array.isArray(rawCreated) ? rawCreated[0] : rawCreated;

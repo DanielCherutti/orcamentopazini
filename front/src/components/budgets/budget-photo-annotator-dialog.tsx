@@ -12,6 +12,7 @@ import { Loader2, Upload, X } from 'lucide-react';
 import { AdvancedImageAnnotator } from '@/components/annotator/advanced-image-annotator';
 import { saveBudgetImageWithAnnotations } from '@/actions/budget-annotations';
 import { ImageAnnotation } from '@/components/annotator/tools/types';
+import type { AnnotatorViewportState } from '@/components/annotator/annotator-viewport-types';
 import { BudgetItem } from '@/types/budget-types';
 import { toast } from '@/lib/toast';
 
@@ -36,6 +37,8 @@ interface BudgetPhotoAnnotatorDialogProps {
     /** URL da imagem ORIGINAL (não composta) — usada no modo edição */
     initialImageUrl?: string | null;
     initialAnnotations?: ImageAnnotation[];
+    /** Zoom/pan salvos no registro da imagem — restaurados ao abrir o anotador. */
+    initialEditorViewport?: AnnotatorViewportState | null;
 }
 
 export function BudgetPhotoAnnotatorDialog({
@@ -52,6 +55,7 @@ export function BudgetPhotoAnnotatorDialog({
     onRefresh,
     initialImageUrl = null,
     initialAnnotations = [],
+    initialEditorViewport = null,
 }: BudgetPhotoAnnotatorDialogProps) {
     const isControlled = controlledOpen !== undefined;
     const [internalOpen, setInternalOpen] = useState(false);
@@ -227,7 +231,12 @@ export function BudgetPhotoAnnotatorDialog({
      * Modo CRIAÇÃO  → upload original + upload composto → create no banco
      * Modo EDIÇÃO   → sem re-upload de original + upload novo composto → merge no banco
      */
-    const handleSave = async (annotations: ImageAnnotation[], composedBlob: Blob, isAutoSave = false) => {
+    const handleSave = async (
+        annotations: ImageAnnotation[],
+        composedBlob: Blob,
+        isAutoSave = false,
+        editorViewport?: AnnotatorViewportState
+    ) => {
         setIsSaving(true);
         const activeImageId = imageId || createdImageDoc?.id;
         try {
@@ -255,6 +264,7 @@ export function BudgetPhotoAnnotatorDialog({
                 width: originalDimensions.width || 0,
                 height: originalDimensions.height || 0,
                 annotations,
+                editorViewport: editorViewport ?? null,
             });
 
             if (result.success) {
@@ -368,6 +378,7 @@ export function BudgetPhotoAnnotatorDialog({
                                 key={annotatorKey}
                                 imageUrl={activeImageUrl!}
                                 initialAnnotations={sessionAnnotations}
+                                initialViewport={initialEditorViewport}
                                 onSave={handleSave}
                                 availableItems={availableItems}
                                 sectionId={sectionId}

@@ -10,7 +10,7 @@ export default function AnnotatorDemoPage() {
 
     const demoImageUrl = "https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=800&h=600&fit=crop";
 
-    const handleSave = async (newAnnotations: ImageAnnotation[], _composedBlob: Blob) => {
+    const handleSave = async (newAnnotations: ImageAnnotation[], _composedBlob: Blob, _auto?: boolean, _viewport?: unknown) => {
         console.log('Salvando:', newAnnotations);
         setAnnotations(newAnnotations);
     };

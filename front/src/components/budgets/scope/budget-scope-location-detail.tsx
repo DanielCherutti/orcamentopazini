@@ -17,6 +17,7 @@ import { toast } from "@/lib/toast";
 import { CompositorRichTextEditor, CollapsibleEditorSection } from "@/components/budgets/compositor/compositor-rich-text-editor";
 import { BudgetImageGallery } from "@/components/budgets/budget-image-gallery";
 import { BudgetPhotoAnnotatorDialog } from "@/components/budgets/budget-photo-annotator-dialog";
+import { parseAnnotatorViewport } from "@/components/annotator/annotator-viewport-types";
 import type { BudgetImage, BudgetItem } from "@/types/budget-types";
 import type { ScopeLocation } from "@/actions/budget-scope-actions";
 import { getItemsBySectionAction } from "@/actions/budget-hierarchy-section-items-actions";
@@ -298,6 +299,7 @@ export function LocationDetail({
                             typeof BudgetPhotoAnnotatorDialog
                         >[0]["initialAnnotations"]
                     }
+                    initialEditorViewport={parseAnnotatorViewport(editingImage.editor_viewport)}
                     open={!!editingImage}
                     onOpenChange={(open) => { if (!open) setEditingImage(null); }}
                     onSaved={() => {

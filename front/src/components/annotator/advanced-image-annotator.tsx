@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import type { AnnotatorViewportState } from "./annotator-viewport-types";
 import type { DragEvent } from "react";
 import { KonvaEventObject } from "konva/lib/Node";
 import {
@@ -34,7 +35,14 @@ import { AnnotatorEditAnnotationDialog } from "./annotator-edit-annotation-dialo
 export interface AdvancedImageAnnotatorProps {
     imageUrl: string;
     initialAnnotations?: ImageAnnotation[];
-    onSave?: (annotations: ImageAnnotation[], composedImageBlob: Blob, isAutoSave?: boolean) => Promise<void>;
+    /** Zoom/pan salvos — restaurados uma vez quando o stage estiver pronto. */
+    initialViewport?: AnnotatorViewportState | null;
+    onSave?: (
+        annotations: ImageAnnotation[],
+        composedImageBlob: Blob,
+        isAutoSave?: boolean,
+        editorViewport?: AnnotatorViewportState
+    ) => Promise<void>;
     availableItems?: BudgetItem[]; // Itens ricos (BudgetItem com product_id populado)
     readOnly?: boolean;
     width?: number;
@@ -49,6 +57,7 @@ export interface AdvancedImageAnnotatorProps {
 export function AdvancedImageAnnotator({
     imageUrl,
     initialAnnotations = [],
+    initialViewport = null,
     onSave,
     availableItems = [],
     readOnly = false,
@@ -145,6 +154,8 @@ export function AdvancedImageAnnotator({
 
     const stageRef = useRef<Konva.Stage>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    /** Evita reaplicar zoom em todo resize; zera ao mudar `imageUrl`. */
+    const viewportApplyMarkerRef = useRef<string>("");
     const [containerSize, setContainerSize] = useState<{ width: number; height: number } | null>(null);
 
     // Medir container real (responsivo) para manter proporção e ocupar o máximo possível.
@@ -223,7 +234,13 @@ export function AdvancedImageAnnotator({
         }
     }, [annotations]);
 
-    // Quando trocar a imagem, reseta estado de edição e zoom para evitar "vazar" anotações/seleção.
+    // Troca de imagem: zera marca de viewport (aplicação ocorre no efeito seguinte).
+    useEffect(() => {
+        viewportApplyMarkerRef.current = "";
+    }, [imageUrl]);
+
+    // Quando trocar imagem ou anotações vindas de fora, reseta ferramentas/seleção — **sem** resetar zoom
+    // (zoom só muda na troca de `imageUrl` via efeito de viewport ou interação do usuário).
     useEffect(() => {
         setAnnotations(initialAnnotations || []);
         setSelectedTool('select');
@@ -242,12 +259,40 @@ export function AdvancedImageAnnotator({
         setPolylinePoints([]);
         polylinePointsRef.current = [];
         setPolylineTempEnd(null);
-        setStageScale(1);
-        if (stageRef.current) {
-            stageRef.current.scale({ x: 1, y: 1 });
-            stageRef.current.position({ x: 0, y: 0 });
+    }, [imageUrl, initialAnnotations]);
+
+    // Aplica zoom/pan salvo uma vez por imagem (usa mesma lógica de `stageSize` sem depender de hook após const).
+    useEffect(() => {
+        const sw = containerSize?.width ?? width;
+        if (viewportApplyMarkerRef.current === imageUrl) return;
+        if (!image || imageSize.width <= 0 || sw <= 0) return;
+        const stage = stageRef.current;
+        if (!stage) return;
+
+        viewportApplyMarkerRef.current = imageUrl;
+
+        const v = initialViewport;
+        if (v && Number.isFinite(v.scale) && v.scale >= 0.25 && v.scale <= 4) {
+            stage.scale({ x: v.scale, y: v.scale });
+            stage.position({ x: v.x, y: v.y });
+            setStageScale(v.scale);
+        } else {
+            stage.scale({ x: 1, y: 1 });
+            stage.position({ x: 0, y: 0 });
+            setStageScale(1);
         }
-    }, [imageUrl, initialAnnotations]); // reset a cada troca de imagem ou anotações iniciais
+        stage.batchDraw();
+    }, [
+        imageUrl,
+        image,
+        imageSize.width,
+        imageSize.height,
+        containerSize?.width,
+        containerSize?.height,
+        width,
+        height,
+        initialViewport,
+    ]);
 
     // --- AUTO SAVE ---
     useEffect(() => {
@@ -815,7 +860,11 @@ export function AdvancedImageAnnotator({
                 });
             });
 
-            await onSave(annotations, blob, isAutoSave);
+            await onSave(annotations, blob, isAutoSave, {
+                scale: savedScale,
+                x: savedPos.x,
+                y: savedPos.y,
+            });
         } catch (error) {
             console.error('Erro ao salvar:', error);
             toast.error("Erro ao salvar anotações");

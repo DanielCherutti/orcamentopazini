@@ -8,6 +8,7 @@ import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
 import { getNextBudgetNumberAction } from "@/actions/budget-core-read-actions";
 import { duplicateCompositorBlocks } from "@/actions/budget-core-duplicate-internals";
+import { buildDuplicatedBudgetItemContent } from "@/actions/budget-hierarchy-helpers";
 
 export async function duplicateBudgetAction(
     budgetId: string,
@@ -98,21 +99,14 @@ export async function duplicateBudgetAction(
                     const origSecRecordId = new StringRecordId(String(sec.id));
 
                     const itemsRes = await db.query<[Array<Record<string, unknown>>]>(
-                        "SELECT * FROM budget_item WHERE section_id = $secId",
+                        "SELECT * FROM budget_item WHERE section_id = $secId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC",
                         { secId: origSecRecordId }
                     );
                     const items = itemsRes?.[0] || [];
                     for (const item of items) {
                         await db.create(new Table("budget_item")).content({
+                            ...buildDuplicatedBudgetItemContent(item as Record<string, unknown>),
                             section_id: new StringRecordId(newSecId),
-                            product_id: item.product_id,
-                            quantity: item.quantity,
-                            unit_price: item.unit_price,
-                            labor_cost: item.labor_cost ?? 0,
-                            total: item.total,
-                            group_id: item.group_id,
-                            group_name: item.group_name,
-                            created_at: new Date().toISOString(),
                         });
                     }
                 }

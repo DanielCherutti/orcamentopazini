@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/lib/toast";
-import { Layers, Search } from "lucide-react";
+import { ChevronRight, Layers, Search } from "lucide-react";
 import {
   listProductGroupsWithProductsAction,
   getProductGroupProductsAction,
@@ -66,6 +66,17 @@ export function AddGroupDialog({
   const [quantities, setQuantities] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
+  /** Índices de grupos com lista de produtos expandida (por padrão todos recolhidos). */
+  const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
+
+  const toggleGroupExpanded = useCallback((groupIdx: number) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupIdx)) next.delete(groupIdx);
+      else next.add(groupIdx);
+      return next;
+    });
+  }, []);
 
   // Carrega grupos e produtos; usa índice do array como chave interna
   useEffect(() => {
@@ -74,6 +85,7 @@ export function AddGroupDialog({
     setSearch("");
     setSelectedKeys(new Set());
     setQuantities(new Map());
+    setExpandedGroups(new Set());
 
     listProductGroupsWithProductsAction()
       .then(async (res) => {
@@ -262,11 +274,28 @@ export function AddGroupDialog({
                   const products = groupProducts[idx] ?? [];
                   if (products.length === 0) return null;
 
+                  const isExpanded = expandedGroups.has(idx);
+
                   return (
                     <div key={idx} className="space-y-2">
                       {/* Cabeçalho do grupo */}
                       <div className="flex items-center justify-between gap-2 px-2 py-1.5 rounded bg-muted/30 border-b">
-                        <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                          <button
+                            type="button"
+                            onClick={() => toggleGroupExpanded(idx)}
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors touch-manipulation"
+                            title={isExpanded ? "Recolher produtos" : "Ver produtos do grupo"}
+                            aria-expanded={isExpanded}
+                            aria-label={isExpanded ? "Recolher lista de produtos" : "Expandir lista de produtos"}
+                          >
+                            <ChevronRight
+                              className={cn(
+                                "h-4 w-4 transition-transform duration-200",
+                                isExpanded && "rotate-90"
+                              )}
+                            />
+                          </button>
                           {group.image_url ? (
                             <div className="relative w-8 h-8 rounded overflow-hidden bg-muted shrink-0">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -281,7 +310,14 @@ export function AddGroupDialog({
                               <Layers className="h-4 w-4 text-muted-foreground/40" />
                             </div>
                           )}
-                          <span className="text-sm font-semibold truncate">{group.name}</span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-sm font-semibold truncate block">{group.name}</span>
+                            {!isExpanded && (
+                              <span className="text-[11px] text-muted-foreground">
+                                {products.length} produto{products.length !== 1 ? "s" : ""} — clique na seta para ver
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <Button
                           type="button"
@@ -297,6 +333,7 @@ export function AddGroupDialog({
                       </div>
 
                       {/* Lista de produtos do grupo */}
+                      {isExpanded && (
                       <div className="space-y-1 pl-1">
                         {products.map((p) => {
                           const isSelectedHere = selectedKeys.has(ckey(idx, p.id));
@@ -338,6 +375,7 @@ export function AddGroupDialog({
                           );
                         })}
                       </div>
+                      )}
                     </div>
                   );
                 })}

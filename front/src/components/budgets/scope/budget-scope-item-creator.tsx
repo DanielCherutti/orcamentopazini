@@ -8,8 +8,8 @@ import { AddProductScopeDialog } from "@/components/budgets/scope/add-product-sc
 import { addGroupToSectionAction } from "@/actions/budget-hierarchy-section-items-actions";
 import { cn } from "@/lib/utils";
 
-/** Base visual comum: `Button variant="outline" size="sm"` do escopo (produto + grupo). */
-const SCOPE_OUTLINE_CONTROL_CLASS = "h-8 w-full gap-1.5 text-xs sm:w-auto";
+/** Tamanho/layout comum dos botões de adicionar no escopo (cor primária via `variant="default"`). */
+const SCOPE_ADD_CONTROL_CLASS = "h-8 w-full gap-1.5 text-xs sm:w-auto";
 
 export function ScopeItemCreator({
     sectionId,
@@ -24,10 +24,10 @@ export function ScopeItemCreator({
     return (
         <>
             <Button
-                variant="outline"
+                variant="default"
                 size="sm"
                 type="button"
-                className={cn("shrink-0", SCOPE_OUTLINE_CONTROL_CLASS)}
+                className={cn("shrink-0", SCOPE_ADD_CONTROL_CLASS)}
                 onClick={() => setOpen(true)}
             >
                 <Plus className="h-3.5 w-3.5 shrink-0" /> Adicionar produto
@@ -56,10 +56,10 @@ export function ScopeGroupAdder({
     return (
         <>
             <Button
-                variant="outline"
+                variant="default"
                 size="sm"
                 type="button"
-                className={cn("shrink-0", SCOPE_OUTLINE_CONTROL_CLASS)}
+                className={cn("shrink-0", SCOPE_ADD_CONTROL_CLASS)}
                 onClick={() => setOpen(true)}
             >
                 <Plus className="h-3.5 w-3.5 shrink-0" /> Adicionar Grupo de Produtos

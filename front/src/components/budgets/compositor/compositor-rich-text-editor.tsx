@@ -29,19 +29,33 @@ export function CollapsibleEditorSection({
   children,
   defaultOpen = true,
   rightContent,
+  open: openProp,
+  onOpenChange,
 }: {
   label: string;
   children: React.ReactNode;
   defaultOpen?: boolean;
   rightContent?: React.ReactNode;
+  /** Modo controlado (opcional). Se informado, `defaultOpen` é ignorado após o primeiro render. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [internalOpen, setInternalOpen] = useState(defaultOpen);
+  const isControlled = openProp !== undefined;
+  const open = isControlled ? openProp : internalOpen;
+
+  const toggle = () => {
+    const next = !open;
+    if (!isControlled) setInternalOpen(next);
+    onOpenChange?.(next);
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5">
         <button
           type="button"
-          onClick={() => setOpen((o) => !o)}
+          onClick={toggle}
           className="flex items-center gap-1 group text-left"
         >
           <ChevronRight

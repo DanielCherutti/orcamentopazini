@@ -25,6 +25,7 @@ import { CompositorItemCreator } from "@/components/budgets/compositor/composito
 import { AddGroupDialog } from "@/components/budgets/editor/add-group-dialog";
 import { BudgetImageGallery } from "@/components/budgets/budget-image-gallery";
 import { BudgetPhotoAnnotatorDialog } from "@/components/budgets/budget-photo-annotator-dialog";
+import { parseAnnotatorViewport } from "@/components/annotator/annotator-viewport-types";
 import { toast } from "@/lib/toast";
 import {
     addGroupToBlockAction,
@@ -190,6 +191,7 @@ function LocationRenderer({
                         typeof BudgetPhotoAnnotatorDialog
                     >[0]["initialAnnotations"]
                 }
+                initialEditorViewport={parseAnnotatorViewport(editingImage?.editor_viewport)}
                 open={!!editingImage}
                 onOpenChange={(open) => {
                     if (!open) setEditingImage(null);
@@ -457,6 +459,7 @@ function SectionRenderer({
                         typeof BudgetPhotoAnnotatorDialog
                     >[0]["initialAnnotations"]
                 }
+                initialEditorViewport={parseAnnotatorViewport(editingImage?.editor_viewport)}
                 open={!!editingImage}
                 onOpenChange={(open) => {
                     if (!open) setEditingImage(null);

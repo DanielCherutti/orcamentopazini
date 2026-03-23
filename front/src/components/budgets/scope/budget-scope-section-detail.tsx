@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Layers, Copy, Trash2, Pencil } from "lucide-react";
+import { Layers, Copy, Trash2, Pencil, FileText } from "lucide-react";
 import {
     Dialog,
     DialogContent,
@@ -17,6 +17,7 @@ import { toast } from "@/lib/toast";
 import { CompositorRichTextEditor, CollapsibleEditorSection } from "@/components/budgets/compositor/compositor-rich-text-editor";
 import { BudgetImageGallery } from "@/components/budgets/budget-image-gallery";
 import { BudgetPhotoAnnotatorDialog } from "@/components/budgets/budget-photo-annotator-dialog";
+import { parseAnnotatorViewport } from "@/components/annotator/annotator-viewport-types";
 import type { BudgetImage, BudgetItem } from "@/types/budget-types";
 import type { ScopeLocation, ScopeSection } from "@/actions/budget-scope-actions";
 import type { ProductGroup } from "@/actions/product-group-actions";
@@ -31,6 +32,17 @@ import { getBudgetImagesBySection, deleteBudgetImage } from "@/actions/budget-an
 import { formatCurrency } from "./budget-scope-utils";
 import { SortableItemsList } from "./budget-scope-sortable-items-list";
 import { ScopeGroupAdder, ScopeItemCreator } from "./budget-scope-item-creator";
+
+/** True se o HTML do editor estiver vazio (só tags/brancos). */
+function isRichTextContentEmpty(html: string | undefined | null): boolean {
+    if (html == null || !String(html).trim()) return true;
+    const text = String(html)
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&nbsp;/gi, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    return text.length === 0;
+}
 
 interface SectionDetailProps {
     sectionId: string;
@@ -62,6 +74,10 @@ export function SectionDetail({
     const [dupDialog, setDupDialog] = useState(false);
     const [dupName, setDupName] = useState("");
     const [dupSectioning, setDupSectioning] = useState(false);
+    const [descSectionOpen, setDescSectionOpen] = useState(() =>
+        !isRichTextContentEmpty(section?.description)
+    );
+    const descriptionSectionRef = useRef<HTMLDivElement>(null);
     const descDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
     const pendingDescRef = useRef<string | null>(null);
 
@@ -70,6 +86,12 @@ export function SectionDetail({
         pendingDescRef.current = null;
         if (descDebounce.current) clearTimeout(descDebounce.current);
     }, [sectionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    /** Ao trocar de trecho: descrição vazia → recolhido; com texto → expandido (não depende de salvamentos no mesmo trecho). */
+    useEffect(() => {
+        setDescSectionOpen(!isRichTextContentEmpty(section?.description));
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- apenas ao mudar `sectionId`
+    }, [sectionId]);
 
     useEffect(() => {
         return () => {
@@ -139,6 +161,15 @@ export function SectionDetail({
     };
 
     const total = items.reduce((sum, i) => sum + (Number(i.total) || 0), 0);
+
+    const descEmpty = isRichTextContentEmpty(description);
+
+    const focusDescriptionSection = () => {
+        setDescSectionOpen(true);
+        requestAnimationFrame(() => {
+            descriptionSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        });
+    };
 
     if (!section) return null;
 
@@ -301,18 +332,34 @@ export function SectionDetail({
                     <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
                         <ScopeItemCreator sectionId={sectionId} budgetId={budgetId} onSuccess={loadItems} />
                         <ScopeGroupAdder sectionId={sectionId} budgetId={budgetId} onSuccess={loadItems} />
+                        <Button
+                            type="button"
+                            variant="default"
+                            size="sm"
+                            className="h-8 w-full gap-1.5 text-xs sm:w-auto shrink-0"
+                            onClick={focusDescriptionSection}
+                        >
+                            <FileText className="h-3.5 w-3.5 shrink-0" />
+                            {descEmpty ? "Adicionar descrição" : "Editar descrição"}
+                        </Button>
                     </div>
                 )}
             </CollapsibleEditorSection>
 
-            <CollapsibleEditorSection label="Descrição do trecho">
-                <CompositorRichTextEditor
+            <div ref={descriptionSectionRef} id="budget-scope-section-description">
+                <CollapsibleEditorSection
+                    label="Descrição do trecho"
+                    open={descSectionOpen}
+                    onOpenChange={setDescSectionOpen}
+                >
+                    <CompositorRichTextEditor
                     key={sectionId}
                     value={description}
                     onChange={handleDescChange}
                     placeholder="Descreva o trecho..."
                 />
-            </CollapsibleEditorSection>
+                </CollapsibleEditorSection>
+            </div>
 
             <BudgetPhotoAnnotatorDialog
                 budgetId={budgetId}
@@ -339,6 +386,7 @@ export function SectionDetail({
                             typeof BudgetPhotoAnnotatorDialog
                         >[0]["initialAnnotations"]
                     }
+                    initialEditorViewport={parseAnnotatorViewport(editingImage.editor_viewport)}
                     open={!!editingImage}
                     onOpenChange={(open) => { if (!open) setEditingImage(null); }}
                     onSaved={() => {

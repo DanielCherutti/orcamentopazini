@@ -3,6 +3,12 @@ import { z } from "zod";
 // --- Zod Schemas ---
 
 // BudgetImage schema (used in sections and locations)
+export const annotatorViewportSchema = z.object({
+    scale: z.number(),
+    x: z.number(),
+    y: z.number(),
+});
+
 export const budgetImageSchema = z.object({
     id: z.string(),
     section_id: z.string().optional(),
@@ -13,6 +19,8 @@ export const budgetImageSchema = z.object({
     width: z.number(),
     height: z.number(),
     order_index: z.number().optional(),
+    /** Zoom/pan do anotador (Surreal: `editor_viewport`) */
+    editor_viewport: annotatorViewportSchema.nullish().optional(),
     annotations: z.array(z.record(z.string(), z.unknown())).optional(),
 });
 

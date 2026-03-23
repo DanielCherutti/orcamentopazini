@@ -25,6 +25,12 @@ import { reorderSectionItemsAction } from "@/actions/budget-hierarchy-section-it
 import { buildItemSegments, type ItemSegment } from "./budget-scope-utils";
 import { ScopeItemRow } from "./budget-scope-item-row";
 
+/** Id estável e único por segmento na lista (o mesmo grupo de catálogo pode aparecer em mais de um bloco). */
+function getSegmentSortableId(seg: ItemSegment): string {
+    if (seg.type === "standalone") return seg.item.id!;
+    return `group-block:${seg.items[0].id!}`;
+}
+
 export function SortableItemsList({
     items,
     budgetId,
@@ -51,9 +57,7 @@ export function SortableItemsList({
 
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
-    const segmentIds = segments.map((seg) =>
-        seg.type === "standalone" ? seg.item.id! : `group:${seg.id}`
-    );
+    const segmentIds = segments.map((seg) => getSegmentSortableId(seg));
 
     const flattenToIds = (segs: ItemSegment[]) =>
         segs.flatMap((seg) =>
@@ -81,9 +85,11 @@ export function SortableItemsList({
     };
 
     const handleGroupItemReorder = useCallback(
-        async (groupId: string, oldIdx: number, newIdx: number) => {
+        async (groupAnchorItemId: string, oldIdx: number, newIdx: number) => {
             const current = segmentsRef.current;
-            const segIdx = current.findIndex((s) => s.type === "group" && s.id === groupId);
+            const segIdx = current.findIndex(
+                (s) => s.type === "group" && s.items[0]?.id === groupAnchorItemId
+            );
             if (segIdx === -1) return;
             const seg = current[segIdx] as Extract<ItemSegment, { type: "group" }>;
             const newItems = arrayMove(seg.items, oldIdx, newIdx);
@@ -111,7 +117,7 @@ export function SortableItemsList({
                     {segments.map((seg) =>
                         seg.type === "standalone" ? (
                             <SortableStandaloneItem
-                                key={seg.item.id}
+                                key={getSegmentSortableId(seg)}
                                 item={seg.item}
                                 budgetId={budgetId}
                                 isReadOnly={isReadOnly}
@@ -120,7 +126,7 @@ export function SortableItemsList({
                             />
                         ) : (
                             <SortableGroup
-                                key={seg.id}
+                                key={getSegmentSortableId(seg)}
                                 seg={seg}
                                 sensors={sensors}
                                 budgetId={budgetId}
@@ -187,11 +193,12 @@ function SortableGroup({
     budgetId: string;
     isReadOnly: boolean;
     onRefresh: () => void;
-    onItemReorder: (groupId: string, oldIdx: number, newIdx: number) => void;
+    onItemReorder: (groupAnchorItemId: string, oldIdx: number, newIdx: number) => void;
     groups: ProductGroup[];
 }) {
+    const outerId = getSegmentSortableId(seg);
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-        id: `group:${seg.id}`,
+        id: outerId,
         disabled: isReadOnly,
     });
     const style = { transform: CSS.Transform.toString(transform), transition };
@@ -201,9 +208,13 @@ function SortableGroup({
         <div
             ref={setNodeRef}
             style={style}
-            className={cn(isDragging && "opacity-50 z-10 relative")}
+            className={cn(
+                "rounded-lg border border-border/70 bg-muted/20 py-1",
+                isDragging && "opacity-50 z-10 relative"
+            )}
         >
-            <div className="flex items-center gap-2 mt-2 mb-1 px-1">
+            {/* Cabeçalho do grupo — linhas + título */}
+            <div className="flex items-center gap-2 mb-2 px-2 pt-0.5">
                 {!isReadOnly && (
                     <button
                         {...attributes}
@@ -215,37 +226,47 @@ function SortableGroup({
                     </button>
                 )}
                 <div className="h-px flex-1 bg-border" />
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide shrink-0">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide shrink-0 max-w-[min(100%,14rem)] truncate text-center" title={seg.name}>
                     {seg.name}
                 </span>
                 <div className="h-px flex-1 bg-border" />
             </div>
-            <DndContext
-                id={`group-dnd-${seg.id}`}
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={(event) => {
-                    const { active, over } = event;
-                    if (!over || active.id === over.id) return;
-                    const oldIdx = seg.items.findIndex((i) => i.id === active.id);
-                    const newIdx = seg.items.findIndex((i) => i.id === over.id);
-                    if (oldIdx !== -1 && newIdx !== -1) onItemReorder(seg.id, oldIdx, newIdx);
-                }}
-            >
-                <SortableContext items={groupItemIds} strategy={verticalListSortingStrategy}>
-                    {seg.items.map((item) => (
-                        <SortableGroupItem
-                            key={item.id}
-                            item={item}
-                            budgetId={budgetId}
-                            isReadOnly={isReadOnly}
-                            onRefresh={onRefresh}
-                            groups={groups}
-                        />
-                    ))}
-                </SortableContext>
-            </DndContext>
-            <div className="h-px bg-border mt-1" />
+            {/* Itens com leve “trilho” à esquerda para fechar visualmente com o rodapé */}
+            <div className="mx-2 mb-1 border-s-2 border-primary/20 ps-2.5 rounded-bl-md">
+                <DndContext
+                    id={`group-dnd-${seg.items[0].id}`}
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={(event) => {
+                        const { active, over } = event;
+                        if (!over || active.id === over.id) return;
+                        const oldIdx = seg.items.findIndex((i) => i.id === active.id);
+                        const newIdx = seg.items.findIndex((i) => i.id === over.id);
+                        if (oldIdx !== -1 && newIdx !== -1) onItemReorder(seg.items[0].id!, oldIdx, newIdx);
+                    }}
+                >
+                    <SortableContext items={groupItemIds} strategy={verticalListSortingStrategy}>
+                        {seg.items.map((item) => (
+                            <SortableGroupItem
+                                key={item.id}
+                                item={item}
+                                budgetId={budgetId}
+                                isReadOnly={isReadOnly}
+                                onRefresh={onRefresh}
+                                groups={groups}
+                            />
+                        ))}
+                    </SortableContext>
+                </DndContext>
+            </div>
+            {/* Rodapé espelhado — deixa explícito onde o grupo termina */}
+            <div className="flex items-center gap-2 mt-1 px-2 pb-0.5">
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-[10px] font-medium text-muted-foreground/90 uppercase tracking-wider shrink-0 whitespace-nowrap">
+                    Fim do grupo
+                </span>
+                <div className="h-px flex-1 bg-border" />
+            </div>
         </div>
     );
 }

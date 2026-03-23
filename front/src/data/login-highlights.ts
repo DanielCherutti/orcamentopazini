@@ -13,6 +13,48 @@ export const LOGIN_HIGHLIGHTS_SUBTITLE =
 
 export const loginHighlights: LoginHighlight[] = [
   {
+    kind: "improvement",
+    date: "2026-03-27",
+    title: "Foto do trecho: zoom e posição lembrados",
+    description:
+      "Ao reabrir o anotador, o zoom e o deslocamento da imagem voltam como você deixou ao salvar (manual ou autosave).",
+  },
+  {
+    kind: "improvement",
+    date: "2026-03-27",
+    title: "Adicionar grupo: lista de produtos recolhida",
+    description:
+      "No modal de grupos, cada kit começa fechado com uma seta para expandir e ver os produtos; dá para marcar “Selecionar disponíveis” sem abrir a lista.",
+  },
+  {
+    kind: "feature",
+    date: "2026-03-27",
+    title: "Escopo: botão Adicionar descrição",
+    description:
+      "Ao lado de Adicionar produto e Adicionar grupo, um atalho abre a descrição do trecho (por padrão recolhida quando está vazia) e leva o foco até o editor.",
+  },
+  {
+    kind: "improvement",
+    date: "2026-03-27",
+    title: "Escopo: botões de ação na cor primária",
+    description:
+      "Adicionar produto, Adicionar grupo de produtos e Adicionar descrição usam o azul da marca para ficarem consistentes com o restante do sistema.",
+  },
+  {
+    kind: "improvement",
+    date: "2026-03-27",
+    title: "Grupos no escopo mais fáceis de ler",
+    description:
+      "Cada bloco de grupo ganhou moldura leve, trilho à esquerda e um rodapé “Fim do grupo” espelhando o título, para ver claramente onde o kit termina.",
+  },
+  {
+    kind: "fix",
+    date: "2026-03-27",
+    title: "Duplicar trecho igual ao original",
+    description:
+      "Ao duplicar um trecho, ordem dos itens, grupos, quantidades, textos do produto e notas são copiados como na lista — inclusive mais de um uso do mesmo grupo no mesmo trecho.",
+  },
+  {
     kind: "fix",
     date: "2026-03-26",
     title: "Primeiro acesso pelo convite",

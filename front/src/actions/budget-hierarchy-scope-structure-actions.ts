@@ -7,7 +7,7 @@ import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
 import { serializeBudgetEntity } from "@/actions/budget-shared";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
-import { recalculateBudgetTotal } from "@/actions/budget-hierarchy-helpers";
+import { buildDuplicatedBudgetItemContent, recalculateBudgetTotal } from "@/actions/budget-hierarchy-helpers";
 
 export async function updateLocationAction(
     locationId: string,
@@ -209,7 +209,7 @@ export async function duplicateSectionAction(sectionId: string, budgetId: string
         if (!original) return { success: false, error: "Trecho não encontrado" };
 
         const itemsRes = await db.query<[Array<Record<string, unknown>>]>(
-            "SELECT * FROM budget_item WHERE section_id = $secId",
+            "SELECT * FROM budget_item WHERE section_id = $secId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC",
             { secId: secRecordId }
         );
         const items = itemsRes?.[0] || [];
@@ -227,15 +227,8 @@ export async function duplicateSectionAction(sectionId: string, budgetId: string
 
         for (const item of items) {
             await db.create(new Table("budget_item")).content({
+                ...buildDuplicatedBudgetItemContent(item as Record<string, unknown>),
                 section_id: new StringRecordId(newSectionId),
-                product_id: item.product_id,
-                quantity: item.quantity,
-                unit_price: item.unit_price,
-                labor_cost: item.labor_cost ?? 0,
-                total: item.total,
-                group_id: item.group_id,
-                group_name: item.group_name,
-                created_at: new Date().toISOString(),
             });
         }
 
@@ -342,21 +335,14 @@ export async function duplicateLocationAction(locationId: string, budgetId: stri
             const newSectionId = String(createdSec.id);
 
             const itemsRes = await db.query<[Array<Record<string, unknown>>]>(
-                "SELECT * FROM budget_item WHERE section_id = $secId",
+                "SELECT * FROM budget_item WHERE section_id = $secId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC",
                 { secId: origSecRecordId }
             );
             const items = itemsRes?.[0] || [];
             for (const item of items) {
                 await db.create(new Table("budget_item")).content({
+                    ...buildDuplicatedBudgetItemContent(item as Record<string, unknown>),
                     section_id: new StringRecordId(newSectionId),
-                    product_id: item.product_id,
-                    quantity: item.quantity,
-                    unit_price: item.unit_price,
-                    labor_cost: item.labor_cost ?? 0,
-                    total: item.total,
-                    group_id: item.group_id,
-                    group_name: item.group_name,
-                    created_at: new Date().toISOString(),
                 });
             }
         }

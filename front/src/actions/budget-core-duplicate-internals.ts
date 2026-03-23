@@ -1,4 +1,5 @@
 import { Table, StringRecordId } from "surrealdb";
+import { buildDuplicatedBudgetItemContent } from "@/actions/budget-hierarchy-helpers";
 
 type BudgetDb = Awaited<ReturnType<typeof import("@/lib/surreal").getDb>>;
 
@@ -55,21 +56,14 @@ export async function duplicateCompositorBlocks(
     for (const [origBlockId, newBlockRecordId] of oldToNew.entries()) {
         const origBlockRecordId = new StringRecordId(origBlockId);
         const itemsRes = await db.query<[Array<Record<string, unknown>>]>(
-            "SELECT * FROM budget_item WHERE block_id = $blockId",
+            "SELECT * FROM budget_item WHERE block_id = $blockId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC",
             { blockId: origBlockRecordId }
         );
         const items = itemsRes[0] || [];
         for (const item of items) {
             await db.create(new Table("budget_item")).content({
+                ...buildDuplicatedBudgetItemContent(item),
                 block_id: newBlockRecordId,
-                product_id: item.product_id,
-                quantity: item.quantity,
-                unit_price: item.unit_price,
-                labor_cost: item.labor_cost ?? 0,
-                total: item.total,
-                group_id: item.group_id,
-                group_name: item.group_name,
-                created_at: new Date().toISOString(),
             });
         }
     }

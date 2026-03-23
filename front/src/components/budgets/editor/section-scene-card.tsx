@@ -7,6 +7,7 @@ import { InlineItemCreator } from "./inline-item-creator";
 import { AddGroupDialog } from "./add-group-dialog";
 import { BudgetImageGallery } from "../budget-image-gallery";
 import { BudgetPhotoAnnotatorDialog } from "../budget-photo-annotator-dialog";
+import { parseAnnotatorViewport } from "@/components/annotator/annotator-viewport-types";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { EditableTitle } from "./editable-title";
 import { Button } from "@/components/ui/button";
@@ -432,6 +433,7 @@ export function SectionSceneCard({ section, budget_id, sectionNumber, onRefresh 
                         return raw ? (typeof window !== "undefined" ? new URL(raw, window.location.origin).href : raw) : null;
                     })()}
                     initialAnnotations={(editingImage?.annotations ?? []) as unknown as ImageAnnotation[]}
+                    initialEditorViewport={parseAnnotatorViewport(editingImage?.editor_viewport)}
                     open={!!editingImage}
                     onOpenChange={(open) => !open && setEditingImage(null)}
                     onRefresh={onRefresh}

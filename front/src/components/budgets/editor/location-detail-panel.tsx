@@ -8,6 +8,7 @@ import { SectionDetail } from "../scope/budget-scope-section-detail";
 import { budgetLocationsToScopeLocations, budgetSectionToScopeSection } from "./budget-editor-scope-adapters";
 import { BudgetImageGallery } from "../budget-image-gallery";
 import { BudgetPhotoAnnotatorDialog } from "../budget-photo-annotator-dialog";
+import { parseAnnotatorViewport } from "@/components/annotator/annotator-viewport-types";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { EditableTitle } from "./editable-title";
 import { Button } from "@/components/ui/button";
@@ -298,6 +299,7 @@ export function LocationDetailPanel({
           return raw ? (typeof window !== "undefined" ? new URL(raw, window.location.origin).href : raw) : null;
         })()}
           initialAnnotations={(editingImage?.annotations ?? []) as unknown as ImageAnnotation[]}
+          initialEditorViewport={parseAnnotatorViewport(editingImage?.editor_viewport)}
           open={!!editingImage}
           onOpenChange={(open) => !open && setEditingImage(null)}
           onRefresh={onRefresh}
