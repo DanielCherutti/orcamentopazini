@@ -209,6 +209,29 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
         }
     };
 
+    const formatCnpjDisplay = (cnpj: string | undefined) => {
+        if (!cnpj?.trim()) return "";
+        const d = cnpj.replace(/\D/g, "");
+        if (d.length !== 14) return cnpj.trim();
+        return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+    };
+
+    const clientCell = (budget: Budget) => {
+        const name = budget.client_name?.trim();
+        const cnpj = formatCnpjDisplay(budget.client_cnpj);
+        if (!name && !cnpj) {
+            return <span className="text-muted-foreground">—</span>;
+        }
+        return (
+            <div className="min-w-0 max-w-[14rem]">
+                {name ? <div className="font-medium leading-snug [overflow-wrap:anywhere]">{name}</div> : null}
+                {cnpj ? (
+                    <div className="text-xs text-muted-foreground tabular-nums mt-0.5">{cnpj}</div>
+                ) : null}
+            </div>
+        );
+    };
+
     const total = meta?.total ?? 0;
     const totalPages = meta?.totalPages ?? 1;
     const currentPage = meta?.page ?? 1;
@@ -245,6 +268,15 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                                 <div className="flex items-center">
                                     Título
                                     {getSortIcon("title")}
+                                </div>
+                            </th>
+                            <th
+                                className="h-10 px-4 text-left font-medium text-muted-foreground min-w-[11rem] max-w-[16rem] cursor-pointer hover:bg-muted/50 transition-colors group"
+                                onClick={() => handleSort("client_name")}
+                            >
+                                <div className="flex items-center">
+                                    Cliente
+                                    {getSortIcon("client_name")}
                                 </div>
                             </th>
                             <th
@@ -285,6 +317,7 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                                 <tr key={budget.id} className="border-b border-border hover:bg-muted/20 transition-colors">
                                     <td className="p-4 align-middle font-medium">{budget.code || "---"}</td>
                                     <td className="p-4 align-middle">{budget.title || "---"}</td>
+                                    <td className="p-4 align-middle">{clientCell(budget)}</td>
                                     <td className="p-4 align-middle">
                                         <div className="flex justify-center">{getStatusBadge(budget.status)}</div>
                                     </td>
@@ -351,7 +384,7 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                                <td colSpan={7} className="p-8 text-center text-muted-foreground">
                                     {query ? `Nenhum orçamento encontrado para \"${query}\"` : "Nenhum orçamento cadastrado"}
                                 </td>
                             </tr>
@@ -369,6 +402,20 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                                 <div className="min-w-0">
                                     <div className="font-semibold truncate">{b.title || "Sem título"}</div>
                                     <div className="text-xs text-muted-foreground truncate">{b.code || "---"}</div>
+                                    {(b.client_name?.trim() || formatCnpjDisplay(b.client_cnpj)) && (
+                                        <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                                            {b.client_name?.trim() ? (
+                                                <div className="font-medium text-foreground/80 [overflow-wrap:anywhere]">
+                                                    {b.client_name.trim()}
+                                                </div>
+                                            ) : null}
+                                            {formatCnpjDisplay(b.client_cnpj) ? (
+                                                <div className="tabular-nums">
+                                                    {formatCnpjDisplay(b.client_cnpj)}
+                                                </div>
+                                            ) : null}
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="flex shrink-0 items-center">{getStatusBadge(b.status)}</div>
                             </div>

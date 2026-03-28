@@ -77,15 +77,31 @@ export async function getBudgetAction(
     }
 }
 
+/** Maior sequência numérica já usada em `budget.code` (ex.: "00042" → 42). Ignora códigos não numéricos. */
+function maxNumericBudgetCode(rows: Array<{ code: unknown }> | undefined): number {
+    let maxSeq = 0;
+    for (const row of rows ?? []) {
+        const raw = row.code;
+        if (raw == null) continue;
+        const s = String(raw).trim();
+        if (!s) continue;
+        const n = Number.parseInt(s, 10);
+        if (!Number.isNaN(n) && n >= 0) {
+            maxSeq = Math.max(maxSeq, n);
+        }
+    }
+    return maxSeq;
+}
+
 export async function getNextBudgetNumberAction() {
     const auth = await assertActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();
     try {
-        const countQuery = await db.query<[{ count: number }[]]>("SELECT count() FROM budget GROUP ALL");
-        const totalBudgets = countQuery[0]?.[0]?.count || 0;
-        const sequence = totalBudgets + 1;
+        const codesRes = await db.query<[Array<{ code: unknown }>]>("SELECT code FROM budget");
+        const rows = codesRes[0] ?? [];
+        const sequence = maxNumericBudgetCode(rows) + 1;
         const nextNumber = sequence.toString().padStart(5, "0");
 
         return {

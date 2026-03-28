@@ -24,21 +24,41 @@ export async function getBudgetsAction(params?: {
   const sortOrder = params?.sortOrder || "desc";
 
   try {
-    let sql = `SELECT * FROM budget`;
-    const queryParams: Record<string, string> = {};
+    const budgetsResult = await db.query<[Budget[]]>("SELECT * FROM budget FETCH client_id");
+    let allBudgets = (budgetsResult[0] || []).map(serializeBudgetEntity);
 
-    if (search) {
-      sql += ` WHERE (code CONTAINS $search OR title CONTAINS $search)`;
-      queryParams.search = search;
+    const q = search.trim().toLowerCase();
+    if (q) {
+      const qDigits = q.replace(/\D/g, "");
+      allBudgets = allBudgets.filter((b) => {
+        const rec = b as Record<string, unknown>;
+        const code = String(rec.code ?? "").toLowerCase();
+        const title = String(rec.title ?? "").toLowerCase();
+        const clientName = String(rec.client_name ?? "").toLowerCase();
+        const cnpjRaw = String(rec.client_cnpj ?? "");
+        const cnpjLower = cnpjRaw.toLowerCase();
+        const cnpjDigits = cnpjRaw.replace(/\D/g, "");
+        return (
+          code.includes(q) ||
+          title.includes(q) ||
+          clientName.includes(q) ||
+          cnpjLower.includes(q) ||
+          (qDigits.length > 0 && cnpjDigits.includes(qDigits))
+        );
+      });
     }
-
-    const budgetsResult = await db.query<[Budget[]]>(sql, queryParams);
-    const allBudgets = (budgetsResult[0] || []).map(serializeBudgetEntity);
 
     const total = allBudgets.length;
 
     const collator = new Intl.Collator("pt-BR", { sensitivity: "base" });
     allBudgets.sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
+      if (sortBy === "client_name") {
+        const an = String(a.client_name ?? "").toLowerCase();
+        const bn = String(b.client_name ?? "").toLowerCase();
+        const comparison = collator.compare(an, bn);
+        return sortOrder === "asc" ? comparison : -comparison;
+      }
+
       const aValue = a?.[sortBy];
       const bValue = b?.[sortBy];
 

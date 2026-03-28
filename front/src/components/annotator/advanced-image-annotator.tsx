@@ -339,7 +339,6 @@ export function AdvancedImageAnnotator({
             style: { ...DEFAULT_STYLE },
         };
         updateAnnotations(prev => [...prev, newArrow]);
-        setSelectedTool('select');
     }, [updateAnnotations]);
 
     // Keyboard support — Delete/Backspace para remover anotação selecionada
@@ -561,7 +560,6 @@ export function AdvancedImageAnnotator({
             };
 
             updateAnnotations([...annotations, newSticker]);
-            setSelectedTool('select');
         }
     };
 
@@ -622,7 +620,7 @@ export function AdvancedImageAnnotator({
                 };
                 updateAnnotations((prev) => [...prev, newAnnotation]);
             }
-            setIsDrawingArrow(false); setArrowStartPoint(null); setTempArrowEnd(null); setSelectedTool('select');
+            setIsDrawingArrow(false); setArrowStartPoint(null); setTempArrowEnd(null);
         } else if (isDrawingRect && rectStartPoint && tempRectEnd) {
             const width = Math.abs(tempRectEnd.x - rectStartPoint.x);
             const height = Math.abs(tempRectEnd.y - rectStartPoint.y);
@@ -638,7 +636,7 @@ export function AdvancedImageAnnotator({
                 };
                 updateAnnotations((prev) => [...prev, newAnnotation]);
             }
-            setIsDrawingRect(false); setRectStartPoint(null); setTempRectEnd(null); setSelectedTool('select');
+            setIsDrawingRect(false); setRectStartPoint(null); setTempRectEnd(null);
         }
     };
 
@@ -665,7 +663,6 @@ export function AdvancedImageAnnotator({
                 style: { ...DEFAULT_STYLE }
             }]);
             setStepCounter(stepCounter + 1);
-            setSelectedTool('select');
         } else if (selectedTool === 'text') {
             updateAnnotations([...annotations, {
                 id: generateAnnotationId(),
@@ -675,7 +672,6 @@ export function AdvancedImageAnnotator({
                 fontSize: 14, width: 200, padding: 8, backgroundColor: 'transparent',
                 style: { ...DEFAULT_STYLE }
             }]);
-            setSelectedTool('select');
         } else if (selectedTool === 'polyline') {
             setIsDrawingPolyline(true);
             setPolylinePoints(prev => {
@@ -724,7 +720,6 @@ export function AdvancedImageAnnotator({
         };
         updateAnnotations([...annotations, newSticker]);
         setInsertImageDialogOpen(false);
-        setSelectedTool('select');
     };
 
     const handleEditStart = (id: string, toolType: 'text' | 'step_number' | 'polyline') => {
@@ -807,7 +802,6 @@ export function AdvancedImageAnnotator({
             setEditFontColor(DEFAULT_STYLE.color);
             setEditPolylineStrokeWidth(2);
             setEditPolylineLineStyle('solid');
-            setSelectedTool('select');
         }
         e.cancelBubble = true;
     };
@@ -822,7 +816,6 @@ export function AdvancedImageAnnotator({
                 setPolylinePoints([]);
                 polylinePointsRef.current = [];
                 setPolylineTempEnd(null);
-                setSelectedTool('select');
             }
         };
         window.addEventListener('keydown', handleEscKey);

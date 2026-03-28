@@ -26,8 +26,7 @@ export function serializeBudgetEntity<T extends DbEntity>(item: T): T {
   }
 
   // Relations:
-  // - client_id é tipado como string no Budget — sempre extrair apenas o ID.
-  //   Se vier como objeto (via FETCH), pega apenas o .id para evitar objeto no estado React.
+  // - client_id: string id. Se vier expandido (FETCH), também preenche client_name / client_cnpj.
   // - Demais relações: preservar o objeto se vier via FETCH (product_id usa dados para UI).
   // Serializa campos de data para ISO string
   if (newItem.created_at) newItem.created_at = String(newItem.created_at);
@@ -59,7 +58,15 @@ export function serializeBudgetEntity<T extends DbEntity>(item: T): T {
     return String(value);
   };
 
-  newItem.client_id = serializeRelationAsId(newItem.client_id);
+  const rawClient = newItem.client_id;
+  if (rawClient && typeof rawClient === "object" && !Array.isArray(rawClient) && "id" in rawClient) {
+    const c = rawClient as Record<string, unknown>;
+    newItem.client_id = String(c.id ?? "");
+    if (c.name != null) newItem.client_name = String(c.name);
+    if (c.cnpj != null) newItem.client_cnpj = String(c.cnpj);
+  } else {
+    newItem.client_id = serializeRelationAsId(rawClient);
+  }
   newItem.budget_id = serializeRelation(newItem.budget_id);
   newItem.location_id = serializeRelation(newItem.location_id);
   newItem.section_id = serializeRelation(newItem.section_id);
