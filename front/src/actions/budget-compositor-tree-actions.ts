@@ -12,7 +12,10 @@ import {
     ensureCompositorTocBlockAction,
 } from "@/actions/budget-compositor-block-actions";
 
-export async function getCompositorTreeAction(budgetId: string): Promise<{
+async function loadCompositorTreeData(
+    budgetId: string,
+    options: { ensureBlocks: boolean }
+): Promise<{
     success: boolean;
     blocks?: BudgetBlockFlat[];
     items?: Record<string, BudgetItem[]>;
@@ -26,8 +29,10 @@ export async function getCompositorTreeAction(budgetId: string): Promise<{
     try {
         const budgetRecordId = requireRecordId("budget", budgetId);
 
-        await ensureCompositorCoverBlockAction(budgetId);
-        await ensureCompositorTocBlockAction(budgetId);
+        if (options.ensureBlocks) {
+            await ensureCompositorCoverBlockAction(budgetId);
+            await ensureCompositorTocBlockAction(budgetId);
+        }
 
         const blocksRes = await db.query<[BudgetBlockFlat[]]>(
             "SELECT * FROM budget_block WHERE budget_id = $budgetId AND deleted_at IS NONE ORDER BY order_index ASC",
@@ -79,8 +84,33 @@ export async function getCompositorTreeAction(budgetId: string): Promise<{
         if (error instanceof InvalidRecordIdError) {
             return { success: false, error: error.message };
         }
-        console.error("getCompositorTreeAction error:", error);
+        console.error("loadCompositorTreeData error:", error);
         if (isTokenExpiredError(error)) resetDb();
         return { success: false, error: "Erro ao carregar árvore do documento" };
     }
+}
+
+/** Árvore + itens + imagens (garante capa/sumário/figuras na raiz ao editar). */
+export async function getCompositorTreeAction(budgetId: string): Promise<{
+    success: boolean;
+    blocks?: BudgetBlockFlat[];
+    items?: Record<string, BudgetItem[]>;
+    imagesByBlock?: Record<string, unknown[]>;
+    error?: string;
+}> {
+    return loadCompositorTreeData(budgetId, { ensureBlocks: true });
+}
+
+/**
+ * Mesmo payload que getCompositorTreeAction, sem mutar blocos no banco.
+ * Uso: geração de PDF / leitura (evita reordenar raiz ao só abrir o PDF).
+ */
+export async function getCompositorTreeSnapshotAction(budgetId: string): Promise<{
+    success: boolean;
+    blocks?: BudgetBlockFlat[];
+    items?: Record<string, BudgetItem[]>;
+    imagesByBlock?: Record<string, unknown[]>;
+    error?: string;
+}> {
+    return loadCompositorTreeData(budgetId, { ensureBlocks: false });
 }

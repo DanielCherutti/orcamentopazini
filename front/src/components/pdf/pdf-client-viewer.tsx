@@ -3,6 +3,7 @@
 import React from 'react';
 import dynamic from 'next/dynamic';
 import { ProposalDocument } from './proposal-document';
+import type { CompositorPdfPayload } from './compositor-pdf-types';
 import type { Budget } from '@/types/budget-types';
 import type { ProposalSettings } from '@/actions/settings-actions';
 
@@ -18,9 +19,10 @@ const PDFViewer = dynamic(
 interface PdfClientViewerProps {
     budget: Budget;
     settings: ProposalSettings;
+    compositorPdf?: CompositorPdfPayload;
 }
 
-export function PdfClientViewer({ budget, settings }: PdfClientViewerProps) {
+export function PdfClientViewer({ budget, settings, compositorPdf }: PdfClientViewerProps) {
     return (
         <div className="w-full h-[calc(100vh-64px)] bg-slate-100 flex flex-col">
             <div className="p-4 bg-white shadow flex justify-between items-center">
@@ -28,7 +30,7 @@ export function PdfClientViewer({ budget, settings }: PdfClientViewerProps) {
                 <span className="text-sm text-muted-foreground">O PDF é gerado em tempo real no cliente.</span>
             </div>
             <PDFViewer className="flex-1 w-full border-none shadow-inner">
-                <ProposalDocument budget={budget} settings={settings} />
+                <ProposalDocument budget={budget} settings={settings} compositorPdf={compositorPdf} />
             </PDFViewer>
         </div>
     );
