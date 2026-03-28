@@ -1,6 +1,15 @@
 "use client";
 
-import { useState, useEffect, useRef, type MouseEvent, type ReactNode } from "react";
+import {
+    useState,
+    useEffect,
+    useRef,
+    useCallback,
+    type KeyboardEvent,
+    type MouseEvent,
+    type PointerEvent as ReactPointerEvent,
+    type ReactNode,
+} from "react";
 import {
     Plus,
     Trash2,
@@ -58,6 +67,23 @@ import {
     moveSectionAction,
 } from "@/actions/budget-hierarchy-scope-structure-actions";
 import type { Selection } from "./budget-scope-types";
+
+const SCOPE_SIDEBAR_WIDTH_STORAGE_KEY = "pazini-scope-sidebar-width-px";
+const SCOPE_SIDEBAR_WIDTH_DEFAULT = 320;
+const SCOPE_SIDEBAR_WIDTH_MIN = 240;
+const SCOPE_SIDEBAR_WIDTH_MAX = 560;
+
+function clampScopeSidebarWidth(px: number): number {
+    return Math.min(SCOPE_SIDEBAR_WIDTH_MAX, Math.max(SCOPE_SIDEBAR_WIDTH_MIN, Math.round(px)));
+}
+
+function persistScopeSidebarWidth(px: number) {
+    try {
+        localStorage.setItem(SCOPE_SIDEBAR_WIDTH_STORAGE_KEY, String(px));
+    } catch {
+        /* ignore */
+    }
+}
 
 /** Zona para soltar trecho em local vazio — não pode ser igual ao id sortable do local. */
 const LOCATION_SECTION_DROP_PREFIX = "scope-drop-loc:";
@@ -206,6 +232,89 @@ export function ScopeSidebar({
     const dndSensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
     );
+
+    const [sidebarWidthPx, setSidebarWidthPx] = useState(SCOPE_SIDEBAR_WIDTH_DEFAULT);
+    const sidebarWidthRef = useRef(SCOPE_SIDEBAR_WIDTH_DEFAULT);
+
+    useEffect(() => {
+        sidebarWidthRef.current = sidebarWidthPx;
+    }, [sidebarWidthPx]);
+
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem(SCOPE_SIDEBAR_WIDTH_STORAGE_KEY);
+            if (!raw) return;
+            const n = Number.parseInt(raw, 10);
+            if (Number.isNaN(n)) return;
+            const clamped = clampScopeSidebarWidth(n);
+            sidebarWidthRef.current = clamped;
+            setSidebarWidthPx(clamped);
+        } catch {
+            /* ignore */
+        }
+    }, []);
+
+    const handleSidebarResizePointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const startX = e.clientX;
+        const startW = sidebarWidthRef.current;
+
+        const onMove = (ev: PointerEvent) => {
+            const delta = ev.clientX - startX;
+            const next = clampScopeSidebarWidth(startW + delta);
+            sidebarWidthRef.current = next;
+            setSidebarWidthPx(next);
+        };
+
+        const onUp = () => {
+            window.removeEventListener("pointermove", onMove);
+            window.removeEventListener("pointerup", onUp);
+            window.removeEventListener("pointercancel", onUp);
+            document.body.style.removeProperty("cursor");
+            document.body.style.removeProperty("user-select");
+            persistScopeSidebarWidth(sidebarWidthRef.current);
+        };
+
+        document.body.style.cursor = "col-resize";
+        document.body.style.userSelect = "none";
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", onUp);
+        window.addEventListener("pointercancel", onUp);
+    }, []);
+
+    const handleSidebarResizeKeyDown = useCallback((e: KeyboardEvent<HTMLDivElement>) => {
+        const step = e.shiftKey ? 32 : 16;
+        let next = sidebarWidthRef.current;
+        if (e.key === "ArrowLeft") {
+            e.preventDefault();
+            next = clampScopeSidebarWidth(next - step);
+        } else if (e.key === "ArrowRight") {
+            e.preventDefault();
+            next = clampScopeSidebarWidth(next + step);
+        } else if (e.key === "Home") {
+            e.preventDefault();
+            next = SCOPE_SIDEBAR_WIDTH_MIN;
+        } else if (e.key === "End") {
+            e.preventDefault();
+            next = SCOPE_SIDEBAR_WIDTH_MAX;
+        } else {
+            return;
+        }
+        sidebarWidthRef.current = next;
+        setSidebarWidthPx(next);
+        persistScopeSidebarWidth(next);
+    }, []);
+
+    const resetSidebarWidth = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const d = SCOPE_SIDEBAR_WIDTH_DEFAULT;
+        sidebarWidthRef.current = d;
+        setSidebarWidthPx(d);
+        persistScopeSidebarWidth(d);
+    }, []);
 
     const handleDragEnd = async (event: DragEndEvent) => {
         const { active, over } = event;
@@ -419,7 +528,32 @@ export function ScopeSidebar({
     const sectionCount = localLocations.reduce((n, l) => n + l.sections.length, 0);
 
     return (
-        <aside className="w-80 shrink-0 flex flex-col border-r border-primary/10 bg-gradient-to-b from-card via-card to-primary/[0.02] shadow-[inset_-1px_0_0_0_hsl(var(--border))]">
+        <aside
+            className="relative shrink-0 flex flex-col border-r border-primary/10 bg-gradient-to-b from-card via-card to-primary/[0.02] shadow-[inset_-1px_0_0_0_hsl(var(--border))]"
+            style={{ width: sidebarWidthPx }}
+        >
+            <div
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Redimensionar índice do escopo"
+                aria-valuenow={sidebarWidthPx}
+                aria-valuemin={SCOPE_SIDEBAR_WIDTH_MIN}
+                aria-valuemax={SCOPE_SIDEBAR_WIDTH_MAX}
+                tabIndex={0}
+                onPointerDown={handleSidebarResizePointerDown}
+                onDoubleClick={resetSidebarWidth}
+                onKeyDown={handleSidebarResizeKeyDown}
+                title="Arraste para ajustar a largura. Duplo clique para largura padrão."
+                className={cn(
+                    "group/resize absolute right-0 top-0 z-40 flex h-full w-3 -translate-x-1/2 cursor-col-resize touch-none select-none",
+                    "items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-0"
+                )}
+            >
+                <span
+                    className="h-12 w-1 rounded-full bg-border/80 transition-colors group-hover/resize:bg-primary/50"
+                    aria-hidden
+                />
+            </div>
             <div className="shrink-0 border-b border-primary/10 bg-primary/[0.06] px-3 py-3">
                 <div className="flex items-start gap-2.5">
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
