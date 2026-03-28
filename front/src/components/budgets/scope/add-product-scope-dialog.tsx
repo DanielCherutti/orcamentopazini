@@ -65,7 +65,7 @@ export function AddProductScopeDialog({
     return (
         <Dialog open={open} onOpenChange={onOpenChange} modal={false}>
             <DialogContent
-                className="sm:max-w-md"
+                className="flex max-h-[min(90dvh,calc(100dvh-2rem))] min-h-0 w-[min(52rem,calc(100vw-1.5rem))] max-w-[52rem] flex-col gap-0 overflow-hidden p-6 sm:max-w-[52rem]"
                 onPointerDownOutside={(e) => {
                     if (isInsideProductPopover(e.target)) e.preventDefault();
                 }}
@@ -76,12 +76,12 @@ export function AddProductScopeDialog({
                     if (isInsideProductPopover(e.target)) e.preventDefault();
                 }}
             >
-                <DialogHeader>
-                    <DialogTitle>Adicionar produto</DialogTitle>
+                <DialogHeader className="shrink-0 space-y-1 pb-2 text-left">
+                    <DialogTitle className="text-xl">Adicionar produto</DialogTitle>
                 </DialogHeader>
-                <div className="space-y-4 py-2">
+                <div className="min-h-0 flex-1 space-y-5 overflow-y-auto py-1">
                     <div className="space-y-2">
-                        <Label>Produto</Label>
+                        <Label className="text-sm font-semibold">Produto</Label>
                         <ProductSelector
                             popoverLayout="dialog"
                             selectedProduct={selected}
@@ -91,7 +91,15 @@ export function AddProductScopeDialog({
                         />
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="scope-add-product-qty">Quantidade</Label>
+                        <Label htmlFor="scope-add-product-qty">
+                            Quantidade
+                            {selected?.unit?.trim() ? (
+                                <span className="text-muted-foreground font-normal">
+                                    {" "}
+                                    ({selected.unit.trim()})
+                                </span>
+                            ) : null}
+                        </Label>
                         <Input
                             id="scope-add-product-qty"
                             type="number"
@@ -102,7 +110,7 @@ export function AddProductScopeDialog({
                         />
                     </div>
                 </div>
-                <DialogFooter className="gap-2 sm:gap-0">
+                <DialogFooter className="mt-4 shrink-0 gap-2 border-t pt-4 sm:gap-0">
                     <Button
                         type="button"
                         variant="outline"

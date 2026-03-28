@@ -3,7 +3,7 @@ import { safeStringRecordId } from "@/lib/surreal-record-ids";
 
 /**
  * Monta o conteúdo de uma nova linha `budget_item` a partir de uma existente (duplicação).
- * Preserva ordem e blocos de grupo (`order_index`, `group_id`/`group_name` e textos do produto).
+ * Preserva ordem e blocos de grupo (`order_index`, `group_id`/`group_name`/`group_instance_id` e textos do produto).
  */
 export function buildDuplicatedBudgetItemContent(item: Record<string, unknown>): Record<string, unknown> {
     const orderRaw = item.order_index;
@@ -26,6 +26,7 @@ export function buildDuplicatedBudgetItemContent(item: Record<string, unknown>):
 
     if (item.group_id != null) content.group_id = item.group_id;
     if (item.group_name != null) content.group_name = item.group_name;
+    if (item.group_instance_id != null) content.group_instance_id = item.group_instance_id;
     if (item.product_name != null) content.product_name = item.product_name;
     if (item.product_unit != null) content.product_unit = item.product_unit;
     if (item.notes != null) content.notes = item.notes;

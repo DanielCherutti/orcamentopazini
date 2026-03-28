@@ -17,6 +17,7 @@ import { useBudgetsRepository } from "@/lib/budgets/use-budgets-repository";
 import { toast } from "@/lib/toast";
 
 import type { BudgetItem } from "@/types/budget-types";
+import { buildItemSegments } from "@/lib/budgets/item-group-segment";
 
 interface ItemQuantityRowProps {
     item: BudgetItem;
@@ -97,80 +98,59 @@ interface ItemsListProps {
 function ItemsList({ items, onDelete, onUpdateQuantity, formatCurrency }: ItemsListProps) {
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
-    const toggleGroup = (groupId: string) => {
+    const toggleGroup = (segmentId: string) => {
         setExpandedGroups((prev) => {
             const next = new Set(prev);
-            if (next.has(groupId)) next.delete(groupId);
-            else next.add(groupId);
+            if (next.has(segmentId)) next.delete(segmentId);
+            else next.add(segmentId);
             return next;
         });
     };
 
-    // Separa itens avulsos de itens de grupo; agrupa por group_id
-    const { standalone, groups } = useMemo(() => {
-        const standalone: BudgetItem[] = [];
-        const groupMap = new Map<string, { name: string; items: BudgetItem[] }>();
-
-        for (const item of items) {
-            if (item.group_id) {
-                if (!groupMap.has(item.group_id)) {
-                    groupMap.set(item.group_id, { name: item.group_name ?? item.group_id, items: [] });
-                }
-                groupMap.get(item.group_id)!.items.push(item);
-            } else {
-                standalone.push(item);
-            }
-        }
-
-        return { standalone, groups: Array.from(groupMap.entries()) };
-    }, [items]);
+    const segments = useMemo(() => buildItemSegments(items), [items]);
 
     return (
         <>
-            {/* Itens avulsos */}
-            {standalone.map((item) => (
-                <ItemQuantityRow
-                    key={item.id}
-                    item={item}
-                    onDelete={onDelete}
-                    onUpdateQuantity={onUpdateQuantity}
-                    formatCurrency={formatCurrency}
-                />
-            ))}
-
-            {/* Grupos (accordion) */}
-            {groups.map(([groupId, group]) => {
-                const isExpanded = expandedGroups.has(groupId);
-                const groupTotal = group.items.reduce((sum, i) => sum + (i.total ?? 0), 0);
-                const itemCount = group.items.length;
-
-                return (
-                    <div key={groupId} className="border rounded-md overflow-hidden">
-                        {/* Linha do grupo */}
+            {segments.map((seg) =>
+                seg.type === "standalone" ? (
+                    <ItemQuantityRow
+                        key={seg.item.id}
+                        item={seg.item}
+                        onDelete={onDelete}
+                        onUpdateQuantity={onUpdateQuantity}
+                        formatCurrency={formatCurrency}
+                    />
+                ) : (
+                    <div key={seg.id} className="border rounded-md overflow-hidden">
                         <button
                             type="button"
-                            onClick={() => toggleGroup(groupId)}
+                            onClick={() => toggleGroup(seg.id)}
                             className="w-full grid grid-cols-12 gap-2 items-center px-2 py-2 bg-muted/40 hover:bg-muted/60 transition-colors text-sm"
                         >
                             <div className="col-span-12 md:col-span-5 flex items-center gap-2 text-left font-medium">
-                                {isExpanded ? <ChevronDown className="w-3.5 h-3.5 shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 shrink-0" />}
+                                {expandedGroups.has(seg.id) ? (
+                                    <ChevronDown className="w-3.5 h-3.5 shrink-0" />
+                                ) : (
+                                    <ChevronRight className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+                                )}
                                 <Layers className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-                                <span className="truncate">{group.name}</span>
-                                <span className="text-xs text-muted-foreground font-normal">({itemCount} produto{itemCount !== 1 ? "s" : ""})</span>
+                                <span className="truncate">{seg.name}</span>
+                                <span className="text-xs text-muted-foreground font-normal">
+                                    ({seg.items.length} produto{seg.items.length !== 1 ? "s" : ""})
+                                </span>
                             </div>
                             <div className="col-span-4 md:col-span-2" />
                             <div className="hidden md:block md:col-span-2" />
                             <div className="hidden md:block md:col-span-1" />
                             <div className="col-span-4 md:col-span-1 text-right font-semibold">
-                                {formatCurrency(groupTotal)}
+                                {formatCurrency(seg.items.reduce((sum, i) => sum + (i.total ?? 0), 0))}
                             </div>
                             <div className="col-span-4 md:col-span-1" />
                         </button>
 
-                        {/* Produtos do grupo */}
-                        {isExpanded && (
+                        {expandedGroups.has(seg.id) && (
                             <div className="space-y-px pl-4 pr-1 py-1 bg-muted/10">
-                                {group.items.map((item) => (
+                                {seg.items.map((item) => (
                                     <ItemQuantityRow
                                         key={item.id}
                                         item={item}
@@ -182,8 +162,8 @@ function ItemsList({ items, onDelete, onUpdateQuantity, formatCurrency }: ItemsL
                             </div>
                         )}
                     </div>
-                );
-            })}
+                )
+            )}
         </>
     );
 }

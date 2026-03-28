@@ -119,6 +119,7 @@ export async function addGroupToBlockAction(
         }
 
         let orderIndex = await nextOrderIndex(db, blockId);
+        const groupInstanceId = crypto.randomUUID();
         let inserted = 0;
         for (const product of productsRes.data) {
             const productId = canonicalTableRecordId("product", product.id);
@@ -137,6 +138,7 @@ export async function addGroupToBlockAction(
                 total: (unitPrice + laborCost) * quantity,
                 group_id: groupRecordId,
                 group_name: groupName,
+                group_instance_id: groupInstanceId,
                 order_index: orderIndex++,
                 created_at: new Date().toISOString(),
             });
@@ -233,13 +235,17 @@ export async function updateItemGroupInBlockAction(
     try {
         const itemRecordId = requireRecordId("budget_item", itemId);
         if (groupId === null) {
-            await db.query("UPDATE $item SET group_id = NONE, group_name = NONE", { item: itemRecordId });
+            await db.query(
+                "UPDATE $item SET group_id = NONE, group_name = NONE, group_instance_id = NONE",
+                { item: itemRecordId }
+            );
         } else {
             const groupRecordId = requireRecordId("product_group", groupId);
             await db.update(itemRecordId).merge({
                 group_id: groupRecordId,
                 group_name: groupName ?? "",
             });
+            await db.query("UPDATE $item SET group_instance_id = NONE", { item: itemRecordId });
         }
         revalidatePath(budgetRevalidatePath(budgetId));
         return { success: true };

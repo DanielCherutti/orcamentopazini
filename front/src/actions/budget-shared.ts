@@ -67,6 +67,7 @@ export function serializeBudgetEntity<T extends DbEntity>(item: T): T {
   if (newItem.block_id) newItem.block_id = String(newItem.block_id);
   if (newItem.parent_id) newItem.parent_id = String(newItem.parent_id);
   if (newItem.group_id) newItem.group_id = String(newItem.group_id);
+  if (newItem.group_instance_id) newItem.group_instance_id = String(newItem.group_instance_id);
 
   return newItem as T;
 }

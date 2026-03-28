@@ -13,14 +13,25 @@ import {
 } from "lucide-react";
 import {
     DndContext,
-    closestCenter,
+    DragOverlay,
+    closestCorners,
+    pointerWithin,
     PointerSensor,
     useSensor,
     useSensors,
     useDroppable,
+    useDndContext,
+    type CollisionDetection,
     type DragEndEvent,
 } from "@dnd-kit/core";
-import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
+import {
+    SortableContext,
+    useSortable,
+    verticalListSortingStrategy,
+    arrayMove,
+    defaultAnimateLayoutChanges,
+    type AnimateLayoutChanges,
+} from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,9 +54,129 @@ import {
     duplicateSectionAction,
     duplicateLocationAction,
     reorderSectionsAction,
+    reorderLocationsAction,
     moveSectionAction,
 } from "@/actions/budget-hierarchy-scope-structure-actions";
 import type { Selection } from "./budget-scope-types";
+
+/** Zona para soltar trecho em local vazio — não pode ser igual ao id sortable do local. */
+const LOCATION_SECTION_DROP_PREFIX = "scope-drop-loc:";
+/** Ids sortable de local (evita colisão com trechos no mesmo DndContext). */
+const LOCATION_SORT_PREFIX = "scope-sort-loc:";
+/** Ids sortable de trecho. */
+const SECTION_SORT_PREFIX = "scope-sort-sec:";
+
+const scopeSidebarCollision: CollisionDetection = (args) => {
+    const activeStr = String(args.active.id);
+    if (activeStr.startsWith(SECTION_SORT_PREFIX)) {
+        const byPointer = pointerWithin(args);
+        if (byPointer.length > 0) {
+            const sectionFirst = byPointer.filter((c) => String(c.id).startsWith(SECTION_SORT_PREFIX));
+            if (sectionFirst.length > 0) return sectionFirst;
+            return byPointer;
+        }
+    }
+    return closestCorners(args);
+};
+
+/**
+ * O alvo visual do drop costuma ser o droppable interno (`scope-drop-loc:`) ou um trecho,
+ * não o id sortable do local (`scope-sort-loc:`). Sem isto, o handler faz return e nada muda.
+ */
+function resolveLocationIdFromOver(overRaw: string, list: ScopeLocation[]): string | null {
+    if (overRaw.startsWith(LOCATION_SORT_PREFIX)) return stripLocationSortId(overRaw);
+    if (overRaw.startsWith(LOCATION_SECTION_DROP_PREFIX)) {
+        return overRaw.slice(LOCATION_SECTION_DROP_PREFIX.length);
+    }
+    if (overRaw.startsWith(SECTION_SORT_PREFIX)) {
+        const secId = stripSectionSortId(overRaw);
+        const loc = list.find((l) => l.sections.some((s) => s.id === secId));
+        return loc?.id ?? null;
+    }
+    return null;
+}
+
+const animateLocationItem: AnimateLayoutChanges = (args) => {
+    const aid = args.active?.id != null ? String(args.active.id) : "";
+    if (aid.startsWith(SECTION_SORT_PREFIX)) return false;
+    return defaultAnimateLayoutChanges(args);
+};
+
+const animateSectionItem: AnimateLayoutChanges = (args) => {
+    const aid = args.active?.id != null ? String(args.active.id) : "";
+    if (aid.startsWith(LOCATION_SORT_PREFIX)) return false;
+    return defaultAnimateLayoutChanges(args);
+};
+
+function stripLocationSortId(id: string): string {
+    return id.startsWith(LOCATION_SORT_PREFIX) ? id.slice(LOCATION_SORT_PREFIX.length) : id;
+}
+
+function stripSectionSortId(id: string): string {
+    return id.startsWith(SECTION_SORT_PREFIX) ? id.slice(SECTION_SORT_PREFIX.length) : id;
+}
+
+/** Preview do overlay: lê `active` do contexto — evita setState no pai em onDragStart (que quebrava o arraste). */
+function ScopeSidebarDragOverlay({
+    localLocations,
+    scopeNumber,
+}: {
+    localLocations: ScopeLocation[];
+    scopeNumber: string;
+}) {
+    const { active } = useDndContext();
+    if (!active) return null;
+    const dragId = String(active.id);
+
+    if (dragId.startsWith(LOCATION_SORT_PREFIX)) {
+        const locId = stripLocationSortId(dragId);
+        const loc = localLocations.find((l) => l.id === locId);
+        const idx = localLocations.findIndex((l) => l.id === locId) + 1;
+        if (!loc) return null;
+        return (
+            <div className="w-[min(100%,17.5rem)] rounded-lg border border-border/80 bg-background shadow-lg ring-1 ring-black/[0.06] dark:ring-white/[0.08]">
+                <div className="flex items-center gap-1.5 px-2 py-2">
+                    <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                        <MapIcon className="h-3.5 w-3.5 opacity-90" />
+                    </div>
+                    {scopeNumber && (
+                        <span className="shrink-0 rounded bg-muted px-1 py-0.5 font-mono text-[10px] font-medium tabular-nums text-muted-foreground">
+                            {scopeNumber}.{idx}.
+                        </span>
+                    )}
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight">{loc.name}</span>
+                </div>
+            </div>
+        );
+    }
+
+    if (dragId.startsWith(SECTION_SORT_PREFIX)) {
+        const secId = stripSectionSortId(dragId);
+        for (let li = 0; li < localLocations.length; li++) {
+            const l = localLocations[li];
+            const sec = l.sections.find((s) => s.id === secId);
+            if (!sec) continue;
+            const si = l.sections.findIndex((s) => s.id === secId) + 1;
+            return (
+                <div className="ml-1 w-[min(100%,16.5rem)] rounded-md border border-border/80 bg-background py-1.5 pl-2 pr-1 shadow-md ring-1 ring-black/[0.05] dark:ring-white/[0.06]">
+                    <div className="flex items-center gap-1">
+                        <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <Layers className="h-3.5 w-3.5 shrink-0 text-primary/50" />
+                        {scopeNumber && (
+                            <span className="shrink-0 rounded bg-muted/80 px-1 py-0.5 font-mono text-[10px] font-medium tabular-nums text-muted-foreground">
+                                {scopeNumber}.{li + 1}.{si}.
+                            </span>
+                        )}
+                        <span className="min-w-0 flex-1 truncate text-[12.5px] leading-snug">{sec.name}</span>
+                    </div>
+                </div>
+            );
+        }
+    }
+
+    return null;
+}
 
 interface ScopeSidebarProps {
     budgetId: string;
@@ -67,34 +198,94 @@ export function ScopeSidebar({
     scopeNumber,
 }: ScopeSidebarProps) {
     const [localLocations, setLocalLocations] = useState(locations);
-    const locationsRef = useRef(locations);
     useEffect(() => {
-        locationsRef.current = locations;
         // eslint-disable-next-line react-hooks/set-state-in-effect -- sincroniza com `locations` após refresh do pai
         setLocalLocations(locations);
     }, [locations]);
 
-    const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+    const dndSensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+    );
 
-    const handleSectionDragEnd = async (event: DragEndEvent) => {
+    const handleDragEnd = async (event: DragEndEvent) => {
         const { active, over } = event;
         if (!over || active.id === over.id) return;
-        const activeSectionId = active.id as string;
-        const overId = over.id as string;
-        const orig = locationsRef.current;
+        const activeId = String(active.id);
+        const overRaw = String(over.id);
+        const snapshot = localLocations.map((l) => ({ ...l, sections: [...l.sections] }));
 
-        const srcLoc = orig.find((l) => l.sections.some((s) => s.id === activeSectionId));
+        /* Reordenar locais do escopo */
+        if (activeId.startsWith(LOCATION_SORT_PREFIX)) {
+            const activeLocId = stripLocationSortId(activeId);
+            const overLocId = resolveLocationIdFromOver(overRaw, snapshot);
+            if (
+                !overLocId ||
+                !snapshot.some((l) => l.id === activeLocId) ||
+                !snapshot.some((l) => l.id === overLocId)
+            ) {
+                return;
+            }
+            const oldIdx = snapshot.findIndex((l) => l.id === activeLocId);
+            const newIdx = snapshot.findIndex((l) => l.id === overLocId);
+            if (oldIdx === -1 || newIdx === -1 || oldIdx === newIdx) return;
+            const reordered = arrayMove(snapshot, oldIdx, newIdx);
+            setLocalLocations(reordered);
+            const result = await reorderLocationsAction(
+                reordered.map((l) => l.id),
+                budgetId
+            );
+            if (!result.success) {
+                setLocalLocations(snapshot);
+                toast.error(result.error || "Erro ao reordenar locais");
+            }
+            return;
+        }
+
+        /* Trechos: reordenar dentro do local ou mover para outro local */
+        if (!activeId.startsWith(SECTION_SORT_PREFIX)) return;
+        const activeSectionId = stripSectionSortId(activeId);
+
+        const overLocIdFromChrome =
+            overRaw.startsWith(LOCATION_SECTION_DROP_PREFIX)
+                ? overRaw.slice(LOCATION_SECTION_DROP_PREFIX.length)
+                : overRaw.startsWith(LOCATION_SORT_PREFIX)
+                  ? stripLocationSortId(overRaw)
+                  : undefined;
+
+        const srcLoc = snapshot.find((l) => l.sections.some((s) => s.id === activeSectionId));
         if (!srcLoc) return;
 
         const tgtLoc =
-            orig.find((l) => l.id === overId) ??
-            orig.find((l) => l.sections.some((s) => s.id === overId));
+            (overLocIdFromChrome !== undefined
+                ? snapshot.find((l) => l.id === overLocIdFromChrome)
+                : undefined) ??
+            snapshot.find((l) => l.sections.some((s) => `${SECTION_SORT_PREFIX}${s.id}` === overRaw)) ??
+            (() => {
+                const lid = resolveLocationIdFromOver(overRaw, snapshot);
+                return lid ? snapshot.find((l) => l.id === lid) : undefined;
+            })();
         if (!tgtLoc) return;
 
         if (srcLoc.id === tgtLoc.id) {
-            const sections = srcLoc.sections;
+            const sections = [...srcLoc.sections];
             const oldIdx = sections.findIndex((s) => s.id === activeSectionId);
-            const newIdx = sections.findIndex((s) => s.id === overId);
+            let newIdx: number;
+            if (overRaw.startsWith(SECTION_SORT_PREFIX)) {
+                newIdx = sections.findIndex((s) => `${SECTION_SORT_PREFIX}${s.id}` === overRaw);
+            } else if (
+                overRaw.startsWith(LOCATION_SORT_PREFIX) ||
+                overRaw.startsWith(LOCATION_SECTION_DROP_PREFIX)
+            ) {
+                const lid =
+                    overRaw.startsWith(LOCATION_SORT_PREFIX)
+                        ? stripLocationSortId(overRaw)
+                        : overRaw.slice(LOCATION_SECTION_DROP_PREFIX.length);
+                if (lid !== srcLoc.id) return;
+                /* Soltou na barra ou na zona do cartão: topo da lista de trechos */
+                newIdx = 0;
+            } else {
+                return;
+            }
             if (oldIdx === -1 || newIdx === -1 || oldIdx === newIdx) return;
             const reordered = arrayMove(sections, oldIdx, newIdx);
             setLocalLocations((locs) =>
@@ -102,7 +293,7 @@ export function ScopeSidebar({
             );
             const result = await reorderSectionsAction(reordered.map((s) => s.id), budgetId);
             if (!result.success) {
-                setLocalLocations(orig);
+                setLocalLocations(snapshot);
                 toast.error("Erro ao reordenar trechos");
             }
         } else {
@@ -117,7 +308,7 @@ export function ScopeSidebar({
             );
             const result = await moveSectionAction(activeSectionId, tgtLoc.id, budgetId);
             if (!result.success) {
-                setLocalLocations(orig);
+                setLocalLocations(snapshot);
                 toast.error(result.error || "Erro ao mover trecho");
             } else onRefresh();
         }
@@ -256,8 +447,8 @@ export function ScopeSidebar({
             <div className="flex-1 overflow-y-auto min-h-0 [scrollbar-gutter:stable]">
                 <DndContext
                     sensors={dndSensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleSectionDragEnd}
+                    collisionDetection={scopeSidebarCollision}
+                    onDragEnd={handleDragEnd}
                 >
                     <nav className="p-2.5 space-y-2">
                         {localLocations.length === 0 && !addingLocation && (
@@ -269,24 +460,32 @@ export function ScopeSidebar({
                                 </p>
                             </div>
                         )}
-                        {localLocations.map((loc, locIdx) => (
-                            <LocationNode
-                                key={loc.id}
-                                location={loc}
-                                locIndex={locIdx + 1}
-                                scopeNumber={scopeNumber}
-                                budgetId={budgetId}
-                                selected={selected}
-                                expanded={expandedLocations.has(loc.id)}
-                                onToggleExpand={() => toggleExpanded(loc.id)}
-                                onSelect={onSelect}
-                                onRefresh={onRefresh}
-                                onDelete={(e) => handleDeleteLocation(loc.id, e)}
-                                onDuplicate={(e) => openDupLocDialog(loc.id, loc.name, e)}
-                                isReadOnly={isReadOnly}
-                            />
-                        ))}
+                        <SortableContext
+                            items={localLocations.map((l) => `${LOCATION_SORT_PREFIX}${l.id}`)}
+                            strategy={verticalListSortingStrategy}
+                        >
+                            {localLocations.map((loc, locIdx) => (
+                                <LocationNode
+                                    key={loc.id}
+                                    location={loc}
+                                    locIndex={locIdx + 1}
+                                    scopeNumber={scopeNumber}
+                                    budgetId={budgetId}
+                                    selected={selected}
+                                    expanded={expandedLocations.has(loc.id)}
+                                    onToggleExpand={() => toggleExpanded(loc.id)}
+                                    onSelect={onSelect}
+                                    onRefresh={onRefresh}
+                                    onDelete={(e) => handleDeleteLocation(loc.id, e)}
+                                    onDuplicate={(e) => openDupLocDialog(loc.id, loc.name, e)}
+                                    isReadOnly={isReadOnly}
+                                />
+                            ))}
+                        </SortableContext>
                     </nav>
+                    <DragOverlay dropAnimation={null}>
+                        <ScopeSidebarDragOverlay localLocations={localLocations} scopeNumber={scopeNumber} />
+                    </DragOverlay>
                 </DndContext>
             </div>
 
@@ -400,7 +599,9 @@ function DroppableLocationSections({
     isEmpty: boolean;
     children: ReactNode;
 }) {
-    const { setNodeRef, isOver } = useDroppable({ id: locationId });
+    const { setNodeRef, isOver } = useDroppable({
+        id: `${LOCATION_SECTION_DROP_PREFIX}${locationId}`,
+    });
     return (
         <div ref={setNodeRef}>
             {children}
@@ -436,8 +637,9 @@ function SortableSectionRow({
 }) {
     const isSectionSelected = selected?.type === "section" && selected.id === sec.id;
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-        id: sec.id,
+        id: `${SECTION_SORT_PREFIX}${sec.id}`,
         disabled: isReadOnly,
+        animateLayoutChanges: animateSectionItem,
     });
 
     return (
@@ -557,6 +759,20 @@ function LocationNode({
     onDuplicate,
     isReadOnly,
 }: LocationNodeProps) {
+    const {
+        attributes,
+        listeners,
+        setDroppableNodeRef,
+        setDraggableNodeRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({
+        id: `${LOCATION_SORT_PREFIX}${location.id}`,
+        disabled: isReadOnly,
+        animateLayoutChanges: animateLocationItem,
+    });
+
     const [addingSection, setAddingSection] = useState(false);
     const [sectionName, setSectionName] = useState("");
     const [duplicateDialog, setDuplicateDialog] = useState<{
@@ -616,7 +832,14 @@ function LocationNode({
     };
 
     return (
+        <>
         <div className="rounded-lg border border-border/80 bg-background/60 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.04]">
+            <div ref={setDroppableNodeRef} className="flex flex-col">
+            <div
+                ref={setDraggableNodeRef}
+                style={{ transform: CSS.Transform.toString(transform), transition }}
+                className={cn(isDragging && "relative z-20 opacity-40")}
+            >
             <div
                 className={cn(
                     "group flex items-center gap-1.5 px-2 py-2 cursor-pointer transition-colors",
@@ -627,6 +850,23 @@ function LocationNode({
                 )}
                 onClick={() => onSelect({ type: "location", id: location.id })}
             >
+                {!isReadOnly && (
+                    <button
+                        type="button"
+                        {...attributes}
+                        {...listeners}
+                        className={cn(
+                            "shrink-0 cursor-grab touch-none rounded p-0.5 active:cursor-grabbing",
+                            isSelected
+                                ? "text-primary-foreground/50 hover:text-primary-foreground"
+                                : "text-muted-foreground/40 hover:text-muted-foreground"
+                        )}
+                        onClick={(e) => e.stopPropagation()}
+                        title="Arrastar para reordenar o local"
+                    >
+                        <GripVertical className="h-4 w-4" />
+                    </button>
+                )}
                 <button
                     type="button"
                     className={cn(
@@ -715,6 +955,7 @@ function LocationNode({
                     </>
                 )}
             </div>
+            </div>
 
             <DroppableLocationSections
                 locationId={location.id}
@@ -722,7 +963,7 @@ function LocationNode({
             >
                 {expanded && location.sections.length > 0 && (
                     <SortableContext
-                        items={location.sections.map((s) => s.id)}
+                        items={location.sections.map((s) => `${SECTION_SORT_PREFIX}${s.id}`)}
                         strategy={verticalListSortingStrategy}
                     >
                         <div className="border-t border-border/60 bg-muted/20 px-1.5 py-1.5 rounded-b-lg">
@@ -792,6 +1033,8 @@ function LocationNode({
                     </div>
                 </div>
             )}
+            </div>
+        </div>
 
             <Dialog
                 open={!!duplicateDialog}
@@ -833,6 +1076,6 @@ function LocationNode({
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </div>
+        </>
     );
 }

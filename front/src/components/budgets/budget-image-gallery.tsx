@@ -48,51 +48,68 @@ export function BudgetImageGallery({
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-        {images.map((image) => (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {images.map((image) => {
+          /* Versão composta primeiro: inclui figurinhas, setas e demais anotações “queimadas” no editor. */
+          const rawDisplay = image.composed_url || image.url;
+          const displaySrc =
+            (toAbsoluteImageUrl(rawDisplay) || rawDisplay) ?? "";
+          const nw = Number(image.width);
+          const nh = Number(image.height);
+          const w = Number.isFinite(nw) && nw > 0 ? Math.round(nw) : undefined;
+          const h = Number.isFinite(nh) && nh > 0 ? Math.round(nh) : undefined;
+
+          return (
           <div
             key={image.id}
-            className="relative aspect-video bg-muted rounded-md overflow-hidden group border-2 border-primary/50"
+            className="relative flex w-full flex-col gap-1.5 rounded-md border-2 border-primary/50 bg-muted/40 p-1.5 shadow-sm group"
           >
+            <div className="relative flex w-full items-center justify-center overflow-hidden rounded-md bg-muted">
             {/* eslint-disable-next-line @next/next/no-img-element -- dynamic uploaded images without known dimensions */}
             <img
-              src={(toAbsoluteImageUrl(image.url || image.composed_url) || image.url || image.composed_url) ?? ""}
-              alt="Foto do ambiente"
-              className="w-full h-full object-cover"
+              src={displaySrc}
+              alt="Foto do ambiente (com anotações, se houver)"
+              width={w}
+              height={h}
+              className="h-auto max-h-[min(72vh,44rem)] w-auto max-w-full object-contain"
               loading="lazy"
+              decoding="async"
             />
             {!readOnly && (
-              <div
-                className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 cursor-pointer"
-                onClick={() => onEdit(image)}
-                aria-label="Editar foto"
-              >
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 bg-black/0 opacity-0 transition-colors group-hover:pointer-events-auto group-hover:bg-black/35 group-hover:opacity-100">
                 <Button
                   variant="secondary"
                   size="icon"
-                  className="h-8 w-8"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEdit(image);
-                  }}
+                  className="h-9 w-9 shadow-md"
+                  onClick={() => onEdit(image)}
+                  aria-label="Editar foto"
                 >
                   <Pencil className="h-4 w-4" />
                 </Button>
                 <Button
                   variant="destructive"
                   size="icon"
-                  className="h-8 w-8"
+                  className="h-9 w-9 shadow-md"
                   onClick={(e) => {
                     e.stopPropagation();
                     handleDeleteClick(image);
                   }}
+                  aria-label="Excluir foto"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
             )}
+            </div>
+            {w != null && h != null ? (
+              <p className="px-0.5 text-center text-[11px] text-muted-foreground tabular-nums">
+                {w} × {h}px
+                {image.composed_url ? " · com anotações" : ""}
+              </p>
+            ) : null}
           </div>
-        ))}
+          );
+        })}
       </div>
       {!readOnly && (
         <Button variant="outline" size="sm" onClick={onAdd}>

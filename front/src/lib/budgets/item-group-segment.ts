@@ -1,0 +1,41 @@
+import type { BudgetItem } from "@/types/budget-types";
+
+const INSTANCE_SEP = ":::";
+
+/**
+ * Chave para agrupar itens consecutivos na UI. Cada inserção de grupo do catálogo
+ * recebe um `group_instance_id` único, assim o mesmo `product_group` pode aparecer
+ * várias vezes com blocos separados (início/fim distintos).
+ */
+export function getBudgetItemGroupSegmentKey(item: BudgetItem): string | null {
+    const rec = item as Record<string, unknown>;
+    const gid = rec.group_id as string | undefined;
+    if (gid == null || gid === "") return null;
+    const inst = rec.group_instance_id as string | undefined;
+    if (inst != null && inst !== "") return `${String(gid)}${INSTANCE_SEP}${inst}`;
+    return String(gid);
+}
+
+export type ItemSegment =
+    | { type: "standalone"; item: BudgetItem }
+    | { type: "group"; id: string; name: string; items: BudgetItem[] };
+
+export function buildItemSegments(items: BudgetItem[]): ItemSegment[] {
+    const segments: ItemSegment[] = [];
+    for (const item of items) {
+        const key = getBudgetItemGroupSegmentKey(item);
+        if (key == null) {
+            segments.push({ type: "standalone", item });
+        } else {
+            const last = segments[segments.length - 1];
+            if (last && last.type === "group" && last.id === key) {
+                last.items.push(item);
+            } else {
+                const rec = item as Record<string, unknown>;
+                const gname = (rec.group_name as string) ?? key;
+                segments.push({ type: "group", id: key, name: gname, items: [item] });
+            }
+        }
+    }
+    return segments;
+}

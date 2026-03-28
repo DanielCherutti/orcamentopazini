@@ -79,16 +79,25 @@ export function InlineItemCreator({ sectionId, budgetId, onSuccess }: InlineItem
                 />
             </div>
 
-            <div className="col-span-4 md:col-span-2">
+            <div className="col-span-4 md:col-span-2 flex items-center gap-1 min-w-0">
                 <Input
                     type="number"
                     min="1"
                     value={quantity}
                     onChange={(e) => setQuantity(Number(e.target.value))}
-                    className="h-8 text-center"
+                    className="h-8 text-center min-w-0 flex-1"
                     placeholder="Qtd"
                     onKeyDown={handleKeyDown}
+                    aria-label="Quantidade"
                 />
+                {selectedProduct?.unit?.trim() ? (
+                    <span
+                        className="text-[11px] text-muted-foreground shrink-0 max-w-[3.5rem] truncate"
+                        title={selectedProduct.unit.trim()}
+                    >
+                        {selectedProduct.unit.trim()}
+                    </span>
+                ) : null}
             </div>
 
             <div className="col-span-4 md:col-span-2 text-right text-xs text-muted-foreground hidden md:block">

@@ -38,6 +38,8 @@ export const budgetItemSchema = z.object({
     notes: z.string().optional(),
     group_id: z.string().optional(),   // ID do grupo de origem (se veio de um grupo)
     group_name: z.string().optional(), // Nome do grupo (desnormalizado para exibição)
+    /** Instância por inserção: mesmo catálogo adicionado 2x = dois blocos separados na UI */
+    group_instance_id: z.string().optional(),
 });
 
 export const budgetSectionSchema = z.object({

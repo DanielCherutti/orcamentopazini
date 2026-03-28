@@ -446,6 +446,7 @@ export function AdvancedImageAnnotator({
         e.dataTransfer.setData('product_id', product.id || '');
         e.dataTransfer.setData('image_url', product.imageUrl || '');
         e.dataTransfer.setData('product_name', product.description || 'Produto');
+        e.dataTransfer.setData('product_unit', (product.unit || '').trim());
         e.dataTransfer.setData('item_id', item.id || '');
         e.dataTransfer.setData('source', 'budget');
         e.dataTransfer.effectAllowed = 'copy';
@@ -456,6 +457,7 @@ export function AdvancedImageAnnotator({
         e.dataTransfer.setData('product_id', product.id || '');
         e.dataTransfer.setData('image_url', product.imageUrl || '');
         e.dataTransfer.setData('product_name', product.description || 'Produto');
+        e.dataTransfer.setData('product_unit', (product.unit || '').trim());
         e.dataTransfer.setData('item_id', '');
         e.dataTransfer.setData('source', 'catalog');
         e.dataTransfer.effectAllowed = 'copy';
@@ -503,6 +505,7 @@ export function AdvancedImageAnnotator({
         const source = e.dataTransfer.getData('source');
         const stickerImageUrl = e.dataTransfer.getData('image_url');
         const productName = e.dataTransfer.getData('product_name');
+        const productUnit = e.dataTransfer.getData('product_unit')?.trim();
         const itemId = e.dataTransfer.getData('item_id');
 
         // Se soltou um item arrastável
@@ -515,7 +518,11 @@ export function AdvancedImageAnnotator({
                     const res = await addItemAction(sectionId, budgetId, productId, 1);
                     if (res.success) {
                         if (res.itemId) linkedItemId = res.itemId;
-                        toast.success(`"${productName}" adicionado ao orçamento`);
+                        toast.success(
+                            productUnit
+                                ? `"${productName}" adicionado (1 ${productUnit})`
+                                : `"${productName}" adicionado ao orçamento`
+                        );
                         onProductAddedToBudget?.();
                         setBudgetUsedGroupIdsVersion((v) => v + 1);
                     } else {
@@ -926,7 +933,13 @@ export function AdvancedImageAnnotator({
 
                 {/* DOCK LATERAL — abas Orçamento + Grupo (grupos filtrados pelos itens do orçamento quando há budgetId) */}
                 {!readOnly && (
-                    <div className={catalogDockOpen ? 'flex min-w-0' : 'w-0 overflow-hidden min-w-0'}>
+                    <div
+                        className={
+                            catalogDockOpen
+                                ? "flex h-full min-h-0 min-w-0 shrink-0 self-stretch"
+                                : "w-0 min-w-0 shrink-0 overflow-hidden self-stretch"
+                        }
+                    >
                         <CatalogDock
                             availableItems={availableItems}
                             onDragStartBudgetItem={handleDragStartItem}

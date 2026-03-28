@@ -4,9 +4,9 @@ import { useState, useEffect, useCallback } from "react";
 import { useDebouncedCallback } from "use-debounce";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { GripVertical, ChevronRight, ChevronDown, Loader2, Search } from "lucide-react";
+import { GripVertical, ChevronRight, ChevronDown, Loader2, Search, Plus, Package } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { BudgetItem } from "@/types/budget-types";
 import { getProductsAction, Product } from "@/actions/product-actions";
 import { listProductGroupsWithProductsAction, getProductGroupProductsAction, ProductGroup } from "@/actions/product-group-actions";
@@ -39,33 +39,59 @@ type GroupProduct = {
     imageUrl?: string;
 };
 
-function ProductCard({ name, imageUrl, hint, onDragStart }: {
+function ProductCard({ name, imageUrl, unit, hint, onDragStart }: {
     name: string;
     imageUrl?: string;
+    /** Unidade de venda (ex.: m², un) — exibida ao lado do nome ao adicionar/arrastar. */
+    unit?: string;
     hint: string;
     onDragStart: (e: React.DragEvent) => void;
 }) {
+    const u = unit?.trim();
     return (
-        <Card
-            className="p-2 cursor-grab active:cursor-grabbing hover:bg-white transition-colors border-dashed border-2 hover:border-solid hover:border-primary/50 group"
+        <button
+            type="button"
             draggable
             onDragStart={onDragStart}
+            className={cn(
+                "w-full text-left rounded-lg border border-border bg-background p-3 shadow-sm",
+                "cursor-grab active:cursor-grabbing transition-all",
+                "hover:border-primary/55 hover:bg-primary/5 hover:shadow-md",
+                "focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:border-primary/40",
+                "group"
+            )}
         >
-            <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded bg-muted flex items-center justify-center flex-shrink-0 overflow-hidden border">
+            <div className="flex gap-3">
+                <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center flex-shrink-0 overflow-hidden border border-border/80">
                     {imageUrl ? (
                         /* eslint-disable-next-line @next/next/no-img-element */
-                        <img src={imageUrl} alt={name} className="w-full h-full object-cover" />
+                        <img src={imageUrl} alt="" className="w-full h-full object-cover" />
                     ) : (
-                        <GripVertical className="w-4 h-4 text-muted-foreground" />
+                        <Package className="w-5 h-5 text-muted-foreground" aria-hidden />
                     )}
                 </div>
-                <div className="text-xs truncate font-medium">{name}</div>
+                <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+                    <p className="text-sm font-medium text-foreground leading-snug line-clamp-3 break-words">
+                        {name}
+                    </p>
+                    {u ? (
+                        <p className="text-xs text-muted-foreground" title={u}>
+                            {u}
+                        </p>
+                    ) : null}
+                    <div className="mt-1 flex items-center gap-1.5 text-xs font-medium text-primary">
+                        <span className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-sm shrink-0">
+                            <Plus className="h-3 w-3" strokeWidth={2.5} aria-hidden />
+                        </span>
+                        <span className="leading-tight">{hint}</span>
+                    </div>
+                </div>
+                <GripVertical
+                    className="h-4 w-4 shrink-0 text-muted-foreground/60 group-hover:text-primary/70 mt-1"
+                    aria-hidden
+                />
             </div>
-            <div className="text-[10px] text-muted-foreground mt-1 pl-10 opacity-70 group-hover:opacity-100">
-                {hint}
-            </div>
-        </Card>
+        </button>
     );
 }
 
@@ -123,7 +149,7 @@ export function CatalogDock({
             return;
         }
         setSearching(true);
-        const res = await getProductsAction({ query, limit: 20, page: 1 });
+        const res = await getProductsAction({ query, limit: 40, page: 1 });
         if (res.success && res.data) {
             setSearchResults(res.data);
         }
@@ -225,28 +251,59 @@ export function CatalogDock({
     const showSearchResults = searchQuery.trim().length > 0;
 
     return (
-        <div className="w-56 flex-shrink-0 h-full min-h-0">
-            <Tabs value={activeTab} onValueChange={handleTabChange} className="h-full flex flex-col">
-                <TabsList className="w-full shrink-0">
-                    <TabsTrigger value="budget" className="flex-1 text-xs">
-                        Do Orçamento
-                    </TabsTrigger>
-                    <TabsTrigger value="groups" className="flex-1 text-xs">
-                        Grupo
-                    </TabsTrigger>
-                </TabsList>
+        <div
+            className={cn(
+                "flex-shrink-0 h-full min-h-0 w-[min(26rem,calc(100vw-1.5rem))] max-w-[100vw]",
+                "rounded-xl border-2 border-primary/25 bg-card shadow-md ring-1 ring-primary/10",
+                "flex flex-col overflow-hidden"
+            )}
+        >
+            <Tabs
+                value={activeTab}
+                onValueChange={handleTabChange}
+                className="flex h-full min-h-0 flex-1 flex-col gap-0 overflow-hidden"
+            >
+                <div className="shrink-0 border-b border-primary/15 bg-primary/5 px-2 pt-2 pb-0">
+                    <TabsList className="w-full h-11 p-1 bg-muted/80">
+                        <TabsTrigger
+                            value="budget"
+                            className={cn(
+                                "flex-1 text-sm font-medium data-[state=active]:bg-primary",
+                                "data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm",
+                                "data-[state=inactive]:text-muted-foreground"
+                            )}
+                        >
+                            Do orçamento
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="groups"
+                            className={cn(
+                                "flex-1 text-sm font-medium data-[state=active]:bg-primary",
+                                "data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm",
+                                "data-[state=inactive]:text-muted-foreground"
+                            )}
+                        >
+                            Grupo / busca
+                        </TabsTrigger>
+                    </TabsList>
+                </div>
 
                 {/* Aba: Itens do Orçamento */}
-                <TabsContent value="budget" className="flex-1 min-h-0 mt-0">
-                    <div className="bg-muted/30 border rounded-lg h-full min-h-0 flex flex-col">
-                        <div className="p-2 border-b text-xs font-semibold text-muted-foreground uppercase bg-muted/50">
-                            Produtos Disponíveis
+                <TabsContent
+                    value="budget"
+                    className="mt-0 flex flex-1 flex-col min-h-0 overflow-hidden outline-none data-[state=inactive]:hidden"
+                >
+                    <div className="bg-muted/20 flex h-full min-h-0 flex-1 flex-col border-t border-primary/10">
+                        <div className="px-3 py-2.5 border-b border-primary/10 text-sm font-semibold text-primary bg-primary/5">
+                            Produtos disponíveis neste trecho
                         </div>
-                        <ScrollArea className="flex-1 p-2">
-                            <div className="space-y-2">
+                        <ScrollArea className="flex-1 p-3">
+                            <div className="space-y-3">
                                 {availableItems.length === 0 && (
-                                    <p className="text-xs text-muted-foreground text-center py-4 italic">
-                                        Nenhum item neste trecho.
+                                    <p className="text-sm text-muted-foreground text-center py-8 px-2 leading-relaxed">
+                                        Nenhum produto neste trecho. Use a aba{" "}
+                                        <span className="font-medium text-foreground">Grupo / busca</span> para arrastar
+                                        do catálogo.
                                     </p>
                                 )}
                                 {availableItems.map((item) => {
@@ -258,6 +315,7 @@ export function CatalogDock({
                                             key={item.id}
                                             name={product.description || "Sem nome"}
                                             imageUrl={product.imageUrl}
+                                            unit={product.unit}
                                             hint="Arraste para compor"
                                             onDragStart={(e) => onDragStartBudgetItem(e, item)}
                                         />
@@ -269,23 +327,33 @@ export function CatalogDock({
                 </TabsContent>
 
                 {/* Aba: Grupos do orçamento (filtrados) + busca global de produto */}
-                <TabsContent value="groups" className="flex-1 min-h-0 mt-0">
-                    <div className="bg-muted/30 border rounded-lg h-full min-h-0 flex flex-col">
-                        {/* Busca */}
-                        <div className="p-2 border-b bg-muted/50">
+                <TabsContent
+                    value="groups"
+                    className="mt-0 flex flex-1 flex-col min-h-0 overflow-hidden outline-none data-[state=inactive]:hidden"
+                >
+                    <div className="bg-muted/20 flex h-full min-h-0 flex-1 flex-col border-t border-primary/10">
+                        {/* Busca — área ampla, mesmo padrão visual dos botões primários */}
+                        <div className="p-3 border-b border-primary/10 bg-primary/5 space-y-2">
+                            <p className="text-xs font-medium text-primary px-0.5">
+                                Buscar no catálogo
+                            </p>
                             <div className="relative">
-                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/70 pointer-events-none" />
                                 <Input
-                                    placeholder="Buscar produto..."
+                                    placeholder="Nome, código ou parte da descrição…"
                                     value={searchQuery}
                                     onChange={(e) => handleSearchChange(e.target.value)}
-                                    className="h-7 text-xs pl-7 pr-2"
+                                    className={cn(
+                                        "h-11 text-sm pl-10 pr-3",
+                                        "border-primary/20 bg-background shadow-sm",
+                                        "focus-visible:border-primary/40 focus-visible:ring-primary/20"
+                                    )}
                                 />
                             </div>
                         </div>
 
-                        <ScrollArea className="flex-1 p-2">
-                            <div className="space-y-2">
+                        <ScrollArea className="flex-1 p-3">
+                            <div className="space-y-3">
                                 {/* Resultados da busca */}
                                 {showSearchResults && (
                                     <>
@@ -295,8 +363,8 @@ export function CatalogDock({
                                             </div>
                                         )}
                                         {!searching && searchResults.length === 0 && (
-                                            <p className="text-xs text-muted-foreground text-center py-4 italic">
-                                                Nenhum produto encontrado.
+                                            <p className="text-sm text-muted-foreground text-center py-6 px-2">
+                                                Nenhum produto encontrado. Tente outro termo.
                                             </p>
                                         )}
                                         {!searching && searchResults.map((product) => (
@@ -304,6 +372,7 @@ export function CatalogDock({
                                                 key={product.id}
                                                 name={product.description}
                                                 imageUrl={product.imageUrl}
+                                                unit={product.unit}
                                                 hint="Arraste para compor"
                                                 onDragStart={(e) => onDragStartCatalogProduct(e, product)}
                                             />
@@ -323,7 +392,7 @@ export function CatalogDock({
                                         {groupsLoaded &&
                                             (showAllProductGroups || !budgetUsedGroupIdsLoading) &&
                                             groups.length === 0 && (
-                                            <p className="text-xs text-muted-foreground text-center py-4 italic">
+                                            <p className="text-sm text-muted-foreground text-center py-6 px-2">
                                                 Nenhum grupo com produtos.
                                             </p>
                                         )}
@@ -333,8 +402,9 @@ export function CatalogDock({
                                             !showAllProductGroups &&
                                             groups.length > 0 &&
                                             filteredGroups.length === 0 && (
-                                                <p className="text-xs text-muted-foreground text-center py-4 italic">
-                                                    Nenhum grupo usado nos itens deste orçamento.
+                                                <p className="text-sm text-muted-foreground text-center py-6 px-2 leading-relaxed">
+                                                    Nenhum grupo usado nos itens deste orçamento. Use o ícone de lista na
+                                                    barra para ver todo o catálogo.
                                                 </p>
                                             )}
                                         {groupsLoaded &&
@@ -345,41 +415,73 @@ export function CatalogDock({
                                             const isLoading = loadingGroupIds.has(group.id);
 
                                             return (
-                                                <div key={group.id} className="border rounded-md overflow-hidden">
+                                                <div
+                                                    key={group.id}
+                                                    className="rounded-lg border border-border bg-background shadow-sm overflow-hidden hover:border-primary/40 transition-colors"
+                                                >
                                                     <div
-                                                        className="w-full flex items-center gap-2 p-2 text-left hover:bg-muted/40 transition-colors cursor-grab active:cursor-grabbing border-b border-transparent"
-                                                        draggable
-                                                        onDragStart={(e) => onDragStartCatalogGroup && onDragStartCatalogGroup(e, group)}
+                                                        className={cn(
+                                                            "flex w-full items-stretch gap-0 border-b border-border/80",
+                                                            "bg-primary/5 hover:bg-primary/10"
+                                                        )}
                                                     >
+                                                        <div
+                                                            draggable
+                                                            role="button"
+                                                            tabIndex={0}
+                                                            title="Arrastar grupo para a imagem"
+                                                            onDragStart={(e) =>
+                                                                onDragStartCatalogGroup && onDragStartCatalogGroup(e, group)
+                                                            }
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === "Enter" || e.key === " ") {
+                                                                    e.preventDefault();
+                                                                    void toggleGroup(group.id);
+                                                                }
+                                                            }}
+                                                            className={cn(
+                                                                "flex w-10 shrink-0 cursor-grab flex-col items-center justify-center gap-0.5",
+                                                                "active:cursor-grabbing border-r border-primary/15 bg-primary/10",
+                                                                "hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                                                            )}
+                                                        >
+                                                            <GripVertical className="h-4 w-4 text-primary" aria-hidden />
+                                                            <Plus className="h-3 w-3 text-primary/80" aria-hidden />
+                                                        </div>
                                                         <button
                                                             type="button"
                                                             onClick={() => toggleGroup(group.id)}
-                                                            className="flex items-center gap-2 flex-1 min-w-0"
+                                                            className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left"
                                                         >
-                                                            <div className="w-6 h-6 rounded bg-muted flex items-center justify-center flex-shrink-0 overflow-hidden border">
+                                                            <div className="w-10 h-10 rounded-md bg-muted flex items-center justify-center flex-shrink-0 overflow-hidden border border-border/80">
                                                                 {group.image_url ? (
                                                                     /* eslint-disable-next-line @next/next/no-img-element */
-                                                                    <img src={group.image_url} alt={group.name} className="w-full h-full object-cover" />
+                                                                    <img src={group.image_url} alt="" className="w-full h-full object-cover" />
                                                                 ) : (
-                                                                    <span className="text-[10px] font-bold text-muted-foreground">G</span>
+                                                                    <span className="text-xs font-bold text-primary">G</span>
                                                                 )}
                                                             </div>
-                                                            <span className="text-xs font-medium truncate flex-1">{group.name}</span>
-                                                            <div className="text-[10px] text-muted-foreground ml-2 opacity-70 hidden sm:block truncate shrink-0 max-w-[50px]" title="Arraste ou Clique">
-                                                                (Arraste)
+                                                            <div className="min-w-0 flex-1">
+                                                                <span className="text-sm font-semibold text-foreground line-clamp-2 leading-snug break-words block">
+                                                                    {group.name}
+                                                                </span>
+                                                                <span className="mt-1 block text-xs text-muted-foreground">
+                                                                    Toque na seta para ver produtos
+                                                                </span>
                                                             </div>
                                                         </button>
                                                         <button
                                                             type="button"
                                                             onClick={() => toggleGroup(group.id)}
-                                                            className="shrink-0 p-1 hover:bg-muted rounded"
+                                                            className="shrink-0 p-2 rounded-md hover:bg-background/80 border border-transparent hover:border-border"
+                                                            aria-label={isExpanded ? "Recolher" : "Expandir"}
                                                         >
-                                                            {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                                                            {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                                                         </button>
                                                     </div>
 
                                                     {isExpanded && (
-                                                        <div className="border-t p-1.5 space-y-1.5 bg-muted/10">
+                                                        <div className="border-t border-primary/10 p-2.5 space-y-2.5 bg-muted/15">
                                                             {isLoading && (
                                                                 <div className="flex items-center justify-center py-2">
                                                                     <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
@@ -390,6 +492,7 @@ export function CatalogDock({
                                                                     key={p.id}
                                                                     name={p.description}
                                                                     imageUrl={p.imageUrl}
+                                                                    unit={p.unit}
                                                                     hint="Arraste para compor"
                                                                     onDragStart={(e) => onDragStartCatalogProduct(e, p as unknown as Product)}
                                                                 />

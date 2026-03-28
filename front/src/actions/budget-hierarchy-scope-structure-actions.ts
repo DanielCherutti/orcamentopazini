@@ -6,7 +6,11 @@ import { assertActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
 import { serializeBudgetEntity } from "@/actions/budget-shared";
-import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
+import {
+    InvalidRecordIdError,
+    requireRecordId,
+    canonicalTableRecordId,
+} from "@/lib/surreal-record-ids";
 import { buildDuplicatedBudgetItemContent, recalculateBudgetTotal } from "@/actions/budget-hierarchy-helpers";
 
 export async function updateLocationAction(
@@ -242,6 +246,44 @@ export async function duplicateSectionAction(sectionId: string, budgetId: string
         console.error("Error duplicating section:", error);
         if (isTokenExpiredError(error)) resetDb();
         return { success: false, error: "Erro ao duplicar trecho" };
+    }
+}
+
+export async function reorderLocationsAction(orderedLocationIds: string[], budgetId: string) {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const db = await getDb();
+    try {
+        const budgetRecordId = requireRecordId("budget", budgetId);
+        const [rows] = await db.query<[Array<{ id: unknown }>]>(
+            "SELECT id FROM budget_location WHERE budget_id = $bid AND deleted_at IS NONE",
+            { bid: budgetRecordId }
+        );
+        const allowed = new Set(
+            (rows ?? []).map((r) => canonicalTableRecordId("budget_location", r.id))
+        );
+        const normalized = orderedLocationIds.map((id) => canonicalTableRecordId("budget_location", id));
+        if (new Set(normalized).size !== normalized.length) {
+            return { success: false, error: "Lista de locais inválida" };
+        }
+        if (normalized.length !== allowed.size || !normalized.every((id) => allowed.has(id))) {
+            return { success: false, error: "Lista de locais desatualizada" };
+        }
+        for (let i = 0; i < normalized.length; i++) {
+            await db
+                .update(requireRecordId("budget_location", normalized[i]))
+                .merge({ order_index: i * 10 });
+        }
+        revalidatePath(budgetRevalidatePath(budgetId));
+        return { success: true };
+    } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
+        console.error("Error reordering locations:", error);
+        if (isTokenExpiredError(error)) resetDb();
+        return { success: false, error: "Erro ao reordenar locais" };
     }
 }
 
