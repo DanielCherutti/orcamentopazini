@@ -48,10 +48,10 @@ async function createBudgetItemInSection(
     laborCost: number,
     quantity: number,
     productUnit?: string
-) {
+): Promise<string> {
     const unitLabel = productUnit?.trim();
     const orderIndex = await nextSectionItemOrderIndex(db, sectionId);
-    await db.create(new Table("budget_item")).content({
+    const raw = await db.create(new Table("budget_item")).content({
         section_id: requireRecordId("budget_section", sectionId),
         product_id: requireRecordId("product", productId),
         product_name: productName,
@@ -63,6 +63,9 @@ async function createBudgetItemInSection(
         order_index: orderIndex,
         created_at: new Date().toISOString(),
     });
+    const created = Array.isArray(raw) ? raw[0] : raw;
+    if (!created?.id) throw new Error("Falha ao obter id do item criado");
+    return String(created.id);
 }
 
 export async function getItemsBySectionAction(sectionId: string) {
@@ -196,7 +199,7 @@ export async function addItemAction(sectionId: string, budgetId: string, product
         const productName = String(product.description || product.code || "");
         const productUnit = String((product as Record<string, unknown>).unit ?? "").trim();
 
-        await createBudgetItemInSection(
+        const newItemId = await createBudgetItemInSection(
             db,
             sectionId,
             productId,
@@ -209,7 +212,7 @@ export async function addItemAction(sectionId: string, budgetId: string, product
 
         await recalculateBudgetTotal(budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
-        return { success: true };
+        return { success: true, itemId: newItemId };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
             return { success: false, error: error.message };

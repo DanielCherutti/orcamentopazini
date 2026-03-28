@@ -507,11 +507,14 @@ export function AdvancedImageAnnotator({
 
         // Se soltou um item arrastável
         if (source) {
+            let linkedItemId = itemId?.trim() ? itemId : "";
+
             // Auto-add ao orçamento se veio do catálogo E for um produto real (não grupo)
             if (source === 'catalog' && sectionId && budgetId && productId) {
                 try {
                     const res = await addItemAction(sectionId, budgetId, productId, 1);
                     if (res.success) {
+                        if (res.itemId) linkedItemId = res.itemId;
                         toast.success(`"${productName}" adicionado ao orçamento`);
                         onProductAddedToBudget?.();
                         setBudgetUsedGroupIdsVersion((v) => v + 1);
@@ -545,7 +548,8 @@ export function AdvancedImageAnnotator({
                 height: h,
                 image_url: stickerImageUrl,
                 product_name: productName,
-                linked_item_id: itemId,
+                linked_item_id: linkedItemId || undefined,
+                product_id: productId?.trim() || undefined,
                 style: { ...DEFAULT_STYLE, opacity: 1 }
             };
 

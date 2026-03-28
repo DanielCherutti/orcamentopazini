@@ -9,7 +9,7 @@ import { getDb, resetDb, isTokenExpiredError, isDbConnectionError } from "@/lib/
 import { Attachment } from "@/components/products/attachment-manager";
 import { saveFile } from "@/lib/upload";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
-import { syncProductPricesToDraftBudgetsAction } from "@/actions/budget-core-write-actions";
+import { syncProductCatalogToDraftBudgetItemsAction } from "@/actions/budget-core-write-actions";
 
 // Type definition based on V1 Spec
 export type Product = {
@@ -389,13 +389,16 @@ export async function updateProductAction(id: string, formData: FormData) {
             updated_at: new Date().toISOString()
         });
 
-        const syncBudgets = await syncProductPricesToDraftBudgetsAction(
-            id,
-            data.equipmentPrice,
-            data.assemblyPrice
-        );
+        const syncBudgets = await syncProductCatalogToDraftBudgetItemsAction(id, {
+            code: data.code,
+            description: data.description,
+            unit: data.unit,
+            equipmentPrice: data.equipmentPrice,
+            assemblyPrice: data.assemblyPrice,
+            imageUrl: data.imageUrl,
+        });
         if (!syncBudgets.success) {
-            console.warn("Propagação de preço para orçamentos em rascunho:", syncBudgets.error);
+            console.warn("Propagação do cadastro para orçamentos em andamento:", syncBudgets.error);
         }
 
         revalidatePath("/dashboard/products");
@@ -421,6 +424,21 @@ export async function updateProductImageUrlAction(productId: string, imageUrl: s
     try {
         const recordId = requireRecordId(TABLE_NAME, productId);
         await db.update(recordId).merge({ imageUrl, updated_at: new Date().toISOString() });
+        const rawP = await db.select(recordId);
+        const p = (Array.isArray(rawP) ? rawP[0] : rawP) as Record<string, unknown> | undefined;
+        if (p) {
+            const syncRes = await syncProductCatalogToDraftBudgetItemsAction(productId, {
+                code: String(p.code ?? ""),
+                description: String(p.description ?? ""),
+                unit: String(p.unit ?? ""),
+                equipmentPrice: Number(p.equipmentPrice ?? 0),
+                assemblyPrice: Number(p.assemblyPrice ?? 0),
+                imageUrl,
+            });
+            if (!syncRes.success) {
+                console.warn("Propagação da imagem para orçamentos em andamento:", syncRes.error);
+            }
+        }
         const pathId = String(recordId).includes(":") ? String(recordId).split(":")[1] : String(recordId);
         revalidatePath("/dashboard/products");
         revalidatePath(`/dashboard/products/${pathId}`);

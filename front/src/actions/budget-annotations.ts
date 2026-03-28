@@ -5,7 +5,11 @@ import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { Table } from "surrealdb";
 import { revalidatePath } from "next/cache";
 import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
-import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
+import {
+    InvalidRecordIdError,
+    requireRecordId,
+    canonicalTableRecordId,
+} from "@/lib/surreal-record-ids";
 import { TOOL_CONFIG } from "@/components/annotator/tools/types";
 import type { ImageAnnotation, ArrowAnnotation, RectAnnotation, StickerAnnotation, TextAnnotation, PolylineAnnotation } from "@/components/annotator/tools/types";
 import type { AnnotatorViewportState } from "@/components/annotator/annotator-viewport-types";
@@ -78,18 +82,29 @@ function deserializeAnnotation(row: Record<string, unknown>): ImageAnnotation | 
                 textStrokeWidth: row.textStrokeWidth != null ? Number(row.textStrokeWidth) : undefined,
                 borderColor: row.borderColor as string | undefined,
             };
-        case 'product_sticker':
+        case 'product_sticker': {
+            const rawPid = geometry.product_id;
+            const product_id =
+                rawPid != null && String(rawPid).trim() !== ""
+                    ? canonicalTableRecordId("product", rawPid)
+                    : undefined;
             return {
-                id, tool_type: 'product_sticker', style, linked_item_id, content,
+                id,
+                tool_type: 'product_sticker',
+                style,
+                linked_item_id,
+                content,
                 position: { x: Number(geometry.x), y: Number(geometry.y) },
                 image_url: geometry.image_url as string | undefined,
                 product_name: geometry.product_name as string | undefined,
+                product_id,
                 width: Number(geometry.width),
                 height: Number(geometry.height),
                 rotation: geometry.rotation as number | undefined,
                 scaleX: geometry.scaleX as number | undefined,
                 scaleY: geometry.scaleY as number | undefined,
             } as StickerAnnotation;
+        }
         case 'polyline':
             return {
                 id, tool_type: 'polyline', style, linked_item_id, content,
@@ -220,10 +235,20 @@ export async function saveBudgetImageWithAnnotations(params: SaveBudgetImagePara
                     case 'product_sticker': {
                         const a = ann as StickerAnnotation;
                         return {
-                            x: a.position.x, y: a.position.y,
-                            width: a.width, height: a.height,
-                            image_url: a.image_url, product_name: a.product_name,
-                            rotation: a.rotation, scaleX: a.scaleX, scaleY: a.scaleY,
+                            x: a.position.x,
+                            y: a.position.y,
+                            width: a.width,
+                            height: a.height,
+                            image_url: a.image_url,
+                            product_name: a.product_name,
+                            rotation: a.rotation,
+                            scaleX: a.scaleX,
+                            scaleY: a.scaleY,
+                            ...(a.product_id
+                                ? {
+                                      product_id: canonicalTableRecordId("product", a.product_id),
+                                  }
+                                : {}),
                         };
                     }
                     case 'text': {

@@ -68,6 +68,8 @@ export interface StickerAnnotation extends BaseAnnotation {
     position: Point;
     image_url?: string;
     product_name?: string;
+    /** Catálogo: usado para sincronizar ícone/nome ao alterar o produto quando não há `linked_item_id`. */
+    product_id?: string;
     width: number;
     height: number;
     rotation?: number;
