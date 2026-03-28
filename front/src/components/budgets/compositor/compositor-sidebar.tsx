@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, createContext, useContext, useMemo, type CSSProperties } from "react";
-import { ChevronRight, ChevronDown, MapPin, Layers, FileText, Plus, Trash2, FolderOpen, GripVertical, Map as MapIcon } from "lucide-react";
+import { ChevronRight, ChevronDown, MapPin, Layers, FileText, Plus, Trash2, FolderOpen, GripVertical, Map as MapIcon, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -154,6 +154,7 @@ function DroppableSessionInto({ blockId, depth }: { blockId: string; depth: numb
 // ─── Ícones e opções ──────────────────────────────────────────────────────────
 
 const BLOCK_ICONS: Record<string, React.ReactNode> = {
+  cover:    <BookOpen className="h-3.5 w-3.5 shrink-0 text-primary" />,
   session:  <FolderOpen className="h-3.5 w-3.5 shrink-0" />,
   location: <MapPin className="h-3.5 w-3.5 shrink-0" />,
   section:  <Layers className="h-3.5 w-3.5 shrink-0" />,
@@ -432,6 +433,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
   const isDragActive = !!(ctx?.activeDragId && ctx.activeDragId !== block.id);
 
   const isScope = block.type === "scope";
+  const isCover = block.type === "cover";
   const isSelected = selectedId === block.id;
   const isExpandable = (block.type === "session" || block.type === "location") && !isScope;
   const canAdd = (block.type === "session" || block.type === "location") && !isScope;
@@ -442,7 +444,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: block.id,
     data: { parentId: block.parent_id ?? null },
-    disabled: isReadOnly,
+    disabled: isReadOnly || isCover,
   });
   // Só transladação (sem scale). Com DragOverlay, o item ativo fica invisível na lista e não recebe translate — o overlay segue o ponteiro com offset correto.
   const tx = transform?.x ?? 0;
@@ -483,7 +485,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
         onClick={() => onSelect(block)}
       >
         {/* Handle de drag — oculto em isReadOnly (Escopo reordena na raiz como os demais) */}
-        {!isReadOnly && (
+        {!isReadOnly && !isCover && (
           <div
             {...listeners}
             {...attributes}
@@ -493,6 +495,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
             <GripVertical className="h-3 w-3" />
           </div>
         )}
+        {isCover && <span className="w-5 shrink-0" aria-hidden />}
 
         {/* Ícone / expand — expandível para session e location */}
         {isExpandable ? (
@@ -518,7 +521,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
         )}
 
         {/* Label — duplo-clique para editar (exceto scope) */}
-        {editingLabel && !isReadOnly && !isScope ? (
+        {editingLabel && !isReadOnly && !isScope && !isCover ? (
           <input
             ref={labelInputRef}
             value={labelDraft}
@@ -535,11 +538,11 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
           <span
             className={cn(
               "min-w-0 flex-1 truncate text-xs font-medium leading-none [text-size-adjust:100%]",
-              (block.type === "session" || isScope) && "uppercase"
+              (block.type === "session" || isScope || isCover) && "uppercase"
             )}
-            onDoubleClick={(e) => { if (!isReadOnly && !isScope) { e.stopPropagation(); setLabelDraft(block.label || ""); setEditingLabel(true); } }}
+            onDoubleClick={(e) => { if (!isReadOnly && !isScope && !isCover) { e.stopPropagation(); setLabelDraft(block.label || ""); setEditingLabel(true); } }}
           >
-            {isScope ? "ESCOPO" : (block.label || `(${block.type})`)}
+            {isScope ? "ESCOPO" : isCover ? "CAPA" : (block.label || `(${block.type})`)}
           </span>
         )}
 
@@ -579,7 +582,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
         )}
 
         {/* Botão excluir — oculto em isReadOnly e scope */}
-        {!isReadOnly && !isScope && (
+        {!isReadOnly && !isScope && !isCover && (
           <button
             disabled={deleting}
             onClick={handleDelete}
@@ -677,6 +680,10 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
 
     // Drop dentro de uma sessão (zona "into:")
     if (overId.startsWith("into:")) {
+      if (activeBlock?.type === "cover") {
+        toast.error("A capa só pode ficar na raiz do documento.");
+        return;
+      }
       // Escopo só existe na raiz — não pode virar filho de sessão
       if (activeBlock?.type === "scope") {
         toast.error("O bloco Escopo só pode ser reordenado entre os itens da raiz.");
@@ -704,6 +711,11 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
       return;
     }
 
+    if (activeBlock?.type === "cover" && overParentId !== null) {
+      toast.error("A capa só pode ser reordenada na raiz.");
+      return;
+    }
+
     if (activeParentId === overParentId) {
       // Reordenar dentro do mesmo pai
       const key = pKey(activeParentId);
@@ -711,7 +723,11 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
       const oldIdx = siblings.findIndex((b) => b.id === String(active.id));
       const newIdx = siblings.findIndex((b) => b.id === String(over.id));
       if (oldIdx === -1 || newIdx === -1) return;
-      const reordered = arrayMove(siblings, oldIdx, newIdx);
+      let reordered = arrayMove(siblings, oldIdx, newIdx);
+      const coverNode = reordered.find((b) => b.type === "cover");
+      if (coverNode) {
+        reordered = [coverNode, ...reordered.filter((b) => b.type !== "cover")];
+      }
       setChildrenReg((prev) => ({ ...prev, [key]: reordered }));
       reorderBlocksAction(reordered.map((b) => b.id), budgetId)
         .then((r) => { if (!r.success) onRefresh(); })

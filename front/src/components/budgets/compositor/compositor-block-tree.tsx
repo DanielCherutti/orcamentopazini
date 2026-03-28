@@ -47,8 +47,13 @@ import {
 } from "./compositor-content-utils";
 import { useBlockDescription, useBlockLabel } from "./compositor-content-hooks";
 import { CompositorItemRow } from "./compositor-item-row";
+import { CompositorCoverBlock } from "./compositor-cover-block";
 
 // ─── Renderers de bloco (modo documento) ──────────────────────────────────────
+
+function CoverRenderer({ block, budgetId, isReadOnly }: CompositorRendererProps) {
+    return <CompositorCoverBlock block={block} budgetId={budgetId} isReadOnly={isReadOnly} />;
+}
 
 export interface CompositorRendererProps {
     block: BudgetBlock;
@@ -562,6 +567,7 @@ function ScopeRenderer({ block, budgetId }: CompositorRendererProps) {
 }
 
 const RENDERERS: Record<string, ComponentType<CompositorRendererProps>> = {
+    cover: CoverRenderer,
     session: SessionRenderer,
     location: LocationRenderer,
     section: SectionRenderer,
@@ -590,23 +596,27 @@ function BlockDocument({
     const isSession = block.type === "session";
     const isLocation = block.type === "location";
     const isSection = block.type === "section";
+    const isCover = block.type === "cover";
     const isRoot = block.depth === 0;
 
     return (
         <div id={`block-${block.id}`}>
             {isRoot && isSession && <hr className="border-border mb-6" />}
+            {isRoot && isCover && <hr className="border-border mb-6" />}
 
             <div
                 className={
-                    isSession
-                        ? isRoot
-                            ? "mb-6"
-                            : "mb-4"
-                        : isLocation
-                          ? "mb-4"
-                          : isSection
-                            ? "mb-3"
-                            : "mb-6"
+                    isCover
+                        ? "mb-8"
+                        : isSession
+                          ? isRoot
+                              ? "mb-6"
+                              : "mb-4"
+                          : isLocation
+                            ? "mb-4"
+                            : isSection
+                              ? "mb-3"
+                              : "mb-6"
                 }
             >
                 {Renderer ? (
@@ -695,7 +705,8 @@ export function CompositorContent({
             : null;
     const useFocusedSubtree =
         focused &&
-        (focused.type === "session" ||
+        (focused.type === "cover" ||
+            focused.type === "session" ||
             focused.type === "location" ||
             focused.type === "section");
 

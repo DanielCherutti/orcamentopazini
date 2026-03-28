@@ -6,6 +6,55 @@ import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
 import { revalidatePath } from "next/cache";
 import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
+import { DEFAULT_COVER_PROPS } from "@/types/budget-compositor-types";
+
+/**
+ * Garante um bloco `cover` na raiz (order_index 0) para orçamentos compositor.
+ * Orçamentos antigos sem capa recebem o bloco na próxima carga da árvore.
+ */
+export async function ensureCompositorCoverBlockAction(
+    budgetId: string
+): Promise<{ success: boolean; error?: string }> {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const db = await getDb();
+    try {
+        const budgetRecordId = requireRecordId("budget", budgetId);
+
+        const rootsRes = await db.query<[Array<{ id: unknown; order_index: number; type: string }>]>(
+            "SELECT id, order_index, type FROM budget_block WHERE budget_id = $budgetId AND parent_id IS NONE AND deleted_at IS NONE ORDER BY order_index ASC",
+            { budgetId: budgetRecordId }
+        );
+        const roots = rootsRes[0] || [];
+        if (roots.some((r) => r.type === "cover")) {
+            return { success: true };
+        }
+
+        for (const r of roots) {
+            const rid = requireRecordId("budget_block", String(r.id));
+            await db.update(rid).merge({ order_index: (r.order_index ?? 0) + 1 });
+        }
+
+        await db.create(new Table("budget_block")).content({
+            budget_id: budgetRecordId,
+            type: "cover",
+            label: "CAPA",
+            order_index: 0,
+            props: { ...DEFAULT_COVER_PROPS },
+        });
+
+        revalidatePath(budgetRevalidatePath(budgetId));
+        return { success: true };
+    } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
+        console.error("ensureCompositorCoverBlockAction error:", error);
+        if (isTokenExpiredError(error)) resetDb();
+        return { success: false, error: "Erro ao garantir bloco de capa" };
+    }
+}
 
 async function deleteBlockCascade(db: Awaited<ReturnType<typeof getDb>>, blockId: string) {
     const blockRecordId = requireRecordId("budget_block", blockId);
@@ -131,6 +180,13 @@ export async function deleteBlockAction(
 
     const db = await getDb();
     try {
+        const blockRecordId = requireRecordId("budget_block", blockId);
+        const current = await db.select(blockRecordId);
+        const row = (Array.isArray(current) ? current[0] : current) as { type?: string } | undefined;
+        if (row?.type === "cover") {
+            return { success: false, error: "A capa não pode ser removida — todo documento possui uma capa." };
+        }
+
         await deleteBlockCascade(db, blockId);
         revalidatePath(budgetRevalidatePath(budgetId));
         return { success: true };
@@ -155,11 +211,17 @@ export async function moveBlockToParentAction(
     const db = await getDb();
     try {
         const blockRecordId = requireRecordId("budget_block", blockId);
+        const current = await db.select(blockRecordId);
+        const row = (Array.isArray(current) ? current[0] : current) as { type?: string } | undefined;
+        if (row?.type === "cover") {
+            if (newParentId !== null) {
+                return {
+                    success: false,
+                    error: "A capa deve permanecer na raiz do documento.",
+                };
+            }
+        }
         if (newParentId) {
-            const current = await db.select(blockRecordId);
-            const row = (Array.isArray(current) ? current[0] : current) as {
-                type?: string;
-            } | undefined;
             if (row?.type === "scope") {
                 return {
                     success: false,

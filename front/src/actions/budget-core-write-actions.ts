@@ -8,6 +8,7 @@ import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
 import type { Budget } from "@/types/budget-types";
 import { addBlockAction } from "@/actions/budget-compositor-block-actions";
+import { DEFAULT_COVER_PROPS } from "@/types/budget-compositor-types";
 import {
     InvalidRecordIdError,
     requireRecordId,
@@ -46,6 +47,13 @@ export async function createBudgetAction(title: string, code: string) {
             id: String(createdRecord.id),
         } as Budget;
 
+        await addBlockAction({
+            budgetId: createdBudget.id!,
+            parentId: null,
+            type: "cover",
+            label: "CAPA",
+            props: { ...DEFAULT_COVER_PROPS },
+        });
         await addBlockAction({ budgetId: createdBudget.id!, parentId: null, type: "scope", label: "ESCOPO" });
 
         revalidatePath("/budgets");

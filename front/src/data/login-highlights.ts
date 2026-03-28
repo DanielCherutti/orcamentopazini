@@ -13,6 +13,34 @@ export const LOGIN_HIGHLIGHTS_SUBTITLE =
 
 export const loginHighlights: LoginHighlight[] = [
   {
+    kind: "feature",
+    date: "2026-03-28",
+    title: "Compositor: capa automática da proposta",
+    description:
+      "Todo documento compositor ganha um bloco CAPA na raiz (não pode ser excluído). Lá você personaliza títulos, URL da logomarca do cliente, marcas d’água da capa e do restante do PDF (opacidade), dados cadastrais do cliente, responsável/CREA e cidade da data. O código do orçamento e a data de emissão vêm do cadastro da proposta; dá para informar revisão (ex.: Rev. 02) e preencher dados do cliente com um clique a partir do cadastro.",
+  },
+  {
+    kind: "improvement",
+    date: "2026-03-28",
+    title: "Anotador: ferramenta ativa até você trocar",
+    description:
+      "Seta, retângulo, linha, numeração, texto, figurinha e demais ferramentas permanecem selecionadas após cada uso. Só voltam para “Selecionar” se você escolher outra ferramenta, ao clicar numa anotação já existente ou ao trocar de imagem.",
+  },
+  {
+    kind: "feature",
+    date: "2026-03-28",
+    title: "Figuras na foto: nome obrigatório",
+    description:
+      "No diálogo Inserir figura, o campo Nome da figura é obrigatório antes de escolher produto ou item da biblioteca. Se você arrastar item do catálogo ou do orçamento para a imagem, abre uma confirmação com o mesmo campo (sugestão preenchida quando houver nome do item) antes de concluir a inserção.",
+  },
+  {
+    kind: "improvement",
+    date: "2026-03-28",
+    title: "Orçamentos na entrada, Compositor na edição",
+    description:
+      "Início, menu e listagem falam em Orçamentos. Dentro do workspace, a aba de montagem do documento e os textos desse fluxo usam Compositor — para separar a lista do modo de edição.",
+  },
+  {
     kind: "improvement",
     date: "2026-03-27",
     title: "Foto do trecho: zoom e posição lembrados",
