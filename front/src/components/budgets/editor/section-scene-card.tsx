@@ -414,6 +414,7 @@ export function SectionSceneCard({ section, budget_id, sectionNumber, onRefresh 
                     })()}
                     initialAnnotations={(editingImage?.annotations ?? []) as unknown as ImageAnnotation[]}
                     initialEditorViewport={parseAnnotatorViewport(editingImage?.editor_viewport)}
+                    initialCaption={editingImage?.caption ?? ""}
                     open={!!editingImage}
                     onOpenChange={(open) => !open && setEditingImage(null)}
                     onRefresh={onRefresh}

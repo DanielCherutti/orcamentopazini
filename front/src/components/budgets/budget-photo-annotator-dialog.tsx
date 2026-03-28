@@ -8,6 +8,8 @@ import {
     AlertDialogHeader, AlertDialogTitle
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Loader2, Upload, X } from 'lucide-react';
 import { AdvancedImageAnnotator } from '@/components/annotator/advanced-image-annotator';
 import { saveBudgetImageWithAnnotations } from '@/actions/budget-annotations';
@@ -39,6 +41,8 @@ interface BudgetPhotoAnnotatorDialogProps {
     initialAnnotations?: ImageAnnotation[];
     /** Zoom/pan salvos no registro da imagem — restaurados ao abrir o anotador. */
     initialEditorViewport?: AnnotatorViewportState | null;
+    /** Escopo (local/trecho): legenda obrigatória para a lista de figuras do documento */
+    initialCaption?: string | null;
 }
 
 export function BudgetPhotoAnnotatorDialog({
@@ -56,6 +60,7 @@ export function BudgetPhotoAnnotatorDialog({
     initialImageUrl = null,
     initialAnnotations = [],
     initialEditorViewport = null,
+    initialCaption = null,
 }: BudgetPhotoAnnotatorDialogProps) {
     const isControlled = controlledOpen !== undefined;
     const [internalOpen, setInternalOpen] = useState(false);
@@ -91,7 +96,11 @@ export function BudgetPhotoAnnotatorDialog({
     const [showExitAlert, setShowExitAlert] = useState(false);
 
     const fileInputId = useId();
+    const captionFieldId = useId();
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+    const requiresCaption = !!(sectionId || locationId);
+    const [figureCaption, setFigureCaption] = useState('');
 
     // ── Modo EDIÇÃO: carregar imagem original ao abrir ──────────────────────
     useEffect(() => {
@@ -110,6 +119,15 @@ export function BudgetPhotoAnnotatorDialog({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, initialImageUrl]);
 
+    useEffect(() => {
+        if (!isOpen) return;
+        if (imageId) {
+            setFigureCaption(typeof initialCaption === 'string' ? initialCaption.trim() : '');
+        } else {
+            setFigureCaption('');
+        }
+    }, [isOpen, imageId, initialCaption]);
+
     // ── Limpar ao fechar ────────────────────────────────────────────────────
     const clearState = () => {
         setTimeout(() => {
@@ -119,6 +137,7 @@ export function BudgetPhotoAnnotatorDialog({
             setActiveImageUrl(null);
             setSessionAnnotations([]);
             setHasUnsavedChanges(false);
+            setFigureCaption('');
         }, 300);
     };
 
@@ -237,6 +256,14 @@ export function BudgetPhotoAnnotatorDialog({
         isAutoSave = false,
         editorViewport?: AnnotatorViewportState
     ) => {
+        if (isAutoSave && requiresCaption && !figureCaption.trim()) {
+            return;
+        }
+        if (requiresCaption && !figureCaption.trim()) {
+            toast.error('Preencha a descrição da figura (lista de figuras no documento).');
+            return;
+        }
+
         setIsSaving(true);
         const activeImageId = imageId || createdImageDoc?.id;
         try {
@@ -265,6 +292,7 @@ export function BudgetPhotoAnnotatorDialog({
                 height: originalDimensions.height || 0,
                 annotations,
                 editorViewport: editorViewport ?? null,
+                ...(requiresCaption ? { caption: figureCaption.trim() } : {}),
             });
 
             if (result.success) {
@@ -338,6 +366,28 @@ export function BudgetPhotoAnnotatorDialog({
                         </div>
                     </DialogTitle>
                 </DialogHeader>
+
+                {requiresCaption && activeImageUrl ? (
+                    <div className="shrink-0 space-y-1.5 border-b px-4 py-2">
+                        <Label htmlFor={captionFieldId} className="text-xs font-medium">
+                            Descrição da figura <span className="text-destructive">*</span>
+                        </Label>
+                        <Input
+                            id={captionFieldId}
+                            value={figureCaption}
+                            onChange={(e) => {
+                                setFigureCaption(e.target.value);
+                                if (!hasUnsavedChanges) setHasUnsavedChanges(true);
+                            }}
+                            placeholder="Ex.: Acesso túnel — 01 e 02"
+                            className="h-9 text-sm"
+                            autoComplete="off"
+                        />
+                        <p className="text-[10px] text-muted-foreground">
+                            Aparece na Lista de figuras do compositor (obrigatório no Escopo).
+                        </p>
+                    </div>
+                ) : null}
 
                 <div
                     className={`flex-1 min-h-0 relative overflow-hidden transition-colors ${

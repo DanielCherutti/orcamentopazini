@@ -23,6 +23,8 @@ export interface SaveBudgetImageParams {
     locationId?: string;
     blockId?: string;   // compositor: referência ao budget_block
     imageId?: string; // Se presente, atualiza em vez de criar
+    /** Obrigatório ao salvar imagem do Escopo (local/trecho) */
+    caption?: string;
     url: string;
     composedUrl?: string; // Imagem com anotações "queimadas" (flattened)
     width: number;
@@ -147,15 +149,21 @@ export async function saveBudgetImageWithAnnotations(params: SaveBudgetImagePara
 
     const db = await getDb();
 
-    const hasSection = !!params.sectionId;
-    const hasLocation = !!params.locationId;
-    const hasBlock = !!params.blockId;
-    // Aceita: blockId sozinho (compositor) OU exatamente um de sectionId/locationId (legado)
-    if (!hasBlock && hasSection === hasLocation) {
-        return { success: false, error: "Exatamente um de sectionId, locationId ou blockId deve ser preenchido" };
-    }
+        const hasSection = !!params.sectionId;
+        const hasLocation = !!params.locationId;
+        const hasBlock = !!params.blockId;
+        // Aceita: blockId sozinho (compositor) OU exatamente um de sectionId/locationId (legado)
+        if (!hasBlock && hasSection === hasLocation) {
+            return { success: false, error: "Exatamente um de sectionId, locationId ou blockId deve ser preenchido" };
+        }
 
-    try {
+        const scopeImage = hasSection || hasLocation;
+        const cap = typeof params.caption === "string" ? params.caption.trim() : "";
+        if (scopeImage && !cap) {
+            return { success: false, error: "Preencha a descrição da figura (lista de figuras no documento)." };
+        }
+
+        try {
         let imageId: string;
         let image: DbImage;
 
@@ -184,6 +192,7 @@ export async function saveBudgetImageWithAnnotations(params: SaveBudgetImagePara
                 section_id: sectionRecordId,
                 location_id: locationRecordId,
                 ...(blockRecordId !== null ? { block_id: blockRecordId } : {}),
+                ...(scopeImage ? { caption: cap } : {}),
                 ...(params.editorViewport !== undefined
                     ? { editor_viewport: params.editorViewport }
                     : {}),
@@ -206,6 +215,7 @@ export async function saveBudgetImageWithAnnotations(params: SaveBudgetImagePara
                 height: params.height,
                 order_index: nextOrder,
                 created_at: new Date(),
+                ...(scopeImage ? { caption: cap } : {}),
                 ...(params.editorViewport != null ? { editor_viewport: params.editorViewport } : {}),
             });
             // surrealdb.js pode retornar array ou objeto — normaliza para objeto

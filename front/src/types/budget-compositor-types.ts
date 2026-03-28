@@ -9,6 +9,7 @@ import type { BudgetItem } from "@/types/budget-types";
 export type BlockType =
   | "cover"     // Capa do documento (PDF / proposta) — uma por orçamento, criada automaticamente
   | "toc"       // Sumário automático (sempre após a capa) — conteúdo derivado da árvore
+  | "figures"   // Lista de figuras (após sumário) — imagens do Escopo, automático
   | "session"   // Contêiner: sessão / sub-sessão (qualquer profundidade)
   | "text"      // Texto rico (Tiptap HTML)
   | "location"  // Local / Ambiente (com descrição + galeria + trechos)

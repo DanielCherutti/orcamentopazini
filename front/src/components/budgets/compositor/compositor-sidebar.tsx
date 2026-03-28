@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, createContext, useContext, useMemo, type CSSProperties } from "react";
-import { ChevronRight, ChevronDown, MapPin, Layers, FileText, Plus, Trash2, FolderOpen, GripVertical, Map as MapIcon, BookOpen, ListOrdered } from "lucide-react";
+import { ChevronRight, ChevronDown, MapPin, Layers, FileText, Plus, Trash2, FolderOpen, GripVertical, Map as MapIcon, BookOpen, ListOrdered, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -156,6 +156,7 @@ function DroppableSessionInto({ blockId, depth }: { blockId: string; depth: numb
 const BLOCK_ICONS: Record<string, React.ReactNode> = {
   cover:    <BookOpen className="h-3.5 w-3.5 shrink-0 text-primary" />,
   toc:      <ListOrdered className="h-3.5 w-3.5 shrink-0 text-primary" />,
+  figures:  <ImageIcon className="h-3.5 w-3.5 shrink-0 text-primary" />,
   session:  <FolderOpen className="h-3.5 w-3.5 shrink-0" />,
   location: <MapPin className="h-3.5 w-3.5 shrink-0" />,
   section:  <Layers className="h-3.5 w-3.5 shrink-0" />,
@@ -230,10 +231,10 @@ function SidebarDragPreview({
       <span
         className={cn(
           "min-w-0 flex-1 truncate text-xs font-medium leading-none",
-          (block.type === "session" || isScope || block.type === "toc") && "uppercase"
+          (block.type === "session" || isScope || block.type === "toc" || block.type === "figures") && "uppercase"
         )}
       >
-        {isScope ? "ESCOPO" : block.type === "toc" ? "SUMÁRIO" : (block.label || `(${block.type})`)}
+        {isScope ? "ESCOPO" : block.type === "toc" ? "SUMÁRIO" : block.type === "figures" ? "LISTA DE FIGURAS" : (block.label || `(${block.type})`)}
       </span>
     </div>
   );
@@ -436,6 +437,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
   const isScope = block.type === "scope";
   const isCover = block.type === "cover";
   const isToc = block.type === "toc";
+  const isFigures = block.type === "figures";
   const isSelected = selectedId === block.id;
   const isExpandable = (block.type === "session" || block.type === "location") && !isScope;
   const canAdd = (block.type === "session" || block.type === "location") && !isScope;
@@ -446,7 +448,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: block.id,
     data: { parentId: block.parent_id ?? null },
-    disabled: isReadOnly || isCover || isToc || (isScope && depth === 0),
+    disabled: isReadOnly || isCover || isToc || isFigures || (isScope && depth === 0),
   });
   // Só transladação (sem scale). Com DragOverlay, o item ativo fica invisível na lista e não recebe translate — o overlay segue o ponteiro com offset correto.
   const tx = transform?.x ?? 0;
@@ -487,7 +489,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
         onClick={() => onSelect(block)}
       >
         {/* Handle de drag — oculto em isReadOnly (Escopo reordena na raiz como os demais) */}
-        {!isReadOnly && !isCover && !isToc && !(isScope && depth === 0) && (
+        {!isReadOnly && !isCover && !isToc && !isFigures && !(isScope && depth === 0) && (
           <div
             {...listeners}
             {...attributes}
@@ -497,7 +499,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
             <GripVertical className="h-3 w-3" />
           </div>
         )}
-        {(isCover || isToc || (isScope && depth === 0)) && <span className="w-5 shrink-0" aria-hidden />}
+        {(isCover || isToc || isFigures || (isScope && depth === 0)) && <span className="w-5 shrink-0" aria-hidden />}
 
         {/* Ícone / expand — expandível para session e location */}
         {isExpandable ? (
@@ -523,7 +525,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
         )}
 
         {/* Label — duplo-clique para editar (exceto scope) */}
-        {editingLabel && !isReadOnly && !isScope && !isCover && !isToc ? (
+        {editingLabel && !isReadOnly && !isScope && !isCover && !isToc && !isFigures ? (
           <input
             ref={labelInputRef}
             value={labelDraft}
@@ -540,11 +542,11 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
           <span
             className={cn(
               "min-w-0 flex-1 truncate text-xs font-medium leading-none [text-size-adjust:100%]",
-              (block.type === "session" || isScope || isCover || isToc) && "uppercase"
+              (block.type === "session" || isScope || isCover || isToc || isFigures) && "uppercase"
             )}
-            onDoubleClick={(e) => { if (!isReadOnly && !isScope && !isCover && !isToc) { e.stopPropagation(); setLabelDraft(block.label || ""); setEditingLabel(true); } }}
+            onDoubleClick={(e) => { if (!isReadOnly && !isScope && !isCover && !isToc && !isFigures) { e.stopPropagation(); setLabelDraft(block.label || ""); setEditingLabel(true); } }}
           >
-            {isScope ? "ESCOPO" : isCover ? "CAPA" : isToc ? "SUMÁRIO" : (block.label || `(${block.type})`)}
+            {isScope ? "ESCOPO" : isCover ? "CAPA" : isToc ? "SUMÁRIO" : isFigures ? "LISTA DE FIGURAS" : (block.label || `(${block.type})`)}
           </span>
         )}
 
@@ -584,7 +586,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
         )}
 
         {/* Botão excluir — oculto em isReadOnly e scope */}
-        {!isReadOnly && !isScope && !isCover && !isToc && (
+        {!isReadOnly && !isScope && !isCover && !isToc && !isFigures && (
           <button
             disabled={deleting}
             onClick={handleDelete}
@@ -653,11 +655,9 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
   const [autoEditId, setAutoEditId] = useState<string | null>(null);
   const [childrenReg, setChildrenReg] = useState<ChildrenReg>(() => buildChildrenReg(roots));
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setChildrenReg(buildChildrenReg(roots)); }, [roots]);
 
   const localRoots = childrenReg[ROOT_KEY] ?? [];
-  const hasScopeBlock = localRoots.some((b) => b.type === "scope");
 
   const collisionDetection = useMemo(() => {
     const map = new Map<string, string | null>();
@@ -682,8 +682,13 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
 
     // Drop dentro de uma sessão (zona "into:")
     if (overId.startsWith("into:")) {
-      if (activeBlock?.type === "cover" || activeBlock?.type === "toc" || activeBlock?.type === "scope") {
-        toast.error("Escopo, capa e sumário só podem ficar na raiz do documento.");
+      if (
+        activeBlock?.type === "cover" ||
+        activeBlock?.type === "toc" ||
+        activeBlock?.type === "figures" ||
+        activeBlock?.type === "scope"
+      ) {
+        toast.error("Escopo, capa, sumário e lista de figuras só podem ficar na raiz do documento.");
         return;
       }
       const targetParentId = overId.slice(5);
@@ -704,10 +709,13 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
     const overParentId: string | null = (over.data.current?.parentId as string | null) ?? null;
 
     if (
-      (activeBlock?.type === "scope" || activeBlock?.type === "cover" || activeBlock?.type === "toc") &&
+      (activeBlock?.type === "scope" ||
+        activeBlock?.type === "cover" ||
+        activeBlock?.type === "toc" ||
+        activeBlock?.type === "figures") &&
       overParentId !== null
     ) {
-      toast.error("Escopo, capa e sumário só podem ser reordenados na raiz.");
+      toast.error("Escopo, capa, sumário e lista de figuras só podem ser reordenados na raiz.");
       return;
     }
 
@@ -722,10 +730,19 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
       const scopeNode = reordered.find((b) => b.type === "scope");
       const coverNode = reordered.find((b) => b.type === "cover");
       const tocNode = reordered.find((b) => b.type === "toc");
+      const figuresNode = reordered.find((b) => b.type === "figures");
       const rest = reordered.filter(
-        (b) => b.type !== "cover" && b.type !== "toc" && b.type !== "scope",
+        (b) =>
+          b.type !== "cover" &&
+          b.type !== "toc" &&
+          b.type !== "scope" &&
+          b.type !== "figures",
       );
-      if (coverNode && tocNode) {
+      if (coverNode && tocNode && figuresNode) {
+        reordered = scopeNode
+          ? [scopeNode, coverNode, tocNode, figuresNode, ...rest]
+          : [coverNode, tocNode, figuresNode, ...rest];
+      } else if (coverNode && tocNode) {
         reordered = scopeNode
           ? [scopeNode, coverNode, tocNode, ...rest]
           : [coverNode, tocNode, ...rest];

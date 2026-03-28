@@ -50,6 +50,8 @@ import { CompositorItemRow } from "./compositor-item-row";
 import { CompositorDocumentContext } from "./compositor-document-context";
 import { CompositorCoverBlock } from "./compositor-cover-block";
 import { CompositorTocBlock } from "./compositor-toc-block";
+import { CompositorFiguresBlock } from "./compositor-figures-block";
+import type { ScopeFigureEntry } from "./compositor-figures-utils";
 
 // ─── Renderers de bloco (modo documento) ──────────────────────────────────────
 
@@ -59,6 +61,10 @@ function CoverRenderer({ block, budgetId, isReadOnly }: CompositorRendererProps)
 
 function TocRenderer({ block, isReadOnly }: CompositorRendererProps) {
     return <CompositorTocBlock block={block} isReadOnly={isReadOnly} />;
+}
+
+function FiguresRenderer({ block, isReadOnly }: CompositorRendererProps) {
+    return <CompositorFiguresBlock block={block} isReadOnly={isReadOnly} />;
 }
 
 export interface CompositorRendererProps {
@@ -575,6 +581,7 @@ function ScopeRenderer({ block, budgetId }: CompositorRendererProps) {
 const RENDERERS: Record<string, ComponentType<CompositorRendererProps>> = {
     cover: CoverRenderer,
     toc: TocRenderer,
+    figures: FiguresRenderer,
     session: SessionRenderer,
     location: LocationRenderer,
     section: SectionRenderer,
@@ -605,6 +612,7 @@ function BlockDocument({
     const isSection = block.type === "section";
     const isCover = block.type === "cover";
     const isToc = block.type === "toc";
+    const isFigures = block.type === "figures";
     const isRoot = block.depth === 0;
 
     return (
@@ -612,10 +620,11 @@ function BlockDocument({
             {isRoot && isSession && <hr className="border-border mb-6" />}
             {isRoot && isCover && <hr className="border-border mb-6" />}
             {isRoot && isToc && <hr className="border-border mb-6" />}
+            {isRoot && isFigures && <hr className="border-border mb-6" />}
 
             <div
                 className={
-                    isCover || isToc
+                    isCover || isToc || isFigures
                         ? "mb-8"
                         : isSession
                           ? isRoot
@@ -674,6 +683,8 @@ export interface CompositorContentProps {
     budgetId: string;
     items: Record<string, BudgetItem[]>;
     imagesByBlock: Record<string, BudgetImage[]>;
+    /** Imagens do Escopo (ordem da lista de figuras). */
+    scopeFigures: ScopeFigureEntry[];
     onRefresh: () => void;
     scrollRef: RefObject<HTMLDivElement | null>;
     isReadOnly?: boolean;
@@ -692,6 +703,7 @@ export function CompositorContent({
     budgetId,
     items,
     imagesByBlock,
+    scopeFigures,
     onRefresh,
     scrollRef,
     isReadOnly,
@@ -716,6 +728,7 @@ export function CompositorContent({
         focused &&
         (focused.type === "cover" ||
             focused.type === "toc" ||
+            focused.type === "figures" ||
             focused.type === "scope" ||
             focused.type === "session" ||
             focused.type === "location" ||
@@ -724,7 +737,7 @@ export function CompositorContent({
     const blocksToRender = useFocusedSubtree && focused ? [focused] : roots;
 
     return (
-        <CompositorDocumentContext.Provider value={{ roots, items }}>
+        <CompositorDocumentContext.Provider value={{ roots, items, scopeFigures }}>
             <div
                 ref={scrollRef}
                 className="flex-1 overflow-y-auto min-h-0 bg-primary/[0.015]"

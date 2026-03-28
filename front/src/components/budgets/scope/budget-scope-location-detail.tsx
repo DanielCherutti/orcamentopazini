@@ -300,6 +300,7 @@ export function LocationDetail({
                         >[0]["initialAnnotations"]
                     }
                     initialEditorViewport={parseAnnotatorViewport(editingImage.editor_viewport)}
+                    initialCaption={editingImage.caption ?? ""}
                     open={!!editingImage}
                     onOpenChange={(open) => { if (!open) setEditingImage(null); }}
                     onSaved={() => {

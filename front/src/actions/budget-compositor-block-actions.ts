@@ -57,8 +57,8 @@ export async function ensureCompositorCoverBlockAction(
 }
 
 /**
- * Garante um bloco `toc` (sumário) na raiz após a capa e normaliza order_index da raiz:
- * escopo (se existir) → capa → sumário → demais blocos.
+ * Garante blocos fixos na raiz e normaliza order_index:
+ * escopo (se existir) → capa → sumário → lista de figuras → demais blocos.
  */
 export async function ensureCompositorTocBlockAction(
     budgetId: string
@@ -93,6 +93,21 @@ export async function ensureCompositorTocBlockAction(
             roots = rootsDeduped[0] || [];
         }
 
+        const figDupes = roots.filter((r) => r.type === "figures");
+        if (figDupes.length > 1) {
+            const sortedFig = [...figDupes].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+            for (let i = 1; i < sortedFig.length; i++) {
+                await deleteBlockCascade(db, String(sortedFig[i].id));
+            }
+            const rootsDedupedFig = await db.query<
+                [Array<{ id: unknown; order_index: number; type: string }>]
+            >(
+                "SELECT id, order_index, type FROM budget_block WHERE budget_id = $budgetId AND parent_id IS NONE AND deleted_at IS NONE ORDER BY order_index ASC",
+                { budgetId: budgetRecordId }
+            );
+            roots = rootsDedupedFig[0] || [];
+        }
+
         const hasCover = roots.some((r) => r.type === "cover");
         if (!hasCover) {
             return { success: true };
@@ -115,18 +130,45 @@ export async function ensureCompositorTocBlockAction(
             roots = rootsRes2[0] || [];
         }
 
+        if (!roots.some((r) => r.type === "figures")) {
+            await db.create(new Table("budget_block")).content({
+                budget_id: budgetRecordId,
+                type: "figures",
+                label: "LISTA DE FIGURAS",
+                order_index: 99997,
+                props: {},
+            });
+            const rootsResFig = await db.query<
+                [Array<{ id: unknown; order_index: number; type: string }>]
+            >(
+                "SELECT id, order_index, type FROM budget_block WHERE budget_id = $budgetId AND parent_id IS NONE AND deleted_at IS NONE ORDER BY order_index ASC",
+                { budgetId: budgetRecordId }
+            );
+            roots = rootsResFig[0] || [];
+        }
+
         const scope = roots.find((r) => r.type === "scope");
         const cover = roots.find((r) => r.type === "cover");
         const toc = roots.find((r) => r.type === "toc");
-        if (!cover || !toc) {
-            return { success: false, error: "Não foi possível garantir capa e sumário na raiz." };
+        const figures = roots.find((r) => r.type === "figures");
+        if (!cover || !toc || !figures) {
+            return {
+                success: false,
+                error: "Não foi possível garantir capa, sumário e lista de figuras na raiz.",
+            };
         }
 
         const others = roots
-            .filter((r) => r.type !== "cover" && r.type !== "toc" && r.type !== "scope")
+            .filter(
+                (r) =>
+                    r.type !== "cover" &&
+                    r.type !== "toc" &&
+                    r.type !== "scope" &&
+                    r.type !== "figures"
+            )
             .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
 
-        const ordered = scope ? [scope, cover, toc, ...others] : [cover, toc, ...others];
+        const ordered = scope ? [scope, cover, toc, figures, ...others] : [cover, toc, figures, ...others];
         for (let i = 0; i < ordered.length; i++) {
             await db.update(requireRecordId("budget_block", String(ordered[i].id))).merge({
                 order_index: i,
@@ -278,6 +320,12 @@ export async function deleteBlockAction(
         if (row?.type === "toc") {
             return { success: false, error: "O sumário não pode ser removido — ele é gerado automaticamente após a capa." };
         }
+        if (row?.type === "figures") {
+            return {
+                success: false,
+                error: "A lista de figuras não pode ser removida — ela é gerada automaticamente após o sumário.",
+            };
+        }
 
         await deleteBlockCascade(db, blockId);
         revalidatePath(budgetRevalidatePath(budgetId));
@@ -318,6 +366,14 @@ export async function moveBlockToParentAction(
                 return {
                     success: false,
                     error: "O sumário deve permanecer na raiz do documento.",
+                };
+            }
+        }
+        if (row?.type === "figures") {
+            if (newParentId !== null) {
+                return {
+                    success: false,
+                    error: "A lista de figuras deve permanecer na raiz do documento.",
                 };
             }
         }

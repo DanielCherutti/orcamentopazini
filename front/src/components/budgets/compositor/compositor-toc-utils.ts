@@ -13,12 +13,14 @@ export function flattenDocumentBlocks(nodes: BudgetBlock[]): BudgetBlock[] {
   return out;
 }
 
-/** Peso em “páginas” fracionárias para estimar o início de cada sessão no sumário. */
-function pageWeight(block: BudgetBlock, items: Record<string, BudgetItem[]>): number {
+/** Peso em “páginas” fracionárias para estimativa de página no documento. */
+export function documentPageWeight(block: BudgetBlock, items: Record<string, BudgetItem[]>): number {
   switch (block.type) {
     case "cover":
       return 1;
     case "toc":
+      return 1;
+    case "figures":
       return 1;
     case "session":
       return 1.75;
@@ -66,7 +68,7 @@ export function buildTocModel(
         page,
       });
     }
-    cumulative += pageWeight(b, items);
+    cumulative += documentPageWeight(b, items);
   }
 
   return entries;

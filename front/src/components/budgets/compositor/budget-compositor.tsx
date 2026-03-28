@@ -5,8 +5,9 @@ import { Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { CompositorSidebar } from "./compositor-sidebar";
 import { CompositorContent } from "./compositor-content";
 import { getCompositorTreeAction } from "@/actions/budget-compositor-tree-actions";
+import { getScopeFiguresListAction } from "@/actions/budget-scope-actions";
 import { buildTree } from "@/types/budget-compositor-types";
-import { findBlockInTree } from "@/components/budgets/compositor/compositor-content-utils";
+import type { ScopeFigureEntry } from "@/components/budgets/compositor/compositor-figures-utils";
 import type { BudgetBlock, CompositorTree } from "@/types/budget-compositor-types";
 import type { BudgetItem, BudgetImage } from "@/types/budget-types";
 import { useLiveCompositor } from "@/hooks/use-live-compositor";
@@ -19,6 +20,7 @@ interface BudgetCompositorProps {
 export function BudgetCompositor({ budgetId, isReadOnly = false }: BudgetCompositorProps) {
   const [tree, setTree] = useState<CompositorTree | null>(null);
   const [imagesByBlock, setImagesByBlock] = useState<Record<string, BudgetImage[]>>({});
+  const [scopeFigures, setScopeFigures] = useState<ScopeFigureEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -26,22 +28,37 @@ export function BudgetCompositor({ budgetId, isReadOnly = false }: BudgetComposi
 
   useEffect(() => {
     let cancelled = false;
-    getCompositorTreeAction(budgetId).then((result) => {
-      if (cancelled) return;
-      if (result.success && result.blocks) {
-        setTree(buildTree(result.blocks, result.items ?? {}));
-        setImagesByBlock((result.imagesByBlock ?? {}) as Record<string, BudgetImage[]>);
+    Promise.all([getCompositorTreeAction(budgetId), getScopeFiguresListAction(budgetId)]).then(
+      ([result, figRes]) => {
+        if (cancelled) return;
+        if (result.success && result.blocks) {
+          setTree(buildTree(result.blocks, result.items ?? {}));
+          setImagesByBlock((result.imagesByBlock ?? {}) as Record<string, BudgetImage[]>);
+        }
+        if (figRes.success) {
+          setScopeFigures(figRes.entries ?? []);
+        } else {
+          setScopeFigures([]);
+        }
+        setLoading(false);
       }
-      setLoading(false);
-    });
+    );
     return () => { cancelled = true; };
   }, [budgetId]);
 
   const handleRefresh = useCallback(async () => {
-    const result = await getCompositorTreeAction(budgetId);
+    const [result, figRes] = await Promise.all([
+      getCompositorTreeAction(budgetId),
+      getScopeFiguresListAction(budgetId),
+    ]);
     if (result.success && result.blocks) {
       setTree(buildTree(result.blocks, result.items ?? {}));
       setImagesByBlock((result.imagesByBlock ?? {}) as Record<string, BudgetImage[]>);
+    }
+    if (figRes.success) {
+      setScopeFigures(figRes.entries ?? []);
+    } else {
+      setScopeFigures([]);
     }
   }, [budgetId]);
 
@@ -101,6 +118,7 @@ export function BudgetCompositor({ budgetId, isReadOnly = false }: BudgetComposi
           budgetId={budgetId}
           items={items}
           imagesByBlock={imagesByBlock}
+          scopeFigures={scopeFigures}
           onRefresh={handleRefresh}
           scrollRef={scrollRef}
           isReadOnly={isReadOnly}

@@ -14,6 +14,8 @@ export const budgetImageSchema = z.object({
     section_id: z.string().optional(),
     location_id: z.string().optional(),
     block_id: z.string().optional(),
+    /** Legenda para lista de figuras (obrigatória no Escopo ao adicionar foto) */
+    caption: z.string().optional(),
     url: z.string(),
     composed_url: z.string().optional(),
     width: z.number(),

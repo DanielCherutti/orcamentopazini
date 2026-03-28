@@ -62,6 +62,13 @@ export async function createBudgetAction(title: string, code: string) {
             label: "SUMÁRIO",
             props: {},
         });
+        await addBlockAction({
+            budgetId: createdBudget.id!,
+            parentId: null,
+            type: "figures",
+            label: "LISTA DE FIGURAS",
+            props: {},
+        });
 
         revalidatePath("/budgets");
 
