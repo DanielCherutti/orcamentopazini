@@ -52,7 +52,7 @@ export default function NewBudgetPage() {
         <div className="flex flex-col h-[calc(100vh-4rem)] items-center justify-center">
             <div className="w-full max-w-md space-y-6 text-center">
                 <div className="space-y-2">
-                    <h2 className="text-2xl font-bold">Criando Orçamento...</h2>
+                    <h2 className="text-2xl font-bold">Criando orçamento...</h2>
                     <p className="text-muted-foreground">
                         Preparando o workspace para você.
                     </p>

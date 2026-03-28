@@ -18,12 +18,12 @@ interface CatalogDockProps {
     onDragStartCatalogProduct: (e: React.DragEvent, product: Product) => void;
     onDragStartCatalogGroup?: (e: React.DragEvent, group: ProductGroup) => void;
     /**
-     * Com orçamento: lista de IDs de grupo usados nos itens do orçamento (filtra a árvore de grupos).
+     * Com `budgetId`: IDs de grupo usados nos itens do documento (filtra a árvore de grupos).
      * `undefined` = sem filtro (ex.: demo). Enquanto `budgetUsedGroupIdsLoading`, a lista ainda não está pronta.
      */
     budgetUsedGroupIds?: string[];
     budgetUsedGroupIdsLoading?: boolean;
-    /** Quando true (botão na toolbar com orçamento), lista a aba Grupo com todos os grupos do catálogo, não só os do orçamento. */
+    /** Quando true (toolbar), lista a aba Grupo com todos os grupos do catálogo, não só os usados no documento. */
     showAllProductGroups?: boolean;
     /** Incrementado pela toolbar: vai à aba Grupo e expande/carrega conforme a lista visível (filtrada ou completa). */
     expandAllGroupsSignal?: number;
@@ -205,7 +205,7 @@ export function CatalogDock({
         if (activeTab === "groups") loadGroups();
     }, [activeTab, loadGroups]);
 
-    // Toolbar do anotador: aba Grupo + expandir todos conforme lista atual (só orçamento ou catálogo completo).
+    // Toolbar do anotador: aba Grupo + expandir todos conforme lista atual (só compositor ou catálogo completo).
     useEffect(() => {
         if (!expandAllGroupsSignal) return;
         if (!showAllProductGroups && budgetUsedGroupIdsLoading) return;
@@ -273,7 +273,7 @@ export function CatalogDock({
                                 "data-[state=inactive]:text-muted-foreground"
                             )}
                         >
-                            Do orçamento
+                            Do compositor
                         </TabsTrigger>
                         <TabsTrigger
                             value="groups"
@@ -288,7 +288,7 @@ export function CatalogDock({
                     </TabsList>
                 </div>
 
-                {/* Aba: Itens do Orçamento */}
+                {/* Aba: itens do documento (trecho) */}
                 <TabsContent
                     value="budget"
                     className="mt-0 flex flex-1 flex-col min-h-0 overflow-hidden outline-none data-[state=inactive]:hidden"
@@ -326,7 +326,7 @@ export function CatalogDock({
                     </div>
                 </TabsContent>
 
-                {/* Aba: Grupos do orçamento (filtrados) + busca global de produto */}
+                {/* Aba: grupos (filtrados pelo documento) + busca global */}
                 <TabsContent
                     value="groups"
                     className="mt-0 flex flex-1 flex-col min-h-0 overflow-hidden outline-none data-[state=inactive]:hidden"
@@ -403,7 +403,7 @@ export function CatalogDock({
                                             groups.length > 0 &&
                                             filteredGroups.length === 0 && (
                                                 <p className="text-sm text-muted-foreground text-center py-6 px-2 leading-relaxed">
-                                                    Nenhum grupo usado nos itens deste orçamento. Use o ícone de lista na
+                                                    Nenhum grupo usado nos itens deste compositor. Use o ícone de lista na
                                                     barra para ver todo o catálogo.
                                                 </p>
                                             )}

@@ -24,7 +24,7 @@ interface BudgetDataSectionProps {
 }
 
 /**
- * Seção editável de dados principais do orçamento.
+ * Seção editável de dados principais no workspace (aba Compositor).
  * Inclui: Cliente, Número, Datas, Condições Comerciais, Descrição.
  */
 /**
@@ -149,7 +149,7 @@ export function BudgetDataSection({
                 <CardContent className="grid gap-6 md:grid-cols-3">
                     {/* Número da seção raiz */}
                     <div className="space-y-2">
-                        <Label htmlFor="section-number">Seção do Orçamento (nº raiz)</Label>
+                        <Label htmlFor="section-number">Seção do Compositor (nº raiz)</Label>
                         <Input
                             id="section-number"
                             type="number"

@@ -106,9 +106,9 @@ export const loginHighlights: LoginHighlight[] = [
   {
     kind: "improvement",
     date: "2026-03-24",
-    title: "Escopo e orçamento: mesma lógica de pai e filho na tela",
+    title: "Escopo e compositor: mesma lógica de pai e filho na tela",
     description:
-      "Escopo e Ambientes: o índice mantém todos os trechos visíveis; o ambiente abre todos no painel (como antes no escopo) e o trecho abre só ele. Orçamento com compositor: sessão “pai” mostra tudo abaixo (subsessões, locais…); subsessão, local ou trecho mostra só aquele ramo. Para ver todas as raízes no compositor, selecione o bloco ESCOPO ou um tipo fora sessão/local/trecho.",
+      "Escopo e Ambientes: o índice mantém todos os trechos visíveis; o ambiente abre todos no painel (como antes no escopo) e o trecho abre só ele. Na aba Compositor: sessão “pai” mostra tudo abaixo (subsessões, locais…); subsessão, local ou trecho mostra só aquele ramo. Para ver todas as raízes no compositor, selecione o bloco ESCOPO ou um tipo fora sessão/local/trecho.",
   },
   {
     kind: "improvement",

@@ -1,4 +1,4 @@
-// Tipos do Compositor de Orçamento
+// Tipos do módulo Compositor (árvore de blocos do documento)
 // Arquitetura de blocos tipados com aninhamento livre (Notion-style)
 
 import type { BudgetItem } from "@/types/budget-types";

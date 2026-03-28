@@ -119,7 +119,7 @@ export async function updateBudgetAction(budgetId: string, updates: Partial<Budg
             if (!isBudgetEditableStatus(currentStatus)) {
                 return {
                     success: false,
-                    error: "Este orçamento está finalizado ou fechado e não pode ser alterado.",
+                    error: "Este compositor está finalizado ou fechado e não pode ser alterado.",
                 };
             }
         }
@@ -299,7 +299,7 @@ function extractBudgetIdFromAnnotationRow(row: Record<string, unknown>): string 
 }
 
 /**
- * Figurinha em foto: só atualiza se o orçamento da imagem estiver em draft.
+ * Figurinha em foto: só atualiza se o compositor da imagem estiver em draft.
  * Quando FETCH não expande `budget_id`, busca `budget_image` + `budget` explicitamente.
  */
 async function isDraftBudgetForProductStickerRow(
@@ -365,7 +365,7 @@ async function isDraftBudgetForProductStickerRow(
     }
 }
 
-/** Recalcula total do orçamento somando itens ligados por bloco (compositor) e por trecho (legado). */
+/** Recalcula o total do documento somando itens ligados por bloco (compositor) e por trecho (legado). */
 async function recalculateBudgetTotalCombined(
     db: Awaited<ReturnType<typeof getDb>>,
     budgetId: string
@@ -397,7 +397,7 @@ async function recalculateBudgetTotalCombined(
     });
 }
 
-/** Dados do catálogo propagados para itens de orçamento e figurinhas em fotos (só `draft`). */
+/** Dados do catálogo propagados para itens de compositor e figurinhas em fotos (só `draft`). */
 export type ProductCatalogSyncSnapshot = {
     code: string;
     description: string;

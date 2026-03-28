@@ -24,11 +24,11 @@ interface ToolbarProps {
     onInsertImage?: () => void;
     onToggleCatalog?: () => void;
     catalogOpen?: boolean;
-    /** Aba Grupo + expandir grupos; com orçamento costuma alternar catálogo completo × só grupos do orçamento. */
+    /** Aba Grupo + expandir grupos; com documento aberto alterna catálogo completo × só grupos usados nele. */
     onExpandAllCatalogGroups?: () => void;
-    /** Indica modo “todos os grupos do catálogo” (só relevante com orçamento). */
+    /** Indica modo “todos os grupos do catálogo” (relevante com filtro por documento). */
     catalogShowAllGroupsActive?: boolean;
-    /** Existe filtro por orçamento na aba Grupo (há `budgetId` no anotador). */
+    /** Existe filtro por itens do documento na aba Grupo (há `budgetId` no anotador). */
     catalogHasBudgetFilter?: boolean;
     isSaving?: boolean;
     onSave?: () => void;
@@ -127,7 +127,7 @@ export function Toolbar({
                     className="h-9 w-9 p-0"
                     title={
                         catalogShowAllGroupsActive
-                            ? "Voltar a mostrar só os grupos usados neste orçamento"
+                            ? "Voltar a mostrar só os grupos usados neste compositor"
                             : catalogHasBudgetFilter
                               ? "Ver todos os grupos do catálogo e expandir (aba Grupo)"
                               : "Ir à aba Grupo e expandir todos os grupos"

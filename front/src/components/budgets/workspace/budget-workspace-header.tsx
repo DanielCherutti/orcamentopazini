@@ -18,7 +18,7 @@ interface BudgetWorkspaceHeaderProps {
     hasChanges?: boolean;
     onSave?: () => void;
     onOpenPreview?: () => void;
-    /** Recarrega o orçamento após mudança de status (ex.: finalizar). */
+    /** Recarrega o compositor após mudança de status (ex.: finalizar). */
     onBudgetRefresh?: () => void | Promise<void>;
     activeTab: ActiveTab;
     onTabChange: (tab: ActiveTab) => void;
@@ -114,7 +114,7 @@ export function BudgetWorkspaceHeader({
                         title={editable ? "Duplo clique para editar" : "Somente leitura"}
                     >
                         <span className="font-semibold text-sm truncate">
-                            {budget.title || budget.code || "Novo Orçamento"}
+                            {budget.title || budget.code || "Novo Compositor"}
                         </span>
                         {editable && (
                             <Pencil className="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-40 transition-opacity" />
@@ -179,14 +179,14 @@ export function BudgetWorkspaceHeader({
                         onClick={async () => {
                             if (
                                 !confirm(
-                                    "Finalizar este orçamento? Depois disso ele não poderá mais ser editado — apenas visualizado, pré-visualização e PDF."
+                                    "Finalizar este compositor? Depois disso ele não poderá mais ser editado — apenas visualizado, pré-visualização e PDF."
                                 )
                             ) {
                                 return;
                             }
                             const res = await updateBudgetAction(budget.id!, { status: "finalized" });
                             if (res.success) {
-                                toast.success("Orçamento finalizado.");
+                                toast.success("Compositor finalizado.");
                                 await onBudgetRefresh();
                             } else {
                                 toast.error(res.error || "Não foi possível finalizar.");

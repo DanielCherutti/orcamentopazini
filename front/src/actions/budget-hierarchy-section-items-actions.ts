@@ -453,7 +453,7 @@ export async function reorderSectionItemsAction(orderedItemIds: string[], budget
 }
 
 /**
- * IDs de `product_group` referenciados por itens do orçamento (escopo via seção/local
+ * IDs de `product_group` referenciados por itens do compositor (escopo via seção/local
  * e compositor via bloco). Usado para restringir o painel de grupos no anotador de fotos.
  */
 export async function getBudgetUsedProductGroupIdsAction(

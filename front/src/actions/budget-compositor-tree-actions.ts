@@ -74,6 +74,6 @@ export async function getCompositorTreeAction(budgetId: string): Promise<{
         }
         console.error("getCompositorTreeAction error:", error);
         if (isTokenExpiredError(error)) resetDb();
-        return { success: false, error: "Erro ao carregar compositor" };
+        return { success: false, error: "Erro ao carregar árvore do documento" };
     }
 }

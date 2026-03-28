@@ -562,7 +562,7 @@ export function ScopeSidebar({
                     <div className="min-w-0 flex-1 pt-0.5">
                         <h3 className="text-sm font-semibold tracking-tight text-foreground">Índice do escopo</h3>
                         <p className="text-[11px] leading-snug text-muted-foreground mt-0.5">
-                            Locais e trechos do orçamento
+                            Locais e trechos do compositor
                         </p>
                         {(locationCount > 0 || sectionCount > 0) && (
                             <div className="mt-2 flex flex-wrap gap-1.5">

@@ -10,7 +10,7 @@ interface PageProps {
 }
 
 export const metadata: Metadata = {
-  title: "Orçamento",
+  title: "Compositor",
 };
 
 export default async function BudgetPage(props: PageProps) {

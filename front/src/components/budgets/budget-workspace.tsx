@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { WorkspaceContext, type ActiveTab } from "./workspace-context";
 
 const TABS: { id: ActiveTab; label: string; icon: React.ReactNode }[] = [
-    { id: 'budget',  label: 'Orçamento', icon: <FileText className="h-3.5 w-3.5" /> },
+    { id: 'budget',  label: 'Compositor', icon: <FileText className="h-3.5 w-3.5" /> },
     { id: 'scope',   label: 'Escopo',    icon: <MapIcon className="h-3.5 w-3.5" /> },
     { id: 'print',   label: 'Impressão', icon: <Printer className="h-3.5 w-3.5" /> },
 ];
@@ -60,17 +60,17 @@ export function BudgetWorkspace({ initialBudget, mode: _mode = 'edit' }: BudgetW
     const handleSave = async () => {
         try {
             const budgetId = budget.id as string;
-            if (!budgetId) { toast.error("ID do orçamento inválido"); return; }
+            if (!budgetId) { toast.error("ID do compositor inválido"); return; }
             const result = await repo.updateBudget(budgetId, budget);
             if (result.success) {
-                toast.success("Orçamento salvo com sucesso!");
+                toast.success("Compositor salvo com sucesso!");
                 setHasChanges(false);
                 await handleRefresh();
             } else {
-                toast.error(result.error || "Erro ao salvar orçamento");
+                toast.error(result.error || "Erro ao salvar compositor");
             }
         } catch {
-            toast.error("Erro ao salvar orçamento");
+            toast.error("Erro ao salvar compositor");
         }
     };
 
@@ -94,17 +94,17 @@ export function BudgetWorkspace({ initialBudget, mode: _mode = 'edit' }: BudgetW
                         tabs={TABS}
                     />
 
-                    {/* Banner para orçamentos fora de “em andamento” */}
+                    {/* Banner para compositores fora de “em andamento” */}
                     {isReadOnly && (
                         <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center gap-2 text-sm text-amber-800 shrink-0">
                             <Info className="h-4 w-4 shrink-0" />
                             {budget.status === "finalized" ? (
                                 <>
-                                    Este orçamento está <strong>finalizado</strong> e não pode mais ser editado — apenas visualizado, pré-visualização e PDF. Duplique para criar uma nova versão em andamento.
+                                    Este compositor está <strong>finalizado</strong> e não pode mais ser editado — apenas visualizado, pré-visualização e PDF. Duplique para criar uma nova versão em andamento.
                                 </>
                             ) : (
                                 <>
-                                    Este orçamento está em status <strong>{getBudgetStatusLabel(String(budget.status))}</strong> e não pode mais ser editado. Duplique para criar uma nova versão em andamento.
+                                    Este compositor está em status <strong>{getBudgetStatusLabel(String(budget.status))}</strong> e não pode mais ser editado. Duplique para criar uma nova versão em andamento.
                                 </>
                             )}
                         </div>
@@ -114,7 +114,7 @@ export function BudgetWorkspace({ initialBudget, mode: _mode = 'edit' }: BudgetW
                         <>
                             {/* Conteúdo das abas */}
                             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                                {/* Aba Orçamento */}
+                                {/* Aba Compositor */}
                                 <div className={cn("flex-1 flex min-h-0 overflow-hidden bg-white", activeTab !== 'budget' && "hidden")}>
                                     <BudgetCompositor budgetId={budgetId} isReadOnly={isReadOnly} />
                                 </div>
@@ -143,7 +143,7 @@ export function BudgetWorkspace({ initialBudget, mode: _mode = 'edit' }: BudgetW
                                         <iframe
                                             src={pdfUrl}
                                             className="flex-1 w-full border-0"
-                                            title="PDF do orçamento"
+                                            title="PDF do compositor"
                                         />
                                     </div>
                                 )}

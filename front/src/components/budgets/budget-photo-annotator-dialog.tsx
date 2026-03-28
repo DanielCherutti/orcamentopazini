@@ -32,7 +32,7 @@ interface BudgetPhotoAnnotatorDialogProps {
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
     onSaved?: () => void;
-    /** Callback para refresh dos dados do orçamento (quando produto é auto-adicionado) */
+    /** Callback para refresh dos dados do compositor (quando produto é auto-adicionado) */
     onRefresh?: () => void;
     /** URL da imagem ORIGINAL (não composta) — usada no modo edição */
     initialImageUrl?: string | null;
@@ -308,7 +308,7 @@ export function BudgetPhotoAnnotatorDialog({
             {/* 100% da área útil — fullscreen; sobrescreve max-w do Dialog */}
             <DialogContent className="!max-w-none !w-screen !h-screen !top-0 !left-0 !translate-x-0 !translate-y-0 rounded-none flex flex-col p-0 gap-0">
                 <DialogDescription className="sr-only">
-                    Área para enviar e anotar fotos do local do orçamento. Arraste e solte ou escolha um arquivo.
+                    Área para enviar e anotar fotos do local do compositor. Arraste e solte ou escolha um arquivo.
                 </DialogDescription>
                 <DialogHeader className="px-4 py-2 shrink-0 border-b min-h-[3rem]">
                     <DialogTitle className="flex justify-between items-center">

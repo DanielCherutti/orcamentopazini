@@ -684,7 +684,7 @@ export function CompositorContent({
                 ref={scrollRef}
                 className="flex-1 flex items-center justify-center text-muted-foreground text-sm p-8"
             >
-                Use o menu lateral para criar a estrutura do orçamento.
+                Use o menu lateral para criar a estrutura do compositor.
             </div>
         );
     }

@@ -742,7 +742,7 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
         {/* Cabeçalho */}
         <div className="p-3 border-b border-primary/20 shrink-0 bg-primary/[0.04]">
           <h3 className="text-sm font-semibold text-primary">Compositor</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Estrutura do orçamento</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Estrutura do compositor</p>
         </div>
 
         {/* Árvore */}

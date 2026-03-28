@@ -94,12 +94,12 @@ export function AdvancedImageAnnotator({
     const [catalogDockOpen, setCatalogDockOpen] = useState(true);
     /** Incrementado pelo botão da toolbar: aba Grupo + expandir (lista filtrada ou catálogo completo). */
     const [expandAllGroupsSignal, setExpandAllGroupsSignal] = useState(0);
-    /** Com orçamento: true = aba Grupo mostra todos os grupos do cadastro, não só os do orçamento. */
+    /** Com `budgetId`: true = aba Grupo mostra todos os grupos do cadastro, não só os usados no documento. */
     const [showAllCatalogGroups, setShowAllCatalogGroups] = useState(false);
-    /** Com `budgetId`: IDs de grupo usados no orçamento para filtrar a aba Grupo. */
+    /** Com `budgetId`: IDs de grupo usados no documento para filtrar a aba Grupo. */
     const [budgetUsedGroupIds, setBudgetUsedGroupIds] = useState<string[] | undefined>(undefined);
     const [budgetUsedGroupIdsLoading, setBudgetUsedGroupIdsLoading] = useState(false);
-    /** Incrementado após mutar itens do orçamento a partir do anotador (atualiza filtro de grupos). */
+    /** Incrementado após mutar itens do documento a partir do anotador (atualiza filtro de grupos). */
     const [budgetUsedGroupIdsVersion, setBudgetUsedGroupIdsVersion] = useState(0);
 
     useEffect(() => {
@@ -565,7 +565,7 @@ export function AdvancedImageAnnotator({
         if (source) {
             let linkedItemId = itemId?.trim() ? itemId : "";
 
-            // Auto-add ao orçamento se veio do catálogo E for um produto real (não grupo)
+            // Auto-add ao documento se veio do catálogo E for um produto real (não grupo)
             if (source === 'catalog' && sectionId && budgetId && productId) {
                 try {
                     const res = await addItemAction(sectionId, budgetId, productId, 1);
@@ -574,15 +574,15 @@ export function AdvancedImageAnnotator({
                         toast.success(
                             productUnit
                                 ? `"${productName}" adicionado (1 ${productUnit})`
-                                : `"${productName}" adicionado ao orçamento`
+                                : `"${productName}" adicionado ao documento`
                         );
                         onProductAddedToBudget?.();
                         setBudgetUsedGroupIdsVersion((v) => v + 1);
                     } else {
-                        toast.error(res.error || "Erro ao adicionar produto ao orçamento");
+                        toast.error(res.error || "Erro ao adicionar produto ao documento");
                     }
                 } catch {
-                    toast.error("Erro ao adicionar produto ao orçamento");
+                    toast.error("Erro ao adicionar produto ao documento");
                 }
             }
 
@@ -973,7 +973,7 @@ export function AdvancedImageAnnotator({
 
             <div className="flex gap-4 flex-1 min-h-0">
 
-                {/* DOCK LATERAL — abas Orçamento + Grupo (grupos filtrados pelos itens do orçamento quando há budgetId) */}
+                {/* DOCK LATERAL — abas Documento + Grupo (grupos filtrados pelos itens quando há budgetId) */}
                 {!readOnly && (
                     <div
                         className={
