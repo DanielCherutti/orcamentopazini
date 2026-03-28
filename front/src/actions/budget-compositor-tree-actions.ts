@@ -7,7 +7,10 @@ import type { BudgetItem } from "@/types/budget-types";
 import { serializeBudgetEntity } from "@/actions/budget-shared";
 import { getBudgetImagesByBlocks } from "@/actions/budget-annotations";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
-import { ensureCompositorCoverBlockAction } from "@/actions/budget-compositor-block-actions";
+import {
+    ensureCompositorCoverBlockAction,
+    ensureCompositorTocBlockAction,
+} from "@/actions/budget-compositor-block-actions";
 
 export async function getCompositorTreeAction(budgetId: string): Promise<{
     success: boolean;
@@ -24,6 +27,7 @@ export async function getCompositorTreeAction(budgetId: string): Promise<{
         const budgetRecordId = requireRecordId("budget", budgetId);
 
         await ensureCompositorCoverBlockAction(budgetId);
+        await ensureCompositorTocBlockAction(budgetId);
 
         const blocksRes = await db.query<[BudgetBlockFlat[]]>(
             "SELECT * FROM budget_block WHERE budget_id = $budgetId AND deleted_at IS NONE ORDER BY order_index ASC",

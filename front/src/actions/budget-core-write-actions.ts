@@ -47,6 +47,7 @@ export async function createBudgetAction(title: string, code: string) {
             id: String(createdRecord.id),
         } as Budget;
 
+        await addBlockAction({ budgetId: createdBudget.id!, parentId: null, type: "scope", label: "ESCOPO" });
         await addBlockAction({
             budgetId: createdBudget.id!,
             parentId: null,
@@ -54,7 +55,13 @@ export async function createBudgetAction(title: string, code: string) {
             label: "CAPA",
             props: { ...DEFAULT_COVER_PROPS },
         });
-        await addBlockAction({ budgetId: createdBudget.id!, parentId: null, type: "scope", label: "ESCOPO" });
+        await addBlockAction({
+            budgetId: createdBudget.id!,
+            parentId: null,
+            type: "toc",
+            label: "SUMÁRIO",
+            props: {},
+        });
 
         revalidatePath("/budgets");
 

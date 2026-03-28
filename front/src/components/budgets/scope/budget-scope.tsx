@@ -38,7 +38,10 @@ export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) 
                 return out;
             };
             const scopeBlock = flattenLocal(tree.blocks).find((b) => b.type === "scope");
-            if (scopeBlock) setScopeNumber(scopeBlock.number);
+            if (scopeBlock) {
+                const rootIndex = tree.blocks.findIndex((b) => b.id === scopeBlock.id);
+                setScopeNumber(rootIndex >= 0 ? String(rootIndex + 1) : "");
+            }
         }
     }, [budgetId]);
 

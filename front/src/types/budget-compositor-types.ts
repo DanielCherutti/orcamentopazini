@@ -8,6 +8,7 @@ import type { BudgetItem } from "@/types/budget-types";
 // Catálogo inicial — extensível adicionando novas strings sem migração de banco
 export type BlockType =
   | "cover"     // Capa do documento (PDF / proposta) — uma por orçamento, criada automaticamente
+  | "toc"       // Sumário automático (sempre após a capa) — conteúdo derivado da árvore
   | "session"   // Contêiner: sessão / sub-sessão (qualquer profundidade)
   | "text"      // Texto rico (Tiptap HTML)
   | "location"  // Local / Ambiente (com descrição + galeria + trechos)
@@ -199,7 +200,7 @@ export interface CompositorTree {
 // ─── buildTree ─────────────────────────────────────────────────────────────────
 // Converte lista plana de blocos em árvore aninhada com:
 //   - children ordenados por order_index
-//   - number calculado considerando apenas blocos tipo 'session' na hierarquia
+//   - number só em blocos `session` (capa, sumário, escopo, etc. ficam sem número)
 //   - depth a partir da raiz
 
 export function buildTree(
@@ -231,20 +232,25 @@ export function buildTree(
   };
   sortChildren(roots);
 
-  // 4. Calcula number e depth recursivamente.
-  // Todos os tipos de bloco recebem numeração sequencial entre irmãos:
-  // ex: 1 / 1.1 / 1.1.1 / 1.1.2 / 1.2
+  // 4. Numeração hierárquica apenas para sessões (1., 1.1., 2., …).
   const assignNumbers = (
     nodes: BudgetBlock[],
-    parentNumber: string,
+    sessionParentNumber: string,
     depth: number
   ) => {
-    let counter = 0;
+    let sessionIndex = 0;
     for (const node of nodes) {
       node.depth = depth;
-      counter++;
-      node.number = parentNumber ? `${parentNumber}.${counter}` : String(counter);
-      assignNumbers(node.children, node.number, depth + 1);
+      if (node.type === "session") {
+        sessionIndex++;
+        node.number = sessionParentNumber
+          ? `${sessionParentNumber}.${sessionIndex}`
+          : String(sessionIndex);
+        assignNumbers(node.children, node.number, depth + 1);
+      } else {
+        node.number = "";
+        assignNumbers(node.children, sessionParentNumber, depth + 1);
+      }
     }
   };
   assignNumbers(roots, "", 0);

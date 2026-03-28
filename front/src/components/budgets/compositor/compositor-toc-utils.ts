@@ -1,0 +1,73 @@
+import type { BudgetBlock } from "@/types/budget-compositor-types";
+import type { BudgetItem } from "@/types/budget-types";
+
+/** Ordem de renderização do documento (DFS, igual a BlockDocument). */
+export function flattenDocumentBlocks(nodes: BudgetBlock[]): BudgetBlock[] {
+  const out: BudgetBlock[] = [];
+  for (const n of nodes) {
+    out.push(n);
+    if (n.children.length > 0) {
+      out.push(...flattenDocumentBlocks(n.children));
+    }
+  }
+  return out;
+}
+
+/** Peso em “páginas” fracionárias para estimar o início de cada sessão no sumário. */
+function pageWeight(block: BudgetBlock, items: Record<string, BudgetItem[]>): number {
+  switch (block.type) {
+    case "cover":
+      return 1;
+    case "toc":
+      return 1;
+    case "session":
+      return 1.75;
+    case "location":
+      return 1.15;
+    case "section": {
+      const count = items[block.id]?.length ?? 0;
+      return Math.min(3.5, 0.55 + count * 0.06);
+    }
+    case "text":
+      return 0.75;
+    case "scope":
+      return 2.25;
+    default:
+      return 0.45;
+  }
+}
+
+export interface TocEntryModel {
+  number: string;
+  title: string;
+  depth: number;
+  page: number;
+}
+
+/**
+ * Gera entradas do sumário a partir da árvore atual.
+ * Números de página são estimativas; atualizam-se sempre que a árvore ou itens mudam.
+ */
+export function buildTocModel(
+  roots: BudgetBlock[],
+  items: Record<string, BudgetItem[]>
+): TocEntryModel[] {
+  const ordered = flattenDocumentBlocks(roots);
+  const entries: TocEntryModel[] = [];
+  let cumulative = 1;
+
+  for (const b of ordered) {
+    if (b.type === "session" && b.number) {
+      const page = Math.max(1, Math.floor(cumulative));
+      entries.push({
+        number: b.number,
+        title: (b.label || "Sessão").trim() || "Sessão",
+        depth: b.depth,
+        page,
+      });
+    }
+    cumulative += pageWeight(b, items);
+  }
+
+  return entries;
+}

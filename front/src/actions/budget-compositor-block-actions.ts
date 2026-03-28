@@ -56,6 +56,95 @@ export async function ensureCompositorCoverBlockAction(
     }
 }
 
+/**
+ * Garante um bloco `toc` (sumário) na raiz após a capa e normaliza order_index da raiz:
+ * escopo (se existir) → capa → sumário → demais blocos.
+ */
+export async function ensureCompositorTocBlockAction(
+    budgetId: string
+): Promise<{ success: boolean; error?: string }> {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const db = await getDb();
+    try {
+        const budgetRecordId = requireRecordId("budget", budgetId);
+
+        const rootsRes = await db.query<
+            [Array<{ id: unknown; order_index: number; type: string }>]
+        >(
+            "SELECT id, order_index, type FROM budget_block WHERE budget_id = $budgetId AND parent_id IS NONE AND deleted_at IS NONE ORDER BY order_index ASC",
+            { budgetId: budgetRecordId }
+        );
+        let roots = rootsRes[0] || [];
+
+        const tocDupes = roots.filter((r) => r.type === "toc");
+        if (tocDupes.length > 1) {
+            const sorted = [...tocDupes].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+            for (let i = 1; i < sorted.length; i++) {
+                await deleteBlockCascade(db, String(sorted[i].id));
+            }
+            const rootsDeduped = await db.query<
+                [Array<{ id: unknown; order_index: number; type: string }>]
+            >(
+                "SELECT id, order_index, type FROM budget_block WHERE budget_id = $budgetId AND parent_id IS NONE AND deleted_at IS NONE ORDER BY order_index ASC",
+                { budgetId: budgetRecordId }
+            );
+            roots = rootsDeduped[0] || [];
+        }
+
+        const hasCover = roots.some((r) => r.type === "cover");
+        if (!hasCover) {
+            return { success: true };
+        }
+
+        if (!roots.some((r) => r.type === "toc")) {
+            await db.create(new Table("budget_block")).content({
+                budget_id: budgetRecordId,
+                type: "toc",
+                label: "SUMÁRIO",
+                order_index: 99999,
+                props: {},
+            });
+            const rootsRes2 = await db.query<
+                [Array<{ id: unknown; order_index: number; type: string }>]
+            >(
+                "SELECT id, order_index, type FROM budget_block WHERE budget_id = $budgetId AND parent_id IS NONE AND deleted_at IS NONE ORDER BY order_index ASC",
+                { budgetId: budgetRecordId }
+            );
+            roots = rootsRes2[0] || [];
+        }
+
+        const scope = roots.find((r) => r.type === "scope");
+        const cover = roots.find((r) => r.type === "cover");
+        const toc = roots.find((r) => r.type === "toc");
+        if (!cover || !toc) {
+            return { success: false, error: "Não foi possível garantir capa e sumário na raiz." };
+        }
+
+        const others = roots
+            .filter((r) => r.type !== "cover" && r.type !== "toc" && r.type !== "scope")
+            .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+
+        const ordered = scope ? [scope, cover, toc, ...others] : [cover, toc, ...others];
+        for (let i = 0; i < ordered.length; i++) {
+            await db.update(requireRecordId("budget_block", String(ordered[i].id))).merge({
+                order_index: i,
+            });
+        }
+
+        revalidatePath(budgetRevalidatePath(budgetId));
+        return { success: true };
+    } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
+        console.error("ensureCompositorTocBlockAction error:", error);
+        if (isTokenExpiredError(error)) resetDb();
+        return { success: false, error: "Erro ao garantir sumário" };
+    }
+}
+
 async function deleteBlockCascade(db: Awaited<ReturnType<typeof getDb>>, blockId: string) {
     const blockRecordId = requireRecordId("budget_block", blockId);
 
@@ -186,6 +275,9 @@ export async function deleteBlockAction(
         if (row?.type === "cover") {
             return { success: false, error: "A capa não pode ser removida — todo documento possui uma capa." };
         }
+        if (row?.type === "toc") {
+            return { success: false, error: "O sumário não pode ser removido — ele é gerado automaticamente após a capa." };
+        }
 
         await deleteBlockCascade(db, blockId);
         revalidatePath(budgetRevalidatePath(budgetId));
@@ -218,6 +310,14 @@ export async function moveBlockToParentAction(
                 return {
                     success: false,
                     error: "A capa deve permanecer na raiz do documento.",
+                };
+            }
+        }
+        if (row?.type === "toc") {
+            if (newParentId !== null) {
+                return {
+                    success: false,
+                    error: "O sumário deve permanecer na raiz do documento.",
                 };
             }
         }

@@ -47,12 +47,18 @@ import {
 } from "./compositor-content-utils";
 import { useBlockDescription, useBlockLabel } from "./compositor-content-hooks";
 import { CompositorItemRow } from "./compositor-item-row";
+import { CompositorDocumentContext } from "./compositor-document-context";
 import { CompositorCoverBlock } from "./compositor-cover-block";
+import { CompositorTocBlock } from "./compositor-toc-block";
 
 // ─── Renderers de bloco (modo documento) ──────────────────────────────────────
 
 function CoverRenderer({ block, budgetId, isReadOnly }: CompositorRendererProps) {
     return <CompositorCoverBlock block={block} budgetId={budgetId} isReadOnly={isReadOnly} />;
+}
+
+function TocRenderer({ block, isReadOnly }: CompositorRendererProps) {
+    return <CompositorTocBlock block={block} isReadOnly={isReadOnly} />;
 }
 
 export interface CompositorRendererProps {
@@ -568,6 +574,7 @@ function ScopeRenderer({ block, budgetId }: CompositorRendererProps) {
 
 const RENDERERS: Record<string, ComponentType<CompositorRendererProps>> = {
     cover: CoverRenderer,
+    toc: TocRenderer,
     session: SessionRenderer,
     location: LocationRenderer,
     section: SectionRenderer,
@@ -597,16 +604,18 @@ function BlockDocument({
     const isLocation = block.type === "location";
     const isSection = block.type === "section";
     const isCover = block.type === "cover";
+    const isToc = block.type === "toc";
     const isRoot = block.depth === 0;
 
     return (
         <div id={`block-${block.id}`}>
             {isRoot && isSession && <hr className="border-border mb-6" />}
             {isRoot && isCover && <hr className="border-border mb-6" />}
+            {isRoot && isToc && <hr className="border-border mb-6" />}
 
             <div
                 className={
-                    isCover
+                    isCover || isToc
                         ? "mb-8"
                         : isSession
                           ? isRoot
@@ -706,6 +715,8 @@ export function CompositorContent({
     const useFocusedSubtree =
         focused &&
         (focused.type === "cover" ||
+            focused.type === "toc" ||
+            focused.type === "scope" ||
             focused.type === "session" ||
             focused.type === "location" ||
             focused.type === "section");
@@ -713,23 +724,25 @@ export function CompositorContent({
     const blocksToRender = useFocusedSubtree && focused ? [focused] : roots;
 
     return (
-        <div
-            ref={scrollRef}
-            className="flex-1 overflow-y-auto min-h-0 bg-primary/[0.015]"
-        >
-            <div className="w-full p-6 space-y-2">
-                {blocksToRender.map((block) => (
-                    <BlockDocument
-                        key={block.id}
-                        block={block}
-                        budgetId={budgetId}
-                        items={items}
-                        imagesByBlock={imagesByBlock}
-                        onRefresh={onRefresh}
-                        isReadOnly={isReadOnly}
-                    />
-                ))}
+        <CompositorDocumentContext.Provider value={{ roots, items }}>
+            <div
+                ref={scrollRef}
+                className="flex-1 overflow-y-auto min-h-0 bg-primary/[0.015]"
+            >
+                <div className="w-full p-6 space-y-2">
+                    {blocksToRender.map((block) => (
+                        <BlockDocument
+                            key={block.id}
+                            block={block}
+                            budgetId={budgetId}
+                            items={items}
+                            imagesByBlock={imagesByBlock}
+                            onRefresh={onRefresh}
+                            isReadOnly={isReadOnly}
+                        />
+                    ))}
+                </div>
             </div>
-        </div>
+        </CompositorDocumentContext.Provider>
     );
 }
