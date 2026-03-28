@@ -99,7 +99,7 @@ export function Toolbar({
                 size="sm"
                 onClick={onInsertImage}
                 className="h-9 w-9 p-0"
-                title="Inserir Imagem"
+                title="Inserir figura"
             >
                 <ImagePlus className="h-4 w-4" />
             </Button>

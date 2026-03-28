@@ -31,6 +31,17 @@ import { InsertImageDialog } from "./insert-image-dialog";
 import { computeAnnotatorContentBBox } from "./annotator-compute-content-bbox";
 import { AnnotatorKonvaWorkspace } from "./annotator-konva-workspace";
 import { AnnotatorEditAnnotationDialog } from "./annotator-edit-annotation-dialog";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 
 export interface AdvancedImageAnnotatorProps {
     imageUrl: string;
@@ -151,6 +162,49 @@ export function AdvancedImageAnnotator({
 
     // Estado para dialog de inserir imagem
     const [insertImageDialogOpen, setInsertImageDialogOpen] = useState(false);
+
+    /** Após arrastar produto/grupo para o quadro: confirma nome antes de criar o sticker. */
+    type PendingDropSticker = {
+        relativePos: Point;
+        width: number;
+        height: number;
+        stickerImageUrl: string;
+        suggestedName: string;
+        linkedItemId: string | undefined;
+        productId: string | undefined;
+    };
+    const [pendingDropSticker, setPendingDropSticker] = useState<PendingDropSticker | null>(null);
+    const [dropFigureName, setDropFigureName] = useState("");
+
+    useEffect(() => {
+        if (pendingDropSticker) {
+            setDropFigureName(pendingDropSticker.suggestedName.trim());
+        }
+    }, [pendingDropSticker]);
+
+    const confirmPendingDropSticker = useCallback(() => {
+        const name = dropFigureName.trim();
+        if (!name) {
+            toast.error("Informe o nome da figura.");
+            return;
+        }
+        if (!pendingDropSticker) return;
+        const pending = pendingDropSticker;
+        const newSticker: StickerAnnotation = {
+            id: generateAnnotationId(),
+            tool_type: 'product_sticker',
+            position: pending.relativePos,
+            width: pending.width,
+            height: pending.height,
+            image_url: pending.stickerImageUrl,
+            product_name: name,
+            linked_item_id: pending.linkedItemId,
+            product_id: pending.productId?.trim() || undefined,
+            style: { ...DEFAULT_STYLE, opacity: 1 },
+        };
+        updateAnnotations((prev) => [...prev, newSticker]);
+        setPendingDropSticker(null);
+    }, [dropFigureName, pendingDropSticker, updateAnnotations]);
 
     const stageRef = useRef<Konva.Stage>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -546,20 +600,15 @@ export function AdvancedImageAnnotator({
             const w = Math.max(40, Math.round(dims.width * ratio));
             const h = Math.max(40, Math.round(dims.height * ratio));
 
-            const newSticker: StickerAnnotation = {
-                id: generateAnnotationId(),
-                tool_type: 'product_sticker',
-                position: relativePos,
+            setPendingDropSticker({
+                relativePos,
                 width: w,
                 height: h,
-                image_url: stickerImageUrl,
-                product_name: productName,
-                linked_item_id: linkedItemId || undefined,
-                product_id: productId?.trim() || undefined,
-                style: { ...DEFAULT_STYLE, opacity: 1 }
-            };
-
-            updateAnnotations([...annotations, newSticker]);
+                stickerImageUrl,
+                suggestedName: productName,
+                linkedItemId: linkedItemId?.trim() ? linkedItemId : undefined,
+                productId: productId?.trim() || undefined,
+            });
         }
     };
 
@@ -718,7 +767,7 @@ export function AdvancedImageAnnotator({
             product_name: label,
             style: { ...DEFAULT_STYLE, opacity: 1 }
         };
-        updateAnnotations([...annotations, newSticker]);
+        updateAnnotations((prev) => [...prev, newSticker]);
         setInsertImageDialogOpen(false);
     };
 
@@ -1021,6 +1070,59 @@ export function AdvancedImageAnnotator({
                     onSelectImage={handleInsertImage}
                 />
             )}
+
+            <Dialog
+                open={!!pendingDropSticker}
+                onOpenChange={(open) => {
+                    if (!open) setPendingDropSticker(null);
+                }}
+            >
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Nome da figura</DialogTitle>
+                        <DialogDescription>
+                            Confirme ou edite o nome antes de inserir no quadro. Obrigatório.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {pendingDropSticker?.stickerImageUrl ? (
+                        <div className="flex justify-center rounded-md border bg-muted/40 p-2">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                                src={pendingDropSticker.stickerImageUrl}
+                                alt=""
+                                className="max-h-32 max-w-full object-contain"
+                            />
+                        </div>
+                    ) : null}
+                    <div className="space-y-2">
+                        <Label htmlFor="drop-figure-name">
+                            Nome <span className="text-destructive">*</span>
+                        </Label>
+                        <Input
+                            id="drop-figure-name"
+                            value={dropFigureName}
+                            onChange={(e) => setDropFigureName(e.target.value)}
+                            placeholder="Nome da figura no quadro"
+                            maxLength={200}
+                            autoComplete="off"
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    confirmPendingDropSticker();
+                                }
+                            }}
+                        />
+                    </div>
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <Button type="button" variant="outline" onClick={() => setPendingDropSticker(null)}>
+                            Cancelar
+                        </Button>
+                        <Button type="button" onClick={confirmPendingDropSticker}>
+                            Inserir
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

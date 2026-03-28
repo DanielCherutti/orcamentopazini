@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Search, Upload, X, Loader2, ImageIcon } from "lucide-react";
 import { getProductsAction, type Product } from "@/actions/product-actions";
 import {
@@ -47,8 +48,17 @@ export function InsertImageDialog({
     const [libraryImages, setLibraryImages] = useState<LibraryImage[]>([]);
     const [loadingLibrary, setLoadingLibrary] = useState(false);
     const [uploading, setUploading] = useState(false);
+    /** Nome exibido no quadro (obrigatório antes de escolher a figura). */
+    const [insertImageName, setInsertImageName] = useState("");
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const canPickImage = insertImageName.trim().length > 0;
+
+    useEffect(() => {
+        if (open) {
+            setInsertImageName("");
+        }
+    }, [open]);
 
     // Fetch products with debounce
     const fetchProducts = useDebouncedCallback(async (query: string) => {
@@ -103,15 +113,27 @@ export function InsertImageDialog({
         fetchLibrary(value);
     };
 
-    const handleSelectProduct = (product: Product) => {
-        if (product.imageUrl) {
-            onSelectImage(product.imageUrl, product.description);
-            onOpenChange(false);
+    const resolveInsertName = (): string | null => {
+        const name = insertImageName.trim();
+        if (!name) {
+            toast.error("Informe o nome da figura no campo acima.");
+            return null;
         }
+        return name;
+    };
+
+    const handleSelectProduct = (product: Product) => {
+        if (!product.imageUrl) return;
+        const name = resolveInsertName();
+        if (!name) return;
+        onSelectImage(product.imageUrl, name);
+        onOpenChange(false);
     };
 
     const handleSelectLibraryImage = (image: LibraryImage) => {
-        onSelectImage(image.url, image.name);
+        const name = resolveInsertName();
+        if (!name) return;
+        onSelectImage(image.url, name);
         onOpenChange(false);
     };
 
@@ -191,15 +213,37 @@ export function InsertImageDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-lg max-h-[80vh] flex flex-col">
+            <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col overflow-hidden gap-3 p-6">
                 <DialogDescription className="sr-only">
-                    Selecione uma imagem de um produto ou faça upload da biblioteca.
+                    Informe o nome da figura, depois escolha um produto ou um item da biblioteca.
                 </DialogDescription>
-                <DialogHeader>
-                    <DialogTitle>Inserir Imagem</DialogTitle>
+                <DialogHeader className="shrink-0 space-y-1 text-left">
+                    <DialogTitle>Inserir figura</DialogTitle>
                 </DialogHeader>
 
-                <Tabs value={tab} onValueChange={setTab} className="flex-1 flex flex-col min-h-0">
+                <div className="space-y-2 shrink-0 rounded-md border bg-muted/30 p-3">
+                    <Label htmlFor="insert-image-name" className="text-foreground">
+                        Nome da figura <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                        id="insert-image-name"
+                        value={insertImageName}
+                        onChange={(e) => setInsertImageName(e.target.value)}
+                        placeholder="Obrigatório — ex.: acabamento, referência…"
+                        maxLength={200}
+                        autoComplete="off"
+                        autoFocus
+                    />
+                    <p className="text-xs text-muted-foreground">
+                        Preencha aqui e, em seguida, clique na miniatura abaixo.
+                    </p>
+                </div>
+
+                <Tabs
+                    value={tab}
+                    onValueChange={setTab}
+                    className="flex min-h-0 flex-1 flex-col overflow-hidden"
+                >
                     <TabsList className="grid w-full grid-cols-2">
                         <TabsTrigger value="products">Produtos</TabsTrigger>
                         <TabsTrigger value="library">Biblioteca</TabsTrigger>
@@ -232,8 +276,10 @@ export function InsertImageDialog({
                                         <button
                                             key={product.id}
                                             type="button"
+                                            disabled={!canPickImage}
+                                            title={!canPickImage ? "Preencha o nome da figura acima" : undefined}
                                             onClick={() => handleSelectProduct(product)}
-                                            className="flex flex-col items-center gap-1 p-2 rounded-md border hover:bg-accent hover:border-primary/50 transition-colors cursor-pointer group"
+                                            className="flex flex-col items-center gap-1 p-2 rounded-md border hover:bg-accent hover:border-primary/50 transition-colors cursor-pointer group disabled:pointer-events-none disabled:opacity-40"
                                         >
                                             <div className="w-full aspect-square rounded bg-muted overflow-hidden">
                                                 <img
@@ -311,8 +357,18 @@ export function InsertImageDialog({
                                         <button
                                             key={image.id}
                                             type="button"
-                                            onClick={() => handleSelectLibraryImage(image)}
-                                            className="relative flex flex-col items-center gap-1 p-2 rounded-md border hover:bg-accent hover:border-primary/50 transition-colors cursor-pointer group"
+                                            title={!canPickImage ? "Preencha o nome da figura acima" : undefined}
+                                            onClick={() => {
+                                                if (!canPickImage) {
+                                                    toast.error("Informe o nome da figura no campo acima.");
+                                                    return;
+                                                }
+                                                handleSelectLibraryImage(image);
+                                            }}
+                                            className={
+                                                "relative flex flex-col items-center gap-1 p-2 rounded-md border hover:bg-accent hover:border-primary/50 transition-colors cursor-pointer group " +
+                                                (!canPickImage ? "opacity-50" : "")
+                                            }
                                         >
                                             <div className="w-full aspect-square rounded bg-muted overflow-hidden">
                                                 <img
