@@ -18,50 +18,28 @@ import { buildFiguresListModel } from '@/components/budgets/compositor/composito
 interface ProposalDocumentProps {
     budget: Budget;
     settings: ProposalSettings;
-    /** Quando presente, capa/sumário/lista de figuras seguem o compositor; detalhamento continua pelo Escopo (`locations`). */
+    /** Quando presente, sumário/lista de figuras seguem o compositor; detalhamento continua pelo Escopo (`locations`). */
     compositorPdf?: CompositorPdfPayload;
 }
 
 const styles = StyleSheet.create({
-    page: {
-        fontFamily: theme.fonts.body,
-        backgroundColor: '#FFFFFF',
-        paddingTop: 0,
-        paddingBottom: 0,
-        paddingLeft: 0,
-        paddingRight: 0,
+    pageWithWatermark: {
+        position: 'relative',
     },
-    coverPage: {
-        flex: 1,
-        flexDirection: 'column',
-        backgroundColor: theme.colors.primary,
-        color: theme.colors.textWhite,
-        justifyContent: 'space-between',
-        padding: 50
+    documentWatermarkLayer: {
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 0,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
-    coverLogo: {
-        width: 150,
-        height: 60,
+    documentWatermarkImage: {
+        width: '82%',
+        height: '82%',
         objectFit: 'contain',
-        marginBottom: 50
-    },
-    coverTitle: {
-        fontSize: 36,
-        fontFamily: theme.fonts.bold,
-        marginBottom: 20,
-        textTransform: 'uppercase'
-    },
-    coverSubtitle: {
-        fontSize: 18,
-        fontFamily: theme.fonts.body,
-        opacity: 0.9
-    },
-    coverFooter: {
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(255,255,255,0.3)',
-        paddingTop: 20,
-        flexDirection: 'row',
-        justifyContent: 'space-between'
     },
     contentPage: {
         padding: 35,
@@ -130,88 +108,87 @@ function mergeCoverProps(raw: Record<string, unknown> | undefined): CoverBlockPr
     return { ...DEFAULT_COVER_PROPS, ...(raw as CoverBlockProps) };
 }
 
-export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDocumentProps) => {
-    const issueDate =
-        budget.issue_date
-            ? new Date(budget.issue_date)
-            : budget.created_at
-                ? new Date(budget.created_at)
-                : new Date();
+function resolvePdfImageSrc(url: string | undefined, publicBase?: string): string | undefined {
+    const u = url?.trim();
+    if (!u) return undefined;
+    if (/^data:/i.test(u)) return u;
+    if (/^https?:\/\//i.test(u)) return u;
+    if (u.startsWith("//")) return `https:${u}`;
+    const origin =
+        typeof window !== "undefined" && window.location?.origin
+            ? window.location.origin
+            : publicBase?.replace(/\/$/, "");
+    if (u.startsWith("/")) return origin ? `${origin}${u}` : u;
+    if (origin) return `${origin}/${u.replace(/^\.?\//, "")}`;
+    return `/${u.replace(/^\.?\//, "")}`;
+}
 
-    const formattedDate = issueDate.toLocaleDateString('pt-BR');
+function proxyPdfImageSrc(url: string | undefined, publicBase?: string): string | undefined {
+    const resolved = resolvePdfImageSrc(url, publicBase);
+    if (!resolved || /^data:/i.test(resolved)) return resolved;
+    if (resolved.includes("/api/pdf/image?src=")) return resolved;
+    const origin =
+        typeof window !== "undefined" && window.location?.origin
+            ? window.location.origin
+            : publicBase?.replace(/\/$/, "");
+    if (!origin) return resolved;
+    return `${origin}/api/pdf/image?src=${encodeURIComponent(resolved)}`;
+}
+
+function clampOpacity(value: number | undefined, fallback: number): number {
+    const n = typeof value === "number" ? value : fallback;
+    if (!Number.isFinite(n)) return fallback;
+    if (n < 0) return 0;
+    if (n > 0.32) return 0.32;
+    return n;
+}
+
+export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDocumentProps) => {
     const validityDays = Number(budget.validity_days ?? 15);
     const formatMoney = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
-    type ResolvedClient = { id?: string; name?: string; city?: string; cnpj?: string };
-    const clientText = (() => {
-        const client = budget.client_id as string | ResolvedClient;
-        if (!client) return "Cliente não definido";
-        if (typeof client === "string") return client;
-        const parts = [client.name, client.city, client.cnpj].filter(Boolean);
-        return parts.length > 0 ? parts.join(" - ") : (client.id ? String(client.id) : "Cliente não definido");
-    })();
-
-    const useCompositorLayout =
+    const hasCompositorStructure =
         !!compositorPdf && Array.isArray(compositorPdf.roots) && compositorPdf.roots.length > 0;
 
-    const coverBlock = useCompositorLayout
-        ? flattenTree(compositorPdf!.roots).find((b) => b.type === 'cover')
+    const coverBlock = compositorPdf
+        ? flattenTree(compositorPdf.roots).find((b) => b.type === 'cover')
         : undefined;
-    const compositorCoverMerged = useCompositorLayout
-        ? mergeCoverProps(coverBlock?.props as Record<string, unknown> | undefined)
-        : null;
+    const compositorCoverMerged = mergeCoverProps(coverBlock?.props as Record<string, unknown> | undefined);
 
-    const tocRows = useCompositorLayout
+    const tocRows = hasCompositorStructure
         ? buildTocModel(compositorPdf!.roots, compositorPdf!.items)
         : [];
 
-    const figureRows = useCompositorLayout
+    const figureRows = hasCompositorStructure
         ? buildFiguresListModel(
             compositorPdf!.scopeFigures,
             compositorPdf!.roots,
             compositorPdf!.items
         )
         : [];
+    const docWatermarkSource =
+        compositorCoverMerged.document_watermark_url?.trim()
+            ? compositorCoverMerged.document_watermark_url
+            : compositorCoverMerged.cover_watermark_url;
+    const docWatermarkSrc = proxyPdfImageSrc(docWatermarkSource, settings.app_public_url);
+    const docWatermarkOpacity = clampOpacity(compositorCoverMerged.document_watermark_opacity, 0.06);
 
     return (
         <Document>
-            {useCompositorLayout && compositorCoverMerged ? (
-                <CompositorCoverPdfPage
-                    budget={budget}
-                    settings={settings}
-                    coverProps={compositorCoverMerged}
-                />
-            ) : (
-                <Page size="A4" style={styles.page}>
-                    <View style={styles.coverPage}>
-                        <View>
-                            {settings.company_logo_url ? (
-                                /* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt prop */
-                                <Image src={settings.company_logo_url} style={styles.coverLogo} />
-                            ) : (
-                                <Text style={{ fontSize: 24, fontFamily: theme.fonts.bold, marginBottom: 40 }}>{settings.company_name}</Text>
-                            )}
-                            <Text style={styles.coverTitle}>Proposta Comercial</Text>
-                            <Text style={styles.coverSubtitle}>{budget.title}</Text>
-                            <Text style={{ fontSize: 12, marginTop: 10, opacity: 0.8 }}>Ref: {budget.code}</Text>
-                        </View>
-
-                        <View style={styles.coverFooter}>
-                            <View>
-                                <Text style={{ fontSize: 10, opacity: 0.8 }}>A/C</Text>
-                                <Text style={{ fontSize: 14, fontFamily: theme.fonts.bold }}>{clientText}</Text>
-                            </View>
-                            <View style={{ alignItems: 'flex-end' }}>
-                                <Text style={{ fontSize: 10, opacity: 0.8 }}>Emissão</Text>
-                                <Text style={{ fontSize: 14 }}>{formattedDate}</Text>
-                            </View>
-                        </View>
-                    </View>
-                </Page>
-            )}
+            <CompositorCoverPdfPage
+                budget={budget}
+                settings={settings}
+                coverProps={compositorCoverMerged}
+            />
 
             {/* APRESENTAÇÃO */}
-            <Page size="A4" style={styles.contentPage}>
+            <Page size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
+                {docWatermarkSrc ? (
+                    <View style={styles.documentWatermarkLayer} fixed>
+                        {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
+                        <Image src={docWatermarkSrc} style={[styles.documentWatermarkImage, { opacity: docWatermarkOpacity }]} />
+                    </View>
+                ) : null}
                 <View style={styles.header}>
                     <Text style={styles.headerTitle}>Apresentação</Text>
                     <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{settings.company_name}</Text>
@@ -226,8 +203,14 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
             </Page>
 
             {/* SUMÁRIO (documento compositor — sessões numeradas) */}
-            {useCompositorLayout ? (
-                <Page size="A4" style={styles.contentPage}>
+            {hasCompositorStructure ? (
+                <Page size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
+                    {docWatermarkSrc ? (
+                        <View style={styles.documentWatermarkLayer} fixed>
+                            {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
+                            <Image src={docWatermarkSrc} style={[styles.documentWatermarkImage, { opacity: docWatermarkOpacity }]} />
+                        </View>
+                    ) : null}
                     <View style={styles.header}>
                         <Text style={styles.headerTitle}>Sumário</Text>
                         <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{settings.company_name}</Text>
@@ -260,8 +243,14 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
             ) : null}
 
             {/* LISTA DE FIGURAS (Escopo + blocos no compositor) */}
-            {useCompositorLayout && figureRows.length > 0 ? (
-                <Page size="A4" style={styles.contentPage}>
+            {hasCompositorStructure && figureRows.length > 0 ? (
+                <Page size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
+                    {docWatermarkSrc ? (
+                        <View style={styles.documentWatermarkLayer} fixed>
+                            {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
+                            <Image src={docWatermarkSrc} style={[styles.documentWatermarkImage, { opacity: docWatermarkOpacity }]} />
+                        </View>
+                    ) : null}
                     <View style={styles.header}>
                         <Text style={styles.headerTitle}>Lista de Figuras</Text>
                         <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{settings.company_name}</Text>
@@ -283,7 +272,13 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
             ) : null}
 
             {/* DETALHAMENTO — hierarquia Escopo (locais / trechos / itens) */}
-            <Page size="A4" style={styles.contentPage}>
+            <Page size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
+                {docWatermarkSrc ? (
+                    <View style={styles.documentWatermarkLayer} fixed>
+                        {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
+                        <Image src={docWatermarkSrc} style={[styles.documentWatermarkImage, { opacity: docWatermarkOpacity }]} />
+                    </View>
+                ) : null}
                 <View style={styles.header}>
                     <Text style={styles.headerTitle}>Detalhamento do Projeto</Text>
                 </View>
@@ -304,7 +299,13 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
             </Page>
 
             {/* TERMOS E FECHAMENTO */}
-            <Page size="A4" style={styles.contentPage}>
+            <Page size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
+                {docWatermarkSrc ? (
+                    <View style={styles.documentWatermarkLayer} fixed>
+                        {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
+                        <Image src={docWatermarkSrc} style={[styles.documentWatermarkImage, { opacity: docWatermarkOpacity }]} />
+                    </View>
+                ) : null}
                 <View style={styles.header}>
                     <Text style={styles.headerTitle}>Condições Gerais</Text>
                 </View>
