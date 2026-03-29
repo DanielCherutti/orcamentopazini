@@ -9,11 +9,11 @@ import { CompositorCoverPdfPage } from './sections/compositor-cover-pdf';
 import type { CompositorPdfPayload } from './compositor-pdf-types';
 import {
     DEFAULT_COVER_PROPS,
+    type BudgetBlock,
     flattenTree,
     type CoverBlockProps,
 } from '@/types/budget-compositor-types';
-import { buildTocModel } from '@/components/budgets/compositor/compositor-toc-utils';
-import { buildFiguresListModel } from '@/components/budgets/compositor/compositor-figures-utils';
+import type { BudgetItem } from '@/types/budget-types';
 
 interface ProposalDocumentProps {
     budget: Budget;
@@ -102,6 +102,30 @@ const styles = StyleSheet.create({
         fontSize: 10,
         fontFamily: theme.fonts.bold,
     },
+    sessionTitle: {
+        fontSize: 13,
+        fontFamily: theme.fonts.bold,
+        color: theme.colors.primary,
+        marginBottom: 10,
+        textTransform: 'uppercase',
+    },
+    sessionRow: {
+        marginBottom: 8,
+        borderBottomWidth: 0.5,
+        borderBottomColor: theme.colors.border,
+        paddingBottom: 6,
+    },
+    sessionRowTitle: {
+        fontSize: 10,
+        fontFamily: theme.fonts.bold,
+        color: theme.colors.text,
+        marginBottom: 2,
+    },
+    sessionRowText: {
+        fontSize: 9,
+        color: theme.colors.text,
+        lineHeight: 1.35,
+    },
 });
 
 function mergeCoverProps(raw: Record<string, unknown> | undefined): CoverBlockProps {
@@ -143,6 +167,100 @@ function clampOpacity(value: number | undefined, fallback: number): number {
     return n;
 }
 
+function clampDocumentOpacity(value: number | undefined, fallback: number): number {
+    const n = typeof value === "number" ? value : fallback;
+    if (!Number.isFinite(n)) return fallback;
+    if (n < 0) return 0;
+    // Marca d'água das páginas internas precisa ser mais discreta que a capa.
+    if (n > 0.12) return 0.12;
+    return n;
+}
+
+function stripHtmlToText(raw: string | undefined): string {
+    if (!raw) return '';
+    return raw
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/p>/gi, '\n')
+        .replace(/<[^>]*>/g, ' ')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/\s+\n/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .replace(/[ \t]{2,}/g, ' ')
+        .trim();
+}
+
+function collectSessionPrintRows(
+    sessionRoot: BudgetBlock,
+    itemsByBlock: Record<string, BudgetItem[]>
+): Array<{ depth: number; title: string; text: string }> {
+    const rows: Array<{ depth: number; title: string; text: string }> = [];
+    const visit = (node: BudgetBlock, depth: number) => {
+        if (node.type === 'session') {
+            const desc = stripHtmlToText((node.props?.description as string) || '');
+            rows.push({
+                depth,
+                title: `${node.number ? `${node.number} ` : ''}${(node.label || 'Sessão').trim()}`,
+                text: desc,
+            });
+        } else if (node.type === 'text') {
+            const txt = stripHtmlToText((node.props?.content as string) || '');
+            rows.push({
+                depth,
+                title: 'Texto',
+                text: txt,
+            });
+        } else if (node.type === 'location') {
+            const desc = stripHtmlToText((node.props?.description as string) || '');
+            rows.push({
+                depth,
+                title: `Local: ${(node.label || 'Local').trim()}`,
+                text: desc,
+            });
+        } else if (node.type === 'section') {
+            const desc = stripHtmlToText((node.props?.description as string) || '');
+            const count = itemsByBlock[node.id]?.length ?? 0;
+            rows.push({
+                depth,
+                title: `Trecho: ${(node.label || 'Trecho').trim()}`,
+                text: [desc, count > 0 ? `${count} item(ns) vinculados.` : '']
+                    .filter(Boolean)
+                    .join('\n'),
+            });
+        }
+        node.children.forEach((child) => visit(child, depth + 1));
+    };
+    visit(sessionRoot, 0);
+    return rows;
+}
+
+function collectSessionTocRowsForPrintedLayout(
+    roots: BudgetBlock[],
+    sessionsStartPage: number
+): Array<{ number: string; title: string; depth: number; page: number }> {
+    const out: Array<{ number: string; title: string; depth: number; page: number }> = [];
+    const sessionRoots = roots.filter((b) => b.type === 'session');
+
+    const collectSessionsDfs = (node: BudgetBlock, page: number) => {
+        if (node.type === 'session') {
+            out.push({
+                number: node.number || '',
+                title: (node.label || 'Sessão').trim() || 'Sessão',
+                depth: node.depth,
+                page,
+            });
+        }
+        node.children.forEach((child) => collectSessionsDfs(child, page));
+    };
+
+    sessionRoots.forEach((root, idx) => {
+        collectSessionsDfs(root, sessionsStartPage + idx);
+    });
+    return out;
+}
+
 export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDocumentProps) => {
     const validityDays = Number(budget.validity_days ?? 15);
     const formatMoney = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -155,23 +273,28 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
         : undefined;
     const compositorCoverMerged = mergeCoverProps(coverBlock?.props as Record<string, unknown> | undefined);
 
-    const tocRows = hasCompositorStructure
-        ? buildTocModel(compositorPdf!.roots, compositorPdf!.items)
+    const compositorSessionRoots = hasCompositorStructure
+        ? compositorPdf!.roots.filter((b) => b.type === 'session')
         : [];
-
+    const hasFigureListPage = hasCompositorStructure && (compositorPdf!.scopeFigures?.length ?? 0) > 0;
+    const compositorSessionsStartPage = hasFigureListPage ? 5 : 4;
+    const detailStartPage = compositorSessionsStartPage + compositorSessionRoots.length;
+    const tocRows = hasCompositorStructure
+        ? collectSessionTocRowsForPrintedLayout(compositorPdf!.roots, compositorSessionsStartPage)
+        : [];
     const figureRows = hasCompositorStructure
-        ? buildFiguresListModel(
-            compositorPdf!.scopeFigures,
-            compositorPdf!.roots,
-            compositorPdf!.items
-        )
+        ? compositorPdf!.scopeFigures.map((entry, idx) => ({
+            n: idx + 1,
+            caption: entry.caption?.trim() || "(sem descrição)",
+            page: detailStartPage,
+        }))
         : [];
     const docWatermarkSource =
         compositorCoverMerged.document_watermark_url?.trim()
             ? compositorCoverMerged.document_watermark_url
             : compositorCoverMerged.cover_watermark_url;
     const docWatermarkSrc = proxyPdfImageSrc(docWatermarkSource, settings.app_public_url);
-    const docWatermarkOpacity = clampOpacity(compositorCoverMerged.document_watermark_opacity, 0.06);
+    const docWatermarkOpacity = clampDocumentOpacity(compositorCoverMerged.document_watermark_opacity, 0.06);
 
     return (
         <Document>
@@ -216,7 +339,7 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
                         <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{settings.company_name}</Text>
                     </View>
                     <Text style={{ fontSize: 9, color: theme.colors.textLight, marginBottom: 14 }}>
-                        Páginas estimadas conforme a estrutura atual do Compositor.
+                        Páginas calculadas conforme a impressão atual do documento.
                     </Text>
                     {tocRows.length === 0 ? (
                         <Text style={{ fontSize: 10, fontStyle: 'italic', color: theme.colors.textLight }}>
@@ -256,7 +379,7 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
                         <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{settings.company_name}</Text>
                     </View>
                     <Text style={{ fontSize: 9, color: theme.colors.textLight, marginBottom: 14 }}>
-                        Figuras dos locais e trechos (aba Escopo e/ou galerias no Compositor). Páginas estimadas.
+                        Figuras do Escopo. A página indicada referencia o início do detalhamento impresso.
                     </Text>
                     {figureRows.map((row) => (
                         <View key={`fig-${row.n}`} style={styles.tocRow} wrap={false}>
@@ -270,6 +393,39 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
                     <Text style={styles.footerNumber} render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} fixed />
                 </Page>
             ) : null}
+
+            {/* SESSÕES DO COMPOSITOR */}
+            {compositorSessionRoots.map((sessionRoot) => {
+                const rows = collectSessionPrintRows(sessionRoot, compositorPdf?.items || {});
+                return (
+                    <Page key={`session-page-${sessionRoot.id}`} size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
+                        {docWatermarkSrc ? (
+                            <View style={styles.documentWatermarkLayer} fixed>
+                                {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
+                                <Image src={docWatermarkSrc} style={[styles.documentWatermarkImage, { opacity: docWatermarkOpacity }]} />
+                            </View>
+                        ) : null}
+                        <View style={styles.header}>
+                            <Text style={styles.headerTitle}>Sessão do Compositor</Text>
+                            <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{settings.company_name}</Text>
+                        </View>
+                        <Text style={styles.sessionTitle}>
+                            {sessionRoot.number ? `${sessionRoot.number} ` : ''}{(sessionRoot.label || 'Sessão').trim()}
+                        </Text>
+                        {rows.length === 0 ? (
+                            <Text style={styles.sessionRowText}>Sem conteúdo textual nesta sessão.</Text>
+                        ) : (
+                            rows.map((row, idx) => (
+                                <View key={`session-row-${sessionRoot.id}-${idx}`} style={[styles.sessionRow, { marginLeft: Math.min(row.depth, 5) * 10 }]}>
+                                    <Text style={styles.sessionRowTitle}>{row.title}</Text>
+                                    {row.text ? <Text style={styles.sessionRowText}>{row.text}</Text> : null}
+                                </View>
+                            ))
+                        )}
+                        <Text style={styles.footerNumber} render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} fixed />
+                    </Page>
+                );
+            })}
 
             {/* DETALHAMENTO — hierarquia Escopo (locais / trechos / itens) */}
             <Page size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
