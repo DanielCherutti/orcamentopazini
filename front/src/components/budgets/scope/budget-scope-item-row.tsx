@@ -125,7 +125,8 @@ export function ScopeItemRow({
             ? Number(assemblyManualValue || 0)
             : Number(item.id ? assemblyByItemId[item.id] ?? 0 : 0);
     const assemblyUnitValue = qty > 0 ? assemblyExtra / qty : 0;
-    const moUnitValue = assemblyMode === "percent" ? assemblyUnitValue : laborCost;
+    const moUnitValue =
+        assemblyMode === "manual" ? laborCost : assemblyUnitValue;
     const total = subtotal + assemblyExtra;
 
     const handleQtyChange = (val: number) => {
