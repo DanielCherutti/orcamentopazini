@@ -16,6 +16,7 @@ import {
     safeStringRecordId,
 } from "@/lib/surreal-record-ids";
 import { extractProductId, recalculateBudgetTotal } from "@/actions/budget-hierarchy-helpers";
+import { computeItemSubtotal, type PriceAdjustmentMode } from "@/lib/budgets/scope-pricing";
 
 /** Próximo `order_index` na seção (múltiplos de 10, alinhado a `reorderSectionItemsAction`). */
 async function nextSectionItemOrderIndex(
@@ -51,6 +52,14 @@ async function createBudgetItemInSection(
 ): Promise<string> {
     const unitLabel = productUnit?.trim();
     const orderIndex = await nextSectionItemOrderIndex(db, sectionId);
+    const computedTotal = computeItemSubtotal({
+        quantity,
+        unit_price: unitPrice,
+        labor_cost: laborCost,
+        price_adjustment_mode: null,
+        price_adjustment_value: 0,
+        observation_extra_value: 0,
+    });
     const raw = await db.create(new Table("budget_item")).content({
         section_id: requireRecordId("budget_section", sectionId),
         product_id: requireRecordId("product", productId),
@@ -59,7 +68,13 @@ async function createBudgetItemInSection(
         quantity,
         unit_price: unitPrice,
         labor_cost: laborCost,
-        total: (unitPrice + laborCost) * quantity,
+        total: computedTotal,
+        observation_text: "",
+        observation_show_on_print: false,
+        observation_extra_value: 0,
+        price_adjustment_mode: null,
+        price_adjustment_value: 0,
+        assembly_manual_value: 0,
         order_index: orderIndex,
         created_at: new Date().toISOString(),
     });
@@ -277,7 +292,20 @@ export async function addGroupToSectionAction(
                 quantity,
                 unit_price: unitPrice,
                 labor_cost: laborCost,
-                total: (unitPrice + laborCost) * quantity,
+                total: computeItemSubtotal({
+                    quantity,
+                    unit_price: unitPrice,
+                    labor_cost: laborCost,
+                    price_adjustment_mode: null,
+                    price_adjustment_value: 0,
+                    observation_extra_value: 0,
+                }),
+                observation_text: "",
+                observation_show_on_print: false,
+                observation_extra_value: 0,
+                price_adjustment_mode: null,
+                price_adjustment_value: 0,
+                assembly_manual_value: 0,
                 group_id: groupRecordId,
                 group_name: groupName,
                 group_instance_id: groupInstanceId,
@@ -344,7 +372,25 @@ export async function updateItemQuantityAction(itemId: string, budgetId: string,
 
         const unitPrice = Number(item.unit_price) || 0;
         const laborCost = Number(item.labor_cost) || 0;
-        const newTotal = (unitPrice + laborCost) * quantity;
+        const priceAdjustmentModeRaw = (item as Record<string, unknown>).price_adjustment_mode;
+        const priceAdjustmentMode: PriceAdjustmentMode | null =
+            priceAdjustmentModeRaw === "percent" || priceAdjustmentModeRaw === "fixed"
+                ? priceAdjustmentModeRaw
+                : null;
+        const priceAdjustmentValue = Number(
+            (item as Record<string, unknown>).price_adjustment_value ?? 0
+        );
+        const observationExtraValue = Number(
+            (item as Record<string, unknown>).observation_extra_value ?? 0
+        );
+        const newTotal = computeItemSubtotal({
+            quantity,
+            unit_price: unitPrice,
+            labor_cost: laborCost,
+            price_adjustment_mode: priceAdjustmentMode,
+            price_adjustment_value: priceAdjustmentValue,
+            observation_extra_value: observationExtraValue,
+        });
 
         await db.update(itemRecordId).merge({ quantity, total: newTotal });
         await recalculateBudgetTotal(budgetId);
@@ -374,7 +420,25 @@ export async function updateItemLaborCostAction(itemId: string, budgetId: string
 
         const unitPrice = Number(item.unit_price) || 0;
         const quantity = Number(item.quantity) || 1;
-        const newTotal = (unitPrice + laborCost) * quantity;
+        const priceAdjustmentModeRaw = (item as Record<string, unknown>).price_adjustment_mode;
+        const priceAdjustmentMode: PriceAdjustmentMode | null =
+            priceAdjustmentModeRaw === "percent" || priceAdjustmentModeRaw === "fixed"
+                ? priceAdjustmentModeRaw
+                : null;
+        const priceAdjustmentValue = Number(
+            (item as Record<string, unknown>).price_adjustment_value ?? 0
+        );
+        const observationExtraValue = Number(
+            (item as Record<string, unknown>).observation_extra_value ?? 0
+        );
+        const newTotal = computeItemSubtotal({
+            quantity,
+            unit_price: unitPrice,
+            labor_cost: laborCost,
+            price_adjustment_mode: priceAdjustmentMode,
+            price_adjustment_value: priceAdjustmentValue,
+            observation_extra_value: observationExtraValue,
+        });
 
         await db.update(itemRecordId).merge({ labor_cost: laborCost, total: newTotal });
         await recalculateBudgetTotal(budgetId);
@@ -449,6 +513,91 @@ export async function reorderSectionItemsAction(orderedItemIds: string[], budget
         console.error("Error reordering items:", error);
         if (isTokenExpiredError(error)) resetDb();
         return { success: false, error: "Erro ao reordenar itens" };
+    }
+}
+
+export async function updateItemCommercialSettingsAction(
+    itemId: string,
+    budgetId: string,
+    patch: {
+        observation_text?: string;
+        observation_show_on_print?: boolean;
+        observation_extra_value?: number;
+        price_adjustment_mode?: PriceAdjustmentMode | null;
+        price_adjustment_value?: number;
+        assembly_manual_value?: number;
+    }
+) {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const db = await getDb();
+    try {
+        const itemRecordId = requireRecordId("budget_item", itemId);
+        const itemResult = (await db.select(itemRecordId)) as unknown as BudgetItem[];
+        const item = Array.isArray(itemResult) ? itemResult[0] : itemResult;
+        if (!item) throw new Error("Item not found");
+
+        const quantity = Number(item.quantity) || 1;
+        const unitPrice = Number(item.unit_price) || 0;
+        const laborCost = Number(item.labor_cost) || 0;
+
+        const nextModeRaw =
+            patch.price_adjustment_mode !== undefined
+                ? patch.price_adjustment_mode
+                : ((item as Record<string, unknown>).price_adjustment_mode as PriceAdjustmentMode | null);
+        const nextMode: PriceAdjustmentMode | null =
+            nextModeRaw === "percent" || nextModeRaw === "fixed" ? nextModeRaw : null;
+        const nextAdjustmentValue =
+            patch.price_adjustment_value !== undefined
+                ? Number(patch.price_adjustment_value)
+                : Number((item as Record<string, unknown>).price_adjustment_value ?? 0);
+        const nextObservationExtra =
+            patch.observation_extra_value !== undefined
+                ? Number(patch.observation_extra_value)
+                : Number((item as Record<string, unknown>).observation_extra_value ?? 0);
+
+        const nextTotal = computeItemSubtotal({
+            quantity,
+            unit_price: unitPrice,
+            labor_cost: laborCost,
+            price_adjustment_mode: nextMode,
+            price_adjustment_value: nextAdjustmentValue,
+            observation_extra_value: nextObservationExtra,
+        });
+
+        const mergePayload: Record<string, unknown> = {
+            total: nextTotal,
+            updated_at: new Date().toISOString(),
+        };
+        if (patch.observation_text !== undefined) mergePayload.observation_text = patch.observation_text;
+        if (patch.observation_show_on_print !== undefined) {
+            mergePayload.observation_show_on_print = patch.observation_show_on_print;
+        }
+        if (patch.observation_extra_value !== undefined) {
+            mergePayload.observation_extra_value = Number(patch.observation_extra_value);
+        }
+        if (patch.price_adjustment_mode !== undefined) {
+            mergePayload.price_adjustment_mode = patch.price_adjustment_mode ?? null;
+        }
+        if (patch.price_adjustment_value !== undefined) {
+            mergePayload.price_adjustment_value = Number(patch.price_adjustment_value);
+        }
+        if (patch.assembly_manual_value !== undefined) {
+            mergePayload.assembly_manual_value = Number(patch.assembly_manual_value);
+        }
+
+        await db.update(itemRecordId).merge(mergePayload);
+        await recalculateBudgetTotal(budgetId);
+        revalidatePath(budgetRevalidatePath(budgetId));
+        return { success: true };
+    } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
+        console.error("updateItemCommercialSettingsAction error:", error);
+        if (isTokenExpiredError(error)) resetDb();
+        return { success: false, error: "Erro ao atualizar observação/ajuste do item" };
     }
 }
 

@@ -1,5 +1,11 @@
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
 import { safeStringRecordId } from "@/lib/surreal-record-ids";
+import {
+    computeItemSubtotal,
+    computeLocationAssemblyTotal,
+    type LocationAssemblyMode,
+    type ScopePricingItem,
+} from "@/lib/budgets/scope-pricing";
 
 /**
  * Monta o conteúdo de uma nova linha `budget_item` a partir de uma existente (duplicação).
@@ -30,6 +36,16 @@ export function buildDuplicatedBudgetItemContent(item: Record<string, unknown>):
     if (item.product_name != null) content.product_name = item.product_name;
     if (item.product_unit != null) content.product_unit = item.product_unit;
     if (item.notes != null) content.notes = item.notes;
+    if (item.observation_text != null) content.observation_text = item.observation_text;
+    if (item.observation_show_on_print != null) {
+        content.observation_show_on_print = item.observation_show_on_print;
+    }
+    if (item.observation_extra_value != null) {
+        content.observation_extra_value = item.observation_extra_value;
+    }
+    if (item.price_adjustment_mode != null) content.price_adjustment_mode = item.price_adjustment_mode;
+    if (item.price_adjustment_value != null) content.price_adjustment_value = item.price_adjustment_value;
+    if (item.assembly_manual_value != null) content.assembly_manual_value = item.assembly_manual_value;
 
     return content;
 }
@@ -55,12 +71,69 @@ export async function recalculateBudgetTotal(budgetId: string) {
         const budgetRecordId = safeStringRecordId("budget", budgetId);
         if (!budgetRecordId) return;
 
-        const result = await db.query<[{ grand_total: number }[]]>(
-            `SELECT math::sum(total) as grand_total FROM budget_item WHERE section_id.budget_id = $budgetId GROUP ALL`,
-            { budgetId: budgetRecordId }
-        );
+        const [locRowsRes, itemRowsRes] = await Promise.all([
+            db.query<[Array<{ id: unknown; assembly_mode?: unknown; assembly_value?: unknown }>]>(
+                `SELECT id, assembly_mode, assembly_value FROM budget_location WHERE budget_id = $budgetId AND deleted_at IS NONE`,
+                { budgetId: budgetRecordId }
+            ),
+            db.query<[Array<Record<string, unknown>>]>(
+                `SELECT id, section_id, quantity, unit_price, labor_cost, price_adjustment_mode, price_adjustment_value, observation_extra_value, assembly_manual_value
+                 FROM budget_item WHERE section_id.budget_id = $budgetId AND deleted_at IS NONE FETCH section_id`,
+                { budgetId: budgetRecordId }
+            ),
+        ]);
 
-        const grandTotal = result[0]?.[0]?.grand_total || 0;
+        const locationConfig = new Map<
+            string,
+            { mode: LocationAssemblyMode; value: number }
+        >();
+        for (const row of locRowsRes[0] ?? []) {
+            const id = String(row.id);
+            const modeRaw = String(row.assembly_mode ?? "percent");
+            const mode: LocationAssemblyMode =
+                modeRaw === "fixed" || modeRaw === "manual" ? modeRaw : "percent";
+            locationConfig.set(id, {
+                mode,
+                value: Number(row.assembly_value ?? 0),
+            });
+        }
+
+        const itemsByLocation = new Map<string, ScopePricingItem[]>();
+        for (const row of itemRowsRes[0] ?? []) {
+            const section = row.section_id as Record<string, unknown> | undefined;
+            const locationRaw =
+                section && typeof section === "object" ? section.location_id : undefined;
+            if (!locationRaw) continue;
+            const locationId = String(locationRaw);
+            const arr = itemsByLocation.get(locationId) ?? [];
+            arr.push({
+                id: String(row.id ?? ""),
+                quantity: Number(row.quantity ?? 1),
+                unit_price: Number(row.unit_price ?? 0),
+                labor_cost: Number(row.labor_cost ?? 0),
+                price_adjustment_mode:
+                    row.price_adjustment_mode === "percent" || row.price_adjustment_mode === "fixed"
+                        ? row.price_adjustment_mode
+                        : null,
+                price_adjustment_value: Number(row.price_adjustment_value ?? 0),
+                observation_extra_value: Number(row.observation_extra_value ?? 0),
+                assembly_manual_value: Number(row.assembly_manual_value ?? 0),
+            });
+            itemsByLocation.set(locationId, arr);
+        }
+
+        let grandTotal = 0;
+        for (const [locationId, items] of itemsByLocation.entries()) {
+            const itemSubtotal = items.reduce((sum, item) => sum + computeItemSubtotal(item), 0);
+            const cfg = locationConfig.get(locationId) ?? { mode: "percent", value: 0 };
+            const assemblyTotal = computeLocationAssemblyTotal(cfg.mode, cfg.value, items);
+            grandTotal += itemSubtotal + assemblyTotal;
+        }
+        for (const [locationId, cfg] of locationConfig.entries()) {
+            if (itemsByLocation.has(locationId)) continue;
+            const assemblyTotal = computeLocationAssemblyTotal(cfg.mode, cfg.value, []);
+            grandTotal += assemblyTotal;
+        }
 
         await db.update(budgetRecordId).merge({
             total_value: grandTotal,

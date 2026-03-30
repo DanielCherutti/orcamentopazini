@@ -32,6 +32,8 @@ export interface ScopeLocation {
   budget_id: string;
   name: string;
   description?: string;
+  assembly_mode?: "percent" | "fixed" | "manual";
+  assembly_value?: number;
   order_index: number;
   created_at: string;
   sections: ScopeSection[];
@@ -220,7 +222,9 @@ export async function getScopeFiguresListAction(budgetId: string): Promise<{
   for (const loc of locs) {
     const limgs = await getBudgetImagesByLocation(loc.id);
     const sortedL = [...limgs].sort(
-      (a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)
+      (a, b) =>
+        Number((a as unknown as Record<string, unknown>).order_index ?? 0) -
+        Number((b as unknown as Record<string, unknown>).order_index ?? 0)
     );
     for (const img of sortedL) {
       scopeFigureEntryFromImage(img, seen, entries);
@@ -230,7 +234,9 @@ export async function getScopeFiguresListAction(budgetId: string): Promise<{
     for (const sec of secs) {
       const simgs = await getBudgetImagesBySection(sec.id);
       const sortedS = [...simgs].sort(
-        (a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)
+        (a, b) =>
+          Number((a as unknown as Record<string, unknown>).order_index ?? 0) -
+          Number((b as unknown as Record<string, unknown>).order_index ?? 0)
       );
       for (const img of sortedS) {
         scopeFigureEntryFromImage(img, seen, entries);

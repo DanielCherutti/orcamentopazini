@@ -328,6 +328,8 @@ export function LocationDetailPanel({
               isReadOnly={isReadOnly}
               onRefresh={onRefresh}
               locations={scopeLocations}
+              priceAdjustmentEnabled={true}
+              priceAdjustmentInputMode="fixed"
             />
           ))}
 

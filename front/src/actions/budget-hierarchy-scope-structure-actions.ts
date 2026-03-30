@@ -16,7 +16,12 @@ import { buildDuplicatedBudgetItemContent, recalculateBudgetTotal } from "@/acti
 export async function updateLocationAction(
     locationId: string,
     budgetId: string,
-    patch: { name?: string; description?: string }
+    patch: {
+        name?: string;
+        description?: string;
+        assembly_mode?: "percent" | "fixed" | "manual";
+        assembly_value?: number;
+    }
 ) {
     const auth = await assertActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
@@ -27,6 +32,9 @@ export async function updateLocationAction(
             ...patch,
             updated_at: new Date().toISOString(),
         });
+        if (patch.assembly_mode !== undefined || patch.assembly_value !== undefined) {
+            await recalculateBudgetTotal(budgetId);
+        }
         revalidatePath(budgetRevalidatePath(budgetId));
         return { success: true };
     } catch (error) {
@@ -49,6 +57,8 @@ export async function addLocationAction(budgetId: string, name: string) {
             budget_id: requireRecordId("budget", budgetId),
             name,
             order_index: Date.now(),
+            assembly_mode: "percent",
+            assembly_value: 0,
             created_at: new Date().toISOString(),
         });
         const created = Array.isArray(raw) ? raw[0] : raw;
@@ -351,6 +361,8 @@ export async function duplicateLocationAction(locationId: string, budgetId: stri
             name: newName || `${original.name} - Cópia`,
             description: original.description,
             order_index: Date.now(),
+            assembly_mode: original.assembly_mode ?? "percent",
+            assembly_value: Number(original.assembly_value ?? 0),
             created_at: new Date().toISOString(),
         });
         const createdLoc = Array.isArray(newLocation) ? newLocation[0] : newLocation;

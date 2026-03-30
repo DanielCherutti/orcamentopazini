@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Map as MapIcon, Copy, Trash2, Pencil } from "lucide-react";
 import {
     Dialog,
@@ -28,6 +28,12 @@ import {
 } from "@/actions/budget-hierarchy-scope-structure-actions";
 import { getBudgetImagesByLocation, deleteBudgetImage } from "@/actions/budget-annotations";
 import { SectionDetail } from "./budget-scope-section-detail";
+import {
+    computeLocationAssemblyTotal,
+    distributeProportional,
+    type LocationAssemblyMode,
+    type PriceAdjustmentMode,
+} from "@/lib/budgets/scope-pricing";
 
 interface LocationDetailProps {
     locationId: string;
@@ -37,6 +43,8 @@ interface LocationDetailProps {
     onRefresh: () => void;
     /** Lista completa de locais (repassada aos trechos quando necessário). */
     locations?: ScopeLocation[];
+    priceAdjustmentEnabled: boolean;
+    priceAdjustmentInputMode: PriceAdjustmentMode;
 }
 
 export function LocationDetail({
@@ -46,6 +54,8 @@ export function LocationDetail({
     isReadOnly,
     onRefresh,
     locations = [],
+    priceAdjustmentEnabled,
+    priceAdjustmentInputMode,
 }: LocationDetailProps) {
     const [name, setName] = useState(location?.name ?? "");
     const [editingName, setEditingName] = useState(false);
@@ -57,6 +67,16 @@ export function LocationDetail({
     const [locationItems, setLocationItems] = useState<BudgetItem[]>([]);
     const [addPhotoOpen, setAddPhotoOpen] = useState(false);
     const [editingImage, setEditingImage] = useState<BudgetImage | null>(null);
+    const [assemblyMode, setAssemblyMode] = useState<LocationAssemblyMode>(
+        (location as unknown as Record<string, unknown>)?.assembly_mode === "fixed" ||
+            (location as unknown as Record<string, unknown>)?.assembly_mode === "manual"
+            ? ((location as unknown as Record<string, unknown>)
+                  .assembly_mode as LocationAssemblyMode)
+            : "percent"
+    );
+    const [assemblyValue, setAssemblyValue] = useState<number>(
+        Number((location as unknown as Record<string, unknown>)?.assembly_value ?? 0)
+    );
     const descDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
@@ -64,6 +84,18 @@ export function LocationDetail({
             setImages(imgs as unknown as BudgetImage[])
         );
     }, [locationId]);
+
+    useEffect(() => {
+        const modeRaw = String(
+            (location as unknown as Record<string, unknown>)?.assembly_mode ?? "percent"
+        );
+        const mode: LocationAssemblyMode =
+            modeRaw === "fixed" || modeRaw === "manual" ? modeRaw : "percent";
+        setAssemblyMode(mode);
+        setAssemblyValue(
+            Number((location as unknown as Record<string, unknown>)?.assembly_value ?? 0)
+        );
+    }, [location]);
 
     const sectionIdsKey = location?.sections?.map((s) => s.id).join(",") ?? "";
 
@@ -111,6 +143,22 @@ export function LocationDetail({
         await deleteBudgetImage(image.id, budgetId);
         setImages((prev) => prev.filter((img) => img.id !== image.id));
     };
+
+    const assemblyByItemId = useMemo(() => {
+        if (!locationItems.length) return {} as Record<string, number>;
+        if (assemblyMode === "manual") {
+            const map: Record<string, number> = {};
+            for (const item of locationItems) {
+                if (!item.id) continue;
+                map[item.id] = Number(
+                    (item as unknown as Record<string, unknown>).assembly_manual_value ?? 0
+                );
+            }
+            return map;
+        }
+        const total = computeLocationAssemblyTotal(assemblyMode, assemblyValue, locationItems);
+        return distributeProportional(locationItems, total);
+    }, [assemblyMode, assemblyValue, locationItems]);
 
     if (!location) return null;
 
@@ -269,6 +317,10 @@ export function LocationDetail({
                             isReadOnly={isReadOnly}
                             onRefresh={onRefresh}
                             locations={locations.length > 0 ? locations : [location]}
+                            assemblyMode={assemblyMode}
+                            assemblyByItemId={assemblyByItemId}
+                            priceAdjustmentEnabled={priceAdjustmentEnabled}
+                            priceAdjustmentInputMode={priceAdjustmentInputMode}
                         />
                     ))}
                 </div>

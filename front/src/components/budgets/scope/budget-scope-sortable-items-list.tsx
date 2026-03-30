@@ -24,6 +24,7 @@ import type { BudgetItem } from "@/types/budget-types";
 import { reorderSectionItemsAction } from "@/actions/budget-hierarchy-section-items-actions";
 import { buildItemSegments, type ItemSegment } from "./budget-scope-utils";
 import { ScopeItemRow } from "./budget-scope-item-row";
+import type { LocationAssemblyMode, PriceAdjustmentMode } from "@/lib/budgets/scope-pricing";
 
 /** Id estável e único por segmento na lista (o mesmo grupo de catálogo pode aparecer em mais de um bloco). */
 function getSegmentSortableId(seg: ItemSegment): string {
@@ -37,12 +38,20 @@ export function SortableItemsList({
     isReadOnly,
     onRefresh,
     groups = [],
+    assemblyMode = "percent",
+    assemblyByItemId = {},
+    priceAdjustmentEnabled,
+    priceAdjustmentInputMode,
 }: {
     items: BudgetItem[];
     budgetId: string;
     isReadOnly: boolean;
     onRefresh: () => void;
     groups?: ProductGroup[];
+    assemblyMode?: LocationAssemblyMode;
+    assemblyByItemId?: Record<string, number>;
+    priceAdjustmentEnabled: boolean;
+    priceAdjustmentInputMode: PriceAdjustmentMode;
 }) {
     const [segments, setSegments] = useState<ItemSegment[]>(() => buildItemSegments(items));
     const segmentsRef = useRef(segments);
@@ -123,6 +132,10 @@ export function SortableItemsList({
                                 isReadOnly={isReadOnly}
                                 onRefresh={onRefresh}
                                 groups={groups}
+                                assemblyMode={assemblyMode}
+                                assemblyByItemId={assemblyByItemId}
+                                priceAdjustmentEnabled={priceAdjustmentEnabled}
+                                priceAdjustmentInputMode={priceAdjustmentInputMode}
                             />
                         ) : (
                             <SortableGroup
@@ -134,6 +147,10 @@ export function SortableItemsList({
                                 onRefresh={onRefresh}
                                 onItemReorder={handleGroupItemReorder}
                                 groups={groups}
+                                assemblyMode={assemblyMode}
+                                assemblyByItemId={assemblyByItemId}
+                                priceAdjustmentEnabled={priceAdjustmentEnabled}
+                                priceAdjustmentInputMode={priceAdjustmentInputMode}
                             />
                         )
                     )}
@@ -148,13 +165,21 @@ function SortableStandaloneItem({
     budgetId,
     isReadOnly,
     onRefresh,
-    groups,
+    groups: _groups,
+    assemblyMode,
+    assemblyByItemId,
+    priceAdjustmentEnabled,
+    priceAdjustmentInputMode,
 }: {
     item: BudgetItem;
     budgetId: string;
     isReadOnly: boolean;
     onRefresh: () => void;
     groups: ProductGroup[];
+    assemblyMode: LocationAssemblyMode;
+    assemblyByItemId: Record<string, number>;
+    priceAdjustmentEnabled: boolean;
+    priceAdjustmentInputMode: PriceAdjustmentMode;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: item.id!,
@@ -172,7 +197,10 @@ function SortableStandaloneItem({
                 budgetId={budgetId}
                 isReadOnly={isReadOnly}
                 onRefresh={onRefresh}
-                groups={groups}
+                assemblyMode={assemblyMode}
+                assemblyByItemId={assemblyByItemId}
+                priceAdjustmentEnabled={priceAdjustmentEnabled}
+                priceAdjustmentInputMode={priceAdjustmentInputMode}
                 dragHandleProps={isReadOnly ? undefined : { ...attributes, ...listeners }}
             />
         </div>
@@ -186,7 +214,11 @@ function SortableGroup({
     isReadOnly,
     onRefresh,
     onItemReorder,
-    groups,
+    groups: _groups,
+    assemblyMode,
+    assemblyByItemId,
+    priceAdjustmentEnabled,
+    priceAdjustmentInputMode,
 }: {
     seg: Extract<ItemSegment, { type: "group" }>;
     sensors: ReturnType<typeof useSensors>;
@@ -195,6 +227,10 @@ function SortableGroup({
     onRefresh: () => void;
     onItemReorder: (groupAnchorItemId: string, oldIdx: number, newIdx: number) => void;
     groups: ProductGroup[];
+    assemblyMode: LocationAssemblyMode;
+    assemblyByItemId: Record<string, number>;
+    priceAdjustmentEnabled: boolean;
+    priceAdjustmentInputMode: PriceAdjustmentMode;
 }) {
     const outerId = getSegmentSortableId(seg);
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -253,7 +289,10 @@ function SortableGroup({
                                 budgetId={budgetId}
                                 isReadOnly={isReadOnly}
                                 onRefresh={onRefresh}
-                                groups={groups}
+                                assemblyMode={assemblyMode}
+                                assemblyByItemId={assemblyByItemId}
+                                priceAdjustmentEnabled={priceAdjustmentEnabled}
+                                priceAdjustmentInputMode={priceAdjustmentInputMode}
                             />
                         ))}
                     </SortableContext>
@@ -276,13 +315,21 @@ function SortableGroupItem({
     budgetId,
     isReadOnly,
     onRefresh,
-    groups,
+    groups: _groups,
+    assemblyMode,
+    assemblyByItemId,
+    priceAdjustmentEnabled,
+    priceAdjustmentInputMode,
 }: {
     item: BudgetItem;
     budgetId: string;
     isReadOnly: boolean;
     onRefresh: () => void;
     groups: ProductGroup[];
+    assemblyMode: LocationAssemblyMode;
+    assemblyByItemId: Record<string, number>;
+    priceAdjustmentEnabled: boolean;
+    priceAdjustmentInputMode: PriceAdjustmentMode;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: item.id!,
@@ -300,8 +347,11 @@ function SortableGroupItem({
                 budgetId={budgetId}
                 isReadOnly={isReadOnly}
                 onRefresh={onRefresh}
-                groups={groups}
                 indented
+                assemblyMode={assemblyMode}
+                assemblyByItemId={assemblyByItemId}
+                priceAdjustmentEnabled={priceAdjustmentEnabled}
+                priceAdjustmentInputMode={priceAdjustmentInputMode}
                 dragHandleProps={isReadOnly ? undefined : { ...attributes, ...listeners }}
             />
         </div>

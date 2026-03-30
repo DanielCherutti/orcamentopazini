@@ -32,6 +32,8 @@ import { getBudgetImagesBySection, deleteBudgetImage } from "@/actions/budget-an
 import { formatCurrency } from "./budget-scope-utils";
 import { SortableItemsList } from "./budget-scope-sortable-items-list";
 import { ScopeGroupAdder, ScopeItemCreator } from "./budget-scope-item-creator";
+import type { LocationAssemblyMode, PriceAdjustmentMode } from "@/lib/budgets/scope-pricing";
+import { computeItemSubtotal } from "@/lib/budgets/scope-pricing";
 
 /** True se o HTML do editor estiver vazio (só tags/brancos). */
 function isRichTextContentEmpty(html: string | undefined | null): boolean {
@@ -52,6 +54,10 @@ interface SectionDetailProps {
     isReadOnly: boolean;
     onRefresh: () => void;
     locations?: ScopeLocation[];
+    assemblyMode?: LocationAssemblyMode;
+    assemblyByItemId?: Record<string, number>;
+    priceAdjustmentEnabled: boolean;
+    priceAdjustmentInputMode: PriceAdjustmentMode;
 }
 
 export function SectionDetail({
@@ -62,6 +68,10 @@ export function SectionDetail({
     isReadOnly,
     onRefresh,
     locations: _locations = [],
+    assemblyMode = "percent",
+    assemblyByItemId = {},
+    priceAdjustmentEnabled,
+    priceAdjustmentInputMode,
 }: SectionDetailProps) {
     const [name, setName] = useState(section?.name ?? "");
     const [editingName, setEditingName] = useState(false);
@@ -160,7 +170,11 @@ export function SectionDetail({
         setImages((prev) => prev.filter((img) => img.id !== image.id));
     };
 
-    const total = items.reduce((sum, i) => sum + (Number(i.total) || 0), 0);
+    const total = items.reduce((sum, i) => {
+        const subtotal = computeItemSubtotal(i);
+        const assemblyExtra = i.id ? Number(assemblyByItemId[i.id] ?? 0) : 0;
+        return sum + subtotal + assemblyExtra;
+    }, 0);
 
     const descEmpty = isRichTextContentEmpty(description);
 
@@ -315,8 +329,9 @@ export function SectionDetail({
                     <div className="grid grid-cols-12 gap-2 px-2 py-1 text-xs text-muted-foreground font-medium">
                         <div className="col-span-3">Produto</div>
                         <div className="col-span-2 text-center">Qtd / un.</div>
-                        <div className="col-span-2 text-right">Equipto.</div>
-                        <div className="col-span-2 text-right">MO unit.</div>
+                        <div className="col-span-1 text-right">Equipto.</div>
+                        <div className="col-span-2 text-right">Ajuste de Preço</div>
+                        <div className="col-span-1 text-right">MO unit.</div>
                         <div className="col-span-1 text-right">Total</div>
                         <div className="col-span-2" />
                     </div>
@@ -327,6 +342,10 @@ export function SectionDetail({
                     isReadOnly={isReadOnly}
                     onRefresh={loadItems}
                     groups={groups}
+                    assemblyMode={assemblyMode}
+                    assemblyByItemId={assemblyByItemId}
+                    priceAdjustmentEnabled={priceAdjustmentEnabled}
+                    priceAdjustmentInputMode={priceAdjustmentInputMode}
                 />
                 {!isReadOnly && (
                     <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">

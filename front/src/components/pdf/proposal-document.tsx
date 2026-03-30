@@ -159,14 +159,6 @@ function proxyPdfImageSrc(url: string | undefined, publicBase?: string): string 
     return `${origin}/api/pdf/image?src=${encodeURIComponent(resolved)}`;
 }
 
-function clampOpacity(value: number | undefined, fallback: number): number {
-    const n = typeof value === "number" ? value : fallback;
-    if (!Number.isFinite(n)) return fallback;
-    if (n < 0) return 0;
-    if (n > 0.32) return 0.32;
-    return n;
-}
-
 function clampDocumentOpacity(value: number | undefined, fallback: number): number {
     const n = typeof value === "number" ? value : fallback;
     if (!Number.isFinite(n)) return fallback;
@@ -439,7 +431,12 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
                     <Text style={styles.headerTitle}>Detalhamento do Projeto</Text>
                 </View>
 
-                <BudgetTable locations={budget.locations || []} sectionNumber={budget.section_number ?? 1} />
+                <BudgetTable
+                    locations={budget.locations || []}
+                    sectionNumber={budget.section_number ?? 1}
+                    showCosts={Boolean(budget.show_costs_on_print)}
+                    costsDisplayMode={(budget.costs_display_mode as "location" | "section" | "general") ?? "section"}
+                />
 
                 <View style={styles.totalBlock} break={false}>
                     <View>

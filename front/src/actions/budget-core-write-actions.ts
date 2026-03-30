@@ -36,6 +36,8 @@ export async function createBudgetAction(title: string, code: string) {
             total_value: 0,
             client_id: "",
             use_compositor: true,
+            show_costs_on_print: false,
+            costs_display_mode: "section",
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
         };
@@ -96,6 +98,8 @@ export async function updateBudgetAction(budgetId: string, updates: Partial<Budg
             "delivery_time",
             "validity_days",
             "issue_date",
+            "show_costs_on_print",
+            "costs_display_mode",
         ];
 
         const budgetRecordId = requireRecordId("budget", budgetId);

@@ -1,4 +1,9 @@
 import { z } from "zod";
+import type {
+    CostDisplayMode,
+    LocationAssemblyMode,
+    PriceAdjustmentMode,
+} from "@/lib/budgets/scope-pricing";
 
 // --- Zod Schemas ---
 
@@ -38,6 +43,12 @@ export const budgetItemSchema = z.object({
     labor_cost: z.number().min(0).default(0), // Mão de obra unitária (copiada do produto)
     total: z.number().min(0),
     notes: z.string().optional(),
+    observation_text: z.string().optional(),
+    observation_show_on_print: z.boolean().optional().default(false),
+    observation_extra_value: z.number().optional().default(0),
+    price_adjustment_mode: z.custom<PriceAdjustmentMode>().nullable().optional(),
+    price_adjustment_value: z.number().optional().default(0),
+    assembly_manual_value: z.number().optional().default(0),
     group_id: z.string().optional(),   // ID do grupo de origem (se veio de um grupo)
     group_name: z.string().optional(), // Nome do grupo (desnormalizado para exibição)
     /** Instância por inserção: mesmo catálogo adicionado 2x = dois blocos separados na UI */
@@ -61,6 +72,8 @@ export const budgetLocationSchema = z.object({
     name: z.string().min(1, "Nome do local é obrigatório"),
     description: z.string().optional(),
     order_index: z.number().default(0),
+    assembly_mode: z.custom<LocationAssemblyMode>().optional().default("percent"),
+    assembly_value: z.number().optional().default(0),
     sections: z.array(budgetSectionSchema).optional(),
     images: z.array(budgetImageSchema).optional(),
 });
@@ -84,6 +97,8 @@ export const budgetSchema = z.object({
 
     // Compositor: true = usa árvore de blocos dinâmicos; false = aba Ambientes legada
     use_compositor: z.boolean().default(false),
+    show_costs_on_print: z.boolean().optional().default(false),
+    costs_display_mode: z.custom<CostDisplayMode>().optional().default("section"),
 
     // Condições Comerciais
     payment_terms: z.string().optional().default("30/60/90 dias"),

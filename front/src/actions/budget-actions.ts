@@ -18,6 +18,7 @@ import {
   deleteItemAction,
   updateItemQuantityAction,
   updateItemLaborCostAction,
+  updateItemCommercialSettingsAction,
 } from "./budget-hierarchy-section-items-actions";
 import {
   addLocationAction,
@@ -51,6 +52,7 @@ export {
   deleteItemAction,
   updateItemQuantityAction,
   updateItemLaborCostAction,
+  updateItemCommercialSettingsAction,
   deleteLocationAction,
   deleteSectionAction,
   duplicateSectionAction,

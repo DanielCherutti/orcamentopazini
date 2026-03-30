@@ -43,6 +43,8 @@ export async function duplicateBudgetAction(
             delivery_time: original.delivery_time,
             validity_days: original.validity_days,
             section_number: original.section_number,
+            show_costs_on_print: original.show_costs_on_print ?? false,
+            costs_display_mode: original.costs_display_mode ?? "section",
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
         });
@@ -72,6 +74,8 @@ export async function duplicateBudgetAction(
                     name: loc.name,
                     description: loc.description,
                     order_index: loc.order_index,
+                    assembly_mode: loc.assembly_mode ?? "percent",
+                    assembly_value: Number(loc.assembly_value ?? 0),
                     created_at: new Date().toISOString(),
                 });
                 const newLoc = Array.isArray(newLocRaw) ? newLocRaw[0] : newLocRaw;
