@@ -29,6 +29,8 @@ export type { BudgetScopeProps, Selection } from "./budget-scope-types";
 
 export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) {
     const [locations, setLocations] = useState<ScopeLocation[]>([]);
+    /** Incrementa a cada `loadLocations` bem-sucedido (itens/estrutura) para o sidebar recalcular totais por local. */
+    const [scopeDataVersion, setScopeDataVersion] = useState(0);
     const [loading, setLoading] = useState(true);
     const [selected, setSelected] = useState<Selection | null>(null);
     const [scopeNumber, setScopeNumber] = useState<string>("");
@@ -47,6 +49,7 @@ export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) 
         const result = await getLocationsAction(budgetId);
         if (result.success && result.data) {
             setLocations(result.data);
+            setScopeDataVersion((v) => v + 1);
         }
     }, [budgetId]);
 
@@ -168,6 +171,7 @@ export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) 
                     key={budgetId}
                     budgetId={budgetId}
                     locations={locations}
+                    scopeDataVersion={scopeDataVersion}
                     selected={selected}
                     onSelect={setSelected}
                     onRefresh={loadLocations}

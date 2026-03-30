@@ -55,6 +55,13 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import type { ScopeLocation, ScopeSection } from "@/actions/budget-scope-actions";
+import { getItemsBySectionAction } from "@/actions/budget-hierarchy-section-items-actions";
+import {
+    computeLocationScopeTotal,
+    type ScopePricingItem,
+} from "@/lib/budgets/scope-pricing";
+import type { BudgetItem } from "@/types/budget-types";
+import { formatCurrency } from "./budget-scope-utils";
 import {
     addLocationAction,
     deleteLocationAction,
@@ -75,6 +82,25 @@ const SCOPE_SIDEBAR_WIDTH_MAX = 560;
 
 function clampScopeSidebarWidth(px: number): number {
     return Math.min(SCOPE_SIDEBAR_WIDTH_MAX, Math.max(SCOPE_SIDEBAR_WIDTH_MIN, Math.round(px)));
+}
+
+function budgetItemToScopePricingWithSection(
+    it: BudgetItem,
+    sectionId: string
+): ScopePricingItem & { section_id: string } {
+    const mode = it.price_adjustment_mode;
+    return {
+        id: it.id,
+        section_id: sectionId,
+        quantity: it.quantity,
+        unit_price: it.unit_price,
+        labor_cost: it.labor_cost,
+        price_adjustment_mode:
+            mode === "percent" || mode === "fixed" ? mode : null,
+        price_adjustment_value: it.price_adjustment_value ?? 0,
+        observation_extra_value: it.observation_extra_value ?? 0,
+        assembly_manual_value: it.assembly_manual_value ?? 0,
+    };
 }
 
 function persistScopeSidebarWidth(px: number) {
@@ -207,6 +233,8 @@ function ScopeSidebarDragOverlay({
 interface ScopeSidebarProps {
     budgetId: string;
     locations: ScopeLocation[];
+    /** Incrementa após cada refresh de escopo (inclui alteração de itens). */
+    scopeDataVersion: number;
     selected: Selection | null;
     onSelect: (sel: Selection) => void;
     onRefresh: () => void;
@@ -217,6 +245,7 @@ interface ScopeSidebarProps {
 export function ScopeSidebar({
     budgetId,
     locations,
+    scopeDataVersion,
     selected,
     onSelect,
     onRefresh,
@@ -605,6 +634,7 @@ export function ScopeSidebar({
                                     locIndex={locIdx + 1}
                                     scopeNumber={scopeNumber}
                                     budgetId={budgetId}
+                                    scopeDataVersion={scopeDataVersion}
                                     selected={selected}
                                     expanded={expandedLocations.has(loc.id)}
                                     onToggleExpand={() => toggleExpanded(loc.id)}
@@ -869,6 +899,7 @@ interface LocationNodeProps {
     locIndex: number;
     scopeNumber: string;
     budgetId: string;
+    scopeDataVersion: number;
     selected: Selection | null;
     expanded: boolean;
     onToggleExpand: () => void;
@@ -884,6 +915,7 @@ function LocationNode({
     locIndex,
     scopeNumber,
     budgetId,
+    scopeDataVersion,
     selected,
     expanded,
     onToggleExpand,
@@ -915,6 +947,60 @@ function LocationNode({
     } | null>(null);
     const [duplicateName, setDuplicateName] = useState("");
     const [duplicating, setDuplicating] = useState(false);
+    const [locationScopeTotal, setLocationScopeTotal] = useState<number | null>(null);
+    const [locationTotalLoading, setLocationTotalLoading] = useState(false);
+
+    const sectionIdsKey = location.sections.map((s) => s.id).join(",");
+    const sectionAssemblyKey = location.sections
+        .map((s) => `${s.assembly_mode ?? ""}:${s.assembly_value ?? ""}`)
+        .join("|");
+    const locationAssemblyKey = `${location.assembly_mode ?? ""}:${location.assembly_value ?? ""}`;
+
+    useEffect(() => {
+        if (location.sections.length === 0) {
+            setLocationScopeTotal(0);
+            setLocationTotalLoading(false);
+            return;
+        }
+        let cancelled = false;
+        setLocationTotalLoading(true);
+        Promise.all(location.sections.map((s) => getItemsBySectionAction(s.id)))
+            .then((results) => {
+                if (cancelled) return;
+                const itemsWithSection: Array<ScopePricingItem & { section_id: string }> = [];
+                location.sections.forEach((sec, idx) => {
+                    const r = results[idx];
+                    if (!r.success || !r.data) return;
+                    for (const it of r.data as BudgetItem[]) {
+                        itemsWithSection.push(budgetItemToScopePricingWithSection(it, sec.id));
+                    }
+                });
+                const total = computeLocationScopeTotal({
+                    location: {
+                        assembly_mode: location.assembly_mode,
+                        assembly_value: location.assembly_value,
+                    },
+                    sections: location.sections,
+                    items: itemsWithSection,
+                });
+                setLocationScopeTotal(total);
+            })
+            .catch(() => {
+                if (!cancelled) setLocationScopeTotal(null);
+            })
+            .finally(() => {
+                if (!cancelled) setLocationTotalLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        location.id,
+        sectionIdsKey,
+        locationAssemblyKey,
+        sectionAssemblyKey,
+        scopeDataVersion,
+    ]);
 
     const isSelected = selected?.type === "location" && selected.id === location.id;
     /** Índice sempre lista todos os trechos; só o painel principal muda (todos empilhados vs um trecho). */
@@ -1121,6 +1207,16 @@ function LocationNode({
                             />
                             );
                         })}
+                        <div className="flex items-center justify-end gap-2 border-t border-border/50 bg-muted/30 px-2 py-1.5">
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                Total do local
+                            </span>
+                            <span className="text-xs font-semibold tabular-nums text-foreground">
+                                {locationTotalLoading
+                                    ? "…"
+                                    : formatCurrency(locationScopeTotal ?? 0)}
+                            </span>
+                        </div>
                         </div>
                     </SortableContext>
                 )}
