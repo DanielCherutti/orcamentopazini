@@ -74,6 +74,14 @@ export async function duplicateBudgetAction(
                     name: loc.name,
                     description: loc.description,
                     order_index: loc.order_index,
+                    show_costs_on_print: Boolean(loc.show_costs_on_print),
+                    costs_display_mode:
+                        loc.costs_display_mode === "location" || loc.costs_display_mode === "general"
+                            ? loc.costs_display_mode
+                            : "section",
+                    price_adjustment_enabled: Boolean(loc.price_adjustment_enabled),
+                    price_adjustment_input_mode:
+                        loc.price_adjustment_input_mode === "percent" ? "percent" : "fixed",
                     assembly_mode: loc.assembly_mode ?? "percent",
                     assembly_value: Number(loc.assembly_value ?? 0),
                     created_at: new Date().toISOString(),
@@ -96,6 +104,19 @@ export async function duplicateBudgetAction(
                         name: sec.name,
                         description: sec.description,
                         order_index: sec.order_index,
+                        show_costs_on_print: Boolean(sec.show_costs_on_print),
+                        costs_display_mode:
+                            sec.costs_display_mode === "location" || sec.costs_display_mode === "general"
+                                ? sec.costs_display_mode
+                                : "section",
+                        price_adjustment_enabled: Boolean(sec.price_adjustment_enabled),
+                        price_adjustment_input_mode:
+                            sec.price_adjustment_input_mode === "percent" ? "percent" : "fixed",
+                        assembly_mode:
+                            sec.assembly_mode === "fixed" || sec.assembly_mode === "manual"
+                                ? sec.assembly_mode
+                                : "percent",
+                        assembly_value: Number(sec.assembly_value ?? 0),
                         created_at: new Date().toISOString(),
                     });
                     const newSec = Array.isArray(newSecRaw) ? newSecRaw[0] : newSecRaw;

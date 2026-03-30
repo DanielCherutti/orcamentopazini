@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Loader2, Map as MapIcon, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { getLocationsAction, type ScopeLocation } from "@/actions/budget-scope-actions";
-import { getBudgetAction, updateBudgetAction } from "@/actions/budget-actions";
 import { ScopeSidebar } from "./budget-scope-sidebar";
 import { LocationDetail } from "./budget-scope-location-detail";
 import { SectionDetail } from "./budget-scope-section-detail";
@@ -13,7 +12,10 @@ import type {
     LocationAssemblyMode,
     PriceAdjustmentMode,
 } from "@/lib/budgets/scope-pricing";
-import { updateLocationAction } from "@/actions/budget-hierarchy-scope-structure-actions";
+import {
+    updateLocationAction,
+    updateSectionAction,
+} from "@/actions/budget-hierarchy-scope-structure-actions";
 
 export type { BudgetScopeProps, Selection } from "./budget-scope-types";
 
@@ -59,23 +61,9 @@ export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) 
         }
     }, [budgetId]);
 
-    const loadBudgetCostConfig = useCallback(async () => {
-        const result = await getBudgetAction(budgetId);
-        if (!result.success || !result.data) return;
-        setShowCostsOnPrint(!!result.data.show_costs_on_print);
-        const mode = String(result.data.costs_display_mode ?? "section");
-        if (mode === "location" || mode === "general") {
-            setCostsDisplayMode(mode);
-        } else {
-            setCostsDisplayMode("section");
-        }
-    }, [budgetId]);
-
     useEffect(() => {
-        Promise.all([loadLocations(), loadScopeNumber(), loadBudgetCostConfig()]).finally(() =>
-            setLoading(false)
-        );
-    }, [loadLocations, loadScopeNumber, loadBudgetCostConfig]);
+        Promise.all([loadLocations(), loadScopeNumber()]).finally(() => setLoading(false));
+    }, [loadLocations, loadScopeNumber]);
 
     const selectedLocation = useMemo(() => {
         if (!selected) return null;
@@ -87,18 +75,70 @@ export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) 
         );
     }, [locations, selected]);
 
+    const selectedSection = useMemo(() => {
+        if (!selected || selected.type !== "section") return null;
+        return selectedLocation?.sections.find((sec) => sec.id === selected.id) ?? null;
+    }, [selected, selectedLocation]);
+
     useEffect(() => {
-        if (!selectedLocation) return;
+        if (!selectedLocation && !selectedSection) return;
+        const target = selected?.type === "section" ? selectedSection : selectedLocation;
+        if (!target) return;
+        setShowCostsOnPrint(
+            Boolean((target as unknown as Record<string, unknown>).show_costs_on_print)
+        );
+        const costsModeRaw = String(
+            (target as unknown as Record<string, unknown>).costs_display_mode ?? "section"
+        );
+        const costsMode: CostDisplayMode =
+            costsModeRaw === "location" || costsModeRaw === "general" ? costsModeRaw : "section";
+        setCostsDisplayMode(costsMode);
+        setPriceAdjustmentEnabled(
+            Boolean((target as unknown as Record<string, unknown>).price_adjustment_enabled)
+        );
+        const paModeRaw = String(
+            (target as unknown as Record<string, unknown>).price_adjustment_input_mode ?? "fixed"
+        );
+        setPriceAdjustmentInputMode(paModeRaw === "percent" ? "percent" : "fixed");
         const modeRaw = String(
-            (selectedLocation as unknown as Record<string, unknown>).assembly_mode ?? "percent"
+            (target as unknown as Record<string, unknown>).assembly_mode ?? "percent"
         );
         const mode: LocationAssemblyMode =
             modeRaw === "fixed" || modeRaw === "manual" ? modeRaw : "percent";
         setAssemblyMode(mode);
         setAssemblyValue(
-            Number((selectedLocation as unknown as Record<string, unknown>).assembly_value ?? 0)
+            Number((target as unknown as Record<string, unknown>).assembly_value ?? 0)
         );
-    }, [selectedLocation]);
+    }, [selected, selectedLocation, selectedSection]);
+
+    const saveCommercialConfig = useCallback(
+        async (
+            patch:
+                | {
+                      show_costs_on_print?: boolean;
+                      costs_display_mode?: CostDisplayMode;
+                      price_adjustment_enabled?: boolean;
+                      price_adjustment_input_mode?: PriceAdjustmentMode;
+                  }
+                | {
+                      assembly_mode?: LocationAssemblyMode;
+                      assembly_value?: number;
+                  }
+        ) => {
+            if (!selected) return;
+            if (selected.type === "location") {
+                const result = await updateLocationAction(selected.id, budgetId, patch);
+                if (!result.success) return false;
+                await loadLocations();
+                return true;
+            }
+            const result = await updateSectionAction(selected.id, budgetId, patch);
+            if (!result.success) return false;
+            await loadLocations();
+            return true;
+        },
+        [selected, budgetId, loadLocations]
+    );
 
     const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -152,14 +192,15 @@ export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) 
                                     onChange={async (e) => {
                                         const checked = e.target.checked;
                                         setShowCostsOnPrint(checked);
-                                        const result = await updateBudgetAction(budgetId, {
+                                        const ok = await saveCommercialConfig({
                                             show_costs_on_print: checked,
                                         });
-                                        if (!result.success) {
+                                        if (!ok) {
                                             setShowCostsOnPrint(!checked);
                                         }
                                     }}
                                     className="h-3 w-3 accent-white"
+                                    disabled={!selected}
                                 />
                                 EXIBIR CUSTOS
                             </label>
@@ -170,13 +211,14 @@ export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) 
                                     onChange={async (e) => {
                                         const mode = e.target.value as CostDisplayMode;
                                         setCostsDisplayMode(mode);
-                                        const result = await updateBudgetAction(budgetId, {
+                                        const ok = await saveCommercialConfig({
                                             costs_display_mode: mode,
                                         });
-                                        if (!result.success) {
+                                        if (!ok) {
                                             setCostsDisplayMode("section");
                                         }
                                     }}
+                                    disabled={!selected}
                                 >
                                     <option value="location">Custos por local</option>
                                     <option value="section">Custos por trecho</option>
@@ -187,8 +229,16 @@ export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) 
                                 <input
                                     type="checkbox"
                                     checked={priceAdjustmentEnabled}
-                                    onChange={(e) => setPriceAdjustmentEnabled(e.target.checked)}
+                                    onChange={async (e) => {
+                                        const checked = e.target.checked;
+                                        setPriceAdjustmentEnabled(checked);
+                                        const ok = await saveCommercialConfig({
+                                            price_adjustment_enabled: checked,
+                                        });
+                                        if (!ok) setPriceAdjustmentEnabled(!checked);
+                                    }}
                                     className="h-3 w-3 accent-white"
+                                    disabled={!selected}
                                 />
                                 AJUSTE DE PREÇO
                             </label>
@@ -196,8 +246,14 @@ export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) 
                                 <input
                                     type="checkbox"
                                     checked={priceAdjustmentInputMode === "percent"}
-                                    onChange={() => setPriceAdjustmentInputMode("percent")}
-                                    disabled={!priceAdjustmentEnabled}
+                                    onChange={async () => {
+                                        setPriceAdjustmentInputMode("percent");
+                                        const ok = await saveCommercialConfig({
+                                            price_adjustment_input_mode: "percent",
+                                        });
+                                        if (!ok) setPriceAdjustmentInputMode("fixed");
+                                    }}
+                                    disabled={!priceAdjustmentEnabled || !selected}
                                     className="h-3 w-3 accent-white"
                                 />
                                 %
@@ -206,8 +262,14 @@ export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) 
                                 <input
                                     type="checkbox"
                                     checked={priceAdjustmentInputMode === "fixed"}
-                                    onChange={() => setPriceAdjustmentInputMode("fixed")}
-                                    disabled={!priceAdjustmentEnabled}
+                                    onChange={async () => {
+                                        setPriceAdjustmentInputMode("fixed");
+                                        const ok = await saveCommercialConfig({
+                                            price_adjustment_input_mode: "fixed",
+                                        });
+                                        if (!ok) setPriceAdjustmentInputMode("percent");
+                                    }}
+                                    disabled={!priceAdjustmentEnabled || !selected}
                                     className="h-3 w-3 accent-white"
                                 />
                                 $
@@ -217,14 +279,13 @@ export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) 
                                     type="checkbox"
                                     checked={assemblyMode === "percent"}
                                     onChange={async () => {
-                                        if (!selectedLocation?.id) return;
+                                        if (!selected?.id) return;
                                         setAssemblyMode("percent");
-                                        await updateLocationAction(selectedLocation.id, budgetId, {
+                                        await saveCommercialConfig({
                                             assembly_mode: "percent",
                                         });
-                                        await loadLocations();
                                     }}
-                                    disabled={!selectedLocation?.id}
+                                    disabled={!selected?.id}
                                     className="h-3 w-3 accent-white"
                                 />
                                 MONTAGEM %
@@ -234,16 +295,15 @@ export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) 
                                 value={assemblyValue}
                                 onChange={(e) => setAssemblyValue(Number(e.target.value))}
                                 onBlur={async () => {
-                                    if (!selectedLocation?.id || assemblyMode === "manual") return;
-                                    await updateLocationAction(selectedLocation.id, budgetId, {
+                                    if (!selected?.id || assemblyMode === "manual") return;
+                                    await saveCommercialConfig({
                                         assembly_mode: assemblyMode,
                                         assembly_value: Number.isFinite(assemblyValue)
                                             ? assemblyValue
                                             : 0,
                                     });
-                                    await loadLocations();
                                 }}
-                                disabled={!selectedLocation?.id || assemblyMode === "manual"}
+                                disabled={!selected?.id || assemblyMode === "manual"}
                                 className="h-7 w-16 rounded border border-primary/60 px-2 text-[11px]"
                             />
                             <label className="inline-flex h-7 items-center gap-1 rounded bg-primary px-2 text-[11px] font-medium text-primary-foreground">
@@ -251,14 +311,13 @@ export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) 
                                     type="checkbox"
                                     checked={assemblyMode === "fixed"}
                                     onChange={async () => {
-                                        if (!selectedLocation?.id) return;
+                                        if (!selected?.id) return;
                                         setAssemblyMode("fixed");
-                                        await updateLocationAction(selectedLocation.id, budgetId, {
+                                        await saveCommercialConfig({
                                             assembly_mode: "fixed",
                                         });
-                                        await loadLocations();
                                     }}
-                                    disabled={!selectedLocation?.id}
+                                    disabled={!selected?.id}
                                     className="h-3 w-3 accent-white"
                                 />
                                 MONTAGEM $
@@ -268,14 +327,13 @@ export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) 
                                     type="checkbox"
                                     checked={assemblyMode === "manual"}
                                     onChange={async () => {
-                                        if (!selectedLocation?.id) return;
+                                        if (!selected?.id) return;
                                         setAssemblyMode("manual");
-                                        await updateLocationAction(selectedLocation.id, budgetId, {
+                                        await saveCommercialConfig({
                                             assembly_mode: "manual",
                                         });
-                                        await loadLocations();
                                     }}
-                                    disabled={!selectedLocation?.id}
+                                    disabled={!selected?.id}
                                     className="h-3 w-3 accent-white"
                                 />
                                 MONTAGEM MANUAL
@@ -313,6 +371,8 @@ export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) 
                             isReadOnly={isReadOnly}
                             onRefresh={loadLocations}
                             locations={locations}
+                            assemblyMode={assemblyMode}
+                            assemblyValue={assemblyValue}
                             priceAdjustmentEnabled={priceAdjustmentEnabled}
                             priceAdjustmentInputMode={priceAdjustmentInputMode}
                         />

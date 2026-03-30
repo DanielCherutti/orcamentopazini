@@ -71,9 +71,24 @@ export async function recalculateBudgetTotal(budgetId: string) {
         const budgetRecordId = safeStringRecordId("budget", budgetId);
         if (!budgetRecordId) return;
 
-        const [locRowsRes, itemRowsRes] = await Promise.all([
+        const [locRowsRes, secRowsRes, itemRowsRes] = await Promise.all([
             db.query<[Array<{ id: unknown; assembly_mode?: unknown; assembly_value?: unknown }>]>(
                 `SELECT id, assembly_mode, assembly_value FROM budget_location WHERE budget_id = $budgetId AND deleted_at IS NONE`,
+                { budgetId: budgetRecordId }
+            ),
+            db.query<
+                [
+                    Array<{
+                        id: unknown;
+                        location_id?: unknown;
+                        assembly_mode?: unknown;
+                        assembly_value?: unknown;
+                    }>,
+                ]
+            >(
+                `SELECT id, location_id, assembly_mode, assembly_value
+                 FROM budget_section
+                 WHERE budget_id = $budgetId AND deleted_at IS NONE`,
                 { budgetId: budgetRecordId }
             ),
             db.query<[Array<Record<string, unknown>>]>(
@@ -98,15 +113,48 @@ export async function recalculateBudgetTotal(budgetId: string) {
             });
         }
 
-        const itemsByLocation = new Map<string, ScopePricingItem[]>();
+        const sectionConfig = new Map<
+            string,
+            {
+                locationId: string;
+                mode: LocationAssemblyMode;
+                value: number;
+                hasOwnAssembly: boolean;
+            }
+        >();
+        const sectionIdsByLocation = new Map<string, string[]>();
+        for (const row of secRowsRes[0] ?? []) {
+            const sectionId = String(row.id);
+            const locationId = String(row.location_id ?? "");
+            if (!locationId) continue;
+            const modeRaw = String(row.assembly_mode ?? "percent");
+            const mode: LocationAssemblyMode =
+                modeRaw === "fixed" || modeRaw === "manual" ? modeRaw : "percent";
+            const value = Number(row.assembly_value ?? 0);
+            const hasOwnAssembly = row.assembly_mode != null || row.assembly_value != null;
+            sectionConfig.set(sectionId, {
+                locationId,
+                mode,
+                value,
+                hasOwnAssembly,
+            });
+            const locSections = sectionIdsByLocation.get(locationId) ?? [];
+            locSections.push(sectionId);
+            sectionIdsByLocation.set(locationId, locSections);
+        }
+
+        const itemsByLocationFallback = new Map<string, ScopePricingItem[]>();
+        const itemsBySection = new Map<string, ScopePricingItem[]>();
         for (const row of itemRowsRes[0] ?? []) {
             const section = row.section_id as Record<string, unknown> | undefined;
+            const sectionIdRaw = section && typeof section === "object" ? section.id : undefined;
+            if (!sectionIdRaw) continue;
+            const sectionId = String(sectionIdRaw);
             const locationRaw =
                 section && typeof section === "object" ? section.location_id : undefined;
             if (!locationRaw) continue;
             const locationId = String(locationRaw);
-            const arr = itemsByLocation.get(locationId) ?? [];
-            arr.push({
+            const item: ScopePricingItem = {
                 id: String(row.id ?? ""),
                 quantity: Number(row.quantity ?? 1),
                 unit_price: Number(row.unit_price ?? 0),
@@ -118,19 +166,50 @@ export async function recalculateBudgetTotal(budgetId: string) {
                 price_adjustment_value: Number(row.price_adjustment_value ?? 0),
                 observation_extra_value: Number(row.observation_extra_value ?? 0),
                 assembly_manual_value: Number(row.assembly_manual_value ?? 0),
-            });
-            itemsByLocation.set(locationId, arr);
+            };
+            const secCfg = sectionConfig.get(sectionId);
+            if (secCfg?.hasOwnAssembly) {
+                const sectionItems = itemsBySection.get(sectionId) ?? [];
+                sectionItems.push(item);
+                itemsBySection.set(sectionId, sectionItems);
+                continue;
+            }
+            const locItems = itemsByLocationFallback.get(locationId) ?? [];
+            locItems.push(item);
+            itemsByLocationFallback.set(locationId, locItems);
         }
 
         let grandTotal = 0;
-        for (const [locationId, items] of itemsByLocation.entries()) {
+        for (const [sectionId, cfg] of sectionConfig.entries()) {
+            if (!cfg.hasOwnAssembly) continue;
+            const items = itemsBySection.get(sectionId) ?? [];
+            const itemSubtotal = items.reduce((sum, item) => sum + computeItemSubtotal(item), 0);
+            const assemblyTotal = computeLocationAssemblyTotal(cfg.mode, cfg.value, items);
+            grandTotal += itemSubtotal + assemblyTotal;
+        }
+
+        for (const [locationId, items] of itemsByLocationFallback.entries()) {
             const itemSubtotal = items.reduce((sum, item) => sum + computeItemSubtotal(item), 0);
             const cfg = locationConfig.get(locationId) ?? { mode: "percent", value: 0 };
             const assemblyTotal = computeLocationAssemblyTotal(cfg.mode, cfg.value, items);
             grandTotal += itemSubtotal + assemblyTotal;
         }
+
+        for (const [sectionId, cfg] of sectionConfig.entries()) {
+            if (!cfg.hasOwnAssembly) continue;
+            if (itemsBySection.has(sectionId)) continue;
+            const assemblyTotal = computeLocationAssemblyTotal(cfg.mode, cfg.value, []);
+            grandTotal += assemblyTotal;
+        }
+
         for (const [locationId, cfg] of locationConfig.entries()) {
-            if (itemsByLocation.has(locationId)) continue;
+            const hasFallbackItems = itemsByLocationFallback.has(locationId);
+            if (hasFallbackItems) continue;
+            const locationSections = sectionIdsByLocation.get(locationId) ?? [];
+            const hasAnyFallbackSection = locationSections.some(
+                (sid) => !sectionConfig.get(sid)?.hasOwnAssembly
+            );
+            if (!hasAnyFallbackSection) continue;
             const assemblyTotal = computeLocationAssemblyTotal(cfg.mode, cfg.value, []);
             grandTotal += assemblyTotal;
         }

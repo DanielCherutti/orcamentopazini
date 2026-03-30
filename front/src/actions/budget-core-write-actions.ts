@@ -17,6 +17,7 @@ import {
 } from "@/lib/surreal-record-ids";
 import { isBudgetEditableStatus } from "@/lib/budgets/budget-status";
 import { getNextBudgetNumberAction } from "@/actions/budget-core-read-actions";
+import { recalculateBudgetTotal } from "@/actions/budget-hierarchy-helpers";
 
 export async function createBudgetAction(title: string, code: string) {
     const auth = await assertActionSession();
@@ -391,38 +392,6 @@ async function isDraftBudgetForProductStickerRow(
     }
 }
 
-/** Recalcula o total do documento somando itens ligados por bloco (compositor) e por trecho (legado). */
-async function recalculateBudgetTotalCombined(
-    db: Awaited<ReturnType<typeof getDb>>,
-    budgetId: string
-): Promise<void> {
-    const budgetRecordId = requireRecordId("budget", budgetId);
-    let sum = 0;
-    const queries: [string, Record<string, unknown>][] = [
-        [
-            "SELECT math::sum(total) AS grand_total FROM budget_item WHERE block_id.budget_id = $bid AND deleted_at IS NONE GROUP ALL",
-            { bid: budgetRecordId },
-        ],
-        [
-            "SELECT math::sum(total) AS grand_total FROM budget_item WHERE section_id.budget_id = $bid AND deleted_at IS NONE GROUP ALL",
-            { bid: budgetRecordId },
-        ],
-    ];
-    for (const [q, vars] of queries) {
-        try {
-            const res = await db.query<[{ grand_total: number | null }[]]>(q, vars);
-            const g = res[0]?.[0]?.grand_total;
-            if (g != null && !Number.isNaN(Number(g))) sum += Number(g);
-        } catch {
-            /* consulta pode falhar em esquemas antigos — ignora */
-        }
-    }
-    await db.update(budgetRecordId).merge({
-        total_value: sum,
-        updated_at: new Date().toISOString(),
-    });
-}
-
 /** Dados do catálogo propagados para itens de compositor e figurinhas em fotos (só `draft`). */
 export type ProductCatalogSyncSnapshot = {
     code: string;
@@ -565,7 +534,7 @@ export async function syncProductCatalogToDraftBudgetItemsAction(
         }
 
         for (const bid of budgetIdsToRecalc) {
-            await recalculateBudgetTotalCombined(db, bid);
+            await recalculateBudgetTotal(bid);
             revalidatePath(budgetRevalidatePath(bid));
         }
 

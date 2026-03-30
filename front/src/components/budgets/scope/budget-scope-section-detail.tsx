@@ -59,6 +59,7 @@ interface SectionDetailProps {
     onRefresh: () => void;
     locations?: ScopeLocation[];
     assemblyMode?: LocationAssemblyMode;
+    assemblyValue?: number;
     assemblyByItemId?: Record<string, number>;
     priceAdjustmentEnabled: boolean;
     priceAdjustmentInputMode: PriceAdjustmentMode;
@@ -73,6 +74,7 @@ export function SectionDetail({
     onRefresh,
     locations = [],
     assemblyMode,
+    assemblyValue,
     assemblyByItemId = {},
     priceAdjustmentEnabled,
     priceAdjustmentInputMode,
@@ -164,6 +166,8 @@ export function SectionDetail({
         return () => {
             cancelled = true;
         };
+        // currentLocation.sections coberto por sectionIdsKey + length
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentLocation?.id, currentLocation?.sections?.length, sectionIdsKey]);
 
     const locationAssemblyModeRaw = String(
@@ -174,17 +178,19 @@ export function SectionDetail({
             ? locationAssemblyModeRaw
             : "percent";
     const effectiveAssemblyMode = assemblyMode ?? locationAssemblyMode;
-    const effectiveAssemblyValue = Number(
-        (currentLocation as unknown as Record<string, unknown> | null)?.assembly_value ?? 0
-    );
+    const effectiveAssemblyValue =
+        assemblyValue ??
+        Number((currentLocation as unknown as Record<string, unknown> | null)?.assembly_value ?? 0);
+    const sectionScopedAssembly = assemblyMode !== undefined || assemblyValue !== undefined;
 
     const effectiveAssemblyByItemId = useMemo(() => {
         if (Object.keys(assemblyByItemId).length > 0) return assemblyByItemId;
-        if (!locationItems.length) return {} as Record<string, number>;
+        const sourceItems = sectionScopedAssembly ? items : locationItems;
+        if (!sourceItems.length) return {} as Record<string, number>;
 
         if (effectiveAssemblyMode === "manual") {
             const map: Record<string, number> = {};
-            for (const item of locationItems) {
+            for (const item of sourceItems) {
                 if (!item.id) continue;
                 map[item.id] = Number(
                     (item as unknown as Record<string, unknown>).assembly_manual_value ?? 0
@@ -196,12 +202,14 @@ export function SectionDetail({
         const total = computeLocationAssemblyTotal(
             effectiveAssemblyMode,
             effectiveAssemblyValue,
-            locationItems
+            sourceItems
         );
-        return distributeProportional(locationItems, total);
+        return distributeProportional(sourceItems, total);
     }, [
         assemblyByItemId,
+        items,
         locationItems,
+        sectionScopedAssembly,
         effectiveAssemblyMode,
         effectiveAssemblyValue,
     ]);
@@ -239,6 +247,11 @@ export function SectionDetail({
         await deleteBudgetImage(image.id, budgetId);
         setImages((prev) => prev.filter((img) => img.id !== image.id));
     };
+
+    const refreshSectionAndScope = useCallback(() => {
+        void loadItems();
+        onRefresh();
+    }, [loadItems, onRefresh]);
 
     const total = items.reduce((sum, i) => {
         const subtotal = computeItemSubtotal(i);
@@ -410,7 +423,7 @@ export function SectionDetail({
                     items={items}
                     budgetId={budgetId}
                     isReadOnly={isReadOnly}
-                    onRefresh={loadItems}
+                    onRefresh={refreshSectionAndScope}
                     groups={groups}
                     assemblyMode={effectiveAssemblyMode}
                     assemblyByItemId={effectiveAssemblyByItemId}
@@ -419,8 +432,16 @@ export function SectionDetail({
                 />
                 {!isReadOnly && (
                     <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-                        <ScopeItemCreator sectionId={sectionId} budgetId={budgetId} onSuccess={loadItems} />
-                        <ScopeGroupAdder sectionId={sectionId} budgetId={budgetId} onSuccess={loadItems} />
+                        <ScopeItemCreator
+                            sectionId={sectionId}
+                            budgetId={budgetId}
+                            onSuccess={refreshSectionAndScope}
+                        />
+                        <ScopeGroupAdder
+                            sectionId={sectionId}
+                            budgetId={budgetId}
+                            onSuccess={refreshSectionAndScope}
+                        />
                         <Button
                             type="button"
                             variant="default"

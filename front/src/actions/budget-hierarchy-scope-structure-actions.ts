@@ -12,6 +12,7 @@ import {
     canonicalTableRecordId,
 } from "@/lib/surreal-record-ids";
 import { buildDuplicatedBudgetItemContent, recalculateBudgetTotal } from "@/actions/budget-hierarchy-helpers";
+import type { CostDisplayMode, LocationAssemblyMode, PriceAdjustmentMode } from "@/lib/budgets/scope-pricing";
 
 export async function updateLocationAction(
     locationId: string,
@@ -19,7 +20,11 @@ export async function updateLocationAction(
     patch: {
         name?: string;
         description?: string;
-        assembly_mode?: "percent" | "fixed" | "manual";
+        show_costs_on_print?: boolean;
+        costs_display_mode?: CostDisplayMode;
+        price_adjustment_enabled?: boolean;
+        price_adjustment_input_mode?: PriceAdjustmentMode;
+        assembly_mode?: LocationAssemblyMode;
         assembly_value?: number;
     }
 ) {
@@ -57,6 +62,10 @@ export async function addLocationAction(budgetId: string, name: string) {
             budget_id: requireRecordId("budget", budgetId),
             name,
             order_index: Date.now(),
+            show_costs_on_print: false,
+            costs_display_mode: "section",
+            price_adjustment_enabled: false,
+            price_adjustment_input_mode: "fixed",
             assembly_mode: "percent",
             assembly_value: 0,
             created_at: new Date().toISOString(),
@@ -78,7 +87,16 @@ export async function addLocationAction(budgetId: string, name: string) {
 export async function updateSectionAction(
     sectionId: string,
     budgetId: string,
-    patch: { name?: string; description?: string }
+    patch: {
+        name?: string;
+        description?: string;
+        show_costs_on_print?: boolean;
+        costs_display_mode?: CostDisplayMode;
+        price_adjustment_enabled?: boolean;
+        price_adjustment_input_mode?: PriceAdjustmentMode;
+        assembly_mode?: LocationAssemblyMode;
+        assembly_value?: number;
+    }
 ) {
     const auth = await assertActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
@@ -89,6 +107,9 @@ export async function updateSectionAction(
             ...patch,
             updated_at: new Date().toISOString(),
         });
+        if (patch.assembly_mode !== undefined || patch.assembly_value !== undefined) {
+            await recalculateBudgetTotal(budgetId);
+        }
         revalidatePath(budgetRevalidatePath(budgetId));
         return { success: true };
     } catch (error) {
@@ -112,6 +133,12 @@ export async function addSectionAction(locationId: string, budgetId: string, nam
             budget_id: requireRecordId("budget", budgetId),
             name,
             order_index: Date.now(),
+            show_costs_on_print: false,
+            costs_display_mode: "section",
+            price_adjustment_enabled: false,
+            price_adjustment_input_mode: "fixed",
+            assembly_mode: "percent",
+            assembly_value: 0,
             created_at: new Date().toISOString(),
         });
         const created = Array.isArray(raw) ? raw[0] : raw;
@@ -233,6 +260,19 @@ export async function duplicateSectionAction(sectionId: string, budgetId: string
             budget_id: requireRecordId("budget", budgetId),
             name: newName || `${original.name} - Cópia`,
             description: original.description,
+            show_costs_on_print: Boolean(original.show_costs_on_print),
+            costs_display_mode:
+                original.costs_display_mode === "location" || original.costs_display_mode === "general"
+                    ? original.costs_display_mode
+                    : "section",
+            price_adjustment_enabled: Boolean(original.price_adjustment_enabled),
+            price_adjustment_input_mode:
+                original.price_adjustment_input_mode === "percent" ? "percent" : "fixed",
+            assembly_mode:
+                original.assembly_mode === "fixed" || original.assembly_mode === "manual"
+                    ? original.assembly_mode
+                    : "percent",
+            assembly_value: Number(original.assembly_value ?? 0),
             order_index: Date.now(),
             created_at: new Date().toISOString(),
         });
@@ -361,6 +401,14 @@ export async function duplicateLocationAction(locationId: string, budgetId: stri
             name: newName || `${original.name} - Cópia`,
             description: original.description,
             order_index: Date.now(),
+            show_costs_on_print: Boolean(original.show_costs_on_print),
+            costs_display_mode:
+                original.costs_display_mode === "location" || original.costs_display_mode === "general"
+                    ? original.costs_display_mode
+                    : "section",
+            price_adjustment_enabled: Boolean(original.price_adjustment_enabled),
+            price_adjustment_input_mode:
+                original.price_adjustment_input_mode === "percent" ? "percent" : "fixed",
             assembly_mode: original.assembly_mode ?? "percent",
             assembly_value: Number(original.assembly_value ?? 0),
             created_at: new Date().toISOString(),
@@ -383,6 +431,19 @@ export async function duplicateLocationAction(locationId: string, budgetId: stri
                 name: sec.name,
                 description: sec.description,
                 order_index: Date.now(),
+                show_costs_on_print: Boolean(sec.show_costs_on_print),
+                costs_display_mode:
+                    sec.costs_display_mode === "location" || sec.costs_display_mode === "general"
+                        ? sec.costs_display_mode
+                        : "section",
+                price_adjustment_enabled: Boolean(sec.price_adjustment_enabled),
+                price_adjustment_input_mode:
+                    sec.price_adjustment_input_mode === "percent" ? "percent" : "fixed",
+                assembly_mode:
+                    sec.assembly_mode === "fixed" || sec.assembly_mode === "manual"
+                        ? sec.assembly_mode
+                        : "percent",
+                assembly_value: Number(sec.assembly_value ?? 0),
                 created_at: new Date().toISOString(),
             });
             const createdSec = Array.isArray(newSection) ? newSection[0] : newSection;

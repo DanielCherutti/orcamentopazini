@@ -23,6 +23,12 @@ export interface ScopeSection {
   budget_id: string;
   name: string;
   description?: string;
+  show_costs_on_print?: boolean;
+  costs_display_mode?: "location" | "section" | "general";
+  price_adjustment_enabled?: boolean;
+  price_adjustment_input_mode?: "percent" | "fixed";
+  assembly_mode?: "percent" | "fixed" | "manual";
+  assembly_value?: number;
   order_index: number;
   created_at: string;
 }
@@ -32,6 +38,10 @@ export interface ScopeLocation {
   budget_id: string;
   name: string;
   description?: string;
+  show_costs_on_print?: boolean;
+  costs_display_mode?: "location" | "section" | "general";
+  price_adjustment_enabled?: boolean;
+  price_adjustment_input_mode?: "percent" | "fixed";
   assembly_mode?: "percent" | "fixed" | "manual";
   assembly_value?: number;
   order_index: number;
