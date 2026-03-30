@@ -124,6 +124,8 @@ export function ScopeItemRow({
         assemblyMode === "manual"
             ? Number(assemblyManualValue || 0)
             : Number(item.id ? assemblyByItemId[item.id] ?? 0 : 0);
+    const assemblyUnitValue = qty > 0 ? assemblyExtra / qty : 0;
+    const moUnitValue = assemblyMode === "percent" ? assemblyUnitValue : laborCost;
     const total = subtotal + assemblyExtra;
 
     const handleQtyChange = (val: number) => {
@@ -237,7 +239,7 @@ export function ScopeItemRow({
                     )}
                 </div>
                 <div className="col-span-1 text-right text-xs text-muted-foreground">
-                    {formatCurrency(laborCost)}
+                    {formatCurrency(moUnitValue)}
                 </div>
                 <div className="col-span-1 text-right text-xs font-medium">{formatCurrency(total)}</div>
                 <div className="col-span-2 flex items-center justify-end gap-1">

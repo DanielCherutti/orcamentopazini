@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Layers, Copy, Trash2, Pencil, FileText } from "lucide-react";
 import {
     Dialog,
@@ -33,7 +33,11 @@ import { formatCurrency } from "./budget-scope-utils";
 import { SortableItemsList } from "./budget-scope-sortable-items-list";
 import { ScopeGroupAdder, ScopeItemCreator } from "./budget-scope-item-creator";
 import type { LocationAssemblyMode, PriceAdjustmentMode } from "@/lib/budgets/scope-pricing";
-import { computeItemSubtotal } from "@/lib/budgets/scope-pricing";
+import {
+    computeItemSubtotal,
+    computeLocationAssemblyTotal,
+    distributeProportional,
+} from "@/lib/budgets/scope-pricing";
 
 /** True se o HTML do editor estiver vazio (só tags/brancos). */
 function isRichTextContentEmpty(html: string | undefined | null): boolean {
@@ -62,13 +66,13 @@ interface SectionDetailProps {
 
 export function SectionDetail({
     sectionId,
-    locationId: _locationId,
+    locationId,
     section,
     budgetId,
     isReadOnly,
     onRefresh,
-    locations: _locations = [],
-    assemblyMode = "percent",
+    locations = [],
+    assemblyMode,
     assemblyByItemId = {},
     priceAdjustmentEnabled,
     priceAdjustmentInputMode,
@@ -79,6 +83,7 @@ export function SectionDetail({
     const [items, setItems] = useState<BudgetItem[]>([]);
     const [groups, setGroups] = useState<ProductGroup[]>([]);
     const [images, setImages] = useState<BudgetImage[]>([]);
+    const [locationItems, setLocationItems] = useState<BudgetItem[]>([]);
     const [addPhotoOpen, setAddPhotoOpen] = useState(false);
     const [editingImage, setEditingImage] = useState<BudgetImage | null>(null);
     const [dupDialog, setDupDialog] = useState(false);
@@ -136,6 +141,71 @@ export function SectionDetail({
         });
     }, []);
 
+    const currentLocation = useMemo(
+        () => locations.find((loc) => loc.id === locationId) ?? null,
+        [locations, locationId]
+    );
+
+    const sectionIdsKey = currentLocation?.sections?.map((s) => s.id).join(",") ?? "";
+
+    useEffect(() => {
+        if (!currentLocation?.sections?.length) {
+            setLocationItems([]);
+            return;
+        }
+        let cancelled = false;
+        Promise.all(currentLocation.sections.map((s) => getItemsBySectionAction(s.id))).then((results) => {
+            if (cancelled) return;
+            const all = results.flatMap((r) =>
+                r.success && r.data ? (r.data as unknown as BudgetItem[]) : []
+            );
+            setLocationItems(all);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [currentLocation?.id, currentLocation?.sections?.length, sectionIdsKey]);
+
+    const locationAssemblyModeRaw = String(
+        (currentLocation as unknown as Record<string, unknown> | null)?.assembly_mode ?? "percent"
+    );
+    const locationAssemblyMode: LocationAssemblyMode =
+        locationAssemblyModeRaw === "fixed" || locationAssemblyModeRaw === "manual"
+            ? locationAssemblyModeRaw
+            : "percent";
+    const effectiveAssemblyMode = assemblyMode ?? locationAssemblyMode;
+    const effectiveAssemblyValue = Number(
+        (currentLocation as unknown as Record<string, unknown> | null)?.assembly_value ?? 0
+    );
+
+    const effectiveAssemblyByItemId = useMemo(() => {
+        if (Object.keys(assemblyByItemId).length > 0) return assemblyByItemId;
+        if (!locationItems.length) return {} as Record<string, number>;
+
+        if (effectiveAssemblyMode === "manual") {
+            const map: Record<string, number> = {};
+            for (const item of locationItems) {
+                if (!item.id) continue;
+                map[item.id] = Number(
+                    (item as unknown as Record<string, unknown>).assembly_manual_value ?? 0
+                );
+            }
+            return map;
+        }
+
+        const total = computeLocationAssemblyTotal(
+            effectiveAssemblyMode,
+            effectiveAssemblyValue,
+            locationItems
+        );
+        return distributeProportional(locationItems, total);
+    }, [
+        assemblyByItemId,
+        locationItems,
+        effectiveAssemblyMode,
+        effectiveAssemblyValue,
+    ]);
+
     const commitName = async () => {
         setEditingName(false);
         const trimmed = name
@@ -172,7 +242,7 @@ export function SectionDetail({
 
     const total = items.reduce((sum, i) => {
         const subtotal = computeItemSubtotal(i);
-        const assemblyExtra = i.id ? Number(assemblyByItemId[i.id] ?? 0) : 0;
+        const assemblyExtra = i.id ? Number(effectiveAssemblyByItemId[i.id] ?? 0) : 0;
         return sum + subtotal + assemblyExtra;
     }, 0);
 
@@ -342,8 +412,8 @@ export function SectionDetail({
                     isReadOnly={isReadOnly}
                     onRefresh={loadItems}
                     groups={groups}
-                    assemblyMode={assemblyMode}
-                    assemblyByItemId={assemblyByItemId}
+                    assemblyMode={effectiveAssemblyMode}
+                    assemblyByItemId={effectiveAssemblyByItemId}
                     priceAdjustmentEnabled={priceAdjustmentEnabled}
                     priceAdjustmentInputMode={priceAdjustmentInputMode}
                 />
