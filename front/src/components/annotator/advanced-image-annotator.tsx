@@ -881,6 +881,12 @@ export function AdvancedImageAnnotator({
             await new Promise(r => setTimeout(r, 50));
 
             const stage = stageRef.current;
+            if (!stage) {
+                if (!isAutoSave) {
+                    toast.error("Canvas indisponível para salvar");
+                }
+                return;
+            }
             const savedScale = stage.scaleX();
             const savedPos = { x: stage.x(), y: stage.y() };
 

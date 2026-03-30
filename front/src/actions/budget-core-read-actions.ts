@@ -23,29 +23,37 @@ export async function getBudgetAction(
         SELECT *,
           (
             SELECT *,
-              (SELECT * FROM image_annotation WHERE image_id = $parent.id) as annotations
-              FROM budget_image WHERE location_id = $parent.id
-              ORDER BY created_at ASC
+              (
+                SELECT * FROM image_annotation
+                WHERE image_id = $parent.id AND deleted_at IS NONE
+              ) as annotations
+              FROM budget_image
+              WHERE location_id = $parent.id AND deleted_at IS NONE
+              ORDER BY order_index ASC, created_at ASC
           ) as images,
           (
             SELECT *,
               (
-                SELECT * FROM budget_item WHERE section_id = $parent.id
+                SELECT * FROM budget_item WHERE section_id = $parent.id AND deleted_at IS NONE
                   FETCH product_id
               ) as items,
               (
                 SELECT *,
-                (SELECT * FROM image_annotation WHERE image_id = $parent.id) as annotations
-                FROM budget_image WHERE section_id = $parent.id
-                ORDER BY created_at ASC
+                (
+                  SELECT * FROM image_annotation
+                  WHERE image_id = $parent.id AND deleted_at IS NONE
+                ) as annotations
+                FROM budget_image
+                WHERE section_id = $parent.id AND deleted_at IS NONE
+                ORDER BY order_index ASC, created_at ASC
               ) as images
             FROM budget_section 
-            WHERE location_id = $parent.id 
-            ORDER BY created_at ASC
+            WHERE location_id = $parent.id AND deleted_at IS NONE
+            ORDER BY order_index ASC, created_at ASC
           ) as sections 
         FROM budget_location 
-        WHERE budget_id = $parent.id 
-        ORDER BY created_at ASC
+        WHERE budget_id = $parent.id AND deleted_at IS NONE
+        ORDER BY order_index ASC, created_at ASC
       ) as locations 
       FROM $id
       FETCH client_id

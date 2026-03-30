@@ -356,6 +356,7 @@ export async function getBudgetImagesBySection(sectionId: string) {
         const [images] = await db.query<[DbImage[]]>(`
             SELECT * FROM budget_image
             WHERE section_id = $sectionId
+              AND deleted_at IS NONE
             ORDER BY order_index ASC, created_at ASC
         `, { sectionId: sectionRecordId });
         if (!images) return [];
@@ -378,6 +379,7 @@ export async function getBudgetImagesByLocation(locationId: string) {
         const [images] = await db.query<[DbImage[]]>(`
             SELECT * FROM budget_image
             WHERE location_id = $locationId
+              AND deleted_at IS NONE
             ORDER BY order_index ASC, created_at ASC
         `, { locationId: locationRecordId });
         if (!images) return [];
@@ -400,6 +402,7 @@ export async function getBudgetImages(budgetId: string) {
         const [images] = await db.query<[DbImage[]]>(`
             SELECT * FROM budget_image
             WHERE budget_id = $budgetId
+              AND deleted_at IS NONE
             ORDER BY order_index ASC, created_at ASC
         `, { budgetId: budgetRecordId });
         if (!images) return [];
@@ -422,6 +425,7 @@ export async function getBudgetImagesByBlock(blockId: string) {
         const [images] = await db.query<[DbImage[]]>(`
             SELECT * FROM budget_image
             WHERE block_id = $blockId
+              AND deleted_at IS NONE
             ORDER BY order_index ASC, created_at ASC
         `, { blockId: blockRecordId });
         if (!images) return [];
@@ -446,6 +450,7 @@ export async function getBudgetImagesByBlocks(blockIds: string[]): Promise<Recor
         const [images] = await db.query<[DbImage[]]>(`
             SELECT * FROM budget_image
             WHERE block_id INSIDE $blockIds
+              AND deleted_at IS NONE
             ORDER BY order_index ASC, created_at ASC
         `, { blockIds: blockRecordIds });
         if (!images?.length) return {};

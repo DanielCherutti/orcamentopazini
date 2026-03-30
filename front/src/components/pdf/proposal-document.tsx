@@ -256,6 +256,41 @@ function collectSessionTocRowsForPrintedLayout(
 export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDocumentProps) => {
     const validityDays = Number(budget.validity_days ?? 15);
     const formatMoney = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+    const locations = budget.locations || [];
+    const normalizeCostsMode = (raw: unknown): "location" | "section" | "general" => {
+        const mode = String(raw ?? "section");
+        if (mode === "location" || mode === "general") return mode;
+        return "section";
+    };
+    const hasLocationOrSectionCostsEnabled = locations.some((loc) => {
+        const locRow = loc as unknown as Record<string, unknown>;
+        if (Boolean(locRow.show_costs_on_print)) return true;
+        return (loc.sections || []).some((sec) =>
+            Boolean((sec as unknown as Record<string, unknown>).show_costs_on_print)
+        );
+    });
+    const detailShowCosts = Boolean(budget.show_costs_on_print) || hasLocationOrSectionCostsEnabled;
+    const explicitModes = new Set<"location" | "section" | "general">();
+    if (budget.show_costs_on_print) {
+        explicitModes.add(normalizeCostsMode(budget.costs_display_mode));
+    }
+    for (const loc of locations) {
+        const locRow = loc as unknown as Record<string, unknown>;
+        if (Boolean(locRow.show_costs_on_print)) {
+            explicitModes.add(normalizeCostsMode(locRow.costs_display_mode));
+        }
+        for (const sec of loc.sections || []) {
+            const secRow = sec as unknown as Record<string, unknown>;
+            if (Boolean(secRow.show_costs_on_print)) {
+                explicitModes.add(normalizeCostsMode(secRow.costs_display_mode));
+            }
+        }
+    }
+    const detailCostsMode: "location" | "section" | "general" = explicitModes.has("general")
+        ? "general"
+        : explicitModes.has("location")
+          ? "location"
+          : "section";
 
     const hasCompositorStructure =
         !!compositorPdf && Array.isArray(compositorPdf.roots) && compositorPdf.roots.length > 0;
@@ -432,10 +467,10 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
                 </View>
 
                 <BudgetTable
-                    locations={budget.locations || []}
+                    locations={locations}
                     sectionNumber={budget.section_number ?? 1}
-                    showCosts={Boolean(budget.show_costs_on_print)}
-                    costsDisplayMode={(budget.costs_display_mode as "location" | "section" | "general") ?? "section"}
+                    showCosts={detailShowCosts}
+                    costsDisplayMode={detailCostsMode}
                 />
 
                 <View style={styles.totalBlock} break={false}>

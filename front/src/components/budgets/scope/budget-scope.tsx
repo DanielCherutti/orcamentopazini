@@ -1,7 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Loader2, Map as MapIcon, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import {
+    Loader2,
+    Map as MapIcon,
+    PanelLeftClose,
+    PanelLeftOpen,
+    Settings2,
+} from "lucide-react";
 import { getLocationsAction, type ScopeLocation } from "@/actions/budget-scope-actions";
 import { ScopeSidebar } from "./budget-scope-sidebar";
 import { LocationDetail } from "./budget-scope-location-detail";
@@ -16,6 +22,8 @@ import {
     updateLocationAction,
     updateSectionAction,
 } from "@/actions/budget-hierarchy-scope-structure-actions";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export type { BudgetScopeProps, Selection } from "./budget-scope-types";
 
@@ -31,6 +39,9 @@ export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) 
         useState<PriceAdjustmentMode>("fixed");
     const [assemblyMode, setAssemblyMode] = useState<LocationAssemblyMode>("percent");
     const [assemblyValue, setAssemblyValue] = useState(0);
+    const [costConfigOpen, setCostConfigOpen] = useState(false);
+    const toggleBtnClass =
+        "inline-flex h-8 items-center justify-center rounded-md border px-3 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50";
 
     const loadLocations = useCallback(async () => {
         const result = await getLocationsAction(budgetId);
@@ -184,160 +195,276 @@ export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) 
 
                 <div className="flex-1 overflow-y-auto p-6">
                     {!isReadOnly && (
-                        <div className="mb-4 flex flex-wrap items-center gap-2">
-                            <label className="inline-flex h-7 items-center gap-1 rounded bg-primary px-2 text-[11px] font-medium text-primary-foreground">
-                                <input
-                                    type="checkbox"
-                                    checked={showCostsOnPrint}
-                                    onChange={async (e) => {
-                                        const checked = e.target.checked;
-                                        setShowCostsOnPrint(checked);
-                                        const ok = await saveCommercialConfig({
-                                            show_costs_on_print: checked,
-                                        });
-                                        if (!ok) {
-                                            setShowCostsOnPrint(!checked);
-                                        }
-                                    }}
-                                    className="h-3 w-3 accent-white"
-                                    disabled={!selected}
-                                />
-                                EXIBIR CUSTOS
-                            </label>
-                            {showCostsOnPrint && (
-                                <select
-                                    className="h-7 rounded border border-primary/60 bg-primary px-2 text-[11px] font-medium text-primary-foreground"
-                                    value={costsDisplayMode}
-                                    onChange={async (e) => {
-                                        const mode = e.target.value as CostDisplayMode;
-                                        setCostsDisplayMode(mode);
-                                        const ok = await saveCommercialConfig({
-                                            costs_display_mode: mode,
-                                        });
-                                        if (!ok) {
-                                            setCostsDisplayMode("section");
-                                        }
-                                    }}
-                                    disabled={!selected}
-                                >
-                                    <option value="location">Custos por local</option>
-                                    <option value="section">Custos por trecho</option>
-                                    <option value="general">Custos gerais</option>
-                                </select>
-                            )}
-                            <label className="inline-flex h-7 items-center gap-1 rounded bg-primary px-2 text-[11px] font-medium text-primary-foreground">
-                                <input
-                                    type="checkbox"
-                                    checked={priceAdjustmentEnabled}
-                                    onChange={async (e) => {
-                                        const checked = e.target.checked;
-                                        setPriceAdjustmentEnabled(checked);
-                                        const ok = await saveCommercialConfig({
-                                            price_adjustment_enabled: checked,
-                                        });
-                                        if (!ok) setPriceAdjustmentEnabled(!checked);
-                                    }}
-                                    className="h-3 w-3 accent-white"
-                                    disabled={!selected}
-                                />
-                                AJUSTE DE PREÇO
-                            </label>
-                            <label className="inline-flex h-7 items-center gap-1 rounded bg-primary px-2 text-[11px] font-medium text-primary-foreground">
-                                <input
-                                    type="checkbox"
-                                    checked={priceAdjustmentInputMode === "percent"}
-                                    onChange={async () => {
-                                        setPriceAdjustmentInputMode("percent");
-                                        const ok = await saveCommercialConfig({
-                                            price_adjustment_input_mode: "percent",
-                                        });
-                                        if (!ok) setPriceAdjustmentInputMode("fixed");
-                                    }}
-                                    disabled={!priceAdjustmentEnabled || !selected}
-                                    className="h-3 w-3 accent-white"
-                                />
-                                %
-                            </label>
-                            <label className="inline-flex h-7 items-center gap-1 rounded bg-primary px-2 text-[11px] font-medium text-primary-foreground">
-                                <input
-                                    type="checkbox"
-                                    checked={priceAdjustmentInputMode === "fixed"}
-                                    onChange={async () => {
-                                        setPriceAdjustmentInputMode("fixed");
-                                        const ok = await saveCommercialConfig({
-                                            price_adjustment_input_mode: "fixed",
-                                        });
-                                        if (!ok) setPriceAdjustmentInputMode("percent");
-                                    }}
-                                    disabled={!priceAdjustmentEnabled || !selected}
-                                    className="h-3 w-3 accent-white"
-                                />
-                                $
-                            </label>
-                            <label className="inline-flex h-7 items-center gap-1 rounded bg-primary px-2 text-[11px] font-medium text-primary-foreground">
-                                <input
-                                    type="checkbox"
-                                    checked={assemblyMode === "percent"}
-                                    onChange={async () => {
-                                        if (!selected?.id) return;
-                                        setAssemblyMode("percent");
-                                        await saveCommercialConfig({
-                                            assembly_mode: "percent",
-                                        });
-                                    }}
-                                    disabled={!selected?.id}
-                                    className="h-3 w-3 accent-white"
-                                />
-                                MONTAGEM %
-                            </label>
-                            <input
-                                type="number"
-                                value={assemblyValue}
-                                onChange={(e) => setAssemblyValue(Number(e.target.value))}
-                                onBlur={async () => {
-                                    if (!selected?.id || assemblyMode === "manual") return;
-                                    await saveCommercialConfig({
-                                        assembly_mode: assemblyMode,
-                                        assembly_value: Number.isFinite(assemblyValue)
-                                            ? assemblyValue
-                                            : 0,
-                                    });
-                                }}
-                                disabled={!selected?.id || assemblyMode === "manual"}
-                                className="h-7 w-16 rounded border border-primary/60 px-2 text-[11px]"
-                            />
-                            <label className="inline-flex h-7 items-center gap-1 rounded bg-primary px-2 text-[11px] font-medium text-primary-foreground">
-                                <input
-                                    type="checkbox"
-                                    checked={assemblyMode === "fixed"}
-                                    onChange={async () => {
-                                        if (!selected?.id) return;
-                                        setAssemblyMode("fixed");
-                                        await saveCommercialConfig({
-                                            assembly_mode: "fixed",
-                                        });
-                                    }}
-                                    disabled={!selected?.id}
-                                    className="h-3 w-3 accent-white"
-                                />
-                                MONTAGEM $
-                            </label>
-                            <label className="inline-flex h-7 items-center gap-1 rounded bg-primary px-2 text-[11px] font-medium text-primary-foreground">
-                                <input
-                                    type="checkbox"
-                                    checked={assemblyMode === "manual"}
-                                    onChange={async () => {
-                                        if (!selected?.id) return;
-                                        setAssemblyMode("manual");
-                                        await saveCommercialConfig({
-                                            assembly_mode: "manual",
-                                        });
-                                    }}
-                                    disabled={!selected?.id}
-                                    className="h-3 w-3 accent-white"
-                                />
-                                MONTAGEM MANUAL
-                            </label>
+                        <div className="mb-4 space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setCostConfigOpen((v) => !v)}
+                                className="h-8 gap-1.5"
+                            >
+                                <Settings2 className="h-4 w-4" />
+                                Configuracoes comerciais
+                            </Button>
+                            <span className="text-xs text-muted-foreground">
+                                {selected
+                                    ? `Editando ${selected.type === "location" ? "local" : "trecho"}`
+                                    : "Selecione um local/trecho para editar"}
+                            </span>
+                            </div>
+                            <div
+                                className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                                    costConfigOpen ? "max-h-[48rem] opacity-100" : "max-h-0 opacity-0"
+                                }`}
+                            >
+                                <div className="rounded-lg border bg-card p-3 shadow-sm">
+                                    <p className="mb-3 text-xs text-muted-foreground">
+                                        Ajustes aplicados ao local/trecho selecionado.
+                                    </p>
+                                    <div className="grid gap-3 md:grid-cols-3">
+                                        <div className="rounded-md border p-3 space-y-2">
+                                            <p className="text-xs font-semibold text-foreground">
+                                                Exibição de custos
+                                            </p>
+                                            <button
+                                                type="button"
+                                                className={cn(
+                                                    toggleBtnClass,
+                                                    "w-full",
+                                                    showCostsOnPrint
+                                                        ? "border-primary bg-primary text-primary-foreground"
+                                                        : "border-border bg-background text-foreground hover:bg-muted"
+                                                )}
+                                                onClick={async () => {
+                                                    const checked = !showCostsOnPrint;
+                                                    setShowCostsOnPrint(checked);
+                                                    const ok = await saveCommercialConfig({
+                                                        show_costs_on_print: checked,
+                                                    });
+                                                    if (!ok) setShowCostsOnPrint(!checked);
+                                                }}
+                                                disabled={!selected}
+                                            >
+                                                {showCostsOnPrint ? "Custos visíveis" : "Exibir custos"}
+                                            </button>
+                                            {showCostsOnPrint && (
+                                                <div className="grid grid-cols-1 gap-2 pt-1">
+                                                    <button
+                                                        type="button"
+                                                        className={cn(
+                                                            toggleBtnClass,
+                                                            costsDisplayMode === "location"
+                                                                ? "border-primary bg-primary/10 text-primary"
+                                                                : "border-border bg-background text-foreground hover:bg-muted"
+                                                        )}
+                                                        onClick={async () => {
+                                                            setCostsDisplayMode("location");
+                                                            const ok = await saveCommercialConfig({
+                                                                costs_display_mode: "location",
+                                                            });
+                                                            if (!ok) setCostsDisplayMode("section");
+                                                        }}
+                                                        disabled={!selected}
+                                                    >
+                                                        Por local
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className={cn(
+                                                            toggleBtnClass,
+                                                            costsDisplayMode === "section"
+                                                                ? "border-primary bg-primary/10 text-primary"
+                                                                : "border-border bg-background text-foreground hover:bg-muted"
+                                                        )}
+                                                        onClick={async () => {
+                                                            setCostsDisplayMode("section");
+                                                            const ok = await saveCommercialConfig({
+                                                                costs_display_mode: "section",
+                                                            });
+                                                            if (!ok) setCostsDisplayMode("section");
+                                                        }}
+                                                        disabled={!selected}
+                                                    >
+                                                        Por trecho
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className={cn(
+                                                            toggleBtnClass,
+                                                            costsDisplayMode === "general"
+                                                                ? "border-primary bg-primary/10 text-primary"
+                                                                : "border-border bg-background text-foreground hover:bg-muted"
+                                                        )}
+                                                        onClick={async () => {
+                                                            setCostsDisplayMode("general");
+                                                            const ok = await saveCommercialConfig({
+                                                                costs_display_mode: "general",
+                                                            });
+                                                            if (!ok) setCostsDisplayMode("section");
+                                                        }}
+                                                        disabled={!selected}
+                                                    >
+                                                        Geral
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="rounded-md border p-3 space-y-2">
+                                            <p className="text-xs font-semibold text-foreground">
+                                                Ajuste de preço
+                                            </p>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    className={cn(
+                                                        toggleBtnClass,
+                                                        "w-full",
+                                                        priceAdjustmentEnabled
+                                                            ? "border-primary bg-primary text-primary-foreground"
+                                                            : "border-border bg-background text-foreground hover:bg-muted"
+                                                    )}
+                                                    onClick={async () => {
+                                                        const checked = !priceAdjustmentEnabled;
+                                                        setPriceAdjustmentEnabled(checked);
+                                                        const ok = await saveCommercialConfig({
+                                                            price_adjustment_enabled: checked,
+                                                        });
+                                                        if (!ok) setPriceAdjustmentEnabled(!checked);
+                                                    }}
+                                                    disabled={!selected}
+                                                >
+                                                    {priceAdjustmentEnabled ? "Ajuste ativo" : "Ativar ajuste"}
+                                                </button>
+                                                <div className="grid w-full grid-cols-2 gap-2">
+                                                    <button
+                                                        type="button"
+                                                        className={cn(
+                                                            toggleBtnClass,
+                                                            priceAdjustmentInputMode === "percent"
+                                                                ? "border-primary bg-primary/10 text-primary"
+                                                                : "border-border bg-background text-foreground hover:bg-muted"
+                                                        )}
+                                                        onClick={async () => {
+                                                            setPriceAdjustmentInputMode("percent");
+                                                            const ok = await saveCommercialConfig({
+                                                                price_adjustment_input_mode: "percent",
+                                                            });
+                                                            if (!ok) setPriceAdjustmentInputMode("fixed");
+                                                        }}
+                                                        disabled={!priceAdjustmentEnabled || !selected}
+                                                    >
+                                                        %
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className={cn(
+                                                            toggleBtnClass,
+                                                            priceAdjustmentInputMode === "fixed"
+                                                                ? "border-primary bg-primary/10 text-primary"
+                                                                : "border-border bg-background text-foreground hover:bg-muted"
+                                                        )}
+                                                        onClick={async () => {
+                                                            setPriceAdjustmentInputMode("fixed");
+                                                            const ok = await saveCommercialConfig({
+                                                                price_adjustment_input_mode: "fixed",
+                                                            });
+                                                            if (!ok) setPriceAdjustmentInputMode("percent");
+                                                        }}
+                                                        disabled={!priceAdjustmentEnabled || !selected}
+                                                    >
+                                                        R$
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="rounded-md border p-3 space-y-2">
+                                            <p className="text-xs font-semibold text-foreground">
+                                                Montagem
+                                            </p>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <div className="grid w-full grid-cols-3 gap-2">
+                                                    <button
+                                                        type="button"
+                                                        className={cn(
+                                                            toggleBtnClass,
+                                                            assemblyMode === "percent"
+                                                                ? "border-primary bg-primary/10 text-primary"
+                                                                : "border-border bg-background text-foreground hover:bg-muted"
+                                                        )}
+                                                        onClick={async () => {
+                                                            if (!selected?.id) return;
+                                                            setAssemblyMode("percent");
+                                                            await saveCommercialConfig({
+                                                                assembly_mode: "percent",
+                                                            });
+                                                        }}
+                                                        disabled={!selected?.id}
+                                                    >
+                                                        %
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className={cn(
+                                                            toggleBtnClass,
+                                                            assemblyMode === "fixed"
+                                                                ? "border-primary bg-primary/10 text-primary"
+                                                                : "border-border bg-background text-foreground hover:bg-muted"
+                                                        )}
+                                                        onClick={async () => {
+                                                            if (!selected?.id) return;
+                                                            setAssemblyMode("fixed");
+                                                            await saveCommercialConfig({
+                                                                assembly_mode: "fixed",
+                                                            });
+                                                        }}
+                                                        disabled={!selected?.id}
+                                                    >
+                                                        R$
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className={cn(
+                                                            toggleBtnClass,
+                                                            assemblyMode === "manual"
+                                                                ? "border-primary bg-primary/10 text-primary"
+                                                                : "border-border bg-background text-foreground hover:bg-muted"
+                                                        )}
+                                                        onClick={async () => {
+                                                            if (!selected?.id) return;
+                                                            setAssemblyMode("manual");
+                                                            await saveCommercialConfig({
+                                                                assembly_mode: "manual",
+                                                            });
+                                                        }}
+                                                        disabled={!selected?.id}
+                                                    >
+                                                        Manual
+                                                    </button>
+                                                </div>
+                                                <input
+                                                    type="number"
+                                                    value={assemblyValue}
+                                                    onChange={(e) => setAssemblyValue(Number(e.target.value))}
+                                                    onBlur={async () => {
+                                                        if (!selected?.id || assemblyMode === "manual") return;
+                                                        await saveCommercialConfig({
+                                                            assembly_mode: assemblyMode,
+                                                            assembly_value: Number.isFinite(assemblyValue)
+                                                                ? assemblyValue
+                                                                : 0,
+                                                        });
+                                                    }}
+                                                    disabled={!selected?.id || assemblyMode === "manual"}
+                                                    className="h-8 w-full rounded-md border px-2 text-xs"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     )}
                     {!selected ? (
