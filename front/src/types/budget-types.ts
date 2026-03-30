@@ -106,6 +106,14 @@ export const budgetSchema = z.object({
     validity_days: z.number().optional().default(15),
     issue_date: z.string().optional(), // ISO string date
 
+    /** Aba Orçamento: acréscimo (vara) e desconto em % aplicados às linhas da tabela. */
+    quote_markup_percent: z.number().optional().default(0),
+    quote_discount_percent: z.number().optional().default(0),
+    /** Exibir linhas de trecho por local na tabela. */
+    quote_show_sections: z.boolean().optional().default(false),
+    quote_note_above: z.string().optional().default(""),
+    quote_note_below: z.string().optional().default(""),
+
     // Timestamps
     created_at: z.string().optional(),
     updated_at: z.string().optional(),

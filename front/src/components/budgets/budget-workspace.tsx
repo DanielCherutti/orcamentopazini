@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect, createContext, useContext } from "react";
-import { Info, FileText, Map as MapIcon, Printer } from "lucide-react";
+import { Info, FileText, Map as MapIcon, Printer, Table2 } from "lucide-react";
 import { Budget } from "@/types/budget-types";
 import { BudgetTreeV2 } from "./editor/budget-tree-v2";
 import { BudgetCompositor } from "./compositor/budget-compositor";
 import { BudgetScope } from "./scope/budget-scope";
+import { BudgetQuoteTab } from "./quote/budget-quote-tab";
 import { BudgetWorkspaceHeader } from "./workspace/budget-workspace-header";
 import { toast } from "@/lib/toast";
 import { useBudgetsRepository } from "@/lib/budgets/use-budgets-repository";
@@ -18,6 +19,7 @@ import { WorkspaceContext, type ActiveTab } from "./workspace-context";
 const TABS: { id: ActiveTab; label: string; icon: React.ReactNode }[] = [
     { id: 'budget',  label: 'Compositor', icon: <FileText className="h-3.5 w-3.5" /> },
     { id: 'scope',   label: 'Escopo',    icon: <MapIcon className="h-3.5 w-3.5" /> },
+    { id: 'quote',   label: 'Orçamento', icon: <Table2 className="h-3.5 w-3.5" /> },
     { id: 'print',   label: 'Impressão', icon: <Printer className="h-3.5 w-3.5" /> },
 ];
 
@@ -123,6 +125,16 @@ export function BudgetWorkspace({ initialBudget, mode: _mode = 'edit' }: BudgetW
                                 {activeTab === 'scope' && (
                                     <div className="flex-1 flex min-h-0 overflow-hidden bg-white">
                                         <BudgetScope budgetId={budgetId} isReadOnly={isReadOnly} />
+                                    </div>
+                                )}
+
+                                {activeTab === 'quote' && (
+                                    <div className="flex-1 flex min-h-0 overflow-hidden bg-white">
+                                        <BudgetQuoteTab
+                                            budgetId={budgetId}
+                                            isReadOnly={isReadOnly}
+                                            onBudgetRefresh={handleRefresh}
+                                        />
                                     </div>
                                 )}
 

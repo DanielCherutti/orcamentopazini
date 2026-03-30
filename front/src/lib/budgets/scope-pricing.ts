@@ -159,6 +159,162 @@ export function computeLocationScopeTotal(params: {
     return grandTotal;
 }
 
+/** Uma linha de trecho na aba Orçamento (equipamentos vs montagem). */
+export type QuoteSectionCostRow = {
+    sectionId: string;
+    equipment: number;
+    assembly: number;
+};
+
+/** Equipamentos = soma dos subtotais dos itens; montagem = restante do total de escopo. */
+export type QuoteLocationCostBreakdown = {
+    collapsedEquipment: number;
+    collapsedAssembly: number;
+    scopeTotal: number;
+    sectionRows: QuoteSectionCostRow[];
+};
+
+/**
+ * Decompõe custos por local e por trecho para a aba Orçamento.
+ * Trechos com montagem própria recebem a montagem calculada para seus itens; o restante
+ * da montagem do local é rateado entre trechos em fallback, proporcional ao equipamento.
+ */
+export function computeLocationQuoteBreakdown(params: {
+    location: {
+        assembly_mode?: LocationAssemblyMode | string;
+        assembly_value?: number;
+    };
+    sections: Array<{
+        id: string;
+        assembly_mode?: "percent" | "fixed" | "manual";
+        assembly_value?: number;
+    }>;
+    items: Array<ScopePricingItem & { section_id: string }>;
+}): QuoteLocationCostBreakdown {
+    const sectionConfig = new Map<
+        string,
+        { mode: LocationAssemblyMode; value: number; hasOwnAssembly: boolean }
+    >();
+    for (const row of params.sections) {
+        const sectionId = row.id;
+        const hasOwnAssembly = row.assembly_mode != null || row.assembly_value != null;
+        const modeRaw = String(row.assembly_mode ?? "percent");
+        const mode: LocationAssemblyMode =
+            modeRaw === "fixed" || modeRaw === "manual" ? modeRaw : "percent";
+        const value = Number(row.assembly_value ?? 0);
+        sectionConfig.set(sectionId, { mode, value, hasOwnAssembly });
+    }
+
+    const itemsBySection = new Map<string, ScopePricingItem[]>();
+    for (const row of params.items) {
+        const sectionId = row.section_id;
+        const item: ScopePricingItem = {
+            id: row.id,
+            quantity: row.quantity,
+            unit_price: row.unit_price,
+            labor_cost: row.labor_cost,
+            price_adjustment_mode: row.price_adjustment_mode ?? null,
+            price_adjustment_value: row.price_adjustment_value,
+            observation_extra_value: row.observation_extra_value,
+            assembly_manual_value: row.assembly_manual_value,
+        };
+        const secCfg = sectionConfig.get(sectionId);
+        if (secCfg?.hasOwnAssembly) {
+            const sectionItems = itemsBySection.get(sectionId) ?? [];
+            sectionItems.push(item);
+            itemsBySection.set(sectionId, sectionItems);
+        }
+    }
+
+    const collapsedEquipment = params.items.reduce(
+        (sum, row) => sum + computeItemSubtotal(row),
+        0
+    );
+    const scopeTotal = computeLocationScopeTotal(params);
+    const collapsedAssembly = scopeTotal - collapsedEquipment;
+
+    const sectionRows: QuoteSectionCostRow[] = [];
+    let assemblyFromOwnSections = 0;
+
+    for (const sec of params.sections) {
+        const cfg = sectionConfig.get(sec.id);
+        const itemsInSec = params.items.filter((it) => it.section_id === sec.id);
+        const equipment = itemsInSec.reduce((s, it) => s + computeItemSubtotal(it), 0);
+
+        if (cfg?.hasOwnAssembly) {
+            const pool = itemsBySection.get(sec.id) ?? [];
+            const assembly = computeLocationAssemblyTotal(cfg.mode, cfg.value, pool);
+            assemblyFromOwnSections += assembly;
+            sectionRows.push({ sectionId: sec.id, equipment, assembly });
+        } else {
+            sectionRows.push({ sectionId: sec.id, equipment, assembly: 0 });
+        }
+    }
+
+    const remainingAssembly = Math.max(0, collapsedAssembly - assemblyFromOwnSections);
+    const fallbackIdx = sectionRows
+        .map((r, idx) => ({ r, idx }))
+        .filter(({ r }) => !sectionConfig.get(r.sectionId)?.hasOwnAssembly);
+
+    if (remainingAssembly > 0 && fallbackIdx.length > 0) {
+        const weights = fallbackIdx.map(({ r }) => Math.max(0, r.equipment));
+        const wsum = weights.reduce((a, b) => a + b, 0);
+        let allocated = 0;
+        if (wsum <= 0) {
+            const n = fallbackIdx.length;
+            for (let j = 0; j < n; j++) {
+                const { idx } = fallbackIdx[j];
+                if (j === n - 1) {
+                    sectionRows[idx].assembly += remainingAssembly - allocated;
+                } else {
+                    const raw = remainingAssembly / n;
+                    const rounded = Math.round(raw * 100) / 100;
+                    sectionRows[idx].assembly += rounded;
+                    allocated += rounded;
+                }
+            }
+        } else {
+            for (let j = 0; j < fallbackIdx.length; j++) {
+                const { idx } = fallbackIdx[j];
+                if (j === fallbackIdx.length - 1) {
+                    sectionRows[idx].assembly += remainingAssembly - allocated;
+                } else {
+                    const raw = remainingAssembly * (weights[j] / wsum);
+                    const rounded = Math.round(raw * 100) / 100;
+                    sectionRows[idx].assembly += rounded;
+                    allocated += rounded;
+                }
+            }
+        }
+    }
+
+    return {
+        collapsedEquipment,
+        collapsedAssembly,
+        scopeTotal,
+        sectionRows,
+    };
+}
+
+/** Aplica Vara % (acréscimo) e Desconto % sobre equipamentos e montagem de uma linha. */
+export function applyQuoteRowAdjustments(
+    equipment: number,
+    assembly: number,
+    markupPercent: number,
+    discountPercent: number
+): { equipment: number; assembly: number; lineTotal: number } {
+    const m = Number.isFinite(markupPercent) ? markupPercent : 0;
+    const d = Number.isFinite(discountPercent) ? discountPercent : 0;
+    const factor = (1 + m / 100) * (1 - d / 100);
+    const eq = normalizeMoney(equipment) * factor;
+    const as = normalizeMoney(assembly) * factor;
+    return {
+        equipment: Math.round(eq * 100) / 100,
+        assembly: Math.round(as * 100) / 100,
+        lineTotal: Math.round((eq + as) * 100) / 100,
+    };
+}
+
 export function distributeProportional(
     items: ScopePricingItem[],
     totalToDistribute: number

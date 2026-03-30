@@ -101,6 +101,11 @@ export async function updateBudgetAction(budgetId: string, updates: Partial<Budg
             "issue_date",
             "show_costs_on_print",
             "costs_display_mode",
+            "quote_markup_percent",
+            "quote_discount_percent",
+            "quote_show_sections",
+            "quote_note_above",
+            "quote_note_below",
         ];
 
         const budgetRecordId = requireRecordId("budget", budgetId);
