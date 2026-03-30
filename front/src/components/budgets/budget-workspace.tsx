@@ -124,7 +124,12 @@ export function BudgetWorkspace({ initialBudget, mode: _mode = 'edit' }: BudgetW
                                 {/* Aba Escopo */}
                                 {activeTab === 'scope' && (
                                     <div className="flex-1 flex min-h-0 overflow-hidden bg-white">
-                                        <BudgetScope budgetId={budgetId} isReadOnly={isReadOnly} />
+                                        <BudgetScope
+                                            budgetId={budgetId}
+                                            isReadOnly={isReadOnly}
+                                            quoteMarkupPercent={Number(budget.quote_markup_percent ?? 0)}
+                                            quoteDiscountPercent={Number(budget.quote_discount_percent ?? 0)}
+                                        />
                                     </div>
                                 )}
 

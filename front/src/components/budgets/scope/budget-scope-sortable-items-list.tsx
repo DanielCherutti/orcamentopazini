@@ -42,6 +42,8 @@ export function SortableItemsList({
     assemblyByItemId = {},
     priceAdjustmentEnabled,
     priceAdjustmentInputMode,
+    quoteMarkupPercent = 0,
+    quoteDiscountPercent = 0,
 }: {
     items: BudgetItem[];
     budgetId: string;
@@ -52,6 +54,8 @@ export function SortableItemsList({
     assemblyByItemId?: Record<string, number>;
     priceAdjustmentEnabled: boolean;
     priceAdjustmentInputMode: PriceAdjustmentMode;
+    quoteMarkupPercent?: number;
+    quoteDiscountPercent?: number;
 }) {
     const [segments, setSegments] = useState<ItemSegment[]>(() => buildItemSegments(items));
     const segmentsRef = useRef(segments);
@@ -136,6 +140,8 @@ export function SortableItemsList({
                                 assemblyByItemId={assemblyByItemId}
                                 priceAdjustmentEnabled={priceAdjustmentEnabled}
                                 priceAdjustmentInputMode={priceAdjustmentInputMode}
+                                quoteMarkupPercent={quoteMarkupPercent}
+                                quoteDiscountPercent={quoteDiscountPercent}
                             />
                         ) : (
                             <SortableGroup
@@ -151,6 +157,8 @@ export function SortableItemsList({
                                 assemblyByItemId={assemblyByItemId}
                                 priceAdjustmentEnabled={priceAdjustmentEnabled}
                                 priceAdjustmentInputMode={priceAdjustmentInputMode}
+                                quoteMarkupPercent={quoteMarkupPercent}
+                                quoteDiscountPercent={quoteDiscountPercent}
                             />
                         )
                     )}
@@ -170,6 +178,8 @@ function SortableStandaloneItem({
     assemblyByItemId,
     priceAdjustmentEnabled,
     priceAdjustmentInputMode,
+    quoteMarkupPercent = 0,
+    quoteDiscountPercent = 0,
 }: {
     item: BudgetItem;
     budgetId: string;
@@ -180,6 +190,8 @@ function SortableStandaloneItem({
     assemblyByItemId: Record<string, number>;
     priceAdjustmentEnabled: boolean;
     priceAdjustmentInputMode: PriceAdjustmentMode;
+    quoteMarkupPercent?: number;
+    quoteDiscountPercent?: number;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: item.id!,
@@ -201,6 +213,8 @@ function SortableStandaloneItem({
                 assemblyByItemId={assemblyByItemId}
                 priceAdjustmentEnabled={priceAdjustmentEnabled}
                 priceAdjustmentInputMode={priceAdjustmentInputMode}
+                quoteMarkupPercent={quoteMarkupPercent}
+                quoteDiscountPercent={quoteDiscountPercent}
                 dragHandleProps={isReadOnly ? undefined : { ...attributes, ...listeners }}
             />
         </div>
@@ -219,6 +233,8 @@ function SortableGroup({
     assemblyByItemId,
     priceAdjustmentEnabled,
     priceAdjustmentInputMode,
+    quoteMarkupPercent = 0,
+    quoteDiscountPercent = 0,
 }: {
     seg: Extract<ItemSegment, { type: "group" }>;
     sensors: ReturnType<typeof useSensors>;
@@ -231,6 +247,8 @@ function SortableGroup({
     assemblyByItemId: Record<string, number>;
     priceAdjustmentEnabled: boolean;
     priceAdjustmentInputMode: PriceAdjustmentMode;
+    quoteMarkupPercent?: number;
+    quoteDiscountPercent?: number;
 }) {
     const outerId = getSegmentSortableId(seg);
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -293,6 +311,8 @@ function SortableGroup({
                                 assemblyByItemId={assemblyByItemId}
                                 priceAdjustmentEnabled={priceAdjustmentEnabled}
                                 priceAdjustmentInputMode={priceAdjustmentInputMode}
+                                quoteMarkupPercent={quoteMarkupPercent}
+                                quoteDiscountPercent={quoteDiscountPercent}
                             />
                         ))}
                     </SortableContext>
@@ -320,6 +340,8 @@ function SortableGroupItem({
     assemblyByItemId,
     priceAdjustmentEnabled,
     priceAdjustmentInputMode,
+    quoteMarkupPercent = 0,
+    quoteDiscountPercent = 0,
 }: {
     item: BudgetItem;
     budgetId: string;
@@ -330,6 +352,8 @@ function SortableGroupItem({
     assemblyByItemId: Record<string, number>;
     priceAdjustmentEnabled: boolean;
     priceAdjustmentInputMode: PriceAdjustmentMode;
+    quoteMarkupPercent?: number;
+    quoteDiscountPercent?: number;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: item.id!,
@@ -352,6 +376,8 @@ function SortableGroupItem({
                 assemblyByItemId={assemblyByItemId}
                 priceAdjustmentEnabled={priceAdjustmentEnabled}
                 priceAdjustmentInputMode={priceAdjustmentInputMode}
+                quoteMarkupPercent={quoteMarkupPercent}
+                quoteDiscountPercent={quoteDiscountPercent}
                 dragHandleProps={isReadOnly ? undefined : { ...attributes, ...listeners }}
             />
         </div>

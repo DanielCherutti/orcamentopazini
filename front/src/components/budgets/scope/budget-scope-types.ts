@@ -5,4 +5,8 @@ export type Selection =
 export interface BudgetScopeProps {
     budgetId: string;
     isReadOnly?: boolean;
+    /** Vara % (aba Orçamento) — reflete na exibição de valores no escopo. */
+    quoteMarkupPercent?: number;
+    /** Desconto % (aba Orçamento) — reflete na exibição de valores no escopo. */
+    quoteDiscountPercent?: number;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import type { HTMLAttributes } from "react";
 import { GripVertical, MessageSquareText, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,7 @@ import {
 } from "@/actions/budget-hierarchy-section-items-actions";
 import { formatCurrency } from "./budget-scope-utils";
 import {
+    applyQuoteCommercialFactor,
     computeItemAdjustmentValue,
     computeItemBaseTotal,
     computeItemSubtotal,
@@ -31,6 +32,8 @@ export function ScopeItemRow({
     assemblyByItemId = {},
     priceAdjustmentEnabled,
     priceAdjustmentInputMode,
+    quoteMarkupPercent = 0,
+    quoteDiscountPercent = 0,
 }: {
     item: BudgetItem;
     budgetId: string;
@@ -42,6 +45,8 @@ export function ScopeItemRow({
     assemblyByItemId?: Record<string, number>;
     priceAdjustmentEnabled: boolean;
     priceAdjustmentInputMode: PriceAdjustmentMode;
+    quoteMarkupPercent?: number;
+    quoteDiscountPercent?: number;
 }) {
     const [qty, setQty] = useState(item.quantity);
     const [observationOpen, setObservationOpen] = useState(false);
@@ -129,6 +134,14 @@ export function ScopeItemRow({
         assemblyMode === "manual" ? laborCost : assemblyUnitValue;
     const total = subtotal + assemblyExtra;
 
+    const displayMoney = useCallback(
+        (value: number) =>
+            formatCurrency(
+                applyQuoteCommercialFactor(value, quoteMarkupPercent ?? 0, quoteDiscountPercent ?? 0)
+            ),
+        [quoteMarkupPercent, quoteDiscountPercent]
+    );
+
     const handleQtyChange = (val: number) => {
         if (val < 1) return;
         setQty(val);
@@ -208,7 +221,7 @@ export function ScopeItemRow({
                 )}
                 </div>
                 <div className="col-span-1 text-right text-xs text-muted-foreground">
-                    {formatCurrency(unitPrice)}
+                    {displayMoney(unitPrice)}
                 </div>
                 <div className="col-span-2 flex items-center justify-end gap-1">
                     {!isReadOnly && (
@@ -235,14 +248,14 @@ export function ScopeItemRow({
                     )}
                     {isReadOnly && (
                         <span className="text-xs text-muted-foreground">
-                            {formatCurrency(adjustmentValue)}
+                            {displayMoney(adjustmentValue)}
                         </span>
                     )}
                 </div>
                 <div className="col-span-1 text-right text-xs text-muted-foreground">
-                    {formatCurrency(moUnitValue)}
+                    {displayMoney(moUnitValue)}
                 </div>
-                <div className="col-span-1 text-right text-xs font-medium">{formatCurrency(total)}</div>
+                <div className="col-span-1 text-right text-xs font-medium">{displayMoney(total)}</div>
                 <div className="col-span-2 flex items-center justify-end gap-1">
                     {!isReadOnly && (
                         <button
@@ -332,11 +345,11 @@ export function ScopeItemRow({
                         )}
                         {assemblyMode !== "manual" && (
                             <span className="text-[11px] text-muted-foreground">
-                                Rateio montagem: {formatCurrency(assemblyExtra)}
+                                Rateio montagem: {displayMoney(assemblyExtra)}
                             </span>
                         )}
                         <span className="text-[11px] text-muted-foreground">
-                            Base: {formatCurrency(baseTotal)} | Ajuste: {formatCurrency(adjustmentValue)}
+                            Base: {displayMoney(baseTotal)} | Ajuste: {displayMoney(adjustmentValue)}
                         </span>
                     </div>
                 </div>

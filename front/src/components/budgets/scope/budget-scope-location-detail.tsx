@@ -45,6 +45,8 @@ interface LocationDetailProps {
     locations?: ScopeLocation[];
     priceAdjustmentEnabled: boolean;
     priceAdjustmentInputMode: PriceAdjustmentMode;
+    quoteMarkupPercent?: number;
+    quoteDiscountPercent?: number;
 }
 
 export function LocationDetail({
@@ -56,6 +58,8 @@ export function LocationDetail({
     locations = [],
     priceAdjustmentEnabled,
     priceAdjustmentInputMode,
+    quoteMarkupPercent = 0,
+    quoteDiscountPercent = 0,
 }: LocationDetailProps) {
     const [name, setName] = useState(location?.name ?? "");
     const [editingName, setEditingName] = useState(false);
@@ -321,6 +325,8 @@ export function LocationDetail({
                             assemblyByItemId={assemblyByItemId}
                             priceAdjustmentEnabled={priceAdjustmentEnabled}
                             priceAdjustmentInputMode={priceAdjustmentInputMode}
+                            quoteMarkupPercent={quoteMarkupPercent}
+                            quoteDiscountPercent={quoteDiscountPercent}
                         />
                     ))}
                 </div>

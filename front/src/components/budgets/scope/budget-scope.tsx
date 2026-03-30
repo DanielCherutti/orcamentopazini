@@ -27,7 +27,12 @@ import { cn } from "@/lib/utils";
 
 export type { BudgetScopeProps, Selection } from "./budget-scope-types";
 
-export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) {
+export function BudgetScope({
+    budgetId,
+    isReadOnly = false,
+    quoteMarkupPercent = 0,
+    quoteDiscountPercent = 0,
+}: BudgetScopeProps) {
     const [locations, setLocations] = useState<ScopeLocation[]>([]);
     /** Incrementa a cada `loadLocations` bem-sucedido (itens/estrutura) para o sidebar recalcular totais por local. */
     const [scopeDataVersion, setScopeDataVersion] = useState(0);
@@ -172,6 +177,8 @@ export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) 
                     budgetId={budgetId}
                     locations={locations}
                     scopeDataVersion={scopeDataVersion}
+                    quoteMarkupPercent={quoteMarkupPercent}
+                    quoteDiscountPercent={quoteDiscountPercent}
                     selected={selected}
                     onSelect={setSelected}
                     onRefresh={loadLocations}
@@ -487,6 +494,8 @@ export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) 
                             locations={locations}
                             priceAdjustmentEnabled={priceAdjustmentEnabled}
                             priceAdjustmentInputMode={priceAdjustmentInputMode}
+                            quoteMarkupPercent={quoteMarkupPercent}
+                            quoteDiscountPercent={quoteDiscountPercent}
                         />
                     ) : (
                         <SectionDetail
@@ -506,6 +515,8 @@ export function BudgetScope({ budgetId, isReadOnly = false }: BudgetScopeProps) 
                             assemblyValue={assemblyValue}
                             priceAdjustmentEnabled={priceAdjustmentEnabled}
                             priceAdjustmentInputMode={priceAdjustmentInputMode}
+                            quoteMarkupPercent={quoteMarkupPercent}
+                            quoteDiscountPercent={quoteDiscountPercent}
                         />
                     )}
                 </div>

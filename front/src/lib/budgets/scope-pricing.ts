@@ -315,6 +315,21 @@ export function applyQuoteRowAdjustments(
     };
 }
 
+/**
+ * Vara % + desconto % (aba Orçamento) sobre um valor monetário.
+ * Usado na exibição do escopo; não altera valores persistidos no item.
+ */
+export function applyQuoteCommercialFactor(
+    value: number,
+    markupPercent: number,
+    discountPercent: number
+): number {
+    const m = Number.isFinite(markupPercent) ? markupPercent : 0;
+    const d = Number.isFinite(discountPercent) ? discountPercent : 0;
+    const factor = (1 + m / 100) * (1 - d / 100);
+    return Math.round(normalizeMoney(value) * factor * 100) / 100;
+}
+
 export function distributeProportional(
     items: ScopePricingItem[],
     totalToDistribute: number

@@ -34,6 +34,7 @@ import { SortableItemsList } from "./budget-scope-sortable-items-list";
 import { ScopeGroupAdder, ScopeItemCreator } from "./budget-scope-item-creator";
 import type { LocationAssemblyMode, PriceAdjustmentMode } from "@/lib/budgets/scope-pricing";
 import {
+    applyQuoteCommercialFactor,
     computeItemSubtotal,
     computeLocationAssemblyTotal,
     distributeProportional,
@@ -63,6 +64,8 @@ interface SectionDetailProps {
     assemblyByItemId?: Record<string, number>;
     priceAdjustmentEnabled: boolean;
     priceAdjustmentInputMode: PriceAdjustmentMode;
+    quoteMarkupPercent?: number;
+    quoteDiscountPercent?: number;
 }
 
 export function SectionDetail({
@@ -78,6 +81,8 @@ export function SectionDetail({
     assemblyByItemId = {},
     priceAdjustmentEnabled,
     priceAdjustmentInputMode,
+    quoteMarkupPercent = 0,
+    quoteDiscountPercent = 0,
 }: SectionDetailProps) {
     const [name, setName] = useState(section?.name ?? "");
     const [editingName, setEditingName] = useState(false);
@@ -253,11 +258,12 @@ export function SectionDetail({
         onRefresh();
     }, [loadItems, onRefresh]);
 
-    const total = items.reduce((sum, i) => {
+    const totalRaw = items.reduce((sum, i) => {
         const subtotal = computeItemSubtotal(i);
         const assemblyExtra = i.id ? Number(effectiveAssemblyByItemId[i.id] ?? 0) : 0;
         return sum + subtotal + assemblyExtra;
     }, 0);
+    const total = applyQuoteCommercialFactor(totalRaw, quoteMarkupPercent, quoteDiscountPercent);
 
     const descEmpty = isRichTextContentEmpty(description);
 
@@ -429,6 +435,8 @@ export function SectionDetail({
                     assemblyByItemId={effectiveAssemblyByItemId}
                     priceAdjustmentEnabled={priceAdjustmentEnabled}
                     priceAdjustmentInputMode={priceAdjustmentInputMode}
+                    quoteMarkupPercent={quoteMarkupPercent}
+                    quoteDiscountPercent={quoteDiscountPercent}
                 />
                 {!isReadOnly && (
                     <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">

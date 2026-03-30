@@ -57,6 +57,7 @@ import { toast } from "@/lib/toast";
 import type { ScopeLocation, ScopeSection } from "@/actions/budget-scope-actions";
 import { getItemsBySectionAction } from "@/actions/budget-hierarchy-section-items-actions";
 import {
+    applyQuoteCommercialFactor,
     computeLocationScopeTotal,
     type ScopePricingItem,
 } from "@/lib/budgets/scope-pricing";
@@ -235,6 +236,8 @@ interface ScopeSidebarProps {
     locations: ScopeLocation[];
     /** Incrementa após cada refresh de escopo (inclui alteração de itens). */
     scopeDataVersion: number;
+    quoteMarkupPercent?: number;
+    quoteDiscountPercent?: number;
     selected: Selection | null;
     onSelect: (sel: Selection) => void;
     onRefresh: () => void;
@@ -246,6 +249,8 @@ export function ScopeSidebar({
     budgetId,
     locations,
     scopeDataVersion,
+    quoteMarkupPercent = 0,
+    quoteDiscountPercent = 0,
     selected,
     onSelect,
     onRefresh,
@@ -635,6 +640,8 @@ export function ScopeSidebar({
                                     scopeNumber={scopeNumber}
                                     budgetId={budgetId}
                                     scopeDataVersion={scopeDataVersion}
+                                    quoteMarkupPercent={quoteMarkupPercent}
+                                    quoteDiscountPercent={quoteDiscountPercent}
                                     selected={selected}
                                     expanded={expandedLocations.has(loc.id)}
                                     onToggleExpand={() => toggleExpanded(loc.id)}
@@ -900,6 +907,8 @@ interface LocationNodeProps {
     scopeNumber: string;
     budgetId: string;
     scopeDataVersion: number;
+    quoteMarkupPercent: number;
+    quoteDiscountPercent: number;
     selected: Selection | null;
     expanded: boolean;
     onToggleExpand: () => void;
@@ -916,6 +925,8 @@ function LocationNode({
     scopeNumber,
     budgetId,
     scopeDataVersion,
+    quoteMarkupPercent,
+    quoteDiscountPercent,
     selected,
     expanded,
     onToggleExpand,
@@ -1214,7 +1225,13 @@ function LocationNode({
                             <span className="text-xs font-semibold tabular-nums text-foreground">
                                 {locationTotalLoading
                                     ? "…"
-                                    : formatCurrency(locationScopeTotal ?? 0)}
+                                    : formatCurrency(
+                                          applyQuoteCommercialFactor(
+                                              locationScopeTotal ?? 0,
+                                              quoteMarkupPercent,
+                                              quoteDiscountPercent
+                                          )
+                                      )}
                             </span>
                         </div>
                         </div>
