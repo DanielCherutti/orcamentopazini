@@ -83,6 +83,109 @@ async function createBudgetItemInSection(
     return String(created.id);
 }
 
+/**
+ * Serialização compartilhada para linhas de `budget_item` vindas do Surreal (uma seção ou orçamento inteiro).
+ */
+async function serializeBudgetItemsFromRawQueryRows(
+    db: Awaited<ReturnType<typeof getDb>>,
+    rawRows: Array<Record<string, unknown>>
+): Promise<Array<Record<string, unknown>>> {
+    let items = rawRows.map((item) => {
+        const serialized = serializeBudgetEntity(item);
+        const productSource =
+            serialized.product_data ??
+            (typeof serialized.product_id === "object" ? serialized.product_id : null);
+        if (productSource && typeof productSource === "object") {
+            const pd = { ...(productSource as Record<string, unknown>) };
+            if (pd.id) pd.id = String(pd.id);
+            if (pd.company_id) pd.company_id = String(pd.company_id);
+            if (pd.created_at) pd.created_at = String(pd.created_at);
+            if (pd.updated_at) pd.updated_at = String(pd.updated_at);
+            if (Array.isArray(pd.group_ids)) {
+                pd.group_ids = (pd.group_ids as unknown[]).map((g) =>
+                    typeof g === "object" && g !== null ? String(g) : g
+                );
+            }
+            if (Array.isArray(pd.attachments)) {
+                pd.attachments = (pd.attachments as unknown[]).map((a) =>
+                    typeof a === "object" && a !== null
+                        ? serializeBudgetEntity(a as Record<string, unknown>)
+                        : a
+                );
+            }
+            serialized.product_data = pd;
+        }
+        return serialized;
+    });
+
+    const needFetch = items.filter((it) => {
+        const pd = (it as Record<string, unknown>).product_data as Record<string, unknown> | undefined;
+        const productId = extractProductId((it as Record<string, unknown>).product_id);
+        return productId != null && !pd?.description && !pd?.name && !pd?.code;
+    });
+    if (needFetch.length > 0) {
+        const productIds = [
+            ...new Set(
+                needFetch
+                    .map((it) => extractProductId((it as Record<string, unknown>).product_id))
+                    .filter(Boolean)
+            ),
+        ] as string[];
+        const productsMap = new Map<string, Record<string, unknown>>();
+        for (const rawId of productIds) {
+            const cleanId = rawId.replace(/^product:/, "");
+            const pr = safeStringRecordId("product", cleanId);
+            if (!pr) continue;
+            try {
+                const res = await db.select(pr);
+                const p = Array.isArray(res) ? res[0] : res;
+                if (p && typeof p === "object") {
+                    const prod = p as Record<string, unknown>;
+                    productsMap.set(rawId, prod);
+                    productsMap.set(cleanId, prod);
+                    productsMap.set(`product:${cleanId}`, prod);
+                }
+            } catch {
+                // produto pode ter sido deletado
+            }
+        }
+        items = items.map((it) => {
+            const pd = (it as Record<string, unknown>).product_data as Record<string, unknown> | undefined;
+            if (pd?.description || pd?.name || pd?.code) return it;
+            const productId = extractProductId((it as Record<string, unknown>).product_id);
+            if (!productId) return it;
+            const product =
+                productsMap.get(productId) ?? productsMap.get(productId.replace(/^product:/, ""));
+            if (product) {
+                (it as Record<string, unknown>).product_data = {
+                    id: String(product.id),
+                    code: product.code,
+                    description: product.description ?? product.name,
+                    name: product.name,
+                    unit: product.unit,
+                };
+            }
+            return it;
+        });
+    }
+
+    items = items.map((it) => {
+        const r = it as Record<string, unknown>;
+        const pd = r.product_data as Record<string, unknown> | undefined;
+        if (!r.product_name) {
+            const resolved = String(pd?.description ?? pd?.name ?? pd?.code ?? "");
+            if (resolved) r.product_name = resolved;
+        }
+        const u = pd?.unit;
+        if (u != null && String(u).trim() !== "" && !r.product_unit) {
+            r.product_unit = String(u);
+        }
+        return it;
+    });
+
+    return items;
+}
+
 export async function getItemsBySectionAction(sectionId: string) {
     const auth = await assertActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
@@ -94,99 +197,7 @@ export async function getItemsBySectionAction(sectionId: string) {
             `SELECT * FROM budget_item WHERE section_id = $sectionId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC FETCH product_id`,
             { sectionId: sectionRecordId }
         );
-        let items = (result?.[0] || []).map((item) => {
-            const serialized = serializeBudgetEntity(item);
-            const productSource =
-                serialized.product_data ??
-                (typeof serialized.product_id === "object" ? serialized.product_id : null);
-            if (productSource && typeof productSource === "object") {
-                const pd = { ...(productSource as Record<string, unknown>) };
-                if (pd.id) pd.id = String(pd.id);
-                if (pd.company_id) pd.company_id = String(pd.company_id);
-                if (pd.created_at) pd.created_at = String(pd.created_at);
-                if (pd.updated_at) pd.updated_at = String(pd.updated_at);
-                if (Array.isArray(pd.group_ids)) {
-                    pd.group_ids = (pd.group_ids as unknown[]).map((g) =>
-                        typeof g === "object" && g !== null ? String(g) : g
-                    );
-                }
-                if (Array.isArray(pd.attachments)) {
-                    pd.attachments = (pd.attachments as unknown[]).map((a) =>
-                        typeof a === "object" && a !== null
-                            ? serializeBudgetEntity(a as Record<string, unknown>)
-                            : a
-                    );
-                }
-                serialized.product_data = pd;
-            }
-            return serialized;
-        });
-
-        const needFetch = items.filter((it) => {
-            const pd = (it as Record<string, unknown>).product_data as Record<string, unknown> | undefined;
-            const productId = extractProductId((it as Record<string, unknown>).product_id);
-            return productId != null && !pd?.description && !pd?.name && !pd?.code;
-        });
-        if (needFetch.length > 0) {
-            const productIds = [
-                ...new Set(
-                    needFetch
-                        .map((it) => extractProductId((it as Record<string, unknown>).product_id))
-                        .filter(Boolean)
-                ),
-            ] as string[];
-            const productsMap = new Map<string, Record<string, unknown>>();
-            for (const rawId of productIds) {
-                const cleanId = rawId.replace(/^product:/, "");
-                const pr = safeStringRecordId("product", cleanId);
-                if (!pr) continue;
-                try {
-                    const res = await db.select(pr);
-                    const p = Array.isArray(res) ? res[0] : res;
-                    if (p && typeof p === "object") {
-                        const prod = p as Record<string, unknown>;
-                        productsMap.set(rawId, prod);
-                        productsMap.set(cleanId, prod);
-                        productsMap.set(`product:${cleanId}`, prod);
-                    }
-                } catch {
-                    // produto pode ter sido deletado
-                }
-            }
-            items = items.map((it) => {
-                const pd = (it as Record<string, unknown>).product_data as Record<string, unknown> | undefined;
-                if (pd?.description || pd?.name || pd?.code) return it;
-                const productId = extractProductId((it as Record<string, unknown>).product_id);
-                if (!productId) return it;
-                const product =
-                    productsMap.get(productId) ?? productsMap.get(productId.replace(/^product:/, ""));
-                if (product) {
-                    (it as Record<string, unknown>).product_data = {
-                        id: String(product.id),
-                        code: product.code,
-                        description: product.description ?? product.name,
-                        name: product.name,
-                        unit: product.unit,
-                    };
-                }
-                return it;
-            });
-        }
-
-        items = items.map((it) => {
-            const r = it as Record<string, unknown>;
-            const pd = r.product_data as Record<string, unknown> | undefined;
-            if (!r.product_name) {
-                const resolved = String(pd?.description ?? pd?.name ?? pd?.code ?? "");
-                if (resolved) r.product_name = resolved;
-            }
-            const u = pd?.unit;
-            if (u != null && String(u).trim() !== "" && !r.product_unit) {
-                r.product_unit = String(u);
-            }
-            return it;
-        });
-
+        const items = await serializeBudgetItemsFromRawQueryRows(db, result?.[0] || []);
         return { success: true, data: toPlain(items) };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -195,6 +206,46 @@ export async function getItemsBySectionAction(sectionId: string) {
         console.error("getItemsBySectionAction error:", error);
         if (isTokenExpiredError(error)) resetDb();
         return { success: false, error: "Erro ao carregar itens" };
+    }
+}
+
+/**
+ * Carrega todos os itens do orçamento numa única query e agrupa por trecho.
+ * Evita centenas de round-trips (`getItemsBySectionAction` por trecho) no índice do escopo.
+ */
+export async function getBudgetItemsGroupedByBudgetIdAction(budgetId: string): Promise<{
+    success: boolean;
+    data?: Record<string, BudgetItem[]>;
+    error?: string;
+}> {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const db = await getDb();
+    try {
+        const budgetRecordId = requireRecordId("budget", budgetId);
+        const result = await db.query<[Array<Record<string, unknown>>]>(
+            `SELECT * FROM budget_item WHERE section_id.budget_id = $budgetId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC FETCH product_id`,
+            { budgetId: budgetRecordId }
+        );
+        const rows = await serializeBudgetItemsFromRawQueryRows(db, result?.[0] || []);
+        const plain = toPlain(rows) as BudgetItem[];
+        const grouped: Record<string, BudgetItem[]> = {};
+        for (const it of plain) {
+            const r = it as unknown as Record<string, unknown>;
+            const sid = canonicalTableRecordId("budget_section", r.section_id);
+            if (!sid) continue;
+            if (!grouped[sid]) grouped[sid] = [];
+            grouped[sid].push(it);
+        }
+        return { success: true, data: grouped };
+    } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
+        console.error("getBudgetItemsGroupedByBudgetIdAction error:", error);
+        if (isTokenExpiredError(error)) resetDb();
+        return { success: false, error: "Erro ao carregar itens do orçamento" };
     }
 }
 

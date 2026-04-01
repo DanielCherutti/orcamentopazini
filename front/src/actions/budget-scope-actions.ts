@@ -3,7 +3,11 @@
 import { assertActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { serializeBudgetEntity } from "@/actions/budget-shared";
-import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
+import {
+  InvalidRecordIdError,
+  canonicalTableRecordId,
+  requireRecordId,
+} from "@/lib/surreal-record-ids";
 import {
   getBudgetImagesByBlocks,
   getBudgetImagesByLocation,
@@ -67,22 +71,32 @@ export async function getLocationsAction(budgetId: string): Promise<{
     );
     const locations = locResult?.[0] || [];
 
-    const result: ScopeLocation[] = [];
-    for (const loc of locations) {
-      const locRecordId = requireRecordId("budget_location", String(loc.id));
-      const secResult = await db.query<[Array<Record<string, unknown>>]>(
-        `SELECT * FROM budget_section WHERE location_id = $locId AND deleted_at IS NONE ORDER BY order_index ASC`,
-        { locId: locRecordId }
-      );
-      const sections = (secResult?.[0] || []).map(
-        (s) => serializeBudgetEntity(s)
-      ) as unknown as ScopeSection[];
+    const allSecResult = await db.query<[Array<Record<string, unknown>>]>(
+      `SELECT * FROM budget_section WHERE budget_id = $budgetId AND deleted_at IS NONE ORDER BY order_index ASC`,
+      { budgetId: budgetRecordId }
+    );
+    const allSections = (allSecResult?.[0] || []).map(
+      (s) => serializeBudgetEntity(s)
+    ) as unknown as ScopeSection[];
 
-      result.push({
+    const sectionsByLocationId = new Map<string, ScopeSection[]>();
+    for (const sec of allSections) {
+      const lid = canonicalTableRecordId("budget_location", sec.location_id);
+      if (!sectionsByLocationId.has(lid)) sectionsByLocationId.set(lid, []);
+      sectionsByLocationId.get(lid)!.push(sec);
+    }
+    for (const arr of sectionsByLocationId.values()) {
+      arr.sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+    }
+
+    const result: ScopeLocation[] = locations.map((loc) => {
+      const lid = canonicalTableRecordId("budget_location", String(loc.id));
+      const sections = sectionsByLocationId.get(lid) ?? [];
+      return {
         ...(serializeBudgetEntity(loc) as unknown as ScopeLocation),
         sections,
-      });
-    }
+      };
+    });
 
     return { success: true, data: toPlain(result) };
   } catch (error) {
