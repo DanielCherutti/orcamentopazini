@@ -36,7 +36,7 @@ function formatHighlightDate(iso: string | undefined): string | null {
   try {
     return new Date(iso + "T12:00:00").toLocaleDateString("pt-BR", {
       day: "2-digit",
-      month: "short",
+      month: "2-digit",
       year: "numeric",
     });
   } catch {
