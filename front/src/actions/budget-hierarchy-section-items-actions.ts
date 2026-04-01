@@ -224,11 +224,23 @@ export async function getBudgetItemsGroupedByBudgetIdAction(budgetId: string): P
     const db = await getDb();
     try {
         const budgetRecordId = requireRecordId("budget", budgetId);
-        const result = await db.query<[Array<Record<string, unknown>>]>(
-            `SELECT * FROM budget_item WHERE section_id.budget_id = $budgetId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC FETCH product_id`,
-            { budgetId: budgetRecordId }
-        );
-        const rows = await serializeBudgetItemsFromRawQueryRows(db, result?.[0] || []);
+        /** Preferir cadeia local → orçamento; trechos sem `budget_id` não casam em `section_id.budget_id`. */
+        let rawRows = (
+            await db.query<[Array<Record<string, unknown>>]>(
+                `SELECT * FROM budget_item WHERE section_id.location_id.budget_id = $budgetId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC FETCH product_id`,
+                { budgetId: budgetRecordId }
+            )
+        )?.[0] ?? [];
+        if (rawRows.length === 0) {
+            rawRows =
+                (
+                    await db.query<[Array<Record<string, unknown>>]>(
+                        `SELECT * FROM budget_item WHERE section_id.budget_id = $budgetId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC FETCH product_id`,
+                        { budgetId: budgetRecordId }
+                    )
+                )?.[0] ?? [];
+        }
+        const rows = await serializeBudgetItemsFromRawQueryRows(db, rawRows);
         const plain = toPlain(rows) as BudgetItem[];
         const grouped: Record<string, BudgetItem[]> = {};
         for (const it of plain) {

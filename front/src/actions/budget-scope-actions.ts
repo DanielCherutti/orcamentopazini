@@ -5,7 +5,7 @@ import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { serializeBudgetEntity } from "@/actions/budget-shared";
 import {
   InvalidRecordIdError,
-  canonicalTableRecordId,
+  recordIdToString,
   requireRecordId,
 } from "@/lib/surreal-record-ids";
 import {
@@ -71,32 +71,27 @@ export async function getLocationsAction(budgetId: string): Promise<{
     );
     const locations = locResult?.[0] || [];
 
-    const allSecResult = await db.query<[Array<Record<string, unknown>>]>(
-      `SELECT * FROM budget_section WHERE budget_id = $budgetId AND deleted_at IS NONE ORDER BY order_index ASC`,
-      { budgetId: budgetRecordId }
+    /**
+     * Um `SELECT … WHERE location_id INSIDE $locIds` pode não retornar linhas em alguns ambientes Surreal.
+     * Usamos `location_id = $locId` por local (validado no projeto), em paralelo para não serializar N round-trips.
+     */
+    const sectionsPerLoc = await Promise.all(
+      locations.map(async (loc) => {
+        const locRecordId = requireRecordId("budget_location", String(loc.id));
+        const secResult = await db.query<[Array<Record<string, unknown>>]>(
+          `SELECT * FROM budget_section WHERE location_id = $locId AND deleted_at IS NONE ORDER BY order_index ASC`,
+          { locId: locRecordId }
+        );
+        return (secResult?.[0] || []).map(
+          (s) => serializeBudgetEntity(s)
+        ) as unknown as ScopeSection[];
+      })
     );
-    const allSections = (allSecResult?.[0] || []).map(
-      (s) => serializeBudgetEntity(s)
-    ) as unknown as ScopeSection[];
 
-    const sectionsByLocationId = new Map<string, ScopeSection[]>();
-    for (const sec of allSections) {
-      const lid = canonicalTableRecordId("budget_location", sec.location_id);
-      if (!sectionsByLocationId.has(lid)) sectionsByLocationId.set(lid, []);
-      sectionsByLocationId.get(lid)!.push(sec);
-    }
-    for (const arr of sectionsByLocationId.values()) {
-      arr.sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
-    }
-
-    const result: ScopeLocation[] = locations.map((loc) => {
-      const lid = canonicalTableRecordId("budget_location", String(loc.id));
-      const sections = sectionsByLocationId.get(lid) ?? [];
-      return {
-        ...(serializeBudgetEntity(loc) as unknown as ScopeLocation),
-        sections,
-      };
-    });
+    const result: ScopeLocation[] = locations.map((loc, i) => ({
+      ...(serializeBudgetEntity(loc) as unknown as ScopeLocation),
+      sections: sectionsPerLoc[i] ?? [],
+    }));
 
     return { success: true, data: toPlain(result) };
   } catch (error) {
@@ -121,26 +116,37 @@ export async function getScopeStatsAction(budgetId: string): Promise<{
   try {
     const budgetRecordId = requireRecordId("budget", budgetId);
 
-    const [locRes, secRes, itemRes] = await Promise.all([
+    const [locRes, itemRes] = await Promise.all([
       db.query<[Array<{ count: number }>]>(
-        `SELECT count() as count FROM budget_location WHERE budget_id = $budgetId GROUP ALL`,
+        `SELECT count() as count FROM budget_location WHERE budget_id = $budgetId AND deleted_at IS NONE GROUP ALL`,
         { budgetId: budgetRecordId }
       ),
       db.query<[Array<{ count: number }>]>(
-        `SELECT count() as count FROM budget_section WHERE budget_id = $budgetId GROUP ALL`,
-        { budgetId: budgetRecordId }
-      ),
-      db.query<[Array<{ count: number }>]>(
-        `SELECT count() as count FROM budget_item WHERE section_id.budget_id = $budgetId GROUP ALL`,
+        `SELECT count() as count FROM budget_item WHERE section_id.location_id.budget_id = $budgetId AND deleted_at IS NONE GROUP ALL`,
         { budgetId: budgetRecordId }
       ),
     ]);
+
+    const locRows = await db.query<[Array<{ id: unknown }>]>(
+      `SELECT id FROM budget_location WHERE budget_id = $budgetId AND deleted_at IS NONE`,
+      { budgetId: budgetRecordId }
+    );
+    const locStrings = (locRows[0] ?? []).map((r) => recordIdToString(r.id)).filter(Boolean);
+    const locIds = locStrings.map((s) => requireRecordId("budget_location", s));
+    let sectionCount = 0;
+    if (locIds.length > 0) {
+      const secRes = await db.query<[Array<{ count: number }>]>(
+        `SELECT count() as count FROM budget_section WHERE location_id INSIDE $locIds AND deleted_at IS NONE GROUP ALL`,
+        { locIds }
+      );
+      sectionCount = Number(secRes?.[0]?.[0]?.count || 0);
+    }
 
     return {
       success: true,
       data: {
         locations: Number(locRes?.[0]?.[0]?.count || 0),
-        sections: Number(secRes?.[0]?.[0]?.count || 0),
+        sections: sectionCount,
         items: Number(itemRes?.[0]?.[0]?.count || 0),
       },
     };

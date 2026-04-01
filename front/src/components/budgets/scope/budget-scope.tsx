@@ -9,8 +9,6 @@ import {
     Settings2,
 } from "lucide-react";
 import { getLocationsAction, type ScopeLocation } from "@/actions/budget-scope-actions";
-import { getBudgetItemsGroupedByBudgetIdAction } from "@/actions/budget-hierarchy-section-items-actions";
-import type { BudgetItem } from "@/types/budget-types";
 import { ScopeSidebar } from "./budget-scope-sidebar";
 import { LocationDetail } from "./budget-scope-location-detail";
 import { SectionDetail } from "./budget-scope-section-detail";
@@ -36,8 +34,8 @@ export function BudgetScope({
     quoteDiscountPercent = 0,
 }: BudgetScopeProps) {
     const [locations, setLocations] = useState<ScopeLocation[]>([]);
-    /** Itens por trecho (uma carga em lote — evita N requisições no índice do escopo). */
-    const [itemsBySectionId, setItemsBySectionId] = useState<Record<string, BudgetItem[]>>({});
+    /** Incrementa após cada refresh para forçar recálculo dos totais por local no índice. */
+    const [scopeDataVersion, setScopeDataVersion] = useState(0);
     const [loading, setLoading] = useState(true);
     const [selected, setSelected] = useState<Selection | null>(null);
     const [scopeNumber, setScopeNumber] = useState<string>("");
@@ -53,17 +51,10 @@ export function BudgetScope({
         "inline-flex h-8 items-center justify-center rounded-md border px-3 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50";
 
     const loadLocations = useCallback(async () => {
-        const [locResult, itemsResult] = await Promise.all([
-            getLocationsAction(budgetId),
-            getBudgetItemsGroupedByBudgetIdAction(budgetId),
-        ]);
+        const locResult = await getLocationsAction(budgetId);
         if (locResult.success && locResult.data) {
             setLocations(locResult.data);
-        }
-        if (itemsResult.success && itemsResult.data) {
-            setItemsBySectionId(itemsResult.data);
-        } else {
-            setItemsBySectionId({});
+            setScopeDataVersion((v) => v + 1);
         }
     }, [budgetId]);
 
@@ -185,7 +176,7 @@ export function BudgetScope({
                     key={budgetId}
                     budgetId={budgetId}
                     locations={locations}
-                    itemsBySectionId={itemsBySectionId}
+                    scopeDataVersion={scopeDataVersion}
                     quoteMarkupPercent={quoteMarkupPercent}
                     quoteDiscountPercent={quoteDiscountPercent}
                     selected={selected}

@@ -3,7 +3,6 @@
 import {
     useState,
     useEffect,
-    useMemo,
     useRef,
     useCallback,
     type KeyboardEvent,
@@ -56,7 +55,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import type { ScopeLocation, ScopeSection } from "@/actions/budget-scope-actions";
-import { canonicalTableRecordId } from "@/lib/surreal-record-ids";
+import { getItemsBySectionAction } from "@/actions/budget-hierarchy-section-items-actions";
 import {
     applyQuoteCommercialFactor,
     computeLocationScopeTotal,
@@ -235,8 +234,8 @@ function ScopeSidebarDragOverlay({
 interface ScopeSidebarProps {
     budgetId: string;
     locations: ScopeLocation[];
-    /** Itens por id de trecho (carga única no pai). */
-    itemsBySectionId: Record<string, BudgetItem[]>;
+    /** Incrementa após cada refresh (itens/totais do local no índice). */
+    scopeDataVersion: number;
     quoteMarkupPercent?: number;
     quoteDiscountPercent?: number;
     selected: Selection | null;
@@ -249,7 +248,7 @@ interface ScopeSidebarProps {
 export function ScopeSidebar({
     budgetId,
     locations,
-    itemsBySectionId,
+    scopeDataVersion,
     quoteMarkupPercent = 0,
     quoteDiscountPercent = 0,
     selected,
@@ -639,7 +638,7 @@ export function ScopeSidebar({
                                     locIndex={locIdx + 1}
                                     scopeNumber={scopeNumber}
                                     budgetId={budgetId}
-                                    itemsBySectionId={itemsBySectionId}
+                                    scopeDataVersion={scopeDataVersion}
                                     quoteMarkupPercent={quoteMarkupPercent}
                                     quoteDiscountPercent={quoteDiscountPercent}
                                     selected={selected}
@@ -906,7 +905,7 @@ interface LocationNodeProps {
     locIndex: number;
     scopeNumber: string;
     budgetId: string;
-    itemsBySectionId: Record<string, BudgetItem[]>;
+    scopeDataVersion: number;
     quoteMarkupPercent: number;
     quoteDiscountPercent: number;
     selected: Selection | null;
@@ -924,7 +923,7 @@ function LocationNode({
     locIndex,
     scopeNumber,
     budgetId,
-    itemsBySectionId,
+    scopeDataVersion,
     quoteMarkupPercent,
     quoteDiscountPercent,
     selected,
@@ -958,26 +957,63 @@ function LocationNode({
     } | null>(null);
     const [duplicateName, setDuplicateName] = useState("");
     const [duplicating, setDuplicating] = useState(false);
+    const [locationScopeTotal, setLocationScopeTotal] = useState<number | null>(null);
+    const [locationTotalLoading, setLocationTotalLoading] = useState(
+        () => location.sections.length > 0
+    );
 
-    const locationScopeTotal = useMemo(() => {
-        if (location.sections.length === 0) return 0;
-        const itemsWithSection: Array<ScopePricingItem & { section_id: string }> = [];
-        for (const sec of location.sections) {
-            const key = canonicalTableRecordId("budget_section", sec.id);
-            const rows = itemsBySectionId[key] ?? [];
-            for (const it of rows) {
-                itemsWithSection.push(budgetItemToScopePricingWithSection(it, sec.id));
+    const isEmptyLocation = location.sections.length === 0;
+    const displayLocationLoading = isEmptyLocation ? false : locationTotalLoading;
+    const displayLocationTotal = isEmptyLocation ? 0 : (locationScopeTotal ?? 0);
+
+    useEffect(() => {
+        if (location.sections.length === 0) return;
+        let cancelled = false;
+        const sections = location.sections;
+        const locAssemblyMode = location.assembly_mode;
+        const locAssemblyValue = location.assembly_value;
+
+        void (async () => {
+            await Promise.resolve();
+            if (cancelled) return;
+            setLocationTotalLoading(true);
+            try {
+                const results = await Promise.all(sections.map((s) => getItemsBySectionAction(s.id)));
+                if (cancelled) return;
+                const itemsWithSection: Array<ScopePricingItem & { section_id: string }> = [];
+                sections.forEach((sec, idx) => {
+                    const r = results[idx];
+                    if (!r.success || !r.data) return;
+                    for (const it of r.data as BudgetItem[]) {
+                        itemsWithSection.push(budgetItemToScopePricingWithSection(it, sec.id));
+                    }
+                });
+                const total = computeLocationScopeTotal({
+                    location: {
+                        assembly_mode: locAssemblyMode,
+                        assembly_value: locAssemblyValue,
+                    },
+                    sections,
+                    items: itemsWithSection,
+                });
+                setLocationScopeTotal(total);
+            } catch {
+                if (!cancelled) setLocationScopeTotal(null);
+            } finally {
+                if (!cancelled) setLocationTotalLoading(false);
             }
-        }
-        return computeLocationScopeTotal({
-            location: {
-                assembly_mode: location.assembly_mode,
-                assembly_value: location.assembly_value,
-            },
-            sections: location.sections,
-            items: itemsWithSection,
-        });
-    }, [location, itemsBySectionId]);
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        location.id,
+        location.sections,
+        location.assembly_mode,
+        location.assembly_value,
+        scopeDataVersion,
+    ]);
 
     const isSelected = selected?.type === "location" && selected.id === location.id;
     /** Índice sempre lista todos os trechos; só o painel principal muda (todos empilhados vs um trecho). */
@@ -1189,13 +1225,15 @@ function LocationNode({
                                 Total do local
                             </span>
                             <span className="text-xs font-semibold tabular-nums text-foreground">
-                                {formatCurrency(
-                                    applyQuoteCommercialFactor(
-                                        locationScopeTotal,
-                                        quoteMarkupPercent,
-                                        quoteDiscountPercent
-                                    )
-                                )}
+                                {displayLocationLoading
+                                    ? "…"
+                                    : formatCurrency(
+                                          applyQuoteCommercialFactor(
+                                              displayLocationTotal,
+                                              quoteMarkupPercent,
+                                              quoteDiscountPercent
+                                          )
+                                      )}
                             </span>
                         </div>
                         </div>
