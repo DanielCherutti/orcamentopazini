@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
     DndContext,
     closestCenter,
@@ -32,19 +33,157 @@ function getSegmentSortableId(seg: ItemSegment): string {
     return `group-block:${seg.items[0].id!}`;
 }
 
-export function SortableItemsList({
-    items,
+/** Lista só leitura com virtualização — evita milhares de nós no DOM em trechos enormes. */
+function ReadOnlyVirtualItemsList({
+    segments,
     budgetId,
-    isReadOnly,
     onRefresh,
-    groups = [],
-    assemblyMode = "percent",
-    assemblyByItemId = {},
+    groups: _groups,
+    assemblyMode,
+    assemblyByItemId,
     priceAdjustmentEnabled,
     priceAdjustmentInputMode,
     quoteMarkupPercent = 0,
     quoteDiscountPercent = 0,
 }: {
+    segments: ItemSegment[];
+    budgetId: string;
+    onRefresh: () => void;
+    groups: ProductGroup[];
+    assemblyMode: LocationAssemblyMode;
+    assemblyByItemId: Record<string, number>;
+    priceAdjustmentEnabled: boolean;
+    priceAdjustmentInputMode: PriceAdjustmentMode;
+    quoteMarkupPercent?: number;
+    quoteDiscountPercent?: number;
+}) {
+    const parentRef = useRef<HTMLDivElement>(null);
+    /* TanStack Virtual: retorno não é memoizável pelo React Compiler — uso intencional. */
+    // eslint-disable-next-line react-hooks/incompatible-library -- useVirtualizer
+    const virtualizer = useVirtualizer({
+        count: segments.length,
+        getScrollElement: () => parentRef.current,
+        estimateSize: () => 104,
+        overscan: 8,
+    });
+
+    return (
+        <div
+            ref={parentRef}
+            className="max-h-[min(75vh,900px)] overflow-auto rounded-md [scrollbar-gutter:stable]"
+        >
+            <div
+                className="relative w-full"
+                style={{ height: virtualizer.getTotalSize() }}
+            >
+                {virtualizer.getVirtualItems().map((virtualRow) => {
+                    const seg = segments[virtualRow.index];
+                    return (
+                        <div
+                            key={getSegmentSortableId(seg)}
+                            data-index={virtualRow.index}
+                            ref={virtualizer.measureElement}
+                            className="absolute left-0 top-0 w-full"
+                            style={{ transform: `translateY(${virtualRow.start}px)` }}
+                        >
+                            {seg.type === "standalone" ? (
+                                <ScopeItemRow
+                                    item={seg.item}
+                                    budgetId={budgetId}
+                                    isReadOnly
+                                    onRefresh={onRefresh}
+                                    assemblyMode={assemblyMode}
+                                    assemblyByItemId={assemblyByItemId}
+                                    priceAdjustmentEnabled={priceAdjustmentEnabled}
+                                    priceAdjustmentInputMode={priceAdjustmentInputMode}
+                                    quoteMarkupPercent={quoteMarkupPercent}
+                                    quoteDiscountPercent={quoteDiscountPercent}
+                                />
+                            ) : (
+                                <ReadOnlyGroupBlock
+                                    seg={seg}
+                                    budgetId={budgetId}
+                                    onRefresh={onRefresh}
+                                    assemblyMode={assemblyMode}
+                                    assemblyByItemId={assemblyByItemId}
+                                    priceAdjustmentEnabled={priceAdjustmentEnabled}
+                                    priceAdjustmentInputMode={priceAdjustmentInputMode}
+                                    quoteMarkupPercent={quoteMarkupPercent}
+                                    quoteDiscountPercent={quoteDiscountPercent}
+                                />
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+function ReadOnlyGroupBlock({
+    seg,
+    budgetId,
+    onRefresh,
+    assemblyMode,
+    assemblyByItemId,
+    priceAdjustmentEnabled,
+    priceAdjustmentInputMode,
+    quoteMarkupPercent = 0,
+    quoteDiscountPercent = 0,
+}: {
+    seg: Extract<ItemSegment, { type: "group" }>;
+    budgetId: string;
+    onRefresh: () => void;
+    assemblyMode: LocationAssemblyMode;
+    assemblyByItemId: Record<string, number>;
+    priceAdjustmentEnabled: boolean;
+    priceAdjustmentInputMode: PriceAdjustmentMode;
+    quoteMarkupPercent?: number;
+    quoteDiscountPercent?: number;
+}) {
+    return (
+        <div className="rounded-lg border border-border/70 bg-muted/20 py-1">
+            <div className="mb-2 flex items-center gap-2 px-2 pt-0.5">
+                <div className="h-px flex-1 bg-border" />
+                <span
+                    className="max-w-[min(100%,14rem)] shrink-0 truncate text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                    title={seg.name}
+                >
+                    {seg.name}
+                </span>
+                <div className="h-px flex-1 bg-border" />
+            </div>
+            <div className="mx-2 mb-1 rounded-bl-md border-s-2 border-primary/20 ps-2.5">
+                {seg.items.map((item) => (
+                    <div key={item.id} className="mb-1">
+                        <ScopeItemRow
+                            item={item}
+                            budgetId={budgetId}
+                            isReadOnly
+                            onRefresh={onRefresh}
+                            indented
+                            assemblyMode={assemblyMode}
+                            assemblyByItemId={assemblyByItemId}
+                            priceAdjustmentEnabled={priceAdjustmentEnabled}
+                            priceAdjustmentInputMode={priceAdjustmentInputMode}
+                            quoteMarkupPercent={quoteMarkupPercent}
+                            quoteDiscountPercent={quoteDiscountPercent}
+                        />
+                    </div>
+                ))}
+            </div>
+            <div className="mt-1 flex items-center gap-2 px-2 pb-0.5">
+                <div className="h-px flex-1 bg-border" />
+                <span className="whitespace-nowrap text-[10px] font-medium uppercase tracking-wider text-muted-foreground/90">
+                    Fim do grupo
+                </span>
+                <div className="h-px flex-1 bg-border" />
+            </div>
+        </div>
+    );
+}
+
+type SortableItemsListProps = {
     items: BudgetItem[];
     budgetId: string;
     isReadOnly: boolean;
@@ -56,7 +195,53 @@ export function SortableItemsList({
     priceAdjustmentInputMode: PriceAdjustmentMode;
     quoteMarkupPercent?: number;
     quoteDiscountPercent?: number;
-}) {
+};
+
+/** Só leitura: segmentos + virtualização, sem custo de @dnd-kit. */
+function SortableItemsListReadonly({
+    items,
+    budgetId,
+    onRefresh,
+    groups = [],
+    assemblyMode = "percent",
+    assemblyByItemId = {},
+    priceAdjustmentEnabled,
+    priceAdjustmentInputMode,
+    quoteMarkupPercent = 0,
+    quoteDiscountPercent = 0,
+}: SortableItemsListProps) {
+    const [segments, setSegments] = useState<ItemSegment[]>(() => buildItemSegments(items));
+    useEffect(() => {
+        setSegments(buildItemSegments(items));
+    }, [items]);
+    return (
+        <ReadOnlyVirtualItemsList
+            segments={segments}
+            budgetId={budgetId}
+            onRefresh={onRefresh}
+            groups={groups}
+            assemblyMode={assemblyMode}
+            assemblyByItemId={assemblyByItemId}
+            priceAdjustmentEnabled={priceAdjustmentEnabled}
+            priceAdjustmentInputMode={priceAdjustmentInputMode}
+            quoteMarkupPercent={quoteMarkupPercent}
+            quoteDiscountPercent={quoteDiscountPercent}
+        />
+    );
+}
+
+function SortableItemsListEditable({
+    items,
+    budgetId,
+    onRefresh,
+    groups = [],
+    assemblyMode = "percent",
+    assemblyByItemId = {},
+    priceAdjustmentEnabled,
+    priceAdjustmentInputMode,
+    quoteMarkupPercent = 0,
+    quoteDiscountPercent = 0,
+}: SortableItemsListProps) {
     const [segments, setSegments] = useState<ItemSegment[]>(() => buildItemSegments(items));
     const segmentsRef = useRef(segments);
 
@@ -133,7 +318,7 @@ export function SortableItemsList({
                                 key={getSegmentSortableId(seg)}
                                 item={seg.item}
                                 budgetId={budgetId}
-                                isReadOnly={isReadOnly}
+                                isReadOnly={false}
                                 onRefresh={onRefresh}
                                 groups={groups}
                                 assemblyMode={assemblyMode}
@@ -149,7 +334,7 @@ export function SortableItemsList({
                                 seg={seg}
                                 sensors={sensors}
                                 budgetId={budgetId}
-                                isReadOnly={isReadOnly}
+                                isReadOnly={false}
                                 onRefresh={onRefresh}
                                 onItemReorder={handleGroupItemReorder}
                                 groups={groups}
@@ -166,6 +351,13 @@ export function SortableItemsList({
             </SortableContext>
         </DndContext>
     );
+}
+
+export function SortableItemsList(props: SortableItemsListProps) {
+    if (props.isReadOnly) {
+        return <SortableItemsListReadonly {...props} />;
+    }
+    return <SortableItemsListEditable {...props} />;
 }
 
 function SortableStandaloneItem({

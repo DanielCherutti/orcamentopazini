@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, memo } from "react";
 import type { HTMLAttributes } from "react";
 import { GripVertical, MessageSquareText, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -22,7 +22,7 @@ import {
     type PriceAdjustmentMode,
 } from "@/lib/budgets/scope-pricing";
 
-export function ScopeItemRow({
+function ScopeItemRowInner({
     item,
     budgetId,
     isReadOnly,
@@ -358,3 +358,5 @@ export function ScopeItemRow({
         </div>
     );
 }
+
+export const ScopeItemRow = memo(ScopeItemRowInner);

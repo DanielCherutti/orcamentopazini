@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { getBudgetAction } from "@/actions/budget-actions";
 import { updateBudgetAction } from "@/actions/budget-core-write-actions";
 import type { Budget } from "@/types/budget-types";
@@ -56,6 +56,68 @@ type TableRow = {
     /** Com trechos visíveis: linha de total do local; trechos são filhas logo abaixo. */
     rowType: "location" | "section";
 };
+
+const QuoteCostRow = memo(function QuoteCostRow({
+    row,
+    locationOrdinal,
+}: {
+    row: TableRow;
+    locationOrdinal: number | null;
+}) {
+    const isLoc = row.rowType === "location";
+    return (
+        <tr
+            className={cn(
+                "transition-colors",
+                isLoc
+                    ? "bg-gradient-to-r from-primary/[0.06] via-muted/20 to-transparent hover:from-primary/[0.08]"
+                    : "bg-background/50 hover:bg-muted/25"
+            )}
+        >
+            <td
+                className={cn(
+                    "px-4 py-2.5 align-middle tabular-nums",
+                    isLoc ? "font-semibold text-foreground" : "text-muted-foreground/40"
+                )}
+            >
+                {isLoc && locationOrdinal != null ? locationOrdinal : "—"}
+            </td>
+            <td
+                className={cn(
+                    "px-4 py-2.5 align-middle",
+                    isLoc
+                        ? "border-l-[3px] border-l-primary font-semibold text-foreground"
+                        : "border-l border-l-primary/15 pl-8 text-[13px] text-muted-foreground"
+                )}
+            >
+                {isLoc ? (
+                    row.label
+                ) : (
+                    <span className="flex items-center gap-2">
+                        <span className="h-1 w-1 shrink-0 rounded-full bg-primary/35" aria-hidden />
+                        {row.label}
+                    </span>
+                )}
+            </td>
+            <td
+                className={cn(
+                    "px-4 py-2.5 text-right tabular-nums tracking-tight align-middle",
+                    isLoc ? "font-semibold text-foreground" : "text-muted-foreground"
+                )}
+            >
+                {formatCurrency(row.equipment)}
+            </td>
+            <td
+                className={cn(
+                    "px-4 py-2.5 text-right tabular-nums tracking-tight align-middle",
+                    isLoc ? "font-semibold text-foreground" : "text-muted-foreground"
+                )}
+            >
+                {formatCurrency(row.assembly)}
+            </td>
+        </tr>
+    );
+});
 
 interface BudgetQuoteTabProps {
     budgetId: string;
@@ -250,6 +312,18 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
         };
     }, [tableRows, showSections]);
 
+    const quoteTableBodyRows = useMemo(() => {
+        let locIndex = 0;
+        return tableRows.map((row) => {
+            const isLoc = row.rowType === "location";
+            if (isLoc) locIndex += 1;
+            return {
+                row,
+                locationOrdinal: isLoc ? locIndex : null,
+            };
+        });
+    }, [tableRows]);
+
     if (loading && !budget) {
         return (
             <div className="flex flex-1 items-center justify-center bg-background">
@@ -418,75 +492,13 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
                                             </td>
                                         </tr>
                                     ) : (
-                                        (() => {
-                                            let locIndex = 0;
-                                            return tableRows.map((row) => {
-                                                const isLoc = row.rowType === "location";
-                                                if (isLoc) locIndex += 1;
-                                                return (
-                                                    <tr
-                                                        key={row.key}
-                                                        className={cn(
-                                                            "transition-colors",
-                                                            isLoc
-                                                                ? "bg-gradient-to-r from-primary/[0.06] via-muted/20 to-transparent hover:from-primary/[0.08]"
-                                                                : "bg-background/50 hover:bg-muted/25"
-                                                        )}
-                                                    >
-                                                        <td
-                                                            className={cn(
-                                                                "px-4 py-2.5 align-middle tabular-nums",
-                                                                isLoc
-                                                                    ? "font-semibold text-foreground"
-                                                                    : "text-muted-foreground/40"
-                                                            )}
-                                                        >
-                                                            {isLoc ? locIndex : "—"}
-                                                        </td>
-                                                        <td
-                                                            className={cn(
-                                                                "px-4 py-2.5 align-middle",
-                                                                isLoc
-                                                                    ? "border-l-[3px] border-l-primary font-semibold text-foreground"
-                                                                    : "border-l border-l-primary/15 pl-8 text-[13px] text-muted-foreground"
-                                                            )}
-                                                        >
-                                                            {isLoc ? (
-                                                                row.label
-                                                            ) : (
-                                                                <span className="flex items-center gap-2">
-                                                                    <span
-                                                                        className="h-1 w-1 shrink-0 rounded-full bg-primary/35"
-                                                                        aria-hidden
-                                                                    />
-                                                                    {row.label}
-                                                                </span>
-                                                            )}
-                                                        </td>
-                                                        <td
-                                                            className={cn(
-                                                                "px-4 py-2.5 text-right tabular-nums tracking-tight align-middle",
-                                                                isLoc
-                                                                    ? "font-semibold text-foreground"
-                                                                    : "text-muted-foreground"
-                                                            )}
-                                                        >
-                                                            {formatCurrency(row.equipment)}
-                                                        </td>
-                                                        <td
-                                                            className={cn(
-                                                                "px-4 py-2.5 text-right tabular-nums tracking-tight align-middle",
-                                                                isLoc
-                                                                    ? "font-semibold text-foreground"
-                                                                    : "text-muted-foreground"
-                                                            )}
-                                                        >
-                                                            {formatCurrency(row.assembly)}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            });
-                                        })()
+                                        quoteTableBodyRows.map(({ row, locationOrdinal }) => (
+                                            <QuoteCostRow
+                                                key={row.key}
+                                                row={row}
+                                                locationOrdinal={locationOrdinal}
+                                            />
+                                        ))
                                     )}
                                 </tbody>
                                 {tableRows.length > 0 && (

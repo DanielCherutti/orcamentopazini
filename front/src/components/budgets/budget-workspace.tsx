@@ -1,12 +1,10 @@
 "use client";
 
 import { useState, useEffect, createContext, useContext } from "react";
-import { Info, FileText, Map as MapIcon, Printer, Table2 } from "lucide-react";
+import dynamic from "next/dynamic";
+import { Info, FileText, Loader2, Map as MapIcon, Printer, Table2 } from "lucide-react";
 import { Budget } from "@/types/budget-types";
 import { BudgetTreeV2 } from "./editor/budget-tree-v2";
-import { BudgetCompositor } from "./compositor/budget-compositor";
-import { BudgetScope } from "./scope/budget-scope";
-import { BudgetQuoteTab } from "./quote/budget-quote-tab";
 import { BudgetWorkspaceHeader } from "./workspace/budget-workspace-header";
 import { toast } from "@/lib/toast";
 import { useBudgetsRepository } from "@/lib/budgets/use-budgets-repository";
@@ -15,6 +13,38 @@ import { budgetPdfUrl } from "@/lib/budgets/budget-path";
 import { getBudgetStatusLabel, isBudgetEditableStatus } from "@/lib/budgets/budget-status";
 import { cn } from "@/lib/utils";
 import { WorkspaceContext, type ActiveTab } from "./workspace-context";
+
+function BudgetTabLoading() {
+    return (
+        <div className="flex flex-1 min-h-[12rem] items-center justify-center bg-white">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" aria-hidden />
+        </div>
+    );
+}
+
+const BudgetCompositor = dynamic(
+    () =>
+        import("@/components/budgets/compositor/budget-compositor").then((m) => ({
+            default: m.BudgetCompositor,
+        })),
+    { loading: () => <BudgetTabLoading /> }
+);
+
+const BudgetScope = dynamic(
+    () =>
+        import("@/components/budgets/scope/budget-scope").then((m) => ({
+            default: m.BudgetScope,
+        })),
+    { loading: () => <BudgetTabLoading /> }
+);
+
+const BudgetQuoteTab = dynamic(
+    () =>
+        import("@/components/budgets/quote/budget-quote-tab").then((m) => ({
+            default: m.BudgetQuoteTab,
+        })),
+    { loading: () => <BudgetTabLoading /> }
+);
 
 const TABS: { id: ActiveTab; label: string; icon: React.ReactNode }[] = [
     { id: 'budget',  label: 'Compositor', icon: <FileText className="h-3.5 w-3.5" /> },
