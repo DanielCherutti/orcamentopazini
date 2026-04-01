@@ -19,6 +19,7 @@ import {
 } from "@/actions/budget-compositor-block-items-actions";
 import type { ProductGroup } from "@/actions/product-group-actions";
 import type { BudgetItem } from "@/types/budget-types";
+import { QuantityTextInput } from "@/components/budgets/quantity-text-input";
 import { formatCurrency, NO_GROUP_VALUE } from "./compositor-content-utils";
 
 export function CompositorItemRow({
@@ -126,19 +127,17 @@ export function CompositorItemRow({
                 {name}
             </div>
             <div className="col-span-4 md:col-span-2 flex items-center justify-center gap-1">
-                <input
-                    type="number"
-                    min={1}
+                <QuantityTextInput
                     value={qty}
+                    min={1}
                     disabled={saving || isReadOnly}
-                    onChange={(e) =>
-                        !isReadOnly && setQty(Math.max(1, Number(e.target.value)))
-                    }
+                    onValueChange={(n) => !isReadOnly && setQty(n)}
                     onBlur={() => !isReadOnly && void handleQtyCommit()}
                     onKeyDown={(e) => {
                         if (!isReadOnly && e.key === "Enter") e.currentTarget.blur();
                     }}
-                    className="w-14 text-center border rounded px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+                    className="w-14 text-center border border-input rounded bg-background px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+                    aria-label="Quantidade"
                 />
                 {unit && (
                     <span className="text-xs text-muted-foreground">{unit}</span>

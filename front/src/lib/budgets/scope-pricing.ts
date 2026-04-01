@@ -21,7 +21,7 @@ export function normalizeMoney(value: unknown): number {
 export function normalizeQty(value: unknown): number {
     const n = Number(value ?? 1);
     if (!Number.isFinite(n) || n < 1) return 1;
-    return Math.floor(n);
+    return n;
 }
 
 export function computeItemBaseTotal(item: ScopePricingItem): number {

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Plus, Loader2 } from "lucide-react";
 import { ProductSelector } from "@/components/products/product-selector";
-import { Input } from "@/components/ui/input";
+import { QuantityTextInput } from "@/components/budgets/quantity-text-input";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/lib/toast";
 import { useBudgetsRepository } from "@/lib/budgets/use-budgets-repository";
@@ -80,14 +80,12 @@ export function InlineItemCreator({ sectionId, budgetId, onSuccess }: InlineItem
             </div>
 
             <div className="col-span-4 md:col-span-2 flex items-center gap-1 min-w-0">
-                <Input
-                    type="number"
-                    min="1"
+                <QuantityTextInput
                     value={quantity}
-                    onChange={(e) => setQuantity(Number(e.target.value))}
-                    className="h-8 text-center min-w-0 flex-1"
-                    placeholder="Qtd"
+                    min={1}
+                    onValueChange={setQuantity}
                     onKeyDown={handleKeyDown}
+                    className="flex h-8 min-w-0 flex-1 rounded-md border border-input bg-transparent px-2 py-1 text-center text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                     aria-label="Quantidade"
                 />
                 {selectedProduct?.unit?.trim() ? (

@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ChevronDown, ChevronRight, Copy, Layers, Save, Trash2, X } from "lucide-react";
 import { useBudgetsRepository } from "@/lib/budgets/use-budgets-repository";
+import { QuantityTextInput } from "@/components/budgets/quantity-text-input";
 import { toast } from "@/lib/toast";
 
 import type { BudgetItem } from "@/types/budget-types";
@@ -54,15 +55,15 @@ function ItemQuantityRow({ item, onDelete, onUpdateQuantity, formatCurrency }: I
             </div>
             {/* Quantidade */}
             <div className="col-span-4 md:col-span-2 flex items-center justify-center gap-1">
-                <input
-                    type="number"
-                    min={1}
+                <QuantityTextInput
                     value={qty}
+                    min={1}
                     disabled={saving}
-                    onChange={(e) => setQty(Math.max(1, Number(e.target.value)))}
+                    onValueChange={setQty}
                     onBlur={handleQtyCommit}
                     onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
-                    className="w-14 text-center border rounded px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+                    className="w-14 text-center border border-input rounded bg-background px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+                    aria-label="Quantidade"
                 />
                 {unit && <span className="text-xs text-muted-foreground">{unit}</span>}
             </div>

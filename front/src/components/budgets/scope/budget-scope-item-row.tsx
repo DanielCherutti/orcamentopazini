@@ -11,6 +11,7 @@ import {
     deleteItemAction,
     updateItemCommercialSettingsAction,
 } from "@/actions/budget-hierarchy-section-items-actions";
+import { QuantityTextInput } from "@/components/budgets/quantity-text-input";
 import { formatCurrency } from "./budget-scope-utils";
 import {
     applyQuoteCommercialFactor,
@@ -202,12 +203,12 @@ export function ScopeItemRow({
                     </span>
                 ) : (
                     <>
-                        <input
-                            type="number"
-                            min={1}
+                        <QuantityTextInput
                             value={qty}
-                            onChange={(e) => handleQtyChange(Number(e.target.value))}
-                            className="w-11 shrink-0 text-center border rounded text-xs h-6"
+                            min={1}
+                            onValueChange={handleQtyChange}
+                            className="w-11 shrink-0 text-center border border-input rounded text-xs h-6 bg-background"
+                            aria-label="Quantidade"
                         />
                         {productUnit ? (
                             <span

@@ -13,7 +13,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { QuantityTextInput } from "@/components/budgets/quantity-text-input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/lib/toast";
 
@@ -100,13 +100,13 @@ export function AddProductScopeDialog({
                                 </span>
                             ) : null}
                         </Label>
-                        <Input
+                        <QuantityTextInput
                             id="scope-add-product-qty"
-                            type="number"
-                            min={1}
                             value={qty}
-                            onChange={(e) => setQty(Math.max(1, Number(e.target.value)))}
-                            className="w-28"
+                            min={1}
+                            onValueChange={setQty}
+                            className="flex h-9 w-28 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                            aria-label="Quantidade"
                         />
                     </div>
                 </div>

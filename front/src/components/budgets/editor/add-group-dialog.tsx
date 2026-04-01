@@ -19,6 +19,7 @@ import {
   getProductGroupProductsAction,
   type ProductGroup,
 } from "@/actions/product-group-actions";
+import { QuantityTextInput } from "@/components/budgets/quantity-text-input";
 import { cn } from "@/lib/utils";
 import { canonicalTableRecordId } from "@/lib/surreal-record-ids";
 
@@ -382,14 +383,14 @@ export function AddGroupDialog({
                                   {formatCurrency(p.equipmentPrice + p.assemblyPrice)}
                                 </div>
                               </div>
-                              <input
-                                type="number"
-                                min={1}
+                              <QuantityTextInput
                                 value={quantities.get(ckey(idx, p.id)) ?? 1}
+                                min={1}
                                 disabled={!isSelectedHere}
-                                onChange={(e) => setQuantity(idx, p.id, Number(e.target.value))}
+                                onValueChange={(n) => setQuantity(idx, p.id, n)}
                                 onClick={(e) => e.stopPropagation()}
-                                className="w-14 shrink-0 rounded border px-1 py-0.5 text-center text-sm focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-40"
+                                className="w-14 shrink-0 rounded border border-input bg-background px-1 py-0.5 text-center text-sm focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-40"
+                                aria-label={`Quantidade ${p.description}`}
                               />
                             </div>
                           );
