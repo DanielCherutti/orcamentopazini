@@ -420,7 +420,7 @@ function SortableGroup({
     isReadOnly,
     onRefresh,
     onItemReorder,
-    groups: _groups,
+    groups,
     assemblyMode,
     assemblyByItemId,
     priceAdjustmentEnabled,
@@ -499,6 +499,7 @@ function SortableGroup({
                                 budgetId={budgetId}
                                 isReadOnly={isReadOnly}
                                 onRefresh={onRefresh}
+                                groups={groups}
                                 assemblyMode={assemblyMode}
                                 assemblyByItemId={assemblyByItemId}
                                 priceAdjustmentEnabled={priceAdjustmentEnabled}

@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
       .toLowerCase();
 
     if (PASSTHROUGH_TYPES.has(contentType)) {
-      return new NextResponse(inputBuffer, {
+      return new NextResponse(new Uint8Array(inputBuffer), {
         headers: {
           "Content-Type": contentType === "image/jpg" ? "image/jpeg" : contentType,
           "Cache-Control": "public, max-age=3600",
@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
       .png()
       .toBuffer();
 
-    return new NextResponse(pngBuffer, {
+    return new NextResponse(new Uint8Array(pngBuffer), {
       headers: {
         "Content-Type": "image/png",
         "Cache-Control": "public, max-age=3600",

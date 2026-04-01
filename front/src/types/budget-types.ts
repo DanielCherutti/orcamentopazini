@@ -62,6 +62,9 @@ export const budgetSectionSchema = z.object({
     name: z.string().min(1, "Nome do trecho é obrigatório"),
     description: z.string().optional(),
     order_index: z.number().default(0),
+    /** Montagem por trecho (escopo); fallback ao local quando omitido. */
+    assembly_mode: z.custom<LocationAssemblyMode>().optional(),
+    assembly_value: z.number().optional(),
     items: z.array(budgetItemSchema).optional(),
     images: z.array(budgetImageSchema).optional(),
 });
