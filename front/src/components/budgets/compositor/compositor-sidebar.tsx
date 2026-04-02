@@ -448,7 +448,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: block.id,
     data: { parentId: block.parent_id ?? null },
-    disabled: isReadOnly || isCover || isToc || isFigures || (isScope && depth === 0),
+    disabled: isReadOnly,
   });
   // Só transladação (sem scale). Com DragOverlay, o item ativo fica invisível na lista e não recebe translate — o overlay segue o ponteiro com offset correto.
   const tx = transform?.x ?? 0;
@@ -488,8 +488,8 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
         style={{ paddingLeft: `${indentPx}px` }}
         onClick={() => onSelect(block)}
       >
-        {/* Handle de drag — oculto em isReadOnly (Escopo reordena na raiz como os demais) */}
-        {!isReadOnly && !isCover && !isToc && !isFigures && !(isScope && depth === 0) && (
+        {/* Handle de drag — capa, sumário, lista de figuras e escopo (raiz) reordenam na raiz como os demais */}
+        {!isReadOnly ? (
           <div
             {...listeners}
             {...attributes}
@@ -498,8 +498,11 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
           >
             <GripVertical className="h-3 w-3" />
           </div>
+        ) : (
+          (isCover || isToc || isFigures || (isScope && depth === 0)) && (
+            <span className="w-5 shrink-0" aria-hidden />
+          )
         )}
-        {(isCover || isToc || isFigures || (isScope && depth === 0)) && <span className="w-5 shrink-0" aria-hidden />}
 
         {/* Ícone / expand — expandível para session e location */}
         {isExpandable ? (
@@ -726,31 +729,7 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
       const oldIdx = siblings.findIndex((b) => b.id === String(active.id));
       const newIdx = siblings.findIndex((b) => b.id === String(over.id));
       if (oldIdx === -1 || newIdx === -1) return;
-      let reordered = arrayMove(siblings, oldIdx, newIdx);
-      const scopeNode = reordered.find((b) => b.type === "scope");
-      const coverNode = reordered.find((b) => b.type === "cover");
-      const tocNode = reordered.find((b) => b.type === "toc");
-      const figuresNode = reordered.find((b) => b.type === "figures");
-      const rest = reordered.filter(
-        (b) =>
-          b.type !== "cover" &&
-          b.type !== "toc" &&
-          b.type !== "scope" &&
-          b.type !== "figures",
-      );
-      if (coverNode && tocNode && figuresNode) {
-        reordered = scopeNode
-          ? [coverNode, tocNode, figuresNode, scopeNode, ...rest]
-          : [coverNode, tocNode, figuresNode, ...rest];
-      } else if (coverNode && tocNode) {
-        reordered = scopeNode
-          ? [coverNode, tocNode, scopeNode, ...rest]
-          : [coverNode, tocNode, ...rest];
-      } else if (coverNode) {
-        reordered = scopeNode
-          ? [coverNode, scopeNode, ...reordered.filter((b) => b.type !== "cover" && b.type !== "scope")]
-          : [coverNode, ...reordered.filter((b) => b.type !== "cover")];
-      }
+      const reordered = arrayMove(siblings, oldIdx, newIdx);
       setChildrenReg((prev) => ({ ...prev, [key]: reordered }));
       reorderBlocksAction(reordered.map((b) => b.id), budgetId)
         .then((r) => { if (!r.success) onRefresh(); })

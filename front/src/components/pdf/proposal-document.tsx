@@ -228,18 +228,84 @@ function collectSessionPrintRows(
     return rows;
 }
 
+type PdfSegment =
+    | { kind: "cover" }
+    | { kind: "intro" }
+    | { kind: "toc" }
+    | { kind: "figures" }
+    | { kind: "detail" }
+    | { kind: "session"; block: BudgetBlock }
+    | { kind: "terms" };
+
+function buildPdfSegmentsFromCompositorRoots(
+    roots: BudgetBlock[],
+    includeFiguresPage: boolean
+): PdfSegment[] {
+    const segments: PdfSegment[] = [];
+    let placedIntro = false;
+    for (const b of roots) {
+        if (b.type === "cover") {
+            segments.push({ kind: "cover" });
+            if (!placedIntro) {
+                segments.push({ kind: "intro" });
+                placedIntro = true;
+            }
+        } else if (b.type === "toc") {
+            segments.push({ kind: "toc" });
+        } else if (b.type === "figures" && includeFiguresPage) {
+            segments.push({ kind: "figures" });
+        } else if (b.type === "scope") {
+            segments.push({ kind: "detail" });
+        } else if (b.type === "session") {
+            segments.push({ kind: "session", block: b });
+        }
+    }
+    if (!segments.some((s) => s.kind === "detail")) {
+        segments.push({ kind: "detail" });
+    }
+    segments.push({ kind: "terms" });
+    return segments;
+}
+
+function defaultPdfSegmentsNoCompositor(): PdfSegment[] {
+    return [{ kind: "cover" }, { kind: "intro" }, { kind: "detail" }, { kind: "terms" }];
+}
+
+function assignPdfSegmentPages(segments: PdfSegment[]): {
+    detailPage: number;
+    sessionPages: Map<string, number>;
+} {
+    let p = 1;
+    let detailPage = 1;
+    const sessionPages = new Map<string, number>();
+    for (const seg of segments) {
+        if (seg.kind === "cover" || seg.kind === "intro" || seg.kind === "toc" || seg.kind === "figures") {
+            p += 1;
+        } else if (seg.kind === "detail") {
+            detailPage = p;
+            p += 1;
+        } else if (seg.kind === "session") {
+            sessionPages.set(seg.block.id, p);
+            p += 1;
+        } else if (seg.kind === "terms") {
+            p += 1;
+        }
+    }
+    return { detailPage, sessionPages };
+}
+
 function collectSessionTocRowsForPrintedLayout(
     roots: BudgetBlock[],
-    sessionsStartPage: number
+    sessionPages: Map<string, number>
 ): Array<{ number: string; title: string; depth: number; page: number }> {
     const out: Array<{ number: string; title: string; depth: number; page: number }> = [];
-    const sessionRoots = roots.filter((b) => b.type === 'session');
+    const sessionRoots = roots.filter((b) => b.type === "session");
 
     const collectSessionsDfs = (node: BudgetBlock, page: number) => {
-        if (node.type === 'session') {
+        if (node.type === "session") {
             out.push({
-                number: node.number || '',
-                title: (node.label || 'Sessão').trim() || 'Sessão',
+                number: node.number || "",
+                title: (node.label || "Sessão").trim() || "Sessão",
                 depth: node.depth,
                 page,
             });
@@ -247,9 +313,10 @@ function collectSessionTocRowsForPrintedLayout(
         node.children.forEach((child) => collectSessionsDfs(child, page));
     };
 
-    sessionRoots.forEach((root, idx) => {
-        collectSessionsDfs(root, sessionsStartPage + idx);
-    });
+    for (const root of sessionRoots) {
+        const page = sessionPages.get(root.id) ?? 1;
+        collectSessionsDfs(root, page);
+    }
     return out;
 }
 
@@ -300,22 +367,34 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
         : undefined;
     const compositorCoverMerged = mergeCoverProps(coverBlock?.props as Record<string, unknown> | undefined);
 
-    const compositorSessionRoots = hasCompositorStructure
-        ? compositorPdf!.roots.filter((b) => b.type === 'session')
-        : [];
-    const hasFigureListPage = hasCompositorStructure && (compositorPdf!.scopeFigures?.length ?? 0) > 0;
-    const compositorSessionsStartPage = hasFigureListPage ? 5 : 4;
-    const detailStartPage = compositorSessionsStartPage + compositorSessionRoots.length;
+    const figureEntries =
+        hasCompositorStructure && (compositorPdf!.scopeFigures?.length ?? 0) > 0
+            ? compositorPdf!.scopeFigures
+            : [];
+    const includeFiguresPage = figureEntries.length > 0;
+
+    let segments: PdfSegment[] = hasCompositorStructure
+        ? buildPdfSegmentsFromCompositorRoots(compositorPdf!.roots, includeFiguresPage)
+        : defaultPdfSegmentsNoCompositor();
+
+    if (hasCompositorStructure && !segments.some((s) => s.kind === "cover")) {
+        segments = [{ kind: "cover" }, { kind: "intro" }, ...segments];
+    }
+
+    const { detailPage, sessionPages } = assignPdfSegmentPages(segments);
+
     const tocRows = hasCompositorStructure
-        ? collectSessionTocRowsForPrintedLayout(compositorPdf!.roots, compositorSessionsStartPage)
+        ? collectSessionTocRowsForPrintedLayout(compositorPdf!.roots, sessionPages)
         : [];
-    const figureRows = hasCompositorStructure
-        ? compositorPdf!.scopeFigures.map((entry, idx) => ({
-            n: idx + 1,
-            caption: entry.caption?.trim() || "(sem descrição)",
-            page: detailStartPage,
-        }))
-        : [];
+
+    const figureRows =
+        hasCompositorStructure && includeFiguresPage
+            ? figureEntries.map((entry, idx) => ({
+                  n: idx + 1,
+                  caption: entry.caption?.trim() || "(sem descrição)",
+                  page: detailPage,
+              }))
+            : [];
     const docWatermarkSource =
         compositorCoverMerged.document_watermark_url?.trim()
             ? compositorCoverMerged.document_watermark_url
@@ -323,199 +402,221 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
     const docWatermarkSrc = proxyPdfImageSrc(docWatermarkSource, settings.app_public_url);
     const docWatermarkOpacity = clampDocumentOpacity(compositorCoverMerged.document_watermark_opacity, 0.06);
 
-    return (
-        <Document>
-            <CompositorCoverPdfPage
-                budget={budget}
-                settings={settings}
-                coverProps={compositorCoverMerged}
-            />
+    const renderDocumentWatermark = () =>
+        docWatermarkSrc ? (
+            <View style={styles.documentWatermarkLayer} fixed>
+                {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
+                <Image
+                    src={docWatermarkSrc}
+                    style={[styles.documentWatermarkImage, { opacity: docWatermarkOpacity }]}
+                />
+            </View>
+        ) : null;
 
-            {/* APRESENTAÇÃO */}
-            <Page size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
-                {docWatermarkSrc ? (
-                    <View style={styles.documentWatermarkLayer} fixed>
-                        {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
-                        <Image src={docWatermarkSrc} style={[styles.documentWatermarkImage, { opacity: docWatermarkOpacity }]} />
-                    </View>
-                ) : null}
-                <View style={styles.header}>
-                    <Text style={styles.headerTitle}>Apresentação</Text>
-                    <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{settings.company_name}</Text>
-                </View>
-
-                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-pdf Style doesn't type whiteSpace */}
-                <Text style={{ whiteSpace: 'pre-wrap', textAlign: 'justify' } as any}>
-                    {settings.introduction_text}
-                </Text>
-
-                <Text style={styles.footerNumber} render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} fixed />
-            </Page>
-
-            {/* SUMÁRIO (documento compositor — sessões numeradas) */}
-            {hasCompositorStructure ? (
-                <Page size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
-                    {docWatermarkSrc ? (
-                        <View style={styles.documentWatermarkLayer} fixed>
-                            {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
-                            <Image src={docWatermarkSrc} style={[styles.documentWatermarkImage, { opacity: docWatermarkOpacity }]} />
+    const renderPdfSegment = (seg: PdfSegment, i: number): React.ReactNode => {
+        const keyBase = `pdf-${i}-${seg.kind}`;
+        switch (seg.kind) {
+            case "cover":
+                return (
+                    <CompositorCoverPdfPage
+                        key={keyBase}
+                        budget={budget}
+                        settings={settings}
+                        coverProps={compositorCoverMerged}
+                    />
+                );
+            case "intro":
+                return (
+                    <Page key={keyBase} size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
+                        {renderDocumentWatermark()}
+                        <View style={styles.header}>
+                            <Text style={styles.headerTitle}>Apresentação</Text>
+                            <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{settings.company_name}</Text>
                         </View>
-                    ) : null}
-                    <View style={styles.header}>
-                        <Text style={styles.headerTitle}>Sumário</Text>
-                        <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{settings.company_name}</Text>
-                    </View>
-                    <Text style={{ fontSize: 9, color: theme.colors.textLight, marginBottom: 14 }}>
-                        Páginas calculadas conforme a impressão atual do documento.
-                    </Text>
-                    {tocRows.length === 0 ? (
-                        <Text style={{ fontSize: 10, fontStyle: 'italic', color: theme.colors.textLight }}>
-                            Nenhuma sessão numerada no documento. Inclua blocos do tipo &quot;Sessão&quot; no Compositor para
-                            aparecerem aqui.
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-pdf Style doesn't type whiteSpace */}
+                        <Text style={{ whiteSpace: "pre-wrap", textAlign: "justify" } as any}>
+                            {settings.introduction_text}
                         </Text>
-                    ) : (
-                        tocRows.map((row, idx) => (
-                            <View
-                                key={`toc-${row.number}-${idx}`}
-                                style={[styles.tocRow, { paddingLeft: Math.min(row.depth, 6) * 10 }]}
-                                wrap={false}
-                            >
+                        <Text
+                            style={styles.footerNumber}
+                            render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
+                            fixed
+                        />
+                    </Page>
+                );
+            case "toc":
+                return (
+                    <Page key={keyBase} size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
+                        {renderDocumentWatermark()}
+                        <View style={styles.header}>
+                            <Text style={styles.headerTitle}>Sumário</Text>
+                            <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{settings.company_name}</Text>
+                        </View>
+                        <Text style={{ fontSize: 9, color: theme.colors.textLight, marginBottom: 14 }}>
+                            Páginas calculadas conforme a impressão atual do documento.
+                        </Text>
+                        {tocRows.length === 0 ? (
+                            <Text style={{ fontSize: 10, fontStyle: "italic", color: theme.colors.textLight }}>
+                                Nenhuma sessão numerada no documento. Inclua blocos do tipo &quot;Sessão&quot; no
+                                Compositor para aparecerem aqui.
+                            </Text>
+                        ) : (
+                            tocRows.map((row, idx) => (
+                                <View
+                                    key={`toc-${row.number}-${idx}`}
+                                    style={[styles.tocRow, { paddingLeft: Math.min(row.depth, 6) * 10 }]}
+                                    wrap={false}
+                                >
+                                    <Text style={styles.tocTitle}>
+                                        {row.number} {row.title}
+                                    </Text>
+                                    <View style={styles.tocDots} />
+                                    <Text style={styles.tocPage}>{row.page}</Text>
+                                </View>
+                            ))
+                        )}
+                        <Text
+                            style={styles.footerNumber}
+                            render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
+                            fixed
+                        />
+                    </Page>
+                );
+            case "figures":
+                return (
+                    <Page key={keyBase} size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
+                        {renderDocumentWatermark()}
+                        <View style={styles.header}>
+                            <Text style={styles.headerTitle}>Lista de Figuras</Text>
+                            <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{settings.company_name}</Text>
+                        </View>
+                        <Text style={{ fontSize: 9, color: theme.colors.textLight, marginBottom: 14 }}>
+                            Figuras do Escopo. A página indicada referencia o início do detalhamento impresso.
+                        </Text>
+                        {figureRows.map((row) => (
+                            <View key={`fig-${row.n}`} style={styles.tocRow} wrap={false}>
                                 <Text style={styles.tocTitle}>
-                                    {row.number} {row.title}
+                                    Figura {row.n} — {row.caption}
                                 </Text>
                                 <View style={styles.tocDots} />
                                 <Text style={styles.tocPage}>{row.page}</Text>
                             </View>
-                        ))
-                    )}
-                    <Text style={styles.footerNumber} render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} fixed />
-                </Page>
-            ) : null}
-
-            {/* LISTA DE FIGURAS (Escopo + blocos no compositor) */}
-            {hasCompositorStructure && figureRows.length > 0 ? (
-                <Page size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
-                    {docWatermarkSrc ? (
-                        <View style={styles.documentWatermarkLayer} fixed>
-                            {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
-                            <Image src={docWatermarkSrc} style={[styles.documentWatermarkImage, { opacity: docWatermarkOpacity }]} />
+                        ))}
+                        <Text
+                            style={styles.footerNumber}
+                            render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
+                            fixed
+                        />
+                    </Page>
+                );
+            case "detail":
+                return (
+                    <Page key={keyBase} size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
+                        {renderDocumentWatermark()}
+                        <View style={styles.header}>
+                            <Text style={styles.headerTitle}>Detalhamento do Projeto</Text>
                         </View>
-                    ) : null}
-                    <View style={styles.header}>
-                        <Text style={styles.headerTitle}>Lista de Figuras</Text>
-                        <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{settings.company_name}</Text>
-                    </View>
-                    <Text style={{ fontSize: 9, color: theme.colors.textLight, marginBottom: 14 }}>
-                        Figuras do Escopo. A página indicada referencia o início do detalhamento impresso.
-                    </Text>
-                    {figureRows.map((row) => (
-                        <View key={`fig-${row.n}`} style={styles.tocRow} wrap={false}>
-                            <Text style={styles.tocTitle}>
-                                Figura {row.n} — {row.caption}
+                        <BudgetTable
+                            locations={locations}
+                            sectionNumber={budget.section_number ?? 1}
+                            showCosts={detailShowCosts}
+                            costsDisplayMode={detailCostsMode}
+                        />
+                        <View style={styles.totalBlock} break={false}>
+                            <View>
+                                <Text style={{ fontSize: 12, fontFamily: theme.fonts.bold }}>INVESTIMENTO TOTAL</Text>
+                                <Text style={{ fontSize: 10 }}>Validade: {validityDays} dias</Text>
+                            </View>
+                            <Text style={{ fontFamily: theme.fonts.bold, fontSize: 18, color: theme.colors.primary }}>
+                                {formatMoney(budget.total_value || 0)}
                             </Text>
-                            <View style={styles.tocDots} />
-                            <Text style={styles.tocPage}>{row.page}</Text>
                         </View>
-                    ))}
-                    <Text style={styles.footerNumber} render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} fixed />
-                </Page>
-            ) : null}
-
-            {/* SESSÕES DO COMPOSITOR */}
-            {compositorSessionRoots.map((sessionRoot) => {
+                        <Text
+                            style={styles.footerNumber}
+                            render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
+                            fixed
+                        />
+                    </Page>
+                );
+            case "session": {
+                const sessionRoot = seg.block;
                 const rows = collectSessionPrintRows(sessionRoot, compositorPdf?.items || {});
                 return (
-                    <Page key={`session-page-${sessionRoot.id}`} size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
-                        {docWatermarkSrc ? (
-                            <View style={styles.documentWatermarkLayer} fixed>
-                                {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
-                                <Image src={docWatermarkSrc} style={[styles.documentWatermarkImage, { opacity: docWatermarkOpacity }]} />
-                            </View>
-                        ) : null}
+                    <Page
+                        key={`session-page-${sessionRoot.id}`}
+                        size="A4"
+                        style={[styles.contentPage, styles.pageWithWatermark]}
+                    >
+                        {renderDocumentWatermark()}
                         <View style={styles.header}>
                             <Text style={styles.headerTitle}>Sessão do Compositor</Text>
                             <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{settings.company_name}</Text>
                         </View>
                         <Text style={styles.sessionTitle}>
-                            {sessionRoot.number ? `${sessionRoot.number} ` : ''}{(sessionRoot.label || 'Sessão').trim()}
+                            {sessionRoot.number ? `${sessionRoot.number} ` : ""}
+                            {(sessionRoot.label || "Sessão").trim()}
                         </Text>
                         {rows.length === 0 ? (
                             <Text style={styles.sessionRowText}>Sem conteúdo textual nesta sessão.</Text>
                         ) : (
                             rows.map((row, idx) => (
-                                <View key={`session-row-${sessionRoot.id}-${idx}`} style={[styles.sessionRow, { marginLeft: Math.min(row.depth, 5) * 10 }]}>
+                                <View
+                                    key={`session-row-${sessionRoot.id}-${idx}`}
+                                    style={[styles.sessionRow, { marginLeft: Math.min(row.depth, 5) * 10 }]}
+                                >
                                     <Text style={styles.sessionRowTitle}>{row.title}</Text>
                                     {row.text ? <Text style={styles.sessionRowText}>{row.text}</Text> : null}
                                 </View>
                             ))
                         )}
-                        <Text style={styles.footerNumber} render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} fixed />
+                        <Text
+                            style={styles.footerNumber}
+                            render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
+                            fixed
+                        />
                     </Page>
                 );
-            })}
+            }
+            case "terms":
+                return (
+                    <Page key={keyBase} size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
+                        {renderDocumentWatermark()}
+                        <View style={styles.header}>
+                            <Text style={styles.headerTitle}>Condições Gerais</Text>
+                        </View>
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-pdf Style doesn't type whiteSpace */}
+                        <Text style={{ fontSize: 10, lineHeight: 1.6, whiteSpace: "pre-wrap", marginBottom: 50 } as any}>
+                            {settings.closing_text}
+                        </Text>
+                        <View
+                            style={{
+                                flexDirection: "row",
+                                marginTop: "auto",
+                                marginBottom: 50,
+                                justifyContent: "space-between",
+                                gap: 40,
+                            }}
+                        >
+                            <View style={{ borderTopWidth: 1, flex: 1, alignItems: "center", paddingTop: 10 }}>
+                                <Text style={{ fontSize: 11, fontFamily: theme.fonts.bold }}>{settings.company_name}</Text>
+                                <Text style={{ fontSize: 9 }}>Diretoria Comercial</Text>
+                            </View>
+                            <View style={{ borderTopWidth: 1, flex: 1, alignItems: "center", paddingTop: 10 }}>
+                                <Text style={{ fontSize: 11, fontFamily: theme.fonts.bold }}>De Acordo</Text>
+                                <Text style={{ fontSize: 9 }}>Cliente</Text>
+                            </View>
+                        </View>
+                        <Text
+                            style={styles.footerNumber}
+                            render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
+                            fixed
+                        />
+                    </Page>
+                );
+            default:
+                return null;
+        }
+    };
 
-            {/* DETALHAMENTO — hierarquia Escopo (locais / trechos / itens) */}
-            <Page size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
-                {docWatermarkSrc ? (
-                    <View style={styles.documentWatermarkLayer} fixed>
-                        {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
-                        <Image src={docWatermarkSrc} style={[styles.documentWatermarkImage, { opacity: docWatermarkOpacity }]} />
-                    </View>
-                ) : null}
-                <View style={styles.header}>
-                    <Text style={styles.headerTitle}>Detalhamento do Projeto</Text>
-                </View>
-
-                <BudgetTable
-                    locations={locations}
-                    sectionNumber={budget.section_number ?? 1}
-                    showCosts={detailShowCosts}
-                    costsDisplayMode={detailCostsMode}
-                />
-
-                <View style={styles.totalBlock} break={false}>
-                    <View>
-                        <Text style={{ fontSize: 12, fontFamily: theme.fonts.bold }}>INVESTIMENTO TOTAL</Text>
-                        <Text style={{ fontSize: 10 }}>Validade: {validityDays} dias</Text>
-                    </View>
-                    <Text style={{ fontFamily: theme.fonts.bold, fontSize: 18, color: theme.colors.primary }}>
-                        {formatMoney(budget.total_value || 0)}
-                    </Text>
-                </View>
-
-                <Text style={styles.footerNumber} render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} fixed />
-            </Page>
-
-            {/* TERMOS E FECHAMENTO */}
-            <Page size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
-                {docWatermarkSrc ? (
-                    <View style={styles.documentWatermarkLayer} fixed>
-                        {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
-                        <Image src={docWatermarkSrc} style={[styles.documentWatermarkImage, { opacity: docWatermarkOpacity }]} />
-                    </View>
-                ) : null}
-                <View style={styles.header}>
-                    <Text style={styles.headerTitle}>Condições Gerais</Text>
-                </View>
-
-                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-pdf Style doesn't type whiteSpace */}
-                <Text style={{ fontSize: 10, lineHeight: 1.6, whiteSpace: 'pre-wrap', marginBottom: 50 } as any}>
-                    {settings.closing_text}
-                </Text>
-
-                <View style={{ flexDirection: 'row', marginTop: 'auto', marginBottom: 50, justifyContent: 'space-between', gap: 40 }}>
-                    <View style={{ borderTopWidth: 1, flex: 1, alignItems: 'center', paddingTop: 10 }}>
-                        <Text style={{ fontSize: 11, fontFamily: theme.fonts.bold }}>{settings.company_name}</Text>
-                        <Text style={{ fontSize: 9 }}>Diretoria Comercial</Text>
-                    </View>
-                    <View style={{ borderTopWidth: 1, flex: 1, alignItems: 'center', paddingTop: 10 }}>
-                        <Text style={{ fontSize: 11, fontFamily: theme.fonts.bold }}>De Acordo</Text>
-                        <Text style={{ fontSize: 9 }}>Cliente</Text>
-                    </View>
-                </View>
-
-                <Text style={styles.footerNumber} render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} fixed />
-            </Page>
-        </Document>
-    );
+    return <Document>{segments.map((seg, i) => renderPdfSegment(seg, i))}</Document>;
 };

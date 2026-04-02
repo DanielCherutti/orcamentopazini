@@ -57,8 +57,10 @@ export async function ensureCompositorCoverBlockAction(
 }
 
 /**
- * Garante blocos fixos na raiz e normaliza order_index:
- * capa → sumário → lista de figuras → escopo (se existir) → demais blocos.
+ * Garante blocos fixos na raiz (capa, sumário, lista de figuras).
+ * A ordem padrão (capa → sumário → lista de figuras → escopo → demais) só é aplicada
+ * quando um bloco sumário ou lista de figuras é criado nesta execução — não sobrescreve
+ * reordenações feitas pelo usuário nas cargas seguintes.
  */
 export async function ensureCompositorTocBlockAction(
     budgetId: string
@@ -77,6 +79,7 @@ export async function ensureCompositorTocBlockAction(
             { budgetId: budgetRecordId }
         );
         let roots = rootsRes[0] || [];
+        let createdTocOrFigures = false;
 
         const tocDupes = roots.filter((r) => r.type === "toc");
         if (tocDupes.length > 1) {
@@ -114,6 +117,7 @@ export async function ensureCompositorTocBlockAction(
         }
 
         if (!roots.some((r) => r.type === "toc")) {
+            createdTocOrFigures = true;
             await db.create(new Table("budget_block")).content({
                 budget_id: budgetRecordId,
                 type: "toc",
@@ -131,6 +135,7 @@ export async function ensureCompositorTocBlockAction(
         }
 
         if (!roots.some((r) => r.type === "figures")) {
+            createdTocOrFigures = true;
             await db.create(new Table("budget_block")).content({
                 budget_id: budgetRecordId,
                 type: "figures",
@@ -147,7 +152,6 @@ export async function ensureCompositorTocBlockAction(
             roots = rootsResFig[0] || [];
         }
 
-        const scope = roots.find((r) => r.type === "scope");
         const cover = roots.find((r) => r.type === "cover");
         const toc = roots.find((r) => r.type === "toc");
         const figures = roots.find((r) => r.type === "figures");
@@ -158,21 +162,42 @@ export async function ensureCompositorTocBlockAction(
             };
         }
 
-        const others = roots
-            .filter(
-                (r) =>
-                    r.type !== "cover" &&
-                    r.type !== "toc" &&
-                    r.type !== "scope" &&
-                    r.type !== "figures"
-            )
-            .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
-
-        const ordered = scope ? [cover, toc, figures, scope, ...others] : [cover, toc, figures, ...others];
-        for (let i = 0; i < ordered.length; i++) {
-            await db.update(requireRecordId("budget_block", String(ordered[i].id))).merge({
-                order_index: i,
-            });
+        if (createdTocOrFigures) {
+            const rootsResNorm = await db.query<
+                [Array<{ id: unknown; order_index: number; type: string }>]
+            >(
+                "SELECT id, order_index, type FROM budget_block WHERE budget_id = $budgetId AND parent_id IS NONE AND deleted_at IS NONE ORDER BY order_index ASC",
+                { budgetId: budgetRecordId }
+            );
+            roots = rootsResNorm[0] || [];
+            const scopeRow = roots.find((r) => r.type === "scope");
+            const coverRow = roots.find((r) => r.type === "cover");
+            const tocRow = roots.find((r) => r.type === "toc");
+            const figuresRow = roots.find((r) => r.type === "figures");
+            if (!coverRow || !tocRow || !figuresRow) {
+                return {
+                    success: false,
+                    error: "Não foi possível normalizar ordem após criar sumário ou lista de figuras.",
+                };
+            }
+            const othersSorted = roots
+                .filter(
+                    (r) =>
+                        r.type !== "cover" &&
+                        r.type !== "toc" &&
+                        r.type !== "scope" &&
+                        r.type !== "figures"
+                )
+                .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+            const ordered =
+                scopeRow && coverRow && tocRow && figuresRow
+                    ? [coverRow, tocRow, figuresRow, scopeRow, ...othersSorted]
+                    : [coverRow, tocRow, figuresRow, ...othersSorted];
+            for (let i = 0; i < ordered.length; i++) {
+                await db.update(requireRecordId("budget_block", String(ordered[i].id))).merge({
+                    order_index: i,
+                });
+            }
         }
 
         revalidatePath(budgetRevalidatePath(budgetId));
