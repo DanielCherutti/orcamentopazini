@@ -740,15 +740,15 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
       );
       if (coverNode && tocNode && figuresNode) {
         reordered = scopeNode
-          ? [scopeNode, coverNode, tocNode, figuresNode, ...rest]
+          ? [coverNode, tocNode, figuresNode, scopeNode, ...rest]
           : [coverNode, tocNode, figuresNode, ...rest];
       } else if (coverNode && tocNode) {
         reordered = scopeNode
-          ? [scopeNode, coverNode, tocNode, ...rest]
+          ? [coverNode, tocNode, scopeNode, ...rest]
           : [coverNode, tocNode, ...rest];
       } else if (coverNode) {
         reordered = scopeNode
-          ? [scopeNode, coverNode, ...reordered.filter((b) => b.type !== "cover" && b.type !== "scope")]
+          ? [coverNode, scopeNode, ...reordered.filter((b) => b.type !== "cover" && b.type !== "scope")]
           : [coverNode, ...reordered.filter((b) => b.type !== "cover")];
       }
       setChildrenReg((prev) => ({ ...prev, [key]: reordered }));

@@ -58,7 +58,7 @@ export async function ensureCompositorCoverBlockAction(
 
 /**
  * Garante blocos fixos na raiz e normaliza order_index:
- * escopo (se existir) → capa → sumário → lista de figuras → demais blocos.
+ * capa → sumário → lista de figuras → escopo (se existir) → demais blocos.
  */
 export async function ensureCompositorTocBlockAction(
     budgetId: string
@@ -168,7 +168,7 @@ export async function ensureCompositorTocBlockAction(
             )
             .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
 
-        const ordered = scope ? [scope, cover, toc, figures, ...others] : [cover, toc, figures, ...others];
+        const ordered = scope ? [cover, toc, figures, scope, ...others] : [cover, toc, figures, ...others];
         for (let i = 0; i < ordered.length; i++) {
             await db.update(requireRecordId("budget_block", String(ordered[i].id))).merge({
                 order_index: i,
