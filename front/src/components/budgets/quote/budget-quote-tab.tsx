@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState, type FocusEvent } from "react";
 import { getBudgetAction } from "@/actions/budget-actions";
 import { updateBudgetAction } from "@/actions/budget-core-write-actions";
 import type { Budget } from "@/types/budget-types";
@@ -28,6 +28,13 @@ import {
 
 const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
+
+/** Com valor 0 e input numérico controlado, o browser concatena dígitos (ex.: 010). Selecionar no foco substitui ao digitar. */
+function selectPercentInputIfZero(e: FocusEvent<HTMLInputElement>, current: number) {
+    if (current === 0) {
+        e.target.select();
+    }
+}
 
 function mapItemToPricing(
     raw: Record<string, unknown>,
@@ -383,6 +390,7 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
                                     className="h-10 w-[4.75rem] rounded-xl border-emerald-200/80 bg-white/90 text-center text-base font-semibold tabular-nums shadow-inner dark:border-emerald-800/60 dark:bg-emerald-950/40"
                                     disabled={isReadOnly}
                                     value={Number.isFinite(markupPct) ? markupPct : 0}
+                                    onFocus={(e) => selectPercentInputIfZero(e, markupPct)}
                                     onChange={(e) => setMarkupPct(Number(e.target.value))}
                                     onBlur={() =>
                                         void persist({
@@ -413,6 +421,7 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
                                     className="h-10 w-[4.75rem] rounded-xl border-rose-200/80 bg-white/90 text-center text-base font-semibold tabular-nums shadow-inner dark:border-rose-800/60 dark:bg-rose-950/40"
                                     disabled={isReadOnly}
                                     value={Number.isFinite(discountPct) ? discountPct : 0}
+                                    onFocus={(e) => selectPercentInputIfZero(e, discountPct)}
                                     onChange={(e) => setDiscountPct(Number(e.target.value))}
                                     onBlur={() =>
                                         void persist({
