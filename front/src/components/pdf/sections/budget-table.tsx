@@ -4,6 +4,7 @@ import { Text, View, Image, StyleSheet } from '@react-pdf/renderer';
 import { theme } from '../theme';
 import { BudgetItem, BudgetLocation } from '@/types/budget-types';
 import {
+    computeItemAdjustmentValue,
     computeItemSubtotal,
     computeLocationAssemblyTotal,
     distributeProportional,
@@ -64,6 +65,7 @@ const styles = StyleSheet.create({
     },
     colDesc: { flex: 5, paddingRight: 5 },
     colQty: { flex: 1, textAlign: 'center' },
+    colMoney: { flex: 1.4, textAlign: 'right' },
     colTotal: { flex: 2, textAlign: 'right' },
     subtotalRow: {
         flexDirection: 'row',
@@ -122,6 +124,69 @@ function itemLabel(item: BudgetItem): string {
     return item.product_name || 'Produto';
 }
 
+function sectionWantsLaborSplitOnPrint(sec: { items?: BudgetItem[] }): boolean {
+    const items = sec.items ?? [];
+    return items.some((item) => {
+        const r = item as unknown as Record<string, unknown>;
+        return Number(item.labor_cost ?? 0) > 0 && Boolean(r.labor_show_on_print);
+    });
+}
+
+function adjustmentMoneyForPdfItem(item: BudgetItem): number {
+    const r = item as unknown as Record<string, unknown>;
+    const modeRaw = r.price_adjustment_mode;
+    const mode = modeRaw === 'percent' || modeRaw === 'fixed' ? modeRaw : null;
+    return computeItemAdjustmentValue({
+        quantity: Number(item.quantity) || 1,
+        unit_price: Number(item.unit_price) || 0,
+        labor_cost: Number(item.labor_cost) || 0,
+        price_adjustment_mode: mode,
+        price_adjustment_value: Number(r.price_adjustment_value ?? 0),
+    });
+}
+
+/**
+ * Colunas de valor no PDF: com split, Equip. / M.O. / Total; sem split (ou sem MO na linha), só Total.
+ * M.O. embutida: equip mostra subtotal (equip+labor+ajuste+extra), M.O. "—", Total com montagem.
+ */
+function pdfItemValueCells(
+    item: BudgetItem,
+    itemFinalValue: number,
+    showLaborColumns: boolean
+): { equip: string; mo: string; total: string } {
+    const r = item as unknown as Record<string, unknown>;
+    const qty = Number(item.quantity) || 1;
+    const unit = Number(item.unit_price) || 0;
+    const labor = Number(item.labor_cost) || 0;
+    const obs = Number(r.observation_extra_value ?? 0);
+    const adj = adjustmentMoneyForPdfItem(item);
+    const baseE = qty * unit;
+    const baseL = qty * labor;
+    const base = baseE + baseL;
+    const subtotal = base + adj + obs;
+    const totalStr = formatMoney(itemFinalValue);
+
+    if (!showLaborColumns) {
+        return { equip: '', mo: '', total: totalStr };
+    }
+
+    const split = labor > 0 && Boolean(r.labor_show_on_print);
+    if (!split) {
+        return {
+            equip: formatMoney(subtotal),
+            mo: '—',
+            total: totalStr,
+        };
+    }
+    const propE = base > 0 ? baseE / base : 1;
+    const propL = base > 0 ? baseL / base : 0;
+    return {
+        equip: formatMoney(baseE + adj * propE + obs),
+        mo: formatMoney(baseL + adj * propL),
+        total: totalStr,
+    };
+}
+
 export const BudgetTable = ({
     locations,
     sectionNumber = 1,
@@ -150,6 +215,7 @@ export const BudgetTable = ({
 
                 {(loc.sections || []).map((sec, secIdx) => {
                     const secNum = `${locNum}.${secIdx + 1}`;
+                    const laborCols = showCosts && sectionWantsLaborSplitOnPrint(sec);
                     return (
                     <View key={sec.id} style={styles.sectionBlock} wrap={false}>
                         <Text style={styles.sectionTitle}>{secNum} — {sec.name.toUpperCase()}</Text>
@@ -169,13 +235,22 @@ export const BudgetTable = ({
                             <View style={styles.tableHeader}>
                                 <Text style={[styles.textSmall, styles.textBold, styles.colDesc]}>DESCRIÇÃO</Text>
                                 <Text style={[styles.textSmall, styles.textBold, styles.colQty]}>QTD</Text>
-                                {showCosts ? (
+                                {showCosts && laborCols ? (
+                                    <>
+                                        <Text style={[styles.textSmall, styles.textBold, styles.colMoney]}>EQUIP. (R$)</Text>
+                                        <Text style={[styles.textSmall, styles.textBold, styles.colMoney]}>M.O. (R$)</Text>
+                                        <Text style={[styles.textSmall, styles.textBold, styles.colTotal]}>TOTAL (R$)</Text>
+                                    </>
+                                ) : showCosts ? (
                                     <Text style={[styles.textSmall, styles.textBold, styles.colTotal]}>VALOR (R$)</Text>
                                 ) : null}
                             </View>
 
                             {/* Rows */}
-                            {(sec.items || []).map((item, idx) => (
+                            {(sec.items || []).map((item, idx) => {
+                                const finalVal = Number(itemFinalValue.get(String(item.id)) ?? 0);
+                                const cells = pdfItemValueCells(item, finalVal, laborCols);
+                                return (
                                 <View key={item.id} style={[styles.tableRow, { backgroundColor: idx % 2 === 0 ? 'white' : theme.colors.bgLight }]}>
                                     <Text style={[styles.textSmall, styles.colDesc]}>
                                         {itemLabel(item)}
@@ -191,13 +266,20 @@ export const BudgetTable = ({
                                             : ''}
                                     </Text>
                                     <Text style={[styles.textSmall, styles.colQty]}>{item.quantity}</Text>
-                                    {showCosts ? (
+                                    {showCosts && laborCols ? (
+                                        <>
+                                            <Text style={[styles.textSmall, styles.colMoney]}>{cells.equip}</Text>
+                                            <Text style={[styles.textSmall, styles.colMoney]}>{cells.mo}</Text>
+                                            <Text style={[styles.textSmall, styles.colTotal]}>{cells.total}</Text>
+                                        </>
+                                    ) : showCosts ? (
                                         <Text style={[styles.textSmall, styles.colTotal]}>
-                                            {formatMoney(Number(itemFinalValue.get(String(item.id)) ?? 0))}
+                                            {formatMoney(finalVal)}
                                         </Text>
                                     ) : null}
                                 </View>
-                            ))}
+                            );
+                            })}
 
                             {showCosts && costsDisplayMode === 'section' ? (
                                 <View style={styles.subtotalRow}>

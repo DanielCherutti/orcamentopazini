@@ -40,6 +40,9 @@ export function buildDuplicatedBudgetItemContent(item: Record<string, unknown>):
     if (item.observation_show_on_print != null) {
         content.observation_show_on_print = item.observation_show_on_print;
     }
+    if (item.labor_show_on_print != null) {
+        content.labor_show_on_print = item.labor_show_on_print;
+    }
     if (item.observation_extra_value != null) {
         content.observation_extra_value = item.observation_extra_value;
     }

@@ -71,6 +71,7 @@ async function createBudgetItemInSection(
         total: computedTotal,
         observation_text: "",
         observation_show_on_print: false,
+        labor_show_on_print: false,
         observation_extra_value: 0,
         price_adjustment_mode: null,
         price_adjustment_value: 0,
@@ -365,6 +366,7 @@ export async function addGroupToSectionAction(
                 }),
                 observation_text: "",
                 observation_show_on_print: false,
+                labor_show_on_print: false,
                 observation_extra_value: 0,
                 price_adjustment_mode: null,
                 price_adjustment_value: 0,
@@ -589,6 +591,7 @@ export async function updateItemCommercialSettingsAction(
         price_adjustment_mode?: PriceAdjustmentMode | null;
         price_adjustment_value?: number;
         assembly_manual_value?: number;
+        labor_show_on_print?: boolean;
     }
 ) {
     const auth = await assertActionSession();
@@ -648,6 +651,9 @@ export async function updateItemCommercialSettingsAction(
         }
         if (patch.assembly_manual_value !== undefined) {
             mergePayload.assembly_manual_value = Number(patch.assembly_manual_value);
+        }
+        if (patch.labor_show_on_print !== undefined) {
+            mergePayload.labor_show_on_print = Boolean(patch.labor_show_on_print);
         }
 
         await db.update(itemRecordId).merge(mergePayload);

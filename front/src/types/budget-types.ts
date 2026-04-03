@@ -47,6 +47,8 @@ export const budgetItemSchema = z.object({
     notes: z.string().optional(),
     observation_text: z.string().optional(),
     observation_show_on_print: z.boolean().optional().default(false),
+    /** Se true e `labor_cost` > 0, PDF separa equipamento vs mão de obra; se false, MO fica embutida no valor exibido. */
+    labor_show_on_print: z.boolean().optional().default(false),
     observation_extra_value: z.number().optional().default(0),
     price_adjustment_mode: z.custom<PriceAdjustmentMode>().nullable().optional(),
     price_adjustment_value: z.number().optional().default(0),

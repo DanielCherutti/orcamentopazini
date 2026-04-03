@@ -66,6 +66,9 @@ function ScopeItemRowInner({
     const [assemblyManualValue, setAssemblyManualValue] = useState(
         Number((item as Record<string, unknown>).assembly_manual_value ?? 0)
     );
+    const [laborShowOnPrint, setLaborShowOnPrint] = useState(
+        Boolean((item as Record<string, unknown>).labor_show_on_print)
+    );
     const qtyDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
@@ -77,6 +80,7 @@ function ScopeItemRowInner({
         setObservationExtraValue(Number((item as Record<string, unknown>).observation_extra_value ?? 0));
         setPriceAdjustmentValue(Number((item as Record<string, unknown>).price_adjustment_value ?? 0));
         setAssemblyManualValue(Number((item as Record<string, unknown>).assembly_manual_value ?? 0));
+        setLaborShowOnPrint(Boolean((item as Record<string, unknown>).labor_show_on_print));
         const hasObs =
             String((item as Record<string, unknown>).observation_text ?? "").trim().length > 0 ||
             Number((item as Record<string, unknown>).observation_extra_value ?? 0) !== 0;
@@ -106,6 +110,7 @@ function ScopeItemRowInner({
     ).trim();
     const unitPrice = Number(item.unit_price) || 0;
     const laborCost = Number(item.labor_cost) || 0;
+    const hasProductLabor = laborCost > 0;
     const baseTotal = computeItemBaseTotal({
         quantity: qty,
         unit_price: unitPrice,
@@ -166,6 +171,7 @@ function ScopeItemRowInner({
         price_adjustment_mode?: PriceAdjustmentMode | null;
         price_adjustment_value?: number;
         assembly_manual_value?: number;
+        labor_show_on_print?: boolean;
     }) => {
         const result = await updateItemCommercialSettingsAction(item.id!, budgetId, patch);
         if (!result.success) {
@@ -350,6 +356,21 @@ function ScopeItemRowInner({
                             />
                             Exibir na impressão
                         </label>
+                        {hasProductLabor ? (
+                            <label className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                                <input
+                                    type="checkbox"
+                                    checked={laborShowOnPrint}
+                                    onChange={(e) => {
+                                        const checked = e.target.checked;
+                                        setLaborShowOnPrint(checked);
+                                        void handleSaveCommercial({ labor_show_on_print: checked });
+                                    }}
+                                    disabled={isReadOnly}
+                                />
+                                Exibir mão de obra na impressão (PDF)
+                            </label>
+                        ) : null}
                         {assemblyMode !== "manual" && (
                             <span className="text-[11px] text-muted-foreground">
                                 Rateio montagem: {displayMoney(assemblyExtra)}
