@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
 import Link from "next/link";
-import { ImageIcon, RefreshCw, Settings2, SlidersHorizontal, Sparkles } from "lucide-react";
+import { ImageIcon, Maximize2, Minimize2, RefreshCw, Settings2, SlidersHorizontal, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,10 +41,29 @@ export function CompositorCoverBlock({
   const [budget, setBudget] = useState<Budget | null>(null);
   const [loadingClient, setLoadingClient] = useState(false);
   const [coverSettingsOpen, setCoverSettingsOpen] = useState(false);
+  const [coverExpanded, setCoverExpanded] = useState(false);
 
   useEffect(() => {
     setProps(mergeCoverDocumentProps(block.props as Record<string, unknown>));
   }, [block.props]);
+
+  useEffect(() => {
+    if (!coverExpanded) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [coverExpanded]);
+
+  useEffect(() => {
+    if (!coverExpanded) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setCoverExpanded(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [coverExpanded]);
 
   useEffect(() => {
     let cancelled = false;
@@ -186,14 +205,23 @@ export function CompositorCoverBlock({
   );
 
   return (
-    <div className="flex max-h-[min(92vh,960px)] min-h-[min(72vh,560px)] flex-col overflow-hidden rounded-lg border border-neutral-300/90 bg-neutral-200/50 shadow-sm dark:border-neutral-700 dark:bg-neutral-950/40">
+    <div
+      className={cn(
+        "flex flex-col overflow-hidden",
+        coverExpanded
+          ? "fixed inset-0 z-40 m-0 flex h-[100dvh] max-h-none min-h-0 w-screen rounded-none border-0 bg-neutral-200/95 shadow-none dark:bg-neutral-950"
+          : "max-h-[min(92vh,960px)] min-h-[min(72vh,560px)] rounded-lg border border-neutral-300/90 bg-neutral-200/50 shadow-sm dark:border-neutral-700 dark:bg-neutral-950/40",
+      )}
+    >
       <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-neutral-300/90 bg-gradient-to-b from-neutral-50 to-neutral-200/95 px-3 py-2 dark:border-neutral-700 dark:from-neutral-900 dark:to-neutral-950">
         <div className="flex items-center gap-2 border-r border-neutral-300 pr-3 dark:border-neutral-600">
           <Sparkles className="h-4 w-4 shrink-0 text-neutral-600 dark:text-neutral-400" />
           <div>
             <h2 className="text-sm font-semibold tracking-tight text-neutral-900 dark:text-neutral-100">Capa</h2>
             <p className="hidden text-[10px] text-neutral-500 sm:block dark:text-neutral-400">
-              Edite o texto na folha como em um documento; mídia e marcas d’água em Ajustes da capa
+              {coverExpanded
+                ? "Modo expandido — Esc para sair"
+                : "Edite o texto na folha como em um documento; mídia e marcas d’água em Ajustes da capa"}
             </p>
           </div>
         </div>
@@ -211,6 +239,26 @@ export function CompositorCoverBlock({
               Preencher cliente
             </Button>
           )}
+          <Button
+            type="button"
+            variant={coverExpanded ? "secondary" : "outline"}
+            size="sm"
+            className="h-8 border-neutral-300 bg-white text-xs shadow-sm dark:border-neutral-600 dark:bg-neutral-800"
+            onClick={() => setCoverExpanded((v) => !v)}
+            title={coverExpanded ? "Sair da edição em tela cheia (Esc)" : "Expandir capa para editar em tela cheia"}
+          >
+            {coverExpanded ? (
+              <>
+                <Minimize2 className="mr-1.5 h-3.5 w-3.5" />
+                Sair da expansão
+              </>
+            ) : (
+              <>
+                <Maximize2 className="mr-1.5 h-3.5 w-3.5" />
+                Expandir capa
+              </>
+            )}
+          </Button>
           <Button
             type="button"
             variant="outline"
