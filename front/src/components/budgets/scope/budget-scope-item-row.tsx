@@ -131,8 +131,9 @@ function ScopeItemRowInner({
             ? Number(assemblyManualValue || 0)
             : Number(item.id ? assemblyByItemId[item.id] ?? 0 : 0);
     const assemblyUnitValue = qty > 0 ? assemblyExtra / qty : 0;
-    const moUnitValue =
-        assemblyMode === "manual" ? laborCost : assemblyUnitValue;
+    /** MO unit.: em montagem manual = montagem manual por unidade (total da linha / qtd). */
+    const moUnitValue = assemblyUnitValue;
+    const manualMoPerUnit = qty > 0 ? assemblyManualValue / qty : assemblyManualValue;
     const total = subtotal + assemblyExtra;
 
     const displayMoney = useCallback(
@@ -253,8 +254,32 @@ function ScopeItemRowInner({
                         </span>
                     )}
                 </div>
-                <div className="col-span-1 text-right text-xs text-muted-foreground">
-                    {displayMoney(moUnitValue)}
+                <div className="col-span-1 flex items-center justify-end min-w-0">
+                    {!isReadOnly && assemblyMode === "manual" ? (
+                        <input
+                            type="number"
+                            className="h-6 w-full max-w-[5.5rem] rounded border border-input bg-background px-1 text-right text-xs tabular-nums"
+                            value={Number.isFinite(manualMoPerUnit) ? manualMoPerUnit : 0}
+                            onChange={(e) => {
+                                const per = Number(e.target.value);
+                                if (!Number.isFinite(per)) return;
+                                setAssemblyManualValue(qty > 0 ? per * qty : per);
+                            }}
+                            onBlur={() =>
+                                void handleSaveCommercial({
+                                    assembly_manual_value: Number.isFinite(assemblyManualValue)
+                                        ? assemblyManualValue
+                                        : 0,
+                                })
+                            }
+                            title="Montagem manual por unidade (o total da linha é este valor × quantidade)"
+                            aria-label="Montagem manual por unidade"
+                        />
+                    ) : (
+                        <span className="text-right text-xs text-muted-foreground tabular-nums w-full">
+                            {displayMoney(moUnitValue)}
+                        </span>
+                    )}
                 </div>
                 <div className="col-span-1 text-right text-xs font-medium">{displayMoney(total)}</div>
                 <div className="col-span-2 flex items-center justify-end gap-1">
@@ -325,25 +350,6 @@ function ScopeItemRowInner({
                             />
                             Exibir na impressão
                         </label>
-                        {assemblyMode === "manual" && (
-                            <div className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                                <span>Montagem manual</span>
-                                <input
-                                    type="number"
-                                    className="h-7 w-24 rounded border bg-background px-2 text-xs"
-                                    value={assemblyManualValue}
-                                    onChange={(e) => setAssemblyManualValue(Number(e.target.value))}
-                                    onBlur={() =>
-                                        void handleSaveCommercial({
-                                            assembly_manual_value: Number.isFinite(assemblyManualValue)
-                                                ? assemblyManualValue
-                                                : 0,
-                                        })
-                                    }
-                                    disabled={isReadOnly}
-                                />
-                            </div>
-                        )}
                         {assemblyMode !== "manual" && (
                             <span className="text-[11px] text-muted-foreground">
                                 Rateio montagem: {displayMoney(assemblyExtra)}
