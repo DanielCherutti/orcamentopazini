@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import type { AnnotatorViewportState } from "./annotator-viewport-types";
 import type { DragEvent } from "react";
 import { KonvaEventObject } from "konva/lib/Node";
@@ -42,6 +42,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import {
+    computeDisplayFrameRectInImagePixels,
+    type FigureFrameOrientation,
+} from "@/lib/budgets/figure-frame-utils";
 
 export interface AdvancedImageAnnotatorProps {
     imageUrl: string;
@@ -63,6 +67,8 @@ export interface AdvancedImageAnnotatorProps {
     onProductAddedToBudget?: () => void;
     /** Chamado sempre que as anotações mudam (para detectar alterações não salvas) */
     onAnnotationsChange?: () => void;
+    /** Proporção do quadro de exibição no escopo — guia tracejada no canvas. */
+    displayFrameOrientation?: FigureFrameOrientation;
 }
 
 export function AdvancedImageAnnotator({
@@ -78,6 +84,7 @@ export function AdvancedImageAnnotator({
     budgetId,
     onProductAddedToBudget,
     onAnnotationsChange,
+    displayFrameOrientation,
 }: AdvancedImageAnnotatorProps) {
     const [annotations, setAnnotations] = useState<ImageAnnotation[]>(initialAnnotations);
     // Wrapper que notifica o pai quando as anotações mudam
@@ -932,6 +939,23 @@ export function AdvancedImageAnnotator({
         }
     };
 
+    const displayFrameGuide = useMemo(() => {
+        if (!displayFrameOrientation || imageSize.width <= 0 || imageSize.height <= 0) {
+            return null;
+        }
+        const r = computeDisplayFrameRectInImagePixels(
+            imageSize.width,
+            imageSize.height,
+            displayFrameOrientation,
+        );
+        return {
+            x: imageOffset.x + r.x,
+            y: imageOffset.y + r.y,
+            width: r.width,
+            height: r.height,
+        };
+    }, [displayFrameOrientation, imageSize.width, imageSize.height, imageOffset.x, imageOffset.y]);
+
     if (!image) {
         return (
             <div className="flex items-center justify-center h-96 bg-muted/10 rounded-lg px-4 text-center">
@@ -1037,6 +1061,7 @@ export function AdvancedImageAnnotator({
                     isDrawingPolyline={isDrawingPolyline}
                     polylinePoints={polylinePoints}
                     polylineTempEnd={polylineTempEnd}
+                    displayFrameGuide={displayFrameGuide}
                 />
             </div>
 

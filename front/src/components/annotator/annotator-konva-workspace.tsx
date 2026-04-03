@@ -42,6 +42,8 @@ export interface AnnotatorKonvaWorkspaceProps {
     isDrawingPolyline: boolean;
     polylinePoints: Point[];
     polylineTempEnd: Point | null;
+    /** Guia visual do quadro de exibição (pixels do stage, alinhado à imagem). */
+    displayFrameGuide?: { x: number; y: number; width: number; height: number } | null;
 }
 
 export function AnnotatorKonvaWorkspace({
@@ -79,6 +81,7 @@ export function AnnotatorKonvaWorkspace({
     isDrawingPolyline,
     polylinePoints,
     polylineTempEnd,
+    displayFrameGuide = null,
 }: AnnotatorKonvaWorkspaceProps) {
     return (
         <div
@@ -213,6 +216,23 @@ export function AnnotatorKonvaWorkspace({
                             ))}
                         </Layer>
                     )}
+                    {displayFrameGuide &&
+                        displayFrameGuide.width > 0 &&
+                        displayFrameGuide.height > 0 && (
+                            <Layer listening={false}>
+                                <Rect
+                                    x={displayFrameGuide.x}
+                                    y={displayFrameGuide.y}
+                                    width={displayFrameGuide.width}
+                                    height={displayFrameGuide.height}
+                                    stroke="#2563eb"
+                                    strokeWidth={2}
+                                    dash={[10, 6]}
+                                    fill="rgba(37, 99, 235, 0.06)"
+                                    listening={false}
+                                />
+                            </Layer>
+                        )}
                 </Stage>
             )}
 

@@ -53,6 +53,7 @@ import { CompositorTocBlock } from "./compositor-toc-block";
 import { CompositorFiguresBlock } from "./compositor-figures-block";
 import type { ScopeFigureEntry } from "./compositor-figures-utils";
 import { useScopeFigureNumbers } from "@/components/budgets/use-scope-figure-numbers";
+import { parseFigureFrameOrientation } from "@/lib/budgets/figure-frame-utils";
 
 // ─── Renderers de bloco (modo documento) ──────────────────────────────────────
 
@@ -217,6 +218,11 @@ function LocationRenderer({
                 }
                 initialEditorViewport={parseAnnotatorViewport(editingImage?.editor_viewport)}
                 initialCaption={editingImage?.caption ?? ""}
+                initialFigureFrameOrientation={
+                    editingImage
+                        ? parseFigureFrameOrientation(editingImage.figure_frame_orientation) ?? null
+                        : null
+                }
                 open={!!editingImage}
                 onOpenChange={(open) => {
                     if (!open) setEditingImage(null);
@@ -492,6 +498,11 @@ function SectionRenderer({
                 }
                 initialEditorViewport={parseAnnotatorViewport(editingImage?.editor_viewport)}
                 initialCaption={editingImage?.caption ?? ""}
+                initialFigureFrameOrientation={
+                    editingImage
+                        ? parseFigureFrameOrientation(editingImage.figure_frame_orientation) ?? null
+                        : null
+                }
                 open={!!editingImage}
                 onOpenChange={(open) => {
                     if (!open) setEditingImage(null);

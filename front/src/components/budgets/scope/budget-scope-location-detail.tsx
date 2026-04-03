@@ -29,6 +29,7 @@ import {
 import { getBudgetImagesByLocation, deleteBudgetImage } from "@/actions/budget-annotations";
 import { SectionDetail } from "./budget-scope-section-detail";
 import { useScopeFigureNumbers } from "@/components/budgets/use-scope-figure-numbers";
+import { parseFigureFrameOrientation } from "@/lib/budgets/figure-frame-utils";
 import {
     computeLocationAssemblyTotal,
     distributeProportional,
@@ -368,6 +369,9 @@ export function LocationDetail({
                     }
                     initialEditorViewport={parseAnnotatorViewport(editingImage.editor_viewport)}
                     initialCaption={editingImage.caption ?? ""}
+                    initialFigureFrameOrientation={
+                        parseFigureFrameOrientation(editingImage.figure_frame_orientation) ?? null
+                    }
                     open={!!editingImage}
                     onOpenChange={(open) => { if (!open) setEditingImage(null); }}
                     onSaved={() => {

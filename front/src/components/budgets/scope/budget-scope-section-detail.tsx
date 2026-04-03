@@ -17,6 +17,7 @@ import { toast } from "@/lib/toast";
 import { CompositorRichTextEditor, CollapsibleEditorSection } from "@/components/budgets/compositor/compositor-rich-text-editor";
 import { BudgetImageGallery } from "@/components/budgets/budget-image-gallery";
 import { useScopeFigureNumbers } from "@/components/budgets/use-scope-figure-numbers";
+import { parseFigureFrameOrientation } from "@/lib/budgets/figure-frame-utils";
 import { BudgetPhotoAnnotatorDialog } from "@/components/budgets/budget-photo-annotator-dialog";
 import { parseAnnotatorViewport } from "@/components/annotator/annotator-viewport-types";
 import type { BudgetImage, BudgetItem } from "@/types/budget-types";
@@ -514,6 +515,9 @@ export function SectionDetail({
                     }
                     initialEditorViewport={parseAnnotatorViewport(editingImage.editor_viewport)}
                     initialCaption={editingImage.caption ?? ""}
+                    initialFigureFrameOrientation={
+                        parseFigureFrameOrientation(editingImage.figure_frame_orientation) ?? null
+                    }
                     open={!!editingImage}
                     onOpenChange={(open) => { if (!open) setEditingImage(null); }}
                     onSaved={() => {

@@ -1,6 +1,10 @@
 "use client";
 
 import type { BudgetImage } from "@/types/budget-types";
+import {
+    defaultFigureFrameOrientation,
+    parseFigureFrameOrientation,
+} from "@/lib/budgets/figure-frame-utils";
 import { cn, toAbsoluteImageUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ImageIcon, Pencil, Trash2 } from "lucide-react";
@@ -64,20 +68,32 @@ export function BudgetImageGallery({
 
           const figN = figureNumbersByImageId?.[image.id];
           const cap = (image.caption ?? "").trim();
+          const frameOrient =
+              parseFigureFrameOrientation(image.figure_frame_orientation) ??
+              (w != null && h != null && w > 0 && h > 0
+                  ? defaultFigureFrameOrientation(w, h)
+                  : "landscape");
 
           return (
           <div
             key={image.id}
             className="group relative flex w-full flex-col gap-1.5 rounded-md border-2 border-primary/50 bg-muted/40 p-1.5 shadow-sm"
           >
-            <div className="relative flex max-h-[min(240px,42vh)] w-full items-center justify-center overflow-hidden rounded-md bg-muted sm:max-h-[min(280px,38vh)]">
+            <div
+              className={cn(
+                  "relative mx-auto flex w-full max-w-full items-center justify-center overflow-hidden rounded-md bg-muted/80 ring-2 ring-inset ring-primary/20",
+                  frameOrient === "portrait" ? "aspect-[210/297]" : "aspect-[297/210]",
+                  "max-h-[min(240px,42vh)] sm:max-h-[min(280px,38vh)]",
+              )}
+              title="Quadro de exibição no escopo (proporção A4). Edite a foto para mudar retrato/paisagem."
+            >
             {/* eslint-disable-next-line @next/next/no-img-element -- dynamic uploaded images without known dimensions */}
             <img
               src={displaySrc}
               alt={cap || "Foto do escopo (com anotações, se houver)"}
               width={w}
               height={h}
-              className="h-auto max-h-[min(240px,42vh)] w-auto max-w-full object-contain sm:max-h-[min(280px,38vh)]"
+              className="max-h-full max-w-full object-contain"
               loading="lazy"
               decoding="async"
             />

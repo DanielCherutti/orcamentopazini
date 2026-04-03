@@ -17,6 +17,10 @@ import { ImageAnnotation } from '@/components/annotator/tools/types';
 import type { AnnotatorViewportState } from '@/components/annotator/annotator-viewport-types';
 import { BudgetItem } from '@/types/budget-types';
 import { toast } from '@/lib/toast';
+import {
+    defaultFigureFrameOrientation,
+    type FigureFrameOrientation,
+} from '@/lib/budgets/figure-frame-utils';
 
 const MAX_FILE_SIZE_MB = 20;
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -43,6 +47,8 @@ interface BudgetPhotoAnnotatorDialogProps {
     initialEditorViewport?: AnnotatorViewportState | null;
     /** Escopo (local/trecho): legenda obrigatória para a lista de figuras do documento */
     initialCaption?: string | null;
+    /** Formato do quadro salvo (galeria / guia no editor). */
+    initialFigureFrameOrientation?: FigureFrameOrientation | null;
 }
 
 export function BudgetPhotoAnnotatorDialog({
@@ -61,6 +67,7 @@ export function BudgetPhotoAnnotatorDialog({
     initialAnnotations = [],
     initialEditorViewport = null,
     initialCaption = null,
+    initialFigureFrameOrientation = null,
 }: BudgetPhotoAnnotatorDialogProps) {
     const isControlled = controlledOpen !== undefined;
     const [internalOpen, setInternalOpen] = useState(false);
@@ -101,6 +108,8 @@ export function BudgetPhotoAnnotatorDialog({
 
     const requiresCaption = !!(sectionId || locationId);
     const [figureCaption, setFigureCaption] = useState('');
+    const [figureFrameOrientation, setFigureFrameOrientation] =
+        useState<FigureFrameOrientation>('landscape');
 
     // ── Modo EDIÇÃO: carregar imagem original ao abrir ──────────────────────
     useEffect(() => {
@@ -127,6 +136,30 @@ export function BudgetPhotoAnnotatorDialog({
             setFigureCaption('');
         }
     }, [isOpen, imageId, initialCaption]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        if (initialFigureFrameOrientation === 'portrait' || initialFigureFrameOrientation === 'landscape') {
+            setFigureFrameOrientation(initialFigureFrameOrientation);
+        }
+    }, [isOpen, imageId, initialFigureFrameOrientation]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        if (initialFigureFrameOrientation === 'portrait' || initialFigureFrameOrientation === 'landscape') {
+            return;
+        }
+        const w = originalDimensions.width;
+        const h = originalDimensions.height;
+        if (w <= 0 || h <= 0) return;
+        setFigureFrameOrientation(defaultFigureFrameOrientation(w, h));
+    }, [
+        isOpen,
+        imageId,
+        initialFigureFrameOrientation,
+        originalDimensions.width,
+        originalDimensions.height,
+    ]);
 
     // ── Limpar ao fechar ────────────────────────────────────────────────────
     const clearState = () => {
@@ -292,6 +325,7 @@ export function BudgetPhotoAnnotatorDialog({
                 height: originalDimensions.height || 0,
                 annotations,
                 editorViewport: editorViewport ?? null,
+                figureFrameOrientation,
                 ...(requiresCaption ? { caption: figureCaption.trim() } : {}),
             });
 
@@ -389,6 +423,44 @@ export function BudgetPhotoAnnotatorDialog({
                     </div>
                 ) : null}
 
+                {activeImageUrl ? (
+                    <div className="shrink-0 flex flex-col gap-1.5 border-b bg-muted/25 px-4 py-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+                        <span className="text-xs font-medium text-muted-foreground shrink-0">
+                            Quadro de exibição (escopo)
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                            <Button
+                                type="button"
+                                variant={figureFrameOrientation === 'portrait' ? 'default' : 'outline'}
+                                size="sm"
+                                className="h-8 text-xs"
+                                onClick={() => {
+                                    setFigureFrameOrientation('portrait');
+                                    if (!hasUnsavedChanges) setHasUnsavedChanges(true);
+                                }}
+                            >
+                                Retrato (A4)
+                            </Button>
+                            <Button
+                                type="button"
+                                variant={figureFrameOrientation === 'landscape' ? 'default' : 'outline'}
+                                size="sm"
+                                className="h-8 text-xs"
+                                onClick={() => {
+                                    setFigureFrameOrientation('landscape');
+                                    if (!hasUnsavedChanges) setHasUnsavedChanges(true);
+                                }}
+                            >
+                                Paisagem (A4)
+                            </Button>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground sm:max-w-xl">
+                            A moldura tracejada no editor mostra os limites do quadro na galeria. A imagem não é
+                            cortada — áreas externas aparecem como faixas vazias em retrato ou paisagem.
+                        </p>
+                    </div>
+                ) : null}
+
                 <div
                     className={`flex-1 min-h-0 relative overflow-hidden transition-colors ${
                         isDragOver ? "bg-primary/10 border-2 border-dashed border-primary" : "bg-muted/10"
@@ -435,6 +507,7 @@ export function BudgetPhotoAnnotatorDialog({
                                 budgetId={budgetId}
                                 onProductAddedToBudget={onRefresh}
                                 onAnnotationsChange={handleAnnotationsChange}
+                                displayFrameOrientation={figureFrameOrientation}
                             />
                         </div>
                     )}

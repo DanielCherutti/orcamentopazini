@@ -28,6 +28,8 @@ export const budgetImageSchema = z.object({
     order_index: z.number().optional(),
     /** Zoom/pan do anotador (Surreal: `editor_viewport`) */
     editor_viewport: annotatorViewportSchema.nullish().optional(),
+    /** Quadro de exibição no escopo (proporção tipo A4): retrato ou paisagem */
+    figure_frame_orientation: z.enum(["portrait", "landscape"]).optional(),
     annotations: z.array(z.record(z.string(), z.unknown())).optional(),
 });
 

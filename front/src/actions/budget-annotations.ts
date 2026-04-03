@@ -32,6 +32,8 @@ export interface SaveBudgetImageParams {
     annotations: ImageAnnotation[];
     /** Zoom/pan do editor ao salvar — restaurado ao reabrir o anotador. */
     editorViewport?: AnnotatorViewportState | null;
+    /** Proporção do quadro na galeria (A4 retrato / paisagem). */
+    figureFrameOrientation?: "portrait" | "landscape";
 }
 
 interface DbImage {
@@ -196,6 +198,9 @@ export async function saveBudgetImageWithAnnotations(params: SaveBudgetImagePara
                 ...(params.editorViewport !== undefined
                     ? { editor_viewport: params.editorViewport }
                     : {}),
+                ...(params.figureFrameOrientation !== undefined
+                    ? { figure_frame_orientation: params.figureFrameOrientation }
+                    : {}),
             });
             imageId = params.imageId;
             image = { id: imageId };
@@ -217,6 +222,9 @@ export async function saveBudgetImageWithAnnotations(params: SaveBudgetImagePara
                 created_at: new Date(),
                 ...(scopeImage ? { caption: cap } : {}),
                 ...(params.editorViewport != null ? { editor_viewport: params.editorViewport } : {}),
+                ...(params.figureFrameOrientation !== undefined
+                    ? { figure_frame_orientation: params.figureFrameOrientation }
+                    : {}),
             });
             // surrealdb.js pode retornar array ou objeto — normaliza para objeto
             const created = Array.isArray(rawCreated) ? rawCreated[0] : rawCreated;
