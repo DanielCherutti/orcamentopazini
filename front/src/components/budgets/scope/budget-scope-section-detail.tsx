@@ -16,6 +16,7 @@ import { cn, toAbsoluteImageUrl } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { CompositorRichTextEditor, CollapsibleEditorSection } from "@/components/budgets/compositor/compositor-rich-text-editor";
 import { BudgetImageGallery } from "@/components/budgets/budget-image-gallery";
+import { useScopeFigureNumbers } from "@/components/budgets/use-scope-figure-numbers";
 import { BudgetPhotoAnnotatorDialog } from "@/components/budgets/budget-photo-annotator-dialog";
 import { parseAnnotatorViewport } from "@/components/annotator/annotator-viewport-types";
 import type { BudgetImage, BudgetItem } from "@/types/budget-types";
@@ -102,6 +103,12 @@ export function SectionDetail({
     const descriptionSectionRef = useRef<HTMLDivElement>(null);
     const descDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
     const pendingDescRef = useRef<string | null>(null);
+
+    const sectionImageIdsKey = useMemo(
+        () => [...images].map((i) => i.id).sort().join(","),
+        [images],
+    );
+    const figureNumbersByImageId = useScopeFigureNumbers(budgetId, sectionImageIdsKey);
 
     useEffect(() => {
         setDescription(section?.description ?? "");
@@ -403,6 +410,7 @@ export function SectionDetail({
             <CollapsibleEditorSection label="Fotos do trecho">
                 <BudgetImageGallery
                     images={images}
+                    figureNumbersByImageId={figureNumbersByImageId}
                     onAdd={() => { if (!isReadOnly) setAddPhotoOpen(true); }}
                     onEdit={(img) => setEditingImage(img)}
                     onDelete={handleDeleteImage}

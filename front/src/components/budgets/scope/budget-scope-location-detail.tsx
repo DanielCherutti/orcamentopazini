@@ -28,6 +28,7 @@ import {
 } from "@/actions/budget-hierarchy-scope-structure-actions";
 import { getBudgetImagesByLocation, deleteBudgetImage } from "@/actions/budget-annotations";
 import { SectionDetail } from "./budget-scope-section-detail";
+import { useScopeFigureNumbers } from "@/components/budgets/use-scope-figure-numbers";
 import {
     computeLocationAssemblyTotal,
     distributeProportional,
@@ -81,6 +82,13 @@ export function LocationDetail({
     const [assemblyValue, setAssemblyValue] = useState<number>(
         Number((location as unknown as Record<string, unknown>)?.assembly_value ?? 0)
     );
+
+    const imageIdsRefreshKey = useMemo(
+        () => [...images].map((i) => i.id).sort().join(","),
+        [images],
+    );
+    const figureNumbersByImageId = useScopeFigureNumbers(budgetId, imageIdsRefreshKey);
+
     const descDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
@@ -293,6 +301,7 @@ export function LocationDetail({
             <CollapsibleEditorSection label="Fotos do local">
                 <BudgetImageGallery
                     images={images}
+                    figureNumbersByImageId={figureNumbersByImageId}
                     onAdd={() => { if (!isReadOnly) setAddPhotoOpen(true); }}
                     onEdit={(img) => setEditingImage(img)}
                     onDelete={handleDeleteImage}
@@ -300,7 +309,7 @@ export function LocationDetail({
                 />
             </CollapsibleEditorSection>
 
-            <CollapsibleEditorSection label="Descrição do local">
+            <CollapsibleEditorSection label="Descrição do local" defaultOpen={false}>
                 <CompositorRichTextEditor
                     key={locationId}
                     value={description}

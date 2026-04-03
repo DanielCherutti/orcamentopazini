@@ -6,6 +6,7 @@ import type { ImageAnnotation } from "@/components/annotator/tools/types";
 import { InlineItemCreator } from "./inline-item-creator";
 import { AddGroupDialog } from "./add-group-dialog";
 import { BudgetImageGallery } from "../budget-image-gallery";
+import { useScopeFigureNumbers } from "@/components/budgets/use-scope-figure-numbers";
 import { BudgetPhotoAnnotatorDialog } from "../budget-photo-annotator-dialog";
 import { parseAnnotatorViewport } from "@/components/annotator/annotator-viewport-types";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
@@ -196,6 +197,11 @@ export function SectionSceneCard({ section, budget_id, sectionNumber, onRefresh 
         return desc !== "" && desc !== "<p></p>";
     }, [currentDescription]);
     const images: BudgetImage[] = section.images || [];
+    const sceneImageIdsKey = useMemo(
+        () => [...images].map((i) => i.id).sort().join(","),
+        [images],
+    );
+    const figureNumbersByImageId = useScopeFigureNumbers(budget_id, sceneImageIdsKey);
     const items = section.items || [];
 
     // Sincroniza quando um trecho diferente é renderizado com o mesmo componente
@@ -384,6 +390,7 @@ export function SectionSceneCard({ section, budget_id, sectionNumber, onRefresh 
                 <h4 className="text-sm font-medium text-muted-foreground uppercase">Fotos / Cenas</h4>
                 <BudgetImageGallery
                     images={images}
+                    figureNumbersByImageId={figureNumbersByImageId}
                     onAdd={() => setAddPhotoOpen(true)}
                     onEdit={(img) => setEditingImage(img)}
                     onDelete={handleDeleteImage}

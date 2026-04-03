@@ -1,7 +1,7 @@
 "use client";
 
 import type { BudgetImage } from "@/types/budget-types";
-import { toAbsoluteImageUrl } from "@/lib/utils";
+import { cn, toAbsoluteImageUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ImageIcon, Pencil, Trash2 } from "lucide-react";
 
@@ -14,6 +14,8 @@ export interface BudgetImageGalleryProps {
   addButtonLabel?: string;
   /** Apenas visualização (sem adicionar/editar/excluir). */
   readOnly?: boolean;
+  /** id da imagem → número da figura (lista do documento). */
+  figureNumbersByImageId?: Record<string, number>;
 }
 
 export function BudgetImageGallery({
@@ -24,6 +26,7 @@ export function BudgetImageGallery({
   emptyMessage = "Nenhuma foto. Clique em Adicionar Foto para começar.",
   addButtonLabel = "Adicionar Foto",
   readOnly = false,
+  figureNumbersByImageId,
 }: BudgetImageGalleryProps) {
   const handleDeleteClick = (image: BudgetImage) => {
     if (confirm("Excluir esta foto e suas anotações?")) {
@@ -48,7 +51,7 @@ export function BudgetImageGallery({
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {images.map((image) => {
           /* Versão composta primeiro: inclui figurinhas, setas e demais anotações “queimadas” no editor. */
           const rawDisplay = image.composed_url || image.url;
@@ -59,19 +62,22 @@ export function BudgetImageGallery({
           const w = Number.isFinite(nw) && nw > 0 ? Math.round(nw) : undefined;
           const h = Number.isFinite(nh) && nh > 0 ? Math.round(nh) : undefined;
 
+          const figN = figureNumbersByImageId?.[image.id];
+          const cap = (image.caption ?? "").trim();
+
           return (
           <div
             key={image.id}
-            className="relative flex w-full flex-col gap-1.5 rounded-md border-2 border-primary/50 bg-muted/40 p-1.5 shadow-sm group"
+            className="group relative flex w-full flex-col gap-1.5 rounded-md border-2 border-primary/50 bg-muted/40 p-1.5 shadow-sm"
           >
-            <div className="relative flex w-full items-center justify-center overflow-hidden rounded-md bg-muted">
+            <div className="relative flex max-h-[min(240px,42vh)] w-full items-center justify-center overflow-hidden rounded-md bg-muted sm:max-h-[min(280px,38vh)]">
             {/* eslint-disable-next-line @next/next/no-img-element -- dynamic uploaded images without known dimensions */}
             <img
               src={displaySrc}
-              alt="Foto do ambiente (com anotações, se houver)"
+              alt={cap || "Foto do escopo (com anotações, se houver)"}
               width={w}
               height={h}
-              className="h-auto max-h-[min(72vh,44rem)] w-auto max-w-full object-contain"
+              className="h-auto max-h-[min(240px,42vh)] w-auto max-w-full object-contain sm:max-h-[min(280px,38vh)]"
               loading="lazy"
               decoding="async"
             />
@@ -101,12 +107,27 @@ export function BudgetImageGallery({
               </div>
             )}
             </div>
-            {w != null && h != null ? (
-              <p className="px-0.5 text-center text-[11px] text-muted-foreground tabular-nums">
-                {w} × {h}px
-                {image.composed_url ? " · com anotações" : ""}
+            <div className="space-y-0.5 px-0.5">
+              {figN != null ? (
+                <p className="text-center text-sm font-semibold text-foreground sm:text-left">
+                  Figura {figN}
+                </p>
+              ) : null}
+              <p
+                className={cn(
+                  "text-center text-sm leading-snug sm:text-left",
+                  cap ? "text-foreground" : "italic text-muted-foreground",
+                )}
+              >
+                {cap || "Sem legenda — use Editar para preencher a descrição da figura."}
               </p>
-            ) : null}
+              {w != null && h != null ? (
+                <p className="text-center text-[11px] text-muted-foreground tabular-nums sm:text-left">
+                  {w} × {h}px
+                  {image.composed_url ? " · com anotações" : ""}
+                </p>
+              ) : null}
+            </div>
           </div>
           );
         })}

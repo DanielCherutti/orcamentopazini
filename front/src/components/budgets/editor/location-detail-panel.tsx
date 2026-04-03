@@ -7,6 +7,7 @@ import { InlineSectionCreator } from "./inline-creators";
 import { SectionDetail } from "../scope/budget-scope-section-detail";
 import { budgetLocationsToScopeLocations, budgetSectionToScopeSection } from "./budget-editor-scope-adapters";
 import { BudgetImageGallery } from "../budget-image-gallery";
+import { useScopeFigureNumbers } from "@/components/budgets/use-scope-figure-numbers";
 import { BudgetPhotoAnnotatorDialog } from "../budget-photo-annotator-dialog";
 import { parseAnnotatorViewport } from "@/components/annotator/annotator-viewport-types";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
@@ -67,6 +68,13 @@ export function LocationDetailPanel({
     const desc = currentDescription;
     return desc !== "" && desc !== "<p></p>";
   }, [currentDescription]);
+
+  const locationImagesForFigures = location?.images || [];
+  const locationImageIdsKey = useMemo(
+    () => [...locationImagesForFigures].map((i) => i.id).sort().join(","),
+    [locationImagesForFigures],
+  );
+  const figureNumbersByImageId = useScopeFigureNumbers(budgetId, locationImageIdsKey);
 
   // Sincroniza estado local quando um LOCAL diferente é selecionado
   useEffect(() => {
@@ -266,6 +274,7 @@ export function LocationDetailPanel({
             <h3 className="text-sm font-medium text-muted-foreground uppercase">Fotos do Ambiente</h3>
             <BudgetImageGallery
               images={locationImages}
+              figureNumbersByImageId={figureNumbersByImageId}
               onAdd={() => setAddPhotoOpen(true)}
               onEdit={(img) => setEditingImage(img)}
               onDelete={handleDeleteImage}

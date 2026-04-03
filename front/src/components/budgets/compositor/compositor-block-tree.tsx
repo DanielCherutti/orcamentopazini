@@ -1,7 +1,7 @@
 "use client";
 
 import type { ComponentType, RefObject } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FileText, Map as MapIcon, ArrowRight, Plus } from "lucide-react";
 import {
     DndContext,
@@ -52,6 +52,7 @@ import { CompositorCoverBlock } from "./compositor-cover-block";
 import { CompositorTocBlock } from "./compositor-toc-block";
 import { CompositorFiguresBlock } from "./compositor-figures-block";
 import type { ScopeFigureEntry } from "./compositor-figures-utils";
+import { useScopeFigureNumbers } from "@/components/budgets/use-scope-figure-numbers";
 
 // ─── Renderers de bloco (modo documento) ──────────────────────────────────────
 
@@ -140,6 +141,11 @@ function LocationRenderer({
     const images = imagesByBlock[block.id] ?? [];
     const [addPhotoOpen, setAddPhotoOpen] = useState(false);
     const [editingImage, setEditingImage] = useState<BudgetImage | null>(null);
+    const locationImageIdsKey = useMemo(
+        () => [...images].map((i) => i.id).sort().join(","),
+        [images],
+    );
+    const figureNumbersByImageId = useScopeFigureNumbers(budgetId, locationImageIdsKey);
 
     const handleDeleteImage = async (image: BudgetImage) => {
         const result = await deleteBudgetImage(image.id, budgetId);
@@ -162,7 +168,7 @@ function LocationRenderer({
                 />
             </div>
 
-            <CollapsibleEditorSection label="Descrição">
+            <CollapsibleEditorSection label="Descrição" defaultOpen={false}>
                 <CompositorRichTextEditor
                     key={block.id}
                     value={description}
@@ -175,6 +181,7 @@ function LocationRenderer({
             <CollapsibleEditorSection label="Fotos do local">
                 <BudgetImageGallery
                     images={images}
+                    figureNumbersByImageId={figureNumbersByImageId}
                     onAdd={() => setAddPhotoOpen(true)}
                     onEdit={(img) => setEditingImage(img)}
                     onDelete={handleDeleteImage}
@@ -209,6 +216,7 @@ function LocationRenderer({
                     >[0]["initialAnnotations"]
                 }
                 initialEditorViewport={parseAnnotatorViewport(editingImage?.editor_viewport)}
+                initialCaption={editingImage?.caption ?? ""}
                 open={!!editingImage}
                 onOpenChange={(open) => {
                     if (!open) setEditingImage(null);
@@ -237,6 +245,11 @@ function SectionRenderer({
         onRefresh,
     );
     const images = imagesByBlock[block.id] ?? [];
+    const sectionBlockImageIdsKey = useMemo(
+        () => [...images].map((i) => i.id).sort().join(","),
+        [images],
+    );
+    const figureNumbersByImageId = useScopeFigureNumbers(budgetId, sectionBlockImageIdsKey);
     const [addPhotoOpen, setAddPhotoOpen] = useState(false);
     const [editingImage, setEditingImage] = useState<BudgetImage | null>(null);
     const [localItems, setLocalItems] = useState<BudgetItem[]>(
@@ -441,6 +454,7 @@ function SectionRenderer({
                 </p>
                 <BudgetImageGallery
                     images={images}
+                    figureNumbersByImageId={figureNumbersByImageId}
                     onAdd={() => setAddPhotoOpen(true)}
                     onEdit={(img) => setEditingImage(img)}
                     onDelete={handleDeleteImage}
@@ -477,6 +491,7 @@ function SectionRenderer({
                     >[0]["initialAnnotations"]
                 }
                 initialEditorViewport={parseAnnotatorViewport(editingImage?.editor_viewport)}
+                initialCaption={editingImage?.caption ?? ""}
                 open={!!editingImage}
                 onOpenChange={(open) => {
                     if (!open) setEditingImage(null);
