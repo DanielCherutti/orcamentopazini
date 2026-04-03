@@ -4,13 +4,9 @@ import { useContext, useEffect, useMemo, useState } from "react";
 import { getProposalSettingsAction, type ProposalSettings } from "@/actions/settings-actions";
 import type { BudgetBlock } from "@/types/budget-compositor-types";
 import type { CoverBlockProps } from "@/types/budget-compositor-types";
-import { DEFAULT_COVER_PROPS } from "@/types/budget-compositor-types";
+import { mergeCoverDocumentProps } from "@/lib/budgets/cover-document";
 import { CompositorDocumentContext } from "./compositor-document-context";
 import { buildFiguresListModel, type ScopeFigureEntry } from "./compositor-figures-utils";
-
-function mergeCoverProps(raw: Record<string, unknown> | undefined): CoverBlockProps {
-  return { ...DEFAULT_COVER_PROPS, ...(raw as CoverBlockProps) };
-}
 
 export function CompositorFiguresBlock({ block }: { block: BudgetBlock; isReadOnly?: boolean }) {
   const doc = useContext(CompositorDocumentContext);
@@ -29,7 +25,7 @@ export function CompositorFiguresBlock({ block }: { block: BudgetBlock; isReadOn
 
   const coverProps = useMemo(() => {
     const cover = doc?.roots.find((b) => b.type === "cover");
-    return mergeCoverProps(cover?.props as Record<string, unknown> | undefined);
+    return mergeCoverDocumentProps(cover?.props as Record<string, unknown> | undefined);
   }, [doc?.roots]);
 
   const rows = useMemo(() => {

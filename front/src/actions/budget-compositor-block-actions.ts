@@ -6,7 +6,7 @@ import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
 import { revalidatePath } from "next/cache";
 import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
-import { DEFAULT_COVER_PROPS } from "@/types/budget-compositor-types";
+import { mergeCoverDocumentProps } from "@/lib/budgets/cover-document";
 
 /**
  * Garante um bloco `cover` na raiz (order_index 0) para orçamentos compositor.
@@ -41,7 +41,7 @@ export async function ensureCompositorCoverBlockAction(
             type: "cover",
             label: "CAPA",
             order_index: 0,
-            props: { ...DEFAULT_COVER_PROPS },
+            props: mergeCoverDocumentProps({}) as Record<string, unknown>,
         });
 
         revalidatePath(budgetRevalidatePath(budgetId));

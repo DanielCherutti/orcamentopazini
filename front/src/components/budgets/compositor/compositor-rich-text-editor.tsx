@@ -84,6 +84,8 @@ interface CompositorRichTextEditorProps {
   onChange: (html: string) => void;
   placeholder?: string;
   galleryImages?: BudgetImage[];
+  variant?: "default" | "word";
+  readOnly?: boolean;
 }
 
 export const CompositorRichTextEditor = memo(function CompositorRichTextEditor({
@@ -91,6 +93,8 @@ export const CompositorRichTextEditor = memo(function CompositorRichTextEditor({
   onChange,
   placeholder,
   galleryImages,
+  variant = "default",
+  readOnly,
 }: CompositorRichTextEditorProps) {
   const [insertImage, setInsertImage] = useState<((url: string) => void) | null>(null);
   const [galleryOpen, setGalleryOpen] = useState(false);
@@ -129,46 +133,70 @@ export const CompositorRichTextEditor = memo(function CompositorRichTextEditor({
   };
 
   const extraToolbarItems = (
-    <>
+    <div className="flex items-center gap-1.5">
       {galleryImages && galleryImages.length > 0 && (
-        <>
-          <div className="w-px bg-border h-6 my-auto" />
-          <Popover open={galleryOpen} onOpenChange={setGalleryOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="ghost" size="sm" type="button" title="Inserir da galeria">
-                <ImageIcon className="w-4 h-4" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-72 p-2">
-              <p className="text-xs font-medium text-muted-foreground mb-2">Galeria do bloco</p>
-              <div className="grid grid-cols-3 gap-1.5">
-                {galleryImages.map((img) => (
-                  <button
-                    key={img.id}
-                    type="button"
-                    className="aspect-video overflow-hidden rounded border hover:ring-2 ring-primary"
-                    onClick={() => {
-                      insertImage?.(img.composed_url || img.url);
-                      setGalleryOpen(false);
-                    }}
-                  >
-                    <img src={img.composed_url || img.url} className="w-full h-full object-cover" alt="" />
-                  </button>
-                ))}
-              </div>
-            </PopoverContent>
-          </Popover>
-        </>
+        <Popover open={galleryOpen} onOpenChange={setGalleryOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              type="button"
+              title="Inserir da galeria"
+              className="h-7 w-7 shrink-0 p-0"
+            >
+              <ImageIcon className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            className="w-72 p-2"
+            align="start"
+            side="bottom"
+            sideOffset={6}
+            collisionPadding={16}
+          >
+            <p className="mb-2 text-xs font-medium text-muted-foreground">Galeria do bloco</p>
+            <div className="grid grid-cols-3 gap-2">
+              {galleryImages.map((img) => (
+                <button
+                  key={img.id}
+                  type="button"
+                  className="relative aspect-video w-full overflow-hidden rounded-md border bg-muted/30 hover:ring-2 hover:ring-primary"
+                  onClick={() => {
+                    insertImage?.(img.composed_url || img.url);
+                    setGalleryOpen(false);
+                  }}
+                >
+                  <img
+                    src={img.composed_url || img.url}
+                    className="absolute inset-0 h-full w-full object-cover"
+                    alt=""
+                  />
+                </button>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
       )}
 
-      <div className="w-px bg-border h-6 my-auto" />
       <Popover open={productOpen} onOpenChange={handleProductOpen}>
         <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm" type="button" title="Inserir imagem de produto">
-            <Package className="w-4 h-4" />
+          <Button
+            variant="ghost"
+            size="sm"
+            type="button"
+            title="Inserir imagem de produto"
+            className="h-7 w-7 shrink-0 p-0"
+          >
+            <Package className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-80 p-0">
+        <PopoverContent
+          className="w-80 p-0"
+          align="start"
+          side="bottom"
+          sideOffset={6}
+          collisionPadding={16}
+        >
           <Command shouldFilter={false}>
             <CommandInput
               placeholder="Buscar produto..."
@@ -200,7 +228,7 @@ export const CompositorRichTextEditor = memo(function CompositorRichTextEditor({
           </Command>
         </PopoverContent>
       </Popover>
-    </>
+    </div>
   );
 
   return (
@@ -208,6 +236,8 @@ export const CompositorRichTextEditor = memo(function CompositorRichTextEditor({
       value={value}
       onChange={onChange}
       placeholder={placeholder}
+      variant={variant}
+      readOnly={readOnly}
       onUploadImage={handleUploadImage}
       extraToolbarItems={extraToolbarItems}
       onEditorReady={(fn) => setInsertImage(() => fn)}

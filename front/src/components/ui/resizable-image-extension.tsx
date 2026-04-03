@@ -68,6 +68,7 @@ function ResizableImageComponent({ node, selected, updateAttributes }: NodeViewP
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         ref={imgRef}
+        data-drag-handle=""
         src={node.attrs.src}
         alt={node.attrs.alt ?? ""}
         title={node.attrs.title ?? undefined}
@@ -77,6 +78,7 @@ function ResizableImageComponent({ node, selected, updateAttributes }: NodeViewP
           width: "100%",
           height: height ? "100%" : "auto",
           objectFit: "fill",
+          cursor: "grab",
         }}
       />
       {selected &&

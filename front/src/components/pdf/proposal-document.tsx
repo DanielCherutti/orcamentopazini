@@ -8,11 +8,11 @@ import { BudgetTable } from './sections/budget-table';
 import { CompositorCoverPdfPage } from './sections/compositor-cover-pdf';
 import type { CompositorPdfPayload } from './compositor-pdf-types';
 import {
-    DEFAULT_COVER_PROPS,
     type BudgetBlock,
     flattenTree,
     type CoverBlockProps,
 } from '@/types/budget-compositor-types';
+import { mergeCoverDocumentProps } from '@/lib/budgets/cover-document';
 import type { BudgetItem } from '@/types/budget-types';
 
 interface ProposalDocumentProps {
@@ -127,10 +127,6 @@ const styles = StyleSheet.create({
         lineHeight: 1.35,
     },
 });
-
-function mergeCoverProps(raw: Record<string, unknown> | undefined): CoverBlockProps {
-    return { ...DEFAULT_COVER_PROPS, ...(raw as CoverBlockProps) };
-}
 
 function resolvePdfImageSrc(url: string | undefined, publicBase?: string): string | undefined {
     const u = url?.trim();
@@ -365,7 +361,7 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
     const coverBlock = compositorPdf
         ? flattenTree(compositorPdf.roots).find((b) => b.type === 'cover')
         : undefined;
-    const compositorCoverMerged = mergeCoverProps(coverBlock?.props as Record<string, unknown> | undefined);
+    const compositorCoverMerged = mergeCoverDocumentProps(coverBlock?.props as Record<string, unknown> | undefined);
 
     const figureEntries =
         hasCompositorStructure && (compositorPdf!.scopeFigures?.length ?? 0) > 0

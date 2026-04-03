@@ -17,93 +17,11 @@ export type BlockType =
   | "scope"
   | (string & {});
 
-/** Regiões da capa (ordem personalizável na vertical) */
-export type CoverSectionId =
-  | "company_header"
-  | "main_titles"
-  | "client_logo"
-  | "client_cadastral"
-  | "professional_footer";
-
-export type CoverTitlePart = "main" | "subtitle";
-
-export type CoverSectionAlign = "left" | "center" | "right";
-
-export const COVER_SECTION_LABELS: Record<CoverSectionId, string> = {
-  company_header: "Cabeçalho (empresa)",
-  main_titles: "Título e subtítulo",
-  client_logo: "Logomarca do cliente",
-  client_cadastral: "Dados cadastrais do cliente",
-  professional_footer: "Responsável, data e referência",
-};
-
-export const DEFAULT_COVER_SECTION_ORDER: CoverSectionId[] = [
-  "company_header",
-  "main_titles",
-  "client_logo",
-  "client_cadastral",
-  "professional_footer",
-];
-
-export const DEFAULT_COVER_TITLES_ORDER: CoverTitlePart[] = ["main", "subtitle"];
-
-export function normalizeCoverSectionOrder(raw: unknown): CoverSectionId[] {
-  const allowed = DEFAULT_COVER_SECTION_ORDER;
-  const set = new Set<string>(allowed);
-  if (!Array.isArray(raw)) return [...allowed];
-  const seen = new Set<string>();
-  const out: CoverSectionId[] = [];
-  for (const x of raw) {
-    if (typeof x === "string" && set.has(x) && !seen.has(x)) {
-      seen.add(x);
-      out.push(x as CoverSectionId);
-    }
-  }
-  for (const id of allowed) {
-    if (!seen.has(id)) out.push(id);
-  }
-  return out;
-}
-
-export function normalizeCoverTitlesOrder(raw: unknown): CoverTitlePart[] {
-  if (!Array.isArray(raw)) return [...DEFAULT_COVER_TITLES_ORDER];
-  const seen = new Set<string>();
-  const out: CoverTitlePart[] = [];
-  for (const x of raw) {
-    if ((x === "main" || x === "subtitle") && !seen.has(x)) {
-      seen.add(x);
-      out.push(x);
-    }
-  }
-  for (const p of DEFAULT_COVER_TITLES_ORDER) {
-    if (!seen.has(p)) out.push(p);
-  }
-  return out;
-}
-
-const DEFAULT_COVER_SECTION_ALIGN: Record<CoverSectionId, CoverSectionAlign> = {
-  company_header: "left",
-  main_titles: "center",
-  client_logo: "center",
-  client_cadastral: "left",
-  professional_footer: "center",
-};
-
-export function coverSectionAlignFor(
-  id: CoverSectionId,
-  raw: Partial<Record<CoverSectionId, CoverSectionAlign>> | undefined
-): CoverSectionAlign {
-  return raw?.[id] ?? DEFAULT_COVER_SECTION_ALIGN[id];
-}
-
-/** Props do bloco capa — personalização da primeira página da proposta */
+/** Props do bloco capa — documento em HTML (fluxo tipo Word). */
 export interface CoverBlockProps {
-  /** Ordem vertical das regiões na capa */
-  section_order?: CoverSectionId[];
-  /** Alinhamento horizontal por região */
-  section_align?: Partial<Record<CoverSectionId, CoverSectionAlign>>;
-  /** Ordem do título principal em relação ao subtítulo */
-  titles_order?: CoverTitlePart[];
+  /** Conteúdo da capa (TipTap / HTML). */
+  cover_document_html?: string;
+  /** Legado: usados na migração se `cover_document_html` estiver vazio. */
   main_title?: string;
   subtitle?: string;
   /** Logomarca do cliente (URL pública) */
@@ -131,6 +49,8 @@ export interface CoverBlockProps {
 }
 
 export const DEFAULT_COVER_PROPS: CoverBlockProps = {
+  cover_document_html:
+    '<p style="text-align:center"><strong>PROPOSTA COMERCIAL</strong></p><p style="text-align:center">Memorial Descritivo de Fornecimento (NR 33 E 35)</p><p><br></p>',
   main_title: "PROPOSTA COMERCIAL",
   subtitle: "Memorial Descritivo de Fornecimento (NR 33 E 35)",
   client_logo_url: "",
