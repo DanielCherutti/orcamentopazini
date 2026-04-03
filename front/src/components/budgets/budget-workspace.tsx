@@ -157,8 +157,6 @@ export function BudgetWorkspace({ initialBudget, mode: _mode = 'edit' }: BudgetW
                                         <BudgetScope
                                             budgetId={budgetId}
                                             isReadOnly={isReadOnly}
-                                            quoteMarkupPercent={Number(budget.quote_markup_percent ?? 0)}
-                                            quoteDiscountPercent={Number(budget.quote_discount_percent ?? 0)}
                                         />
                                     </div>
                                 )}

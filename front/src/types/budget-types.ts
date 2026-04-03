@@ -113,9 +113,15 @@ export const budgetSchema = z.object({
     validity_days: z.number().optional().default(15),
     issue_date: z.string().optional(), // ISO string date
 
-    /** Aba Orçamento: acréscimo (vara) e desconto em % aplicados às linhas da tabela. */
+    /** Legado: um par único; novos orçamentos usam os quatro campos abaixo. */
     quote_markup_percent: z.number().optional().default(0),
     quote_discount_percent: z.number().optional().default(0),
+    /** Aba Orçamento: vara/desconto % só sobre coluna equipamentos. */
+    quote_markup_equipment_percent: z.number().optional().default(0),
+    quote_discount_equipment_percent: z.number().optional().default(0),
+    /** Aba Orçamento: vara/desconto % só sobre coluna montagem. */
+    quote_markup_assembly_percent: z.number().optional().default(0),
+    quote_discount_assembly_percent: z.number().optional().default(0),
     /** Exibir linhas de trecho por local na tabela. */
     quote_show_sections: z.boolean().optional().default(false),
     quote_note_above: z.string().optional().default(""),

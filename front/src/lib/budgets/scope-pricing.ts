@@ -296,21 +296,26 @@ export function computeLocationQuoteBreakdown(params: {
     };
 }
 
-/** Aplica Vara % (acréscimo) e Desconto % sobre equipamentos e montagem de uma linha. */
+/** Aplica Vara % e Desconto % com fatores distintos para equipamentos e para montagem. */
 export function applyQuoteRowAdjustments(
     equipment: number,
     assembly: number,
-    markupPercent: number,
-    discountPercent: number
+    markupEquipment: number,
+    discountEquipment: number,
+    markupAssembly: number,
+    discountAssembly: number
 ): { equipment: number; assembly: number; lineTotal: number } {
-    const m = Number.isFinite(markupPercent) ? markupPercent : 0;
-    const d = Number.isFinite(discountPercent) ? discountPercent : 0;
-    const factor = (1 + m / 100) * (1 - d / 100);
-    const eq = normalizeMoney(equipment) * factor;
-    const as = normalizeMoney(assembly) * factor;
+    const mE = Number.isFinite(markupEquipment) ? markupEquipment : 0;
+    const dE = Number.isFinite(discountEquipment) ? discountEquipment : 0;
+    const mA = Number.isFinite(markupAssembly) ? markupAssembly : 0;
+    const dA = Number.isFinite(discountAssembly) ? discountAssembly : 0;
+    const fE = (1 + mE / 100) * (1 - dE / 100);
+    const fA = (1 + mA / 100) * (1 - dA / 100);
+    const eq = Math.round(normalizeMoney(equipment) * fE * 100) / 100;
+    const as = Math.round(normalizeMoney(assembly) * fA * 100) / 100;
     return {
-        equipment: Math.round(eq * 100) / 100,
-        assembly: Math.round(as * 100) / 100,
+        equipment: eq,
+        assembly: as,
         lineTotal: Math.round((eq + as) * 100) / 100,
     };
 }

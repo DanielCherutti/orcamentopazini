@@ -36,6 +36,37 @@ function selectPercentInputIfZero(e: FocusEvent<HTMLInputElement>, current: numb
     }
 }
 
+/** Lê % da aba Orçamento: campos separados equip./montagem, ou legado único aplicado às duas colunas. */
+function readQuoteSplitPercents(b: Budget): {
+    markupEquip: number;
+    discountEquip: number;
+    markupAsm: number;
+    discountAsm: number;
+} {
+    const r = b as unknown as Record<string, unknown>;
+    const legM = Number(r.quote_markup_percent ?? 0);
+    const legD = Number(r.quote_discount_percent ?? 0);
+    const hasExplicitSplit =
+        r.quote_markup_equipment_percent !== undefined ||
+        r.quote_discount_equipment_percent !== undefined ||
+        r.quote_markup_assembly_percent !== undefined ||
+        r.quote_discount_assembly_percent !== undefined;
+    if (hasExplicitSplit) {
+        return {
+            markupEquip: Number(r.quote_markup_equipment_percent ?? 0),
+            discountEquip: Number(r.quote_discount_equipment_percent ?? 0),
+            markupAsm: Number(r.quote_markup_assembly_percent ?? 0),
+            discountAsm: Number(r.quote_discount_assembly_percent ?? 0),
+        };
+    }
+    return {
+        markupEquip: legM,
+        discountEquip: legD,
+        markupAsm: legM,
+        discountAsm: legD,
+    };
+}
+
 function mapItemToPricing(
     raw: Record<string, unknown>,
     sectionId: string
@@ -184,8 +215,10 @@ function CollapsibleTextBlock({
 export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: BudgetQuoteTabProps) {
     const [loading, setLoading] = useState(true);
     const [budget, setBudget] = useState<Budget | null>(null);
-    const [markupPct, setMarkupPct] = useState(0);
-    const [discountPct, setDiscountPct] = useState(0);
+    const [markupEquip, setMarkupEquip] = useState(0);
+    const [discountEquip, setDiscountEquip] = useState(0);
+    const [markupAsm, setMarkupAsm] = useState(0);
+    const [discountAsm, setDiscountAsm] = useState(0);
     const [showSections, setShowSections] = useState(false);
     const [noteAbove, setNoteAbove] = useState("");
     const [noteBelow, setNoteBelow] = useState("");
@@ -196,8 +229,11 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
         if (res.success && res.data) {
             const b = res.data as Budget;
             setBudget(b);
-            setMarkupPct(Number((b as unknown as Record<string, unknown>).quote_markup_percent ?? 0));
-            setDiscountPct(Number((b as unknown as Record<string, unknown>).quote_discount_percent ?? 0));
+            const q = readQuoteSplitPercents(b);
+            setMarkupEquip(q.markupEquip);
+            setDiscountEquip(q.discountEquip);
+            setMarkupAsm(q.markupAsm);
+            setDiscountAsm(q.discountAsm);
             setShowSections(
                 Boolean((b as unknown as Record<string, unknown>).quote_show_sections ?? false)
             );
@@ -219,6 +255,17 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
         },
         [budgetId, isReadOnly, onBudgetRefresh]
     );
+
+    const persistQuoteSplitPercents = useCallback(() => {
+        void persist({
+            quote_markup_equipment_percent: Number.isFinite(markupEquip) ? markupEquip : 0,
+            quote_discount_equipment_percent: Number.isFinite(discountEquip) ? discountEquip : 0,
+            quote_markup_assembly_percent: Number.isFinite(markupAsm) ? markupAsm : 0,
+            quote_discount_assembly_percent: Number.isFinite(discountAsm) ? discountAsm : 0,
+            quote_markup_percent: 0,
+            quote_discount_percent: 0,
+        });
+    }, [persist, markupEquip, discountEquip, markupAsm, discountAsm]);
 
     const tableRows = useMemo((): TableRow[] => {
         if (!budget?.locations?.length) return [];
@@ -257,8 +304,10 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
                 const locAdj = applyQuoteRowAdjustments(
                     breakdown.collapsedEquipment,
                     breakdown.collapsedAssembly,
-                    markupPct,
-                    discountPct
+                    markupEquip,
+                    discountEquip,
+                    markupAsm,
+                    discountAsm
                 );
                 rows.push({
                     key: `loc-${loc.id}`,
@@ -273,8 +322,10 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
                     const adj = applyQuoteRowAdjustments(
                         sr.equipment,
                         sr.assembly,
-                        markupPct,
-                        discountPct
+                        markupEquip,
+                        discountEquip,
+                        markupAsm,
+                        discountAsm
                     );
                     rows.push({
                         key: `sec-${sec.id}`,
@@ -288,8 +339,10 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
                 const adj = applyQuoteRowAdjustments(
                     breakdown.collapsedEquipment,
                     breakdown.collapsedAssembly,
-                    markupPct,
-                    discountPct
+                    markupEquip,
+                    discountEquip,
+                    markupAsm,
+                    discountAsm
                 );
                 rows.push({
                     key: `loc-${loc.id}`,
@@ -302,7 +355,7 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
         }
 
         return rows;
-    }, [budget, showSections, markupPct, discountPct]);
+    }, [budget, showSections, markupEquip, discountEquip, markupAsm, discountAsm]);
 
     const totals = useMemo(() => {
         let eq = 0;
@@ -375,65 +428,107 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
                             </div>
                         </label>
 
-                        <div className="flex min-w-[9rem] flex-col gap-1.5 rounded-2xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/90 to-emerald-50/30 px-4 py-3 shadow-sm dark:border-emerald-900/40 dark:from-emerald-950/50 dark:to-emerald-950/20">
-                            <Label
-                                htmlFor="quote-vara"
-                                className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-emerald-800 dark:text-emerald-300/90"
-                            >
-                                <TrendingUp className="h-3.5 w-3.5" />
-                                Vara (acréscimo)
-                            </Label>
-                            <div className="flex items-center gap-2">
-                                <Input
-                                    id="quote-vara"
-                                    type="number"
-                                    className="h-10 w-[4.75rem] rounded-xl border-emerald-200/80 bg-white/90 text-center text-base font-semibold tabular-nums shadow-inner dark:border-emerald-800/60 dark:bg-emerald-950/40"
-                                    disabled={isReadOnly}
-                                    value={Number.isFinite(markupPct) ? markupPct : 0}
-                                    onFocus={(e) => selectPercentInputIfZero(e, markupPct)}
-                                    onChange={(e) => setMarkupPct(Number(e.target.value))}
-                                    onBlur={() =>
-                                        void persist({
-                                            quote_markup_percent: Number.isFinite(markupPct)
-                                                ? markupPct
-                                                : 0,
-                                        })
-                                    }
-                                />
-                                <span className="text-sm font-semibold text-emerald-800/80 dark:text-emerald-400/90">
-                                    %
-                                </span>
+                        <div className="flex flex-col gap-2 rounded-2xl border border-primary/20 bg-card/80 px-3 py-2.5 shadow-sm ring-1 ring-primary/10 sm:px-4">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-primary/80">
+                                Equipamentos
+                            </p>
+                            <div className="flex flex-wrap items-end gap-3">
+                                <div className="flex min-w-[7.5rem] flex-col gap-1">
+                                    <Label
+                                        htmlFor="quote-vara-eq"
+                                        className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-300/90"
+                                    >
+                                        <TrendingUp className="h-3 w-3 shrink-0" />
+                                        Vara
+                                    </Label>
+                                    <div className="flex items-center gap-1.5">
+                                        <Input
+                                            id="quote-vara-eq"
+                                            type="number"
+                                            className="h-9 w-[4.25rem] rounded-lg border-emerald-200/80 bg-white/90 text-center text-sm font-semibold tabular-nums dark:border-emerald-800/60 dark:bg-emerald-950/40"
+                                            disabled={isReadOnly}
+                                            value={Number.isFinite(markupEquip) ? markupEquip : 0}
+                                            onFocus={(e) => selectPercentInputIfZero(e, markupEquip)}
+                                            onChange={(e) => setMarkupEquip(Number(e.target.value))}
+                                            onBlur={persistQuoteSplitPercents}
+                                        />
+                                        <span className="text-xs font-semibold text-emerald-800/80">%</span>
+                                    </div>
+                                </div>
+                                <div className="flex min-w-[7.5rem] flex-col gap-1">
+                                    <Label
+                                        htmlFor="quote-desc-eq"
+                                        className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-rose-800 dark:text-rose-300/90"
+                                    >
+                                        <TrendingDown className="h-3 w-3 shrink-0" />
+                                        Desconto
+                                    </Label>
+                                    <div className="flex items-center gap-1.5">
+                                        <Input
+                                            id="quote-desc-eq"
+                                            type="number"
+                                            className="h-9 w-[4.25rem] rounded-lg border-rose-200/80 bg-white/90 text-center text-sm font-semibold tabular-nums dark:border-rose-800/60 dark:bg-rose-950/40"
+                                            disabled={isReadOnly}
+                                            value={Number.isFinite(discountEquip) ? discountEquip : 0}
+                                            onFocus={(e) => selectPercentInputIfZero(e, discountEquip)}
+                                            onChange={(e) => setDiscountEquip(Number(e.target.value))}
+                                            onBlur={persistQuoteSplitPercents}
+                                        />
+                                        <span className="text-xs font-semibold text-rose-800/80">%</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        <div className="flex min-w-[9rem] flex-col gap-1.5 rounded-2xl border border-rose-200/70 bg-gradient-to-br from-rose-50/90 to-orange-50/25 px-4 py-3 shadow-sm dark:border-rose-900/40 dark:from-rose-950/45 dark:to-orange-950/15">
-                            <Label
-                                htmlFor="quote-discount"
-                                className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-rose-800 dark:text-rose-300/90"
-                            >
-                                <TrendingDown className="h-3.5 w-3.5" />
-                                Desconto
-                            </Label>
-                            <div className="flex items-center gap-2">
-                                <Input
-                                    id="quote-discount"
-                                    type="number"
-                                    className="h-10 w-[4.75rem] rounded-xl border-rose-200/80 bg-white/90 text-center text-base font-semibold tabular-nums shadow-inner dark:border-rose-800/60 dark:bg-rose-950/40"
-                                    disabled={isReadOnly}
-                                    value={Number.isFinite(discountPct) ? discountPct : 0}
-                                    onFocus={(e) => selectPercentInputIfZero(e, discountPct)}
-                                    onChange={(e) => setDiscountPct(Number(e.target.value))}
-                                    onBlur={() =>
-                                        void persist({
-                                            quote_discount_percent: Number.isFinite(discountPct)
-                                                ? discountPct
-                                                : 0,
-                                        })
-                                    }
-                                />
-                                <span className="text-sm font-semibold text-rose-800/80 dark:text-rose-400/90">
-                                    %
-                                </span>
+                        <div className="flex flex-col gap-2 rounded-2xl border border-violet-200/60 bg-gradient-to-br from-violet-50/80 to-background px-3 py-2.5 shadow-sm dark:border-violet-900/35 dark:from-violet-950/35">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-violet-800 dark:text-violet-300/90">
+                                Montagem
+                            </p>
+                            <div className="flex flex-wrap items-end gap-3">
+                                <div className="flex min-w-[7.5rem] flex-col gap-1">
+                                    <Label
+                                        htmlFor="quote-vara-mo"
+                                        className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-300/90"
+                                    >
+                                        <TrendingUp className="h-3 w-3 shrink-0" />
+                                        Vara
+                                    </Label>
+                                    <div className="flex items-center gap-1.5">
+                                        <Input
+                                            id="quote-vara-mo"
+                                            type="number"
+                                            className="h-9 w-[4.25rem] rounded-lg border-emerald-200/80 bg-white/90 text-center text-sm font-semibold tabular-nums dark:border-emerald-800/60 dark:bg-emerald-950/40"
+                                            disabled={isReadOnly}
+                                            value={Number.isFinite(markupAsm) ? markupAsm : 0}
+                                            onFocus={(e) => selectPercentInputIfZero(e, markupAsm)}
+                                            onChange={(e) => setMarkupAsm(Number(e.target.value))}
+                                            onBlur={persistQuoteSplitPercents}
+                                        />
+                                        <span className="text-xs font-semibold text-emerald-800/80">%</span>
+                                    </div>
+                                </div>
+                                <div className="flex min-w-[7.5rem] flex-col gap-1">
+                                    <Label
+                                        htmlFor="quote-desc-mo"
+                                        className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-rose-800 dark:text-rose-300/90"
+                                    >
+                                        <TrendingDown className="h-3 w-3 shrink-0" />
+                                        Desconto
+                                    </Label>
+                                    <div className="flex items-center gap-1.5">
+                                        <Input
+                                            id="quote-desc-mo"
+                                            type="number"
+                                            className="h-9 w-[4.25rem] rounded-lg border-rose-200/80 bg-white/90 text-center text-sm font-semibold tabular-nums dark:border-rose-800/60 dark:bg-rose-950/40"
+                                            disabled={isReadOnly}
+                                            value={Number.isFinite(discountAsm) ? discountAsm : 0}
+                                            onFocus={(e) => selectPercentInputIfZero(e, discountAsm)}
+                                            onChange={(e) => setDiscountAsm(Number(e.target.value))}
+                                            onBlur={persistQuoteSplitPercents}
+                                        />
+                                        <span className="text-xs font-semibold text-rose-800/80">%</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

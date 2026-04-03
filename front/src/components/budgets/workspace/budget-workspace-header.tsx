@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect, useMemo } from "react";
 import { Budget } from "@/types/budget-types";
-import { applyQuoteCommercialFactor } from "@/lib/budgets/scope-pricing";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Save, Eye, Pencil, Lock } from "lucide-react";
@@ -59,15 +58,10 @@ export function BudgetWorkspaceHeader({
     const formatCurrency = (value: number) =>
         new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 
-    /** Total do orçamento com Vara % e Desconto % (aba Orçamento), alinhado ao escopo. */
+    /** Total persistido (soma do escopo). Vara % / Desconto % da aba Orçamento não entram neste valor. */
     const displayTotalValue = useMemo(
-        () =>
-            applyQuoteCommercialFactor(
-                Number(budget.total_value ?? 0),
-                Number(budget.quote_markup_percent ?? 0),
-                Number(budget.quote_discount_percent ?? 0)
-            ),
-        [budget.total_value, budget.quote_markup_percent, budget.quote_discount_percent]
+        () => Number(budget.total_value ?? 0),
+        [budget.total_value]
     );
 
     const getStatusBadge = (status: string) => {
