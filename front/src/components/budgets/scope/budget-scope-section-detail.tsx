@@ -68,6 +68,8 @@ interface SectionDetailProps {
     priceAdjustmentInputMode: PriceAdjustmentMode;
     quoteMarkupPercent?: number;
     quoteDiscountPercent?: number;
+    /** Incrementado no pai após `loadLocations` — força recarregar itens do trecho (ex.: zerar ajustes). */
+    scopeDataVersion?: number;
 }
 
 export function SectionDetail({
@@ -85,6 +87,7 @@ export function SectionDetail({
     priceAdjustmentInputMode,
     quoteMarkupPercent = 0,
     quoteDiscountPercent = 0,
+    scopeDataVersion = 0,
 }: SectionDetailProps) {
     const [name, setName] = useState(section?.name ?? "");
     const [editingName, setEditingName] = useState(false);
@@ -148,7 +151,7 @@ export function SectionDetail({
         getBudgetImagesBySection(sectionId).then((imgs) =>
             setImages(imgs as unknown as BudgetImage[])
         );
-    }, [sectionId, loadItems]);
+    }, [sectionId, loadItems, scopeDataVersion]);
 
     useEffect(() => {
         listProductGroupsAction().then((res) => {
@@ -181,7 +184,7 @@ export function SectionDetail({
         };
         // currentLocation.sections coberto por sectionIdsKey + length
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentLocation?.id, currentLocation?.sections?.length, sectionIdsKey]);
+    }, [currentLocation?.id, currentLocation?.sections?.length, sectionIdsKey, scopeDataVersion]);
 
     const locationAssemblyModeRaw = String(
         (currentLocation as unknown as Record<string, unknown> | null)?.assembly_mode ?? "percent"

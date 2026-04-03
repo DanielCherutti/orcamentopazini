@@ -665,6 +665,94 @@ export async function updateItemCommercialSettingsAction(
 }
 
 /**
+ * Zera `price_adjustment_mode` e `price_adjustment_value` em todos os itens do trecho ou
+ * de todos os trechos do local, recalculando `total` de cada linha (observação extra mantida).
+ */
+export async function clearScopeItemPriceAdjustmentsAction(
+    budgetId: string,
+    scope: { type: "section"; sectionId: string } | { type: "location"; locationId: string }
+): Promise<{ success: boolean; error?: string; clearedCount?: number }> {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const db = await getDb();
+    try {
+        requireRecordId("budget", budgetId);
+
+        let rawRows: Array<Record<string, unknown>> = [];
+        if (scope.type === "section") {
+            const sectionRecordId = requireRecordId("budget_section", scope.sectionId);
+            const result = await db.query<[Array<Record<string, unknown>>]>(
+                `SELECT * FROM budget_item WHERE section_id = $sectionId AND deleted_at IS NONE`,
+                { sectionId: sectionRecordId }
+            );
+            rawRows = result?.[0] ?? [];
+        } else {
+            const locRecordId = requireRecordId("budget_location", scope.locationId);
+            const secRes = await db.query<[Array<{ id: unknown }>]>(
+                `SELECT id FROM budget_section WHERE location_id = $locId AND deleted_at IS NONE`,
+                { locId: locRecordId }
+            );
+            const secStrings = (secRes[0] ?? []).map((r) => recordIdToString(r.id)).filter(Boolean);
+            if (secStrings.length > 0) {
+                const secIds = secStrings.map((s) => requireRecordId("budget_section", s));
+                const itemRes = await db.query<[Array<Record<string, unknown>>]>(
+                    `SELECT * FROM budget_item WHERE section_id INSIDE $secIds AND deleted_at IS NONE`,
+                    { secIds }
+                );
+                rawRows = itemRes?.[0] ?? [];
+            }
+        }
+
+        const now = new Date().toISOString();
+        let clearedCount = 0;
+
+        for (const row of rawRows) {
+            const itemId = recordIdToString(row.id);
+            if (!itemId) continue;
+
+            const modeRaw = row.price_adjustment_mode;
+            const hadMode = modeRaw === "percent" || modeRaw === "fixed";
+            const val = Number(row.price_adjustment_value ?? 0);
+            if (!hadMode && val === 0) continue;
+
+            const quantity = Number(row.quantity) || 1;
+            const unitPrice = Number(row.unit_price) || 0;
+            const laborCost = Number(row.labor_cost) || 0;
+            const observationExtraValue = Number(row.observation_extra_value ?? 0);
+
+            const newTotal = computeItemSubtotal({
+                quantity,
+                unit_price: unitPrice,
+                labor_cost: laborCost,
+                price_adjustment_mode: null,
+                price_adjustment_value: 0,
+                observation_extra_value: observationExtraValue,
+            });
+
+            await db.update(requireRecordId("budget_item", itemId)).merge({
+                price_adjustment_mode: null,
+                price_adjustment_value: 0,
+                total: newTotal,
+                updated_at: now,
+            });
+            clearedCount += 1;
+        }
+
+        await recalculateBudgetTotal(budgetId);
+        revalidatePath(budgetRevalidatePath(budgetId));
+        return { success: true, clearedCount };
+    } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
+        console.error("clearScopeItemPriceAdjustmentsAction error:", error);
+        if (isTokenExpiredError(error)) resetDb();
+        return { success: false, error: "Erro ao zerar ajustes de preço dos itens" };
+    }
+}
+
+/**
  * IDs de `product_group` referenciados por itens do compositor (escopo via seção/local
  * e compositor via bloco). Usado para restringir o painel de grupos no anotador de fotos.
  */

@@ -22,8 +22,10 @@ import {
     updateLocationAction,
     updateSectionAction,
 } from "@/actions/budget-hierarchy-scope-structure-actions";
+import { clearScopeItemPriceAdjustmentsAction } from "@/actions/budget-hierarchy-section-items-actions";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { toast } from "@/lib/toast";
 
 export type { BudgetScopeProps, Selection } from "./budget-scope-types";
 
@@ -158,6 +160,16 @@ export function BudgetScope({
         },
         [selected, budgetId, loadLocations]
     );
+
+    const runClearItemPriceAdjustments = useCallback(async () => {
+        if (!selected) return { success: false as const, clearedCount: 0 };
+        return clearScopeItemPriceAdjustmentsAction(
+            budgetId,
+            selected.type === "location"
+                ? { type: "location", locationId: selected.id }
+                : { type: "section", sectionId: selected.id }
+        );
+    }, [budgetId, selected]);
 
     const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -337,12 +349,42 @@ export function BudgetScope({
                                                             : "border-border bg-background text-foreground hover:bg-muted"
                                                     )}
                                                     onClick={async () => {
-                                                        const checked = !priceAdjustmentEnabled;
-                                                        setPriceAdjustmentEnabled(checked);
+                                                        if (!selected) return;
+                                                        const enabling = !priceAdjustmentEnabled;
+                                                        if (!enabling) {
+                                                            const cleared = await runClearItemPriceAdjustments();
+                                                            if (!cleared.success) {
+                                                                toast.error(
+                                                                    cleared.error ||
+                                                                        "Erro ao zerar ajustes dos itens"
+                                                                );
+                                                                return;
+                                                            }
+                                                            const ok = await saveCommercialConfig({
+                                                                price_adjustment_enabled: false,
+                                                            });
+                                                            if (!ok) {
+                                                                toast.error(
+                                                                    "Não foi possível desativar o ajuste de preço."
+                                                                );
+                                                                await loadLocations();
+                                                                return;
+                                                            }
+                                                            setPriceAdjustmentEnabled(false);
+                                                            await loadLocations();
+                                                            if ((cleared.clearedCount ?? 0) > 0) {
+                                                                toast.success(
+                                                                    `Ajustes zerados em ${cleared.clearedCount} item(ns).`
+                                                                );
+                                                            }
+                                                            return;
+                                                        }
+                                                        setPriceAdjustmentEnabled(true);
                                                         const ok = await saveCommercialConfig({
-                                                            price_adjustment_enabled: checked,
+                                                            price_adjustment_enabled: true,
                                                         });
-                                                        if (!ok) setPriceAdjustmentEnabled(!checked);
+                                                        if (!ok) setPriceAdjustmentEnabled(false);
+                                                        else await loadLocations();
                                                     }}
                                                     disabled={!selected}
                                                 >
@@ -388,6 +430,36 @@ export function BudgetScope({
                                                         R$
                                                     </button>
                                                 </div>
+                                                <button
+                                                    type="button"
+                                                    className={cn(
+                                                        toggleBtnClass,
+                                                        "w-full border-dashed text-muted-foreground hover:text-foreground"
+                                                    )}
+                                                    onClick={async () => {
+                                                        if (!selected || !priceAdjustmentEnabled) return;
+                                                        const res = await runClearItemPriceAdjustments();
+                                                        if (!res.success) {
+                                                            toast.error(
+                                                                res.error || "Erro ao zerar ajustes dos itens"
+                                                            );
+                                                            return;
+                                                        }
+                                                        await loadLocations();
+                                                        if ((res.clearedCount ?? 0) > 0) {
+                                                            toast.success(
+                                                                `Ajustes zerados em ${res.clearedCount} item(ns).`
+                                                            );
+                                                        } else {
+                                                            toast.success(
+                                                                "Nenhum item tinha valor de ajuste de preço."
+                                                            );
+                                                        }
+                                                    }}
+                                                    disabled={!selected || !priceAdjustmentEnabled}
+                                                >
+                                                    Zerar ajustes dos itens
+                                                </button>
                                             </div>
                                         </div>
 
@@ -492,6 +564,7 @@ export function BudgetScope({
                             isReadOnly={isReadOnly}
                             onRefresh={loadLocations}
                             locations={locations}
+                            scopeDataVersion={scopeDataVersion}
                             priceAdjustmentEnabled={priceAdjustmentEnabled}
                             priceAdjustmentInputMode={priceAdjustmentInputMode}
                             quoteMarkupPercent={quoteMarkupPercent}
@@ -511,6 +584,7 @@ export function BudgetScope({
                             isReadOnly={isReadOnly}
                             onRefresh={loadLocations}
                             locations={locations}
+                            scopeDataVersion={scopeDataVersion}
                             assemblyMode={assemblyMode}
                             assemblyValue={assemblyValue}
                             priceAdjustmentEnabled={priceAdjustmentEnabled}

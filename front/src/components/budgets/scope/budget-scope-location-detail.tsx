@@ -49,6 +49,8 @@ interface LocationDetailProps {
     priceAdjustmentInputMode: PriceAdjustmentMode;
     quoteMarkupPercent?: number;
     quoteDiscountPercent?: number;
+    /** Incrementado no pai após `loadLocations` — recarrega itens do local nos trechos. */
+    scopeDataVersion?: number;
 }
 
 export function LocationDetail({
@@ -62,6 +64,7 @@ export function LocationDetail({
     priceAdjustmentInputMode,
     quoteMarkupPercent = 0,
     quoteDiscountPercent = 0,
+    scopeDataVersion = 0,
 }: LocationDetailProps) {
     const [name, setName] = useState(location?.name ?? "");
     const [editingName, setEditingName] = useState(false);
@@ -130,7 +133,7 @@ export function LocationDetail({
         };
         // location.sections coberto por sectionIdsKey + length
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [location?.id, location?.sections?.length, sectionIdsKey]);
+    }, [location?.id, location?.sections?.length, sectionIdsKey, scopeDataVersion]);
 
     const commitName = async () => {
         setEditingName(false);
@@ -337,6 +340,7 @@ export function LocationDetail({
                             priceAdjustmentInputMode={priceAdjustmentInputMode}
                             quoteMarkupPercent={quoteMarkupPercent}
                             quoteDiscountPercent={quoteDiscountPercent}
+                            scopeDataVersion={scopeDataVersion}
                         />
                     ))}
                 </div>
