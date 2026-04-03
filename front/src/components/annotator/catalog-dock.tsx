@@ -65,7 +65,12 @@ function ProductCard({ name, imageUrl, unit, hint, onDragStart }: {
                 <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center flex-shrink-0 overflow-hidden border border-border/80">
                     {imageUrl ? (
                         /* eslint-disable-next-line @next/next/no-img-element */
-                        <img src={imageUrl} alt="" className="w-full h-full object-cover" />
+                        <img
+                            src={imageUrl}
+                            alt=""
+                            draggable={false}
+                            className="w-full h-full object-cover pointer-events-none select-none"
+                        />
                     ) : (
                         <Package className="w-5 h-5 text-muted-foreground" aria-hidden />
                     )}
@@ -456,7 +461,12 @@ export function CatalogDock({
                                                             <div className="w-10 h-10 rounded-md bg-muted flex items-center justify-center flex-shrink-0 overflow-hidden border border-border/80">
                                                                 {group.image_url ? (
                                                                     /* eslint-disable-next-line @next/next/no-img-element */
-                                                                    <img src={group.image_url} alt="" className="w-full h-full object-cover" />
+                                                                    <img
+                                                                        src={group.image_url}
+                                                                        alt=""
+                                                                        draggable={false}
+                                                                        className="w-full h-full object-cover pointer-events-none select-none"
+                                                                    />
                                                                 ) : (
                                                                     <span className="text-xs font-bold text-primary">G</span>
                                                                 )}

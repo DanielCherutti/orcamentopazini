@@ -226,6 +226,9 @@ export function BudgetPhotoAnnotatorDialog({
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
         setIsDragOver(false);
+        // Com o anotador aberto, não tratar arquivo solto aqui: drag nativo da miniatura do
+        // produto viraria substituição da foto; a composição é só no drop do stage.
+        if (activeImageUrl) return;
         const file = e.dataTransfer.files?.[0];
         if (file) processFile(file);
     };

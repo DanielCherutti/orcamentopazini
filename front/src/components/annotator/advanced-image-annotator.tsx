@@ -540,6 +540,7 @@ export function AdvancedImageAnnotator({
 
     const handleDropOnStage = async (e: DragEvent<HTMLDivElement>) => {
         e.preventDefault();
+        e.stopPropagation();
         if (readOnly) return;
 
         const stage = stageRef.current;
