@@ -1,7 +1,8 @@
 "use client";
 
 import { memo, useCallback, useEffect, useMemo, useState, type FocusEvent } from "react";
-import { getBudgetAction } from "@/actions/budget-actions";
+import { getBudgetQuoteTabDataAction } from "@/actions/budget-actions";
+import type { BudgetQuoteTabLocationBreakdown } from "@/actions/budget-core-read-actions";
 import { updateBudgetAction } from "@/actions/budget-core-write-actions";
 import type { Budget } from "@/types/budget-types";
 import { Button } from "@/components/ui/button";
@@ -20,11 +21,7 @@ import {
     TableProperties,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-    applyQuoteRowAdjustments,
-    computeLocationQuoteBreakdown,
-    type ScopePricingItem,
-} from "@/lib/budgets/scope-pricing";
+import { applyQuoteRowAdjustments } from "@/lib/budgets/scope-pricing";
 
 const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
@@ -64,25 +61,6 @@ function readQuoteSplitPercents(b: Budget): {
         discountEquip: legD,
         markupAsm: legM,
         discountAsm: legD,
-    };
-}
-
-function mapItemToPricing(
-    raw: Record<string, unknown>,
-    sectionId: string
-): ScopePricingItem & { section_id: string } {
-    const mode = raw.price_adjustment_mode;
-    return {
-        id: raw.id != null ? String(raw.id) : undefined,
-        section_id: sectionId,
-        quantity: Number(raw.quantity ?? 1),
-        unit_price: Number(raw.unit_price ?? 0),
-        labor_cost: Number(raw.labor_cost ?? 0),
-        price_adjustment_mode:
-            mode === "percent" || mode === "fixed" ? mode : null,
-        price_adjustment_value: Number(raw.price_adjustment_value ?? 0),
-        observation_extra_value: Number(raw.observation_extra_value ?? 0),
-        assembly_manual_value: Number(raw.assembly_manual_value ?? 0),
     };
 }
 
@@ -215,6 +193,7 @@ function CollapsibleTextBlock({
 export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: BudgetQuoteTabProps) {
     const [loading, setLoading] = useState(true);
     const [budget, setBudget] = useState<Budget | null>(null);
+    const [quoteLocations, setQuoteLocations] = useState<BudgetQuoteTabLocationBreakdown[]>([]);
     const [markupEquip, setMarkupEquip] = useState(0);
     const [discountEquip, setDiscountEquip] = useState(0);
     const [markupAsm, setMarkupAsm] = useState(0);
@@ -225,10 +204,11 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
 
     const load = useCallback(async () => {
         setLoading(true);
-        const res = await getBudgetAction(budgetId);
+        const res = await getBudgetQuoteTabDataAction(budgetId);
         if (res.success && res.data) {
-            const b = res.data as Budget;
+            const b = res.data.budget as Budget;
             setBudget(b);
+            setQuoteLocations(res.data.quoteLocations);
             const q = readQuoteSplitPercents(b);
             setMarkupEquip(q.markupEquip);
             setDiscountEquip(q.discountEquip);
@@ -244,7 +224,9 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
     }, [budgetId]);
 
     useEffect(() => {
-        void load();
+        queueMicrotask(() => {
+            void load();
+        });
     }, [load]);
 
     const persist = useCallback(
@@ -268,42 +250,17 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
     }, [persist, markupEquip, discountEquip, markupAsm, discountAsm]);
 
     const tableRows = useMemo((): TableRow[] => {
-        if (!budget?.locations?.length) return [];
+        if (!quoteLocations.length) return [];
         const rows: TableRow[] = [];
-        const locs = [...budget.locations].sort(
-            (a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)
-        );
+        const locs = [...quoteLocations].sort((a, b) => a.order_index - b.order_index);
 
         for (const loc of locs) {
-            const sections = [...(loc.sections ?? [])].sort(
-                (a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)
-            );
-            const items: Array<ScopePricingItem & { section_id: string }> = [];
-            for (const sec of sections) {
-                const rawItems = (sec as unknown as { items?: Record<string, unknown>[] }).items ?? [];
-                for (const it of rawItems) {
-                    if (!it || typeof it !== "object") continue;
-                    items.push(mapItemToPricing(it as Record<string, unknown>, String(sec.id)));
-                }
-            }
-
-            const breakdown = computeLocationQuoteBreakdown({
-                location: {
-                    assembly_mode: loc.assembly_mode,
-                    assembly_value: loc.assembly_value,
-                },
-                sections: sections.map((s) => ({
-                    id: String(s.id),
-                    assembly_mode: s.assembly_mode,
-                    assembly_value: s.assembly_value,
-                })),
-                items,
-            });
+            const sections = [...loc.sections].sort((a, b) => a.order_index - b.order_index);
 
             if (showSections) {
                 const locAdj = applyQuoteRowAdjustments(
-                    breakdown.collapsedEquipment,
-                    breakdown.collapsedAssembly,
+                    loc.collapsedEquipment,
+                    loc.collapsedAssembly,
                     markupEquip,
                     discountEquip,
                     markupAsm,
@@ -311,17 +268,15 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
                 );
                 rows.push({
                     key: `loc-${loc.id}`,
-                    label: String(loc.name),
+                    label: loc.name,
                     equipment: locAdj.equipment,
                     assembly: locAdj.assembly,
                     rowType: "location",
                 });
                 for (const sec of sections) {
-                    const sr = breakdown.sectionRows.find((r) => r.sectionId === String(sec.id));
-                    if (!sr) continue;
                     const adj = applyQuoteRowAdjustments(
-                        sr.equipment,
-                        sr.assembly,
+                        sec.equipment,
+                        sec.assembly,
                         markupEquip,
                         discountEquip,
                         markupAsm,
@@ -329,7 +284,7 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
                     );
                     rows.push({
                         key: `sec-${sec.id}`,
-                        label: String(sec.name),
+                        label: sec.name,
                         equipment: adj.equipment,
                         assembly: adj.assembly,
                         rowType: "section",
@@ -337,8 +292,8 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
                 }
             } else {
                 const adj = applyQuoteRowAdjustments(
-                    breakdown.collapsedEquipment,
-                    breakdown.collapsedAssembly,
+                    loc.collapsedEquipment,
+                    loc.collapsedAssembly,
                     markupEquip,
                     discountEquip,
                     markupAsm,
@@ -346,7 +301,7 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
                 );
                 rows.push({
                     key: `loc-${loc.id}`,
-                    label: String(loc.name),
+                    label: loc.name,
                     equipment: adj.equipment,
                     assembly: adj.assembly,
                     rowType: "location",
@@ -355,7 +310,7 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
         }
 
         return rows;
-    }, [budget, showSections, markupEquip, discountEquip, markupAsm, discountAsm]);
+    }, [quoteLocations, showSections, markupEquip, discountEquip, markupAsm, discountAsm]);
 
     const totals = useMemo(() => {
         let eq = 0;

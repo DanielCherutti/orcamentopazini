@@ -308,42 +308,44 @@ function SortableItemsListEditable({
             onDragEnd={handleOuterDragEnd}
         >
             <SortableContext items={segmentIds} strategy={verticalListSortingStrategy}>
-                <div className="space-y-1">
-                    {segments.map((seg) =>
-                        seg.type === "standalone" ? (
-                            <SortableStandaloneItem
-                                key={getSegmentSortableId(seg)}
-                                item={seg.item}
-                                budgetId={budgetId}
-                                isReadOnly={false}
-                                onRefresh={onRefresh}
-                                groups={groups}
-                                assemblyMode={assemblyMode}
-                                assemblyByItemId={assemblyByItemId}
-                                priceAdjustmentEnabled={priceAdjustmentEnabled}
-                                priceAdjustmentInputMode={priceAdjustmentInputMode}
-                                quoteMarkupPercent={quoteMarkupPercent}
-                                quoteDiscountPercent={quoteDiscountPercent}
-                            />
-                        ) : (
-                            <SortableGroup
-                                key={getSegmentSortableId(seg)}
-                                seg={seg}
-                                sensors={sensors}
-                                budgetId={budgetId}
-                                isReadOnly={false}
-                                onRefresh={onRefresh}
-                                onItemReorder={handleGroupItemReorder}
-                                groups={groups}
-                                assemblyMode={assemblyMode}
-                                assemblyByItemId={assemblyByItemId}
-                                priceAdjustmentEnabled={priceAdjustmentEnabled}
-                                priceAdjustmentInputMode={priceAdjustmentInputMode}
-                                quoteMarkupPercent={quoteMarkupPercent}
-                                quoteDiscountPercent={quoteDiscountPercent}
-                            />
-                        )
-                    )}
+                <div className="max-h-[min(75vh,900px)] overflow-y-auto rounded-md [scrollbar-gutter:stable]">
+                    <div className="space-y-1">
+                        {segments.map((seg) =>
+                            seg.type === "standalone" ? (
+                                <SortableStandaloneItem
+                                    key={getSegmentSortableId(seg)}
+                                    item={seg.item}
+                                    budgetId={budgetId}
+                                    isReadOnly={false}
+                                    onRefresh={onRefresh}
+                                    groups={groups}
+                                    assemblyMode={assemblyMode}
+                                    assemblyByItemId={assemblyByItemId}
+                                    priceAdjustmentEnabled={priceAdjustmentEnabled}
+                                    priceAdjustmentInputMode={priceAdjustmentInputMode}
+                                    quoteMarkupPercent={quoteMarkupPercent}
+                                    quoteDiscountPercent={quoteDiscountPercent}
+                                />
+                            ) : (
+                                <SortableGroup
+                                    key={getSegmentSortableId(seg)}
+                                    seg={seg}
+                                    sensors={sensors}
+                                    budgetId={budgetId}
+                                    isReadOnly={false}
+                                    onRefresh={onRefresh}
+                                    onItemReorder={handleGroupItemReorder}
+                                    groups={groups}
+                                    assemblyMode={assemblyMode}
+                                    assemblyByItemId={assemblyByItemId}
+                                    priceAdjustmentEnabled={priceAdjustmentEnabled}
+                                    priceAdjustmentInputMode={priceAdjustmentInputMode}
+                                    quoteMarkupPercent={quoteMarkupPercent}
+                                    quoteDiscountPercent={quoteDiscountPercent}
+                                />
+                            )
+                        )}
+                    </div>
                 </div>
             </SortableContext>
         </DndContext>

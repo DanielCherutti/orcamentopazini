@@ -283,6 +283,7 @@ export async function duplicateSectionAction(sectionId: string, budgetId: string
             await db.create(new Table("budget_item")).content({
                 ...buildDuplicatedBudgetItemContent(item as Record<string, unknown>),
                 section_id: new StringRecordId(newSectionId),
+                budget_id: requireRecordId("budget", budgetId),
             });
         }
 
@@ -458,6 +459,7 @@ export async function duplicateLocationAction(locationId: string, budgetId: stri
                 await db.create(new Table("budget_item")).content({
                     ...buildDuplicatedBudgetItemContent(item as Record<string, unknown>),
                     section_id: new StringRecordId(newSectionId),
+                    budget_id: requireRecordId("budget", budgetId),
                 });
             }
         }

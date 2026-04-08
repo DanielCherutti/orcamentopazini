@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getBudgetAction, syncDraftPricesAction } from "@/actions/budget-actions";
+import { getBudgetAction, getBudgetShellAction, syncDraftPricesAction } from "@/actions/budget-actions";
+import { getScopeStatsAction } from "@/actions/budget-scope-actions";
+import { shouldUseLightBudgetRead } from "@/lib/budgets/budget-large-read";
 import { BudgetWorkspace } from "@/components/budgets/budget-workspace";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,7 +19,11 @@ export default async function BudgetPage(props: PageProps) {
   const params = await props.params;
   const id = params.id;
 
-  const initial = await getBudgetAction(id);
+  const stats = await getScopeStatsAction(id);
+  const useLightScopeRead =
+    stats.success && stats.data != null && shouldUseLightBudgetRead(stats.data.items);
+
+  const initial = useLightScopeRead ? await getBudgetShellAction(id) : await getBudgetAction(id);
 
   if (!initial.success || !initial.data) {
     notFound();
@@ -29,7 +35,7 @@ export default async function BudgetPage(props: PageProps) {
   if (budget.status === "draft") {
     const syncResult = await syncDraftPricesAction(id);
     if (syncResult.updatedCount > 0) {
-      const refreshed = await getBudgetAction(id);
+      const refreshed = useLightScopeRead ? await getBudgetShellAction(id) : await getBudgetAction(id);
       if (refreshed.success && refreshed.data) {
         budget = refreshed.data;
       }
@@ -38,7 +44,11 @@ export default async function BudgetPage(props: PageProps) {
 
   return (
     <Suspense fallback={<EditorSkeleton />}>
-      <BudgetWorkspace initialBudget={budget} mode="edit" />
+      <BudgetWorkspace
+        initialBudget={budget}
+        initialUseLightScopeRead={useLightScopeRead}
+        mode="edit"
+      />
     </Suspense>
   );
 }

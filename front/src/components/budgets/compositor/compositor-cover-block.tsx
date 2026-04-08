@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { updateBlockAction } from "@/actions/budget-compositor-block-actions";
-import { getBudgetAction } from "@/actions/budget-actions";
+import { getBudgetShellAction } from "@/actions/budget-actions";
 import { getCustomerAction } from "@/actions/client-actions";
 import type { BudgetBlock } from "@/types/budget-compositor-types";
 import type { CoverBlockProps } from "@/types/budget-compositor-types";
@@ -67,7 +67,7 @@ export function CompositorCoverBlock({
 
   useEffect(() => {
     let cancelled = false;
-    getBudgetAction(budgetId).then((bRes) => {
+    getBudgetShellAction(budgetId).then((bRes) => {
       if (cancelled) return;
       if (bRes.success && bRes.data) setBudget(bRes.data as Budget);
     });

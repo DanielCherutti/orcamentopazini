@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { getBudgetAction } from "@/actions/budget-actions";
+import { getBudgetPdfScopeAction } from "@/actions/budget-actions";
 import { getCompositorTreeSnapshotAction } from "@/actions/budget-compositor-tree-actions";
 import { getScopeFiguresListAction } from "@/actions/budget-scope-actions";
 import { buildTree } from "@/types/budget-compositor-types";
@@ -23,7 +23,7 @@ export default async function BudgetPdfPage({ params }: PageProps) {
   const requestHeaders = await headers();
 
   const [budgetRes, settingsRes] = await Promise.all([
-    getBudgetAction(id),
+    getBudgetPdfScopeAction(id),
     getProposalSettingsAction(),
   ]);
 

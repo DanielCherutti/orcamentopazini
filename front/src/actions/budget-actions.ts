@@ -3,7 +3,13 @@
 // Barrel de actions do módulo de Orçamentos.
 // IMPORT/EXPORT explícito para manter compatibilidade com a análise estática do Next.
 
-import { getBudgetAction, getNextBudgetNumberAction } from "./budget-core-read-actions";
+import {
+  getBudgetAction,
+  getBudgetShellAction,
+  getBudgetQuoteTabDataAction,
+  getBudgetPdfScopeAction,
+  getNextBudgetNumberAction,
+} from "./budget-core-read-actions";
 import {
   createBudgetAction,
   deleteBudgetAction,
@@ -36,6 +42,9 @@ export {
   getBudgetsAction,
   // Core
   getBudgetAction,
+  getBudgetShellAction,
+  getBudgetQuoteTabDataAction,
+  getBudgetPdfScopeAction,
   getNextBudgetNumberAction,
   createBudgetAction,
   deleteBudgetAction,

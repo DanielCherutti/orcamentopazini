@@ -16,6 +16,7 @@ import {
     safeStringRecordId,
 } from "@/lib/surreal-record-ids";
 import { extractProductId, recalculateBudgetTotal } from "@/actions/budget-hierarchy-helpers";
+import { budgetItemsFromGroupedBySectionId } from "@/lib/budgets/budget-section-items-grouped";
 import { computeItemSubtotal, type PriceAdjustmentMode } from "@/lib/budgets/scope-pricing";
 
 /** Próximo `order_index` na seção (múltiplos de 10, alinhado a `reorderSectionItemsAction`). */
@@ -43,6 +44,7 @@ async function nextSectionItemOrderIndex(
 async function createBudgetItemInSection(
     db: Awaited<ReturnType<typeof getDb>>,
     sectionId: string,
+    budgetId: string,
     productId: string,
     productName: string,
     unitPrice: number,
@@ -62,6 +64,7 @@ async function createBudgetItemInSection(
     });
     const raw = await db.create(new Table("budget_item")).content({
         section_id: requireRecordId("budget_section", sectionId),
+        budget_id: requireRecordId("budget", budgetId),
         product_id: requireRecordId("product", productId),
         product_name: productName,
         ...(unitLabel ? { product_unit: unitLabel } : {}),
@@ -187,6 +190,75 @@ async function serializeBudgetItemsFromRawQueryRows(
     return items;
 }
 
+/** Itens para UI/PDF sem `FETCH product_id` nem lookups extra ao catálogo. */
+function serializeBudgetItemsLight(rawRows: Array<Record<string, unknown>>): BudgetItem[] {
+    return rawRows.map((row) => {
+        const s = serializeBudgetEntity(row) as Record<string, unknown>;
+        const pid = s.product_id;
+        if (pid && typeof pid === "object" && pid !== null && "id" in (pid as object)) {
+            s.product_id = String((pid as Record<string, unknown>).id ?? "");
+        }
+        return toPlain(s) as BudgetItem;
+    });
+}
+
+/**
+ * Uma query para vários trechos — substitui N× `getItemsBySectionAction` no escopo.
+ * Não faz `FETCH product_id` (usa `product_name` já gravado no item).
+ */
+export async function getBudgetItemsBySectionIdsLightAction(sectionIds: string[]): Promise<{
+    success: boolean;
+    data?: Record<string, BudgetItem[]>;
+    error?: string;
+}> {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    if (sectionIds.length === 0) {
+        return { success: true, data: {} };
+    }
+
+    const db = await getDb();
+    try {
+        const recordIds = sectionIds.map((sid) => requireRecordId("budget_section", sid));
+        const result = await db.query<[Array<Record<string, unknown>>]>(
+            `SELECT * FROM budget_item WHERE section_id INSIDE $sectionIds AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC`,
+            { sectionIds: recordIds }
+        );
+        const rows = serializeBudgetItemsLight(result?.[0] || []);
+        const plain = toPlain(rows) as BudgetItem[];
+        const grouped: Record<string, BudgetItem[]> = {};
+        for (const it of plain) {
+            const r = it as unknown as Record<string, unknown>;
+            const sid = canonicalTableRecordId("budget_section", r.section_id);
+            if (!sid) continue;
+            if (!grouped[sid]) grouped[sid] = [];
+            grouped[sid].push(it);
+        }
+        return { success: true, data: grouped };
+    } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
+        console.error("getBudgetItemsBySectionIdsLightAction error:", error);
+        if (isTokenExpiredError(error)) resetDb();
+        return { success: false, error: "Erro ao carregar itens" };
+    }
+}
+
+/** Itens de um trecho sem `FETCH product_id` (caminho quente do Escopo). */
+export async function getItemsBySectionLightAction(sectionId: string): Promise<{
+    success: boolean;
+    data?: BudgetItem[];
+    error?: string;
+}> {
+    const grouped = await getBudgetItemsBySectionIdsLightAction([sectionId]);
+    if (!grouped.success) {
+        return { success: false, error: grouped.error };
+    }
+    return { success: true, data: budgetItemsFromGroupedBySectionId(grouped.data, sectionId) };
+}
+
 export async function getItemsBySectionAction(sectionId: string) {
     const auth = await assertActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
@@ -225,13 +297,22 @@ export async function getBudgetItemsGroupedByBudgetIdAction(budgetId: string): P
     const db = await getDb();
     try {
         const budgetRecordId = requireRecordId("budget", budgetId);
-        /** Preferir cadeia local → orçamento; trechos sem `budget_id` não casam em `section_id.budget_id`. */
+        /** Preferir `budget_id` denormalizado; depois cadeia section → local → orçamento. */
         let rawRows = (
             await db.query<[Array<Record<string, unknown>>]>(
-                `SELECT * FROM budget_item WHERE section_id.location_id.budget_id = $budgetId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC FETCH product_id`,
+                `SELECT * FROM budget_item WHERE budget_id = $budgetId AND section_id IS NOT NONE AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC FETCH product_id`,
                 { budgetId: budgetRecordId }
             )
         )?.[0] ?? [];
+        if (rawRows.length === 0) {
+            rawRows =
+                (
+                    await db.query<[Array<Record<string, unknown>>]>(
+                        `SELECT * FROM budget_item WHERE section_id.location_id.budget_id = $budgetId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC FETCH product_id`,
+                        { budgetId: budgetRecordId }
+                    )
+                )?.[0] ?? [];
+        }
         if (rawRows.length === 0) {
             rawRows =
                 (
@@ -281,6 +362,7 @@ export async function addItemAction(sectionId: string, budgetId: string, product
         const newItemId = await createBudgetItemInSection(
             db,
             sectionId,
+            budgetId,
             productId,
             productName,
             unitPrice,
@@ -350,6 +432,7 @@ export async function addGroupToSectionAction(
 
             await db.create(new Table("budget_item")).content({
                 section_id: requireRecordId("budget_section", sectionId),
+                budget_id: requireRecordId("budget", budgetId),
                 product_id: requireRecordId("product", productId),
                 product_name: productName,
                 ...(productUnit ? { product_unit: productUnit } : {}),

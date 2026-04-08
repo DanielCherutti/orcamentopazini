@@ -116,9 +116,13 @@ export async function getScopeStatsAction(budgetId: string): Promise<{
   try {
     const budgetRecordId = requireRecordId("budget", budgetId);
 
-    const [locRes, itemRes] = await Promise.all([
+    const [locRes, itemResBudget, itemResChain] = await Promise.all([
       db.query<[Array<{ count: number }>]>(
         `SELECT count() as count FROM budget_location WHERE budget_id = $budgetId AND deleted_at IS NONE GROUP ALL`,
+        { budgetId: budgetRecordId }
+      ),
+      db.query<[Array<{ count: number }>]>(
+        `SELECT count() as count FROM budget_item WHERE budget_id = $budgetId AND section_id IS NOT NONE AND deleted_at IS NONE GROUP ALL`,
         { budgetId: budgetRecordId }
       ),
       db.query<[Array<{ count: number }>]>(
@@ -142,12 +146,16 @@ export async function getScopeStatsAction(budgetId: string): Promise<{
       sectionCount = Number(secRes?.[0]?.[0]?.count || 0);
     }
 
+    const itemsFromBudgetId = Number(itemResBudget?.[0]?.[0]?.count || 0);
+    const itemsFromChain = Number(itemResChain?.[0]?.[0]?.count || 0);
+    const itemCount = Math.max(itemsFromBudgetId, itemsFromChain);
+
     return {
       success: true,
       data: {
         locations: Number(locRes?.[0]?.[0]?.count || 0),
         sections: sectionCount,
-        items: Number(itemRes?.[0]?.[0]?.count || 0),
+        items: itemCount,
       },
     };
   } catch (error) {
@@ -158,6 +166,26 @@ export async function getScopeStatsAction(budgetId: string): Promise<{
     if (isTokenExpiredError(error)) resetDb();
     return { success: false, error: "Erro ao carregar estatísticas" };
   }
+}
+
+/** Baseline leve: mesmas contagens que `getScopeStatsAction`, com tempo de ida ao Surreal (log em dev). */
+export async function getBudgetScopeMetricsAction(budgetId: string): Promise<{
+  success: boolean;
+  data?: { locations: number; sections: number; items: number; elapsedMs: number };
+  error?: string;
+}> {
+  const t0 = Date.now();
+  const inner = await getScopeStatsAction(budgetId);
+  const elapsedMs = Date.now() - t0;
+  if (!inner.success || !inner.data) {
+    return { success: false, error: inner.error };
+  }
+  if (process.env.NODE_ENV === "development") {
+    console.info(
+      `[budget-scope-metrics] ${budgetId} loc=${inner.data.locations} sec=${inner.data.sections} items=${inner.data.items} (${elapsedMs}ms)`
+    );
+  }
+  return { success: true, data: { ...inner.data, elapsedMs } };
 }
 
 /** Entradas ordenadas para a lista de figuras do documento (imagens do Escopo: locais e trechos). */

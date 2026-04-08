@@ -18,6 +18,7 @@ import { Copy, Trash2, ChevronDown, ChevronRight, Save } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { useBudgetsRepository } from "@/lib/budgets/use-budgets-repository";
 import { useEnvironmentsExpanded } from "@/components/budgets/budget-workspace";
+import { listProductGroupsAction, type ProductGroup } from "@/actions/product-group-actions";
 
 interface LocationDetailPanelProps {
   location: BudgetLocation | null;
@@ -56,6 +57,7 @@ export function LocationDetailPanel({
   const [addPhotoOpen, setAddPhotoOpen] = useState(false);
   const [editingImage, setEditingImage] = useState<BudgetImage | null>(null);
   const [notesOpen, setNotesOpen] = useState(false);
+  const [productGroups, setProductGroups] = useState<ProductGroup[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Estado local da descrição: sobrevive ao remount do RichTextEditor
@@ -76,6 +78,12 @@ export function LocationDetailPanel({
     [locationImagesForFigures],
   );
   const figureNumbersByImageId = useScopeFigureNumbers(budgetId, locationImageIdsKey);
+
+  useEffect(() => {
+    void listProductGroupsAction().then((r) => {
+      if (r.success && r.data) setProductGroups(r.data);
+    });
+  }, []);
 
   // Sincroniza estado local quando um LOCAL diferente é selecionado
   useEffect(() => {
@@ -345,6 +353,8 @@ export function LocationDetailPanel({
               locations={scopeLocations}
               priceAdjustmentEnabled={true}
               priceAdjustmentInputMode="fixed"
+              productGroups={productGroups}
+              disableScopePayloadCache
             />
           ))}
 

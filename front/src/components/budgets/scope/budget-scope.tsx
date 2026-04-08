@@ -23,9 +23,12 @@ import {
     updateSectionAction,
 } from "@/actions/budget-hierarchy-scope-structure-actions";
 import { clearScopeItemPriceAdjustmentsAction } from "@/actions/budget-hierarchy-section-items-actions";
+import { listProductGroupsAction, type ProductGroup } from "@/actions/product-group-actions";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
+import { ScopeFiguresProvider } from "./scope-figures-context";
+import { prefetchScopeSectionPayloadDebounced } from "@/lib/budgets/scope-section-payload-cache";
 
 export type { BudgetScopeProps, Selection } from "./budget-scope-types";
 
@@ -172,6 +175,13 @@ export function BudgetScope({
     }, [budgetId, selected]);
 
     const [sidebarOpen, setSidebarOpen] = useState(true);
+    const [productGroups, setProductGroups] = useState<ProductGroup[] | undefined>(undefined);
+
+    useEffect(() => {
+        void listProductGroupsAction().then((r) => {
+            if (r.success && r.data) setProductGroups(r.data);
+        });
+    }, []);
 
     if (loading) {
         return (
@@ -182,6 +192,7 @@ export function BudgetScope({
     }
 
     return (
+        <ScopeFiguresProvider budgetId={budgetId} scopeDataVersion={scopeDataVersion}>
         <div className="flex flex-1 min-h-0 overflow-hidden">
             {sidebarOpen && (
                 <ScopeSidebar
@@ -196,6 +207,9 @@ export function BudgetScope({
                     onRefresh={loadLocations}
                     isReadOnly={isReadOnly}
                     scopeNumber={scopeNumber}
+                    onPrefetchSection={(sectionId) => {
+                        prefetchScopeSectionPayloadDebounced(scopeDataVersion, sectionId);
+                    }}
                 />
             )}
 
@@ -569,6 +583,7 @@ export function BudgetScope({
                             priceAdjustmentInputMode={priceAdjustmentInputMode}
                             quoteMarkupPercent={quoteMarkupPercent}
                             quoteDiscountPercent={quoteDiscountPercent}
+                            productGroups={productGroups}
                         />
                     ) : (
                         <SectionDetail
@@ -591,10 +606,12 @@ export function BudgetScope({
                             priceAdjustmentInputMode={priceAdjustmentInputMode}
                             quoteMarkupPercent={quoteMarkupPercent}
                             quoteDiscountPercent={quoteDiscountPercent}
+                            productGroups={productGroups}
                         />
                     )}
                 </div>
             </div>
         </div>
+        </ScopeFiguresProvider>
     );
 }

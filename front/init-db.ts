@@ -48,6 +48,10 @@ const BASE_SCHEMA_QL = `
             DEFINE TABLE IF NOT EXISTS proposal_settings SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS portal_user SCHEMALESS;
             DEFINE INDEX IF NOT EXISTS idx_portal_user_email ON portal_user FIELDS email UNIQUE;
+            DEFINE INDEX IF NOT EXISTS idx_budget_item_budget_id ON budget_item FIELDS budget_id;
+            DEFINE INDEX IF NOT EXISTS idx_budget_item_section_id ON budget_item FIELDS section_id;
+            DEFINE INDEX IF NOT EXISTS idx_budget_section_location_id ON budget_section FIELDS location_id;
+            DEFINE INDEX IF NOT EXISTS idx_budget_location_budget_id ON budget_location FIELDS budget_id;
             INSERT IGNORE INTO company { id: company:0, name: 'Pazini', created_at: time::now() };
 `;
 

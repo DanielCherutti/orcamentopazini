@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:quote-breakdown": "tsx scripts/quote-breakdown-regression.ts",
     "init:db": "bun ./init-db.ts",
     "seed:products": "tsx seed-products.ts",
     "seed:portal-user": "bun ./seed-portal-user.ts",
@@ -17,6 +18,7 @@
     "backup:db": "bun scripts/db-backup.ts",
     "migrate": "bun scripts/migrate.ts",
     "migrate:20260203": "bun scripts/migrate.ts scripts/run-migration-20260203.ts",
+    "migrate:backfill-budget-item-budget-id": "bun scripts/migrate.ts scripts/run-migration-backfill-budget-item-budget-id.ts",
     "test:clients": "tsx scripts/test-client-setup.ts",
     "setup:image-library": "tsx scripts/setup-image-library-schema.ts",
     "setup:compositor": "bun scripts/setup-compositor-schema.ts"
