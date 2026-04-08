@@ -26,7 +26,9 @@ export async function getScopeSectionOpenPayloadAction(sectionId: string): Promi
         return { success: false, error: itemsRes.error ?? "Erro ao carregar itens" };
     }
 
-    const items = budgetItemsFromGroupedBySectionId(itemsRes.data, sectionId);
+    const items = budgetItemsFromGroupedBySectionId(itemsRes.data, sectionId, {
+        trustSingleBucket: true,
+    });
     return {
         success: true,
         data: toPlain({ items, images: imagesRaw ?? [] }),

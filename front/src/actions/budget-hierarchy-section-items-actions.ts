@@ -190,6 +190,36 @@ async function serializeBudgetItemsFromRawQueryRows(
     return items;
 }
 
+/**
+ * Chave canónica do trecho a partir do `section_id` cru da query (antes de serializeBudgetEntity).
+ * Cobre RecordId/StringRecordId do driver (`String(x)` costuma ser `table:suffix`), `{ tb, id }` e `{ id }`.
+ */
+function budgetItemSectionGroupKey(raw: unknown): string {
+    if (raw == null) return "";
+    if (typeof raw === "string") {
+        return canonicalTableRecordId("budget_section", raw);
+    }
+    if (typeof raw === "object") {
+        const o = raw as Record<string, unknown>;
+        if (typeof o.tb === "string" && o.id != null) {
+            return canonicalTableRecordId("budget_section", raw);
+        }
+        if (o.id != null) {
+            return canonicalTableRecordId("budget_section", o.id);
+        }
+        const s = String(raw);
+        if (s.length > 0 && !s.startsWith("[object ")) {
+            return canonicalTableRecordId("budget_section", s);
+        }
+        return "";
+    }
+    const s = String(raw);
+    if (s.length > 0 && !s.startsWith("[object ")) {
+        return canonicalTableRecordId("budget_section", s);
+    }
+    return "";
+}
+
 /** Itens para UI/PDF sem `FETCH product_id` nem lookups extra ao catálogo. */
 function serializeBudgetItemsLight(rawRows: Array<Record<string, unknown>>): BudgetItem[] {
     return rawRows.map((row) => {
@@ -225,15 +255,21 @@ export async function getBudgetItemsBySectionIdsLightAction(sectionIds: string[]
             `SELECT * FROM budget_item WHERE section_id INSIDE $sectionIds AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC`,
             { sectionIds: recordIds }
         );
-        const rows = serializeBudgetItemsLight(result?.[0] || []);
-        const plain = toPlain(rows) as BudgetItem[];
-        const grouped: Record<string, BudgetItem[]> = {};
-        for (const it of plain) {
-            const r = it as unknown as Record<string, unknown>;
-            const sid = canonicalTableRecordId("budget_section", r.section_id);
+        const rawRows = result?.[0] ?? [];
+        const buckets = new Map<string, Record<string, unknown>[]>();
+        for (const row of rawRows) {
+            const sid = budgetItemSectionGroupKey(row.section_id);
             if (!sid) continue;
-            if (!grouped[sid]) grouped[sid] = [];
-            grouped[sid].push(it);
+            const list = buckets.get(sid) ?? [];
+            list.push(row);
+            buckets.set(sid, list);
+        }
+        const grouped: Record<string, BudgetItem[]> = {};
+        for (const [sid, bucket] of buckets) {
+            grouped[sid] = serializeBudgetItemsLight(bucket).map((it) => {
+                (it as BudgetItem).section_id = sid;
+                return it;
+            });
         }
         return { success: true, data: grouped };
     } catch (error) {
@@ -256,7 +292,12 @@ export async function getItemsBySectionLightAction(sectionId: string): Promise<{
     if (!grouped.success) {
         return { success: false, error: grouped.error };
     }
-    return { success: true, data: budgetItemsFromGroupedBySectionId(grouped.data, sectionId) };
+    return {
+        success: true,
+        data: budgetItemsFromGroupedBySectionId(grouped.data, sectionId, {
+            trustSingleBucket: true,
+        }),
+    };
 }
 
 export async function getItemsBySectionAction(sectionId: string) {
@@ -327,8 +368,9 @@ export async function getBudgetItemsGroupedByBudgetIdAction(budgetId: string): P
         const grouped: Record<string, BudgetItem[]> = {};
         for (const it of plain) {
             const r = it as unknown as Record<string, unknown>;
-            const sid = canonicalTableRecordId("budget_section", r.section_id);
+            const sid = budgetItemSectionGroupKey(r.section_id);
             if (!sid) continue;
+            (it as BudgetItem).section_id = sid;
             if (!grouped[sid]) grouped[sid] = [];
             grouped[sid].push(it);
         }

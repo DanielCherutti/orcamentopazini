@@ -6,7 +6,8 @@ type Payload = { items: BudgetItem[]; images: BudgetImage[] };
 const store = new Map<string, Payload>();
 
 export function scopeSectionPayloadCacheKey(scopeDataVersion: number, sectionId: string): string {
-    return `${scopeDataVersion}::${sectionId}`;
+    /* Prefixo versiona entradas antigas (payload vazio/errado após mudanças de agrupamento). */
+    return `scope-payload-v3::${scopeDataVersion}::${sectionId}`;
 }
 
 export function readScopeSectionPayloadFromCache(
