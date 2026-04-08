@@ -5,6 +5,7 @@ import type { Budget } from "@/types/budget-types";
 import type { ProposalSettings } from "@/actions/settings-actions";
 import type { CoverBlockProps } from "@/types/budget-compositor-types";
 import { mergeCoverDocumentProps } from "@/lib/budgets/cover-document";
+import { sanitizeCoverHtmlForPdf } from "@/lib/pdf/sanitize-inline-styles-for-pdf";
 import { theme } from "../theme";
 
 function resolvePdfImageSrc(url: string | undefined, publicBase?: string): string | undefined {
@@ -133,7 +134,9 @@ export function CompositorCoverPdfPage({
   const coverProps = mergeCoverDocumentProps(raw as unknown as Record<string, unknown>);
   const wmResolved = proxyPdfImageSrc(coverProps.cover_watermark_url, settings.app_public_url);
   const wmOpacity = clampOpacity(coverProps.cover_watermark_opacity, 0.12);
-  const html = rewriteImgSrcInHtml(coverProps.cover_document_html ?? "", settings.app_public_url);
+  const html = sanitizeCoverHtmlForPdf(
+    rewriteImgSrcInHtml(coverProps.cover_document_html ?? "", settings.app_public_url)
+  );
 
   return (
     <Page size="A4" style={styles.page}>

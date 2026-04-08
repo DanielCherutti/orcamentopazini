@@ -77,8 +77,12 @@ const styles = StyleSheet.create({
     textBold: { fontFamily: theme.fonts.bold, color: theme.colors.text }
 });
 
-const formatMoney = (val: number) =>
-    new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
+const formatMoney = (val: number) => {
+    const n = Number(val);
+    if (!Number.isFinite(n)) return '—';
+    const safe = Math.min(Math.max(n, -1e15), 1e15);
+    return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(safe);
+};
 
 function getLocationAssemblyMode(location: BudgetLocation): LocationAssemblyMode {
     const raw = String((location as unknown as Record<string, unknown>).assembly_mode ?? 'percent');

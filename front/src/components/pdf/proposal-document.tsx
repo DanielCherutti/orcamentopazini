@@ -164,6 +164,15 @@ function clampDocumentOpacity(value: number | undefined, fallback: number): numb
     return n;
 }
 
+/** Indentação no PDF: `Math.min(depth, 6)` com depth negativo devolve o próprio negativo (ex.: ID mal tipado) e quebra o Yoga. */
+function safeLayoutIndentDepth(raw: unknown, maxDepth: number): number {
+    const n = typeof raw === "number" ? raw : Number(raw);
+    if (!Number.isFinite(n)) return 0;
+    const i = Math.trunc(n);
+    if (i < 0) return 0;
+    return Math.min(i, maxDepth);
+}
+
 function stripHtmlToText(raw: string | undefined): string {
     if (!raw) return '';
     return raw
@@ -317,8 +326,19 @@ function collectSessionTocRowsForPrintedLayout(
 }
 
 export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDocumentProps) => {
-    const validityDays = Number(budget.validity_days ?? 15);
-    const formatMoney = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+    const rawValidity = Number(budget.validity_days ?? 15);
+    const validityDays =
+        Number.isFinite(rawValidity) && rawValidity >= 0 ? Math.min(Math.trunc(rawValidity), 3650) : 15;
+    const rawSectionNumber = Number(budget.section_number ?? 1);
+    const sectionNumberPdf =
+        Number.isFinite(rawSectionNumber) && rawSectionNumber >= 0 && rawSectionNumber <= 999
+            ? Math.trunc(rawSectionNumber)
+            : 1;
+    const formatMoney = (val: number) => {
+        const n = Number(val);
+        const safe = Number.isFinite(n) ? Math.min(Math.max(n, -1e15), 1e15) : 0;
+        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(safe);
+    };
     const locations = budget.locations || [];
     const normalizeCostsMode = (raw: unknown): "location" | "section" | "general" => {
         const mode = String(raw ?? "section");
@@ -460,7 +480,7 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
                             tocRows.map((row, idx) => (
                                 <View
                                     key={`toc-${row.number}-${idx}`}
-                                    style={[styles.tocRow, { paddingLeft: Math.min(row.depth, 6) * 10 }]}
+                                    style={[styles.tocRow, { paddingLeft: safeLayoutIndentDepth(row.depth, 6) * 10 }]}
                                     wrap={false}
                                 >
                                     <Text style={styles.tocTitle}>
@@ -514,7 +534,7 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
                         </View>
                         <BudgetTable
                             locations={locations}
-                            sectionNumber={budget.section_number ?? 1}
+                            sectionNumber={sectionNumberPdf}
                             showCosts={detailShowCosts}
                             costsDisplayMode={detailCostsMode}
                         />
@@ -558,7 +578,7 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
                             rows.map((row, idx) => (
                                 <View
                                     key={`session-row-${sessionRoot.id}-${idx}`}
-                                    style={[styles.sessionRow, { marginLeft: Math.min(row.depth, 5) * 10 }]}
+                                    style={[styles.sessionRow, { marginLeft: safeLayoutIndentDepth(row.depth, 5) * 10 }]}
                                 >
                                     <Text style={styles.sessionRowTitle}>{row.title}</Text>
                                     {row.text ? <Text style={styles.sessionRowText}>{row.text}</Text> : null}
@@ -590,14 +610,29 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
                                 marginTop: "auto",
                                 marginBottom: 50,
                                 justifyContent: "space-between",
-                                gap: 40,
                             }}
                         >
-                            <View style={{ borderTopWidth: 1, flex: 1, alignItems: "center", paddingTop: 10 }}>
+                            <View
+                                style={{
+                                    borderTopWidth: 1,
+                                    flex: 1,
+                                    alignItems: "center",
+                                    paddingTop: 10,
+                                    marginRight: 20,
+                                }}
+                            >
                                 <Text style={{ fontSize: 11, fontFamily: theme.fonts.bold }}>{settings.company_name}</Text>
                                 <Text style={{ fontSize: 9 }}>Diretoria Comercial</Text>
                             </View>
-                            <View style={{ borderTopWidth: 1, flex: 1, alignItems: "center", paddingTop: 10 }}>
+                            <View
+                                style={{
+                                    borderTopWidth: 1,
+                                    flex: 1,
+                                    alignItems: "center",
+                                    paddingTop: 10,
+                                    marginLeft: 20,
+                                }}
+                            >
                                 <Text style={{ fontSize: 11, fontFamily: theme.fonts.bold }}>De Acordo</Text>
                                 <Text style={{ fontSize: 9 }}>Cliente</Text>
                             </View>

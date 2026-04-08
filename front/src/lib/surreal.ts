@@ -19,13 +19,24 @@ let dbReady: Promise<Surreal> | null = null;
 let dbConnectedAt = 0;
 let dbInitialized = false;
 
-/** Detecta erros de token expirado / 401 Unauthorized do SurrealDB */
+/** Detecta erros de token expirado, 401 ou falha de autenticação HTTP do cliente SurrealDB */
 export function isTokenExpiredError(error: unknown): boolean {
     if (error && typeof error === "object") {
-        const e = error as { status?: number; message?: string };
+        const e = error as { status?: number; message?: string; name?: string };
         if (e.status === 401) return true;
-        if (typeof e.message === "string" &&
-            (e.message.includes("token has expired") || e.message.includes("Unauthorized"))) {
+        const msg = typeof e.message === "string" ? e.message : "";
+        if (
+            msg.includes("token has expired") ||
+            msg.includes("Unauthorized") ||
+            /problem with authentication/i.test(msg)
+        ) {
+            return true;
+        }
+        if (
+            e.name === "HttpConnectionError" &&
+            msg.length > 0 &&
+            /authentication|unauthorized|401/i.test(msg)
+        ) {
             return true;
         }
     }

@@ -10,19 +10,8 @@ import { Eye, Printer } from "lucide-react";
 import { getProposalSettingsAction, type ProposalSettings } from "@/actions/settings-actions";
 import type { Budget } from "@/types/budget-types";
 import { ProposalDocument } from "@/components/pdf/proposal-document";
+import { PdfBlobPreviewFrame } from "@/components/pdf/pdf-blob-preview-frame";
 import { budgetPdfUrl } from "@/lib/budgets/budget-path";
-
-const PDFViewer = dynamic(
-  () => import("@react-pdf/renderer").then((mod) => mod.PDFViewer),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex items-center justify-center h-[70vh]">
-        <Skeleton className="h-full w-full" />
-      </div>
-    ),
-  }
-);
 
 const PDFDownloadLink = dynamic(
   () => import("@react-pdf/renderer").then((mod) => mod.PDFDownloadLink),
@@ -83,6 +72,11 @@ export function BudgetPreviewTab({ budget }: BudgetPreviewTabProps) {
     if (!w) return;
     w.addEventListener("load", () => w.print());
   };
+
+  const previewDocument = useMemo(() => {
+    if (!settings) return null;
+    return <ProposalDocument budget={budget} settings={settings} />;
+  }, [budget, settings]);
 
   if (!budgetId) {
     return (
@@ -146,11 +140,11 @@ export function BudgetPreviewTab({ budget }: BudgetPreviewTabProps) {
             <Skeleton className="h-4 w-64" />
             <Skeleton className="h-[70vh] w-full" />
           </div>
-        ) : (
-          <PDFViewer className="w-full h-[80vh] border-none">
-            <ProposalDocument budget={budget} settings={settings} />
-          </PDFViewer>
-        )}
+        ) : previewDocument ? (
+          <div className="h-[80vh] min-h-[400px] w-full">
+            <PdfBlobPreviewFrame document={previewDocument} className="h-full w-full" />
+          </div>
+        ) : null}
       </div>
     </div>
   );
