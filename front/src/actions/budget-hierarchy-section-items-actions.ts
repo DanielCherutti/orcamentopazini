@@ -549,6 +549,57 @@ export async function deleteItemAction(itemId: string, budgetId: string) {
     }
 }
 
+/** Remove vários itens do orçamento (soft delete), com um único recálculo do total. */
+export async function deleteBudgetItemsBulkAction(
+    itemIds: string[],
+    budgetId: string
+): Promise<{ success: boolean; error?: string; deletedCount: number }> {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error, deletedCount: 0 };
+
+    const unique = [...new Set(itemIds.map((id) => String(id).trim()).filter(Boolean))];
+    if (unique.length === 0) return { success: true, deletedCount: 0 };
+
+    const db = await getDb();
+    try {
+        const budgetRecordId = requireRecordId("budget", budgetId);
+        let itemRecordIds;
+        try {
+            itemRecordIds = unique.map((id) => requireRecordId("budget_item", id));
+        } catch {
+            return { success: false, error: "Identificador de item inválido", deletedCount: 0 };
+        }
+
+        const result = await db.query<[Array<{ id: unknown }>]>(
+            `SELECT id FROM budget_item WHERE id INSIDE $ids AND budget_id = $budgetId AND deleted_at IS NONE`,
+            { ids: itemRecordIds, budgetId: budgetRecordId }
+        );
+        const rows = result?.[0] ?? [];
+        if (rows.length === 0) {
+            return { success: true, deletedCount: 0 };
+        }
+
+        const now = new Date().toISOString();
+        for (const row of rows) {
+            const ridStr = recordIdToString(row.id);
+            if (!ridStr) continue;
+            const itemRecordId = requireRecordId("budget_item", ridStr);
+            await db.update(itemRecordId).merge({ deleted_at: now });
+        }
+
+        await recalculateBudgetTotal(budgetId);
+        revalidatePath(budgetRevalidatePath(budgetId));
+        return { success: true, deletedCount: rows.length };
+    } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message, deletedCount: 0 };
+        }
+        console.error("deleteBudgetItemsBulkAction error:", error);
+        if (isTokenExpiredError(error)) resetDb();
+        return { success: false, error: "Erro ao remover itens", deletedCount: 0 };
+    }
+}
+
 export async function updateItemQuantityAction(itemId: string, budgetId: string, quantity: number) {
     const auth = await assertActionSession();
     if (!auth.ok) return { success: false, error: auth.error };

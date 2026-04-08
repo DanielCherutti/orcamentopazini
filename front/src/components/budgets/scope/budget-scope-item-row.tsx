@@ -12,6 +12,7 @@ import {
     updateItemCommercialSettingsAction,
 } from "@/actions/budget-hierarchy-section-items-actions";
 import { QuantityTextInput } from "@/components/budgets/quantity-text-input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { formatCurrency } from "./budget-scope-utils";
 import {
     applyQuoteCommercialFactor,
@@ -35,6 +36,9 @@ function ScopeItemRowInner({
     priceAdjustmentInputMode,
     quoteMarkupPercent = 0,
     quoteDiscountPercent = 0,
+    selectionEnabled = false,
+    selected = false,
+    onSelectionChange,
 }: {
     item: BudgetItem;
     budgetId: string;
@@ -48,6 +52,10 @@ function ScopeItemRowInner({
     priceAdjustmentInputMode: PriceAdjustmentMode;
     quoteMarkupPercent?: number;
     quoteDiscountPercent?: number;
+    /** Caixas para remoção em lote (lista editável do escopo). */
+    selectionEnabled?: boolean;
+    selected?: boolean;
+    onSelectionChange?: (checked: boolean) => void;
 }) {
     const [qty, setQty] = useState(item.quantity);
     const [observationOpen, setObservationOpen] = useState(false);
@@ -188,17 +196,27 @@ function ScopeItemRowInner({
                     "grid grid-cols-12 gap-2 items-center px-2 py-1.5 rounded-md border bg-background text-sm"
                 )}
             >
-                <div className="col-span-3 flex items-center gap-1 min-w-0">
-                {dragHandleProps && (
-                    <button
-                        type="button"
-                        {...dragHandleProps}
-                        className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground shrink-0 touch-none"
-                    >
-                        <GripVertical className="h-3.5 w-3.5" />
-                    </button>
-                )}
-                <span className="truncate text-xs">{productName || "Produto"}</span>
+                <div className="col-span-3 flex items-center gap-1.5 min-w-0">
+                    {selectionEnabled && (
+                        <Checkbox
+                            checked={selected}
+                            onCheckedChange={(c) => onSelectionChange?.(c === true)}
+                            className="shrink-0"
+                            aria-label="Selecionar produto"
+                            onClick={(e) => e.stopPropagation()}
+                            onPointerDown={(e) => e.stopPropagation()}
+                        />
+                    )}
+                    {dragHandleProps && (
+                        <button
+                            type="button"
+                            {...dragHandleProps}
+                            className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground shrink-0 touch-none"
+                        >
+                            <GripVertical className="h-3.5 w-3.5" />
+                        </button>
+                    )}
+                    <span className="truncate text-xs">{productName || "Produto"}</span>
                 </div>
                 <div className="col-span-2 flex items-center justify-center gap-1 min-w-0">
                 {isReadOnly ? (
