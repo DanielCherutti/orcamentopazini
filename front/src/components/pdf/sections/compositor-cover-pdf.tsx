@@ -1,51 +1,26 @@
 import React from "react";
-import { Page, View, Image, StyleSheet } from "@react-pdf/renderer";
-import Html from "react-pdf-html";
+import { Page, View, Image, Text, StyleSheet } from "@react-pdf/renderer";
 import type { Budget } from "@/types/budget-types";
 import type { ProposalSettings } from "@/actions/settings-actions";
 import type { CoverBlockProps } from "@/types/budget-compositor-types";
 import { mergeCoverDocumentProps } from "@/lib/budgets/cover-document";
+import { type PdfEmbeddedImages, proxyPdfImageSrc } from "@/lib/pdf/pdf-image-src";
 import { sanitizeCoverHtmlForPdf } from "@/lib/pdf/sanitize-inline-styles-for-pdf";
+import { splitCoverHtmlIntoPdfBlocks, splitCoverHtmlFragmentToSegments } from "@/lib/pdf/cover-pdf-blocks";
 import { theme } from "../theme";
 
-function resolvePdfImageSrc(url: string | undefined, publicBase?: string): string | undefined {
-  const u = url?.trim();
-  if (!u) return undefined;
-  if (/^data:/i.test(u)) return u;
-  if (/^https?:\/\//i.test(u)) return u;
-  if (u.startsWith("//")) return `https:${u}`;
-  const origin =
-    typeof window !== "undefined" && window.location?.origin
-      ? window.location.origin
-      : publicBase?.replace(/\/$/, "");
-  if (u.startsWith("/")) {
-    if (origin) return `${origin}${u}`;
-    return u;
-  }
-  if (origin) return `${origin}/${u.replace(/^\.?\//, "")}`;
-  return `/${u.replace(/^\.?\//, "")}`;
-}
-
-function proxyPdfImageSrc(url: string | undefined, publicBase?: string): string | undefined {
-  const resolved = resolvePdfImageSrc(url, publicBase);
-  if (!resolved || /^data:/i.test(resolved)) return resolved;
-  if (resolved.includes("/api/pdf/image?src=")) return resolved;
-  const origin =
-    typeof window !== "undefined" && window.location?.origin
-      ? window.location.origin
-      : publicBase?.replace(/\/$/, "");
-  if (!origin) return resolved;
-  return `${origin}/api/pdf/image?src=${encodeURIComponent(resolved)}`;
-}
-
-function rewriteImgSrcInHtml(html: string, publicBase?: string): string {
+function rewriteImgSrcInHtml(
+  html: string,
+  publicBase?: string,
+  embedded?: PdfEmbeddedImages,
+): string {
   if (!html.trim()) return html;
   return html.replace(/<img\b[^>]*>/gi, (tag) => {
     const m = tag.match(/\bsrc=(["'])([^"']*)\1/i);
     if (!m) return tag;
     const q = m[1];
     const src = m[2];
-    const proxied = proxyPdfImageSrc(src, publicBase) ?? src;
+    const proxied = proxyPdfImageSrc(src, publicBase, embedded) ?? src;
     return tag.replace(/\bsrc=(["'])([^"']*)\1/i, `src=${q}${proxied}${q}`);
   });
 }
@@ -60,8 +35,9 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.body,
     backgroundColor: "#FFFFFF",
     position: "relative",
-    width: PAGE_W,
-    height: PAGE_H,
+    paddingTop: BODY_PAD_V,
+    paddingBottom: BODY_PAD_V,
+    paddingHorizontal: BODY_PAD_H,
   },
   watermarkLayer: {
     position: "absolute",
@@ -79,15 +55,43 @@ const styles = StyleSheet.create({
     objectFit: "contain",
   },
   body: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    width: PAGE_W,
-    height: PAGE_H,
+    position: "relative",
     zIndex: 1,
-    paddingTop: BODY_PAD_V,
-    paddingBottom: BODY_PAD_V,
-    paddingHorizontal: BODY_PAD_H,
+  },
+  coverText: {
+    fontSize: 11,
+    fontFamily: theme.fonts.body,
+    lineHeight: 1.45,
+    color: "#171717",
+    marginBottom: 6,
+    textAlign: "left",
+  },
+  coverHeading1: {
+    fontSize: 20,
+    fontFamily: theme.fonts.bold,
+    lineHeight: 1.35,
+    color: "#171717",
+    marginBottom: 10,
+  },
+  coverHeading2: {
+    fontSize: 16,
+    fontFamily: theme.fonts.bold,
+    lineHeight: 1.35,
+    color: "#171717",
+    marginBottom: 8,
+  },
+  coverHeading3: {
+    fontSize: 13,
+    fontFamily: theme.fonts.bold,
+    lineHeight: 1.4,
+    color: "#171717",
+    marginBottom: 6,
+  },
+  coverImage: {
+    width: PAGE_W - 2 * BODY_PAD_H,
+    height: 280,
+    marginBottom: 8,
+    objectFit: "contain",
   },
 });
 
@@ -99,44 +103,28 @@ function clampOpacity(value: number | undefined, fallback: number): number {
   return n;
 }
 
-const coverHtmlStylesheet = {
-  p: {
-    fontSize: 11,
-    fontFamily: theme.fonts.body,
-    lineHeight: 1.45,
-    marginTop: 0,
-    marginBottom: 4,
-    color: "#171717",
-  },
-  strong: { fontFamily: theme.fonts.bold },
-  b: { fontFamily: theme.fonts.bold },
-  em: { fontFamily: theme.fonts.oblique },
-  i: { fontFamily: theme.fonts.oblique },
-  h1: { fontSize: 18, fontFamily: theme.fonts.bold, marginBottom: 8, marginTop: 0, color: "#171717" },
-  h2: { fontSize: 14, fontFamily: theme.fonts.bold, marginBottom: 6, marginTop: 0, color: "#171717" },
-  h3: { fontSize: 12, fontFamily: theme.fonts.bold, marginBottom: 4, marginTop: 0, color: "#171717" },
-  img: { maxWidth: "100%", objectFit: "contain" as const },
-  ul: { marginBottom: 6, marginTop: 0 },
-  ol: { marginBottom: 6, marginTop: 0 },
-  li: { fontSize: 11, fontFamily: theme.fonts.body, lineHeight: 1.45 },
-  a: { color: "#1e3a8a" },
-};
-
 export function CompositorCoverPdfPage({
   budget: _budget,
   settings,
   coverProps: raw,
+  pdfEmbeddedImages,
 }: {
   budget: Budget;
   settings: ProposalSettings;
   coverProps: CoverBlockProps;
+  pdfEmbeddedImages?: PdfEmbeddedImages;
 }) {
   const coverProps = mergeCoverDocumentProps(raw as unknown as Record<string, unknown>);
-  const wmResolved = proxyPdfImageSrc(coverProps.cover_watermark_url, settings.app_public_url);
+  const wmResolved = proxyPdfImageSrc(
+    coverProps.cover_watermark_url,
+    settings.app_public_url,
+    pdfEmbeddedImages,
+  );
   const wmOpacity = clampOpacity(coverProps.cover_watermark_opacity, 0.12);
   const html = sanitizeCoverHtmlForPdf(
-    rewriteImgSrcInHtml(coverProps.cover_document_html ?? "", settings.app_public_url)
+    rewriteImgSrcInHtml(coverProps.cover_document_html ?? "", settings.app_public_url, pdfEmbeddedImages),
   );
+  const blocks = splitCoverHtmlIntoPdfBlocks(html);
 
   return (
     <Page size="A4" style={styles.page}>
@@ -146,8 +134,46 @@ export function CompositorCoverPdfPage({
           <Image src={wmResolved} style={[styles.watermarkImg, { opacity: wmOpacity }]} />
         </View>
       ) : null}
-      <View style={styles.body}>
-        <Html stylesheet={coverHtmlStylesheet}>{html}</Html>
+      <View style={styles.body} wrap>
+        {blocks.map((b, i) => {
+          if (b.type === "img") {
+            const src = proxyPdfImageSrc(b.src, settings.app_public_url, pdfEmbeddedImages) ?? b.src;
+            return (
+              /* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */
+              <Image key={`cover-img-${i}`} src={src} style={styles.coverImage} />
+            );
+          }
+          const segs = splitCoverHtmlFragmentToSegments(b.content);
+          if (!segs.length) return null;
+          return (
+            <React.Fragment key={`cover-txt-${i}`}>
+              {segs.map((seg, j) => {
+                if (seg.kind === "heading") {
+                  const hs =
+                    seg.level === 1
+                      ? styles.coverHeading1
+                      : seg.level === 2
+                        ? styles.coverHeading2
+                        : styles.coverHeading3;
+                  return (
+                    <Text key={`${i}-${j}`} style={hs}>
+                      {seg.text}
+                    </Text>
+                  );
+                }
+                const align = seg.textAlign;
+                return (
+                  <Text
+                    key={`${i}-${j}`}
+                    style={align ? [styles.coverText, { textAlign: align }] : styles.coverText}
+                  >
+                    {seg.text}
+                  </Text>
+                );
+              })}
+            </React.Fragment>
+          );
+        })}
       </View>
     </Page>
   );

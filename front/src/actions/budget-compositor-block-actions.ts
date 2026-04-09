@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
 import { mergeCoverDocumentProps } from "@/lib/budgets/cover-document";
+import { sanitizeCompositorBlockPropsForPersistence } from "@/lib/pdf/sanitize-inline-styles-for-pdf";
 
 /**
  * Garante um bloco `cover` na raiz (order_index 0) para orçamentos compositor.
@@ -270,7 +271,7 @@ export async function addBlockAction(params: {
             type,
             label,
             order_index: orderIndex,
-            props,
+            props: sanitizeCompositorBlockPropsForPersistence(type, props),
         });
         const created = Array.isArray(raw) ? raw[0] : raw;
 
@@ -301,10 +302,11 @@ export async function updateBlockAction(
         if (patch.props !== undefined) {
             const current = await db.select(blockRecordId);
             const currentBlock = (Array.isArray(current) ? current[0] : current) as Record<string, unknown>;
-            const mergedProps = {
+            const blockType = String(currentBlock?.type ?? "");
+            const mergedProps = sanitizeCompositorBlockPropsForPersistence(blockType, {
                 ...((currentBlock?.props as Record<string, unknown>) ?? {}),
                 ...patch.props,
-            };
+            });
             await db.update(blockRecordId).merge({
                 ...(patch.label !== undefined ? { label: patch.label } : {}),
                 props: mergedProps,

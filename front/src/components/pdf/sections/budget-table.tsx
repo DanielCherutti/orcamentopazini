@@ -11,6 +11,8 @@ import {
     type CostDisplayMode,
     type LocationAssemblyMode,
 } from '@/lib/budgets/scope-pricing';
+import { type PdfEmbeddedImages, proxyPdfImageSrc } from '@/lib/pdf/pdf-image-src';
+import { sanitizeTextForPdf } from '@/lib/pdf/sanitize-pdf-text';
 
 const styles = StyleSheet.create({
     locationBlock: {
@@ -38,12 +40,12 @@ const styles = StyleSheet.create({
         backgroundColor: theme.colors.bgHeader,
         padding: 4
     },
+    /** Largura fixa (A4 − margens ~525pt) + contain para a imagem aparecer inteira no PDF. */
     sceneImage: {
-        width: '100%',
+        width: 525,
         height: 250,
-        objectFit: 'contain',
         marginBottom: 10,
-        borderRadius: 2
+        objectFit: 'contain',
     },
     table: {
         marginTop: 5,
@@ -63,10 +65,10 @@ const styles = StyleSheet.create({
         paddingVertical: 6,
         alignItems: 'center'
     },
-    colDesc: { flex: 5, paddingRight: 5 },
-    colQty: { flex: 1, textAlign: 'center' },
-    colMoney: { flex: 1.4, textAlign: 'right' },
-    colTotal: { flex: 2, textAlign: 'right' },
+    colDesc: { flex: 25, paddingRight: 5 },
+    colQty: { flex: 5, textAlign: 'center' },
+    colMoney: { flex: 7, textAlign: 'right' },
+    colTotal: { flex: 10, textAlign: 'right' },
     subtotalRow: {
         flexDirection: 'row',
         justifyContent: 'flex-end',
@@ -196,11 +198,16 @@ export const BudgetTable = ({
     sectionNumber = 1,
     showCosts = false,
     costsDisplayMode = 'section',
+    pdfImagePublicBase,
+    pdfEmbeddedImages,
 }: {
     locations: BudgetLocation[];
     sectionNumber?: number;
     showCosts?: boolean;
     costsDisplayMode?: CostDisplayMode;
+    /** Base pública (ex. `settings.app_public_url`) para proxy `/api/pdf/image` nas cenas compostas. */
+    pdfImagePublicBase?: string;
+    pdfEmbeddedImages?: PdfEmbeddedImages;
 }) => (
     <View>
         {locations.map((loc, locIdx) => {
@@ -214,24 +221,31 @@ export const BudgetTable = ({
                 return sum + sectionTotal;
             }, 0);
             return (
-            <View key={loc.id} style={styles.locationBlock} break={false} wrap={false}>
-                <Text style={styles.locationHeader}>{locNum} — {loc.name}</Text>
+            <View key={loc.id} style={styles.locationBlock}>
+                <Text style={styles.locationHeader}>
+                    {sanitizeTextForPdf(`${locNum} — ${loc.name ?? ''}`)}
+                </Text>
 
                 {(loc.sections || []).map((sec, secIdx) => {
                     const secNum = `${locNum}.${secIdx + 1}`;
                     const laborCols = showCosts && sectionWantsLaborSplitOnPrint(sec);
                     return (
-                    <View key={sec.id} style={styles.sectionBlock} wrap={false}>
-                        <Text style={styles.sectionTitle}>{secNum} — {sec.name.toUpperCase()}</Text>
+                    <View key={sec.id} style={styles.sectionBlock}>
+                        <Text style={styles.sectionTitle}>
+                            {sanitizeTextForPdf(`${secNum} — ${(sec.name ?? '').toUpperCase()}`)}
+                        </Text>
 
-                        {/* Cena Composta */}
-                        {(sec.images || [])[0] && (sec.images![0].composed_url || sec.images![0].url) && (
-                            /* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt prop */
-                            <Image
-                                src={(sec.images![0].composed_url || sec.images![0].url)}
-                                style={styles.sceneImage}
-                            />
-                        )}
+                        {/* Cena Composta — proxy limita dimensões (evita Yoga "unsupported number"). */}
+                        {(() => {
+                            const firstImg = (sec.images || [])[0];
+                            const raw = firstImg?.composed_url || firstImg?.url;
+                            if (!raw) return null;
+                            const src = proxyPdfImageSrc(raw, pdfImagePublicBase, pdfEmbeddedImages) ?? raw;
+                            return (
+                                /* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt prop */
+                                <Image src={src} style={styles.sceneImage} />
+                            );
+                        })()}
 
                         {/* Lista de Itens */}
                         <View style={styles.table}>
@@ -257,19 +271,30 @@ export const BudgetTable = ({
                                 return (
                                 <View key={item.id} style={[styles.tableRow, { backgroundColor: idx % 2 === 0 ? 'white' : theme.colors.bgLight }]}>
                                     <Text style={[styles.textSmall, styles.colDesc]}>
-                                        {itemLabel(item)}
-                                        {Boolean(
-                                            (item as unknown as Record<string, unknown>).observation_show_on_print
-                                        ) &&
-                                        String(
-                                            (item as unknown as Record<string, unknown>).observation_text ?? ''
-                                        ).trim()
-                                            ? ` - Obs: ${String(
-                                                  (item as unknown as Record<string, unknown>).observation_text ?? ''
-                                              ).trim()}`
-                                            : ''}
+                                        {sanitizeTextForPdf(
+                                            [
+                                                itemLabel(item),
+                                                Boolean(
+                                                    (item as unknown as Record<string, unknown>)
+                                                        .observation_show_on_print
+                                                ) &&
+                                                    String(
+                                                        (item as unknown as Record<string, unknown>)
+                                                            .observation_text ?? ''
+                                                    ).trim()
+                                                    ? ` - Obs: ${String(
+                                                          (item as unknown as Record<string, unknown>)
+                                                              .observation_text ?? ''
+                                                      ).trim()}`
+                                                    : '',
+                                            ]
+                                                .filter(Boolean)
+                                                .join('')
+                                        )}
                                     </Text>
-                                    <Text style={[styles.textSmall, styles.colQty]}>{item.quantity}</Text>
+                                    <Text style={[styles.textSmall, styles.colQty]}>
+                                        {sanitizeTextForPdf(String(item.quantity ?? ''))}
+                                    </Text>
                                     {showCosts && laborCols ? (
                                         <>
                                             <Text style={[styles.textSmall, styles.colMoney]}>{cells.equip}</Text>

@@ -13,6 +13,9 @@ import {
     type CoverBlockProps,
 } from '@/types/budget-compositor-types';
 import { mergeCoverDocumentProps } from '@/lib/budgets/cover-document';
+import { type PdfEmbeddedImages, proxyPdfImageSrc } from '@/lib/pdf/pdf-image-src';
+import { stripHtmlToText } from '@/lib/pdf/html-to-plain-text';
+import { sanitizeTextForPdf } from '@/lib/pdf/sanitize-pdf-text';
 import type { BudgetItem } from '@/types/budget-types';
 
 interface ProposalDocumentProps {
@@ -20,6 +23,10 @@ interface ProposalDocumentProps {
     settings: ProposalSettings;
     /** Quando presente, sumário/lista de figuras seguem o compositor; detalhamento continua pelo Escopo (`locations`). */
     compositorPdf?: CompositorPdfPayload;
+    /** Evita marca d’água nas páginas internas (útil se imagem remota corromper o layout). */
+    omitDocumentWatermark?: boolean;
+    /** Data URIs pré-carregadas na rota API (evita `fetch` HTTP durante `renderToBuffer`). */
+    pdfEmbeddedImages?: PdfEmbeddedImages;
 }
 
 const styles = StyleSheet.create({
@@ -36,9 +43,10 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
+    /** Dimensões fixas em pt; `contain` encaixa a arte sem esticar (evita caixa vazia no viewer). */
     documentWatermarkImage: {
-        width: '82%',
-        height: '82%',
+        width: Math.round(595.28 * 0.82),
+        height: Math.round(841.89 * 0.82),
         objectFit: 'contain',
     },
     contentPage: {
@@ -47,8 +55,7 @@ const styles = StyleSheet.create({
         paddingBottom: 50,
         fontFamily: theme.fonts.body,
         fontSize: 11,
-        lineHeight: 1.5,
-        color: theme.colors.text
+        color: theme.colors.text,
     },
     header: {
         marginBottom: 20,
@@ -76,7 +83,6 @@ const styles = StyleSheet.create({
         marginTop: 30,
         backgroundColor: theme.colors.bgHeader,
         padding: 15,
-        borderRadius: 4,
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center'
@@ -88,6 +94,7 @@ const styles = StyleSheet.create({
     },
     tocDots: {
         flex: 1,
+        minWidth: 24,
         borderBottomWidth: 0.5,
         borderBottomColor: '#888',
         marginHorizontal: 6,
@@ -128,33 +135,6 @@ const styles = StyleSheet.create({
     },
 });
 
-function resolvePdfImageSrc(url: string | undefined, publicBase?: string): string | undefined {
-    const u = url?.trim();
-    if (!u) return undefined;
-    if (/^data:/i.test(u)) return u;
-    if (/^https?:\/\//i.test(u)) return u;
-    if (u.startsWith("//")) return `https:${u}`;
-    const origin =
-        typeof window !== "undefined" && window.location?.origin
-            ? window.location.origin
-            : publicBase?.replace(/\/$/, "");
-    if (u.startsWith("/")) return origin ? `${origin}${u}` : u;
-    if (origin) return `${origin}/${u.replace(/^\.?\//, "")}`;
-    return `/${u.replace(/^\.?\//, "")}`;
-}
-
-function proxyPdfImageSrc(url: string | undefined, publicBase?: string): string | undefined {
-    const resolved = resolvePdfImageSrc(url, publicBase);
-    if (!resolved || /^data:/i.test(resolved)) return resolved;
-    if (resolved.includes("/api/pdf/image?src=")) return resolved;
-    const origin =
-        typeof window !== "undefined" && window.location?.origin
-            ? window.location.origin
-            : publicBase?.replace(/\/$/, "");
-    if (!origin) return resolved;
-    return `${origin}/api/pdf/image?src=${encodeURIComponent(resolved)}`;
-}
-
 function clampDocumentOpacity(value: number | undefined, fallback: number): number {
     const n = typeof value === "number" ? value : fallback;
     if (!Number.isFinite(n)) return fallback;
@@ -171,22 +151,6 @@ function safeLayoutIndentDepth(raw: unknown, maxDepth: number): number {
     const i = Math.trunc(n);
     if (i < 0) return 0;
     return Math.min(i, maxDepth);
-}
-
-function stripHtmlToText(raw: string | undefined): string {
-    if (!raw) return '';
-    return raw
-        .replace(/<br\s*\/?>/gi, '\n')
-        .replace(/<\/p>/gi, '\n')
-        .replace(/<[^>]*>/g, ' ')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/\s+\n/g, '\n')
-        .replace(/\n{3,}/g, '\n\n')
-        .replace(/[ \t]{2,}/g, ' ')
-        .trim();
 }
 
 function collectSessionPrintRows(
@@ -311,8 +275,8 @@ function collectSessionTocRowsForPrintedLayout(
             out.push({
                 number: node.number || "",
                 title: (node.label || "Sessão").trim() || "Sessão",
-                depth: node.depth,
-                page,
+                depth: safeLayoutIndentDepth(node.depth, 24),
+                page: Number.isFinite(page) && page > 0 ? Math.min(Math.trunc(page), 99999) : 1,
             });
         }
         node.children.forEach((child) => collectSessionsDfs(child, page));
@@ -325,7 +289,13 @@ function collectSessionTocRowsForPrintedLayout(
     return out;
 }
 
-export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDocumentProps) => {
+export const ProposalDocument = ({
+    budget,
+    settings,
+    compositorPdf,
+    omitDocumentWatermark = false,
+    pdfEmbeddedImages,
+}: ProposalDocumentProps) => {
     const rawValidity = Number(budget.validity_days ?? 15);
     const validityDays =
         Number.isFinite(rawValidity) && rawValidity >= 0 ? Math.min(Math.trunc(rawValidity), 3650) : 15;
@@ -415,11 +385,15 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
         compositorCoverMerged.document_watermark_url?.trim()
             ? compositorCoverMerged.document_watermark_url
             : compositorCoverMerged.cover_watermark_url;
-    const docWatermarkSrc = proxyPdfImageSrc(docWatermarkSource, settings.app_public_url);
+    const docWatermarkSrc = proxyPdfImageSrc(docWatermarkSource, settings.app_public_url, pdfEmbeddedImages);
     const docWatermarkOpacity = clampDocumentOpacity(compositorCoverMerged.document_watermark_opacity, 0.06);
 
+    const pdfCompanyName = sanitizeTextForPdf(settings.company_name);
+    const pdfIntroduction = sanitizeTextForPdf(settings.introduction_text);
+    const pdfClosing = sanitizeTextForPdf(settings.closing_text);
+
     const renderDocumentWatermark = () =>
-        docWatermarkSrc ? (
+        !omitDocumentWatermark && docWatermarkSrc ? (
             <View style={styles.documentWatermarkLayer} fixed>
                 {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
                 <Image
@@ -439,6 +413,7 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
                         budget={budget}
                         settings={settings}
                         coverProps={compositorCoverMerged}
+                        pdfEmbeddedImages={pdfEmbeddedImages}
                     />
                 );
             case "intro":
@@ -447,11 +422,11 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
                         {renderDocumentWatermark()}
                         <View style={styles.header}>
                             <Text style={styles.headerTitle}>Apresentação</Text>
-                            <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{settings.company_name}</Text>
+                            <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{pdfCompanyName}</Text>
                         </View>
-                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-pdf Style doesn't type whiteSpace */}
-                        <Text style={{ whiteSpace: "pre-wrap", textAlign: "justify" } as any}>
-                            {settings.introduction_text}
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-pdf Style não tipa whiteSpace */}
+                        <Text style={{ whiteSpace: "pre-wrap", textAlign: "left" } as any}>
+                            {pdfIntroduction}
                         </Text>
                         <Text
                             style={styles.footerNumber}
@@ -466,7 +441,7 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
                         {renderDocumentWatermark()}
                         <View style={styles.header}>
                             <Text style={styles.headerTitle}>Sumário</Text>
-                            <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{settings.company_name}</Text>
+                            <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{pdfCompanyName}</Text>
                         </View>
                         <Text style={{ fontSize: 9, color: theme.colors.textLight, marginBottom: 14 }}>
                             Páginas calculadas conforme a impressão atual do documento.
@@ -481,13 +456,14 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
                                 <View
                                     key={`toc-${row.number}-${idx}`}
                                     style={[styles.tocRow, { paddingLeft: safeLayoutIndentDepth(row.depth, 6) * 10 }]}
-                                    wrap={false}
                                 >
                                     <Text style={styles.tocTitle}>
-                                        {row.number} {row.title}
+                                        {sanitizeTextForPdf(`${row.number} ${row.title}`.trim())}
                                     </Text>
                                     <View style={styles.tocDots} />
-                                    <Text style={styles.tocPage}>{row.page}</Text>
+                                    <Text style={styles.tocPage}>
+                                        {Number.isFinite(row.page) ? row.page : 1}
+                                    </Text>
                                 </View>
                             ))
                         )}
@@ -504,18 +480,20 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
                         {renderDocumentWatermark()}
                         <View style={styles.header}>
                             <Text style={styles.headerTitle}>Lista de Figuras</Text>
-                            <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{settings.company_name}</Text>
+                            <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{pdfCompanyName}</Text>
                         </View>
                         <Text style={{ fontSize: 9, color: theme.colors.textLight, marginBottom: 14 }}>
                             Figuras do Escopo. A página indicada referencia o início do detalhamento impresso.
                         </Text>
                         {figureRows.map((row) => (
-                            <View key={`fig-${row.n}`} style={styles.tocRow} wrap={false}>
+                            <View key={`fig-${row.n}`} style={styles.tocRow}>
                                 <Text style={styles.tocTitle}>
-                                    Figura {row.n} — {row.caption}
+                                    {sanitizeTextForPdf(`Figura ${row.n} — ${row.caption}`)}
                                 </Text>
                                 <View style={styles.tocDots} />
-                                <Text style={styles.tocPage}>{row.page}</Text>
+                                <Text style={styles.tocPage}>
+                                    {Number.isFinite(row.page) ? row.page : 1}
+                                </Text>
                             </View>
                         ))}
                         <Text
@@ -537,8 +515,10 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
                             sectionNumber={sectionNumberPdf}
                             showCosts={detailShowCosts}
                             costsDisplayMode={detailCostsMode}
+                            pdfImagePublicBase={settings.app_public_url}
+                            pdfEmbeddedImages={pdfEmbeddedImages}
                         />
-                        <View style={styles.totalBlock} break={false}>
+                        <View style={styles.totalBlock}>
                             <View>
                                 <Text style={{ fontSize: 12, fontFamily: theme.fonts.bold }}>INVESTIMENTO TOTAL</Text>
                                 <Text style={{ fontSize: 10 }}>Validade: {validityDays} dias</Text>
@@ -566,11 +546,12 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
                         {renderDocumentWatermark()}
                         <View style={styles.header}>
                             <Text style={styles.headerTitle}>Sessão do Compositor</Text>
-                            <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{settings.company_name}</Text>
+                            <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{pdfCompanyName}</Text>
                         </View>
                         <Text style={styles.sessionTitle}>
-                            {sessionRoot.number ? `${sessionRoot.number} ` : ""}
-                            {(sessionRoot.label || "Sessão").trim()}
+                            {sanitizeTextForPdf(
+                                `${sessionRoot.number ? `${sessionRoot.number} ` : ""}${(sessionRoot.label || "Sessão").trim()}`
+                            )}
                         </Text>
                         {rows.length === 0 ? (
                             <Text style={styles.sessionRowText}>Sem conteúdo textual nesta sessão.</Text>
@@ -580,8 +561,10 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
                                     key={`session-row-${sessionRoot.id}-${idx}`}
                                     style={[styles.sessionRow, { marginLeft: safeLayoutIndentDepth(row.depth, 5) * 10 }]}
                                 >
-                                    <Text style={styles.sessionRowTitle}>{row.title}</Text>
-                                    {row.text ? <Text style={styles.sessionRowText}>{row.text}</Text> : null}
+                                    <Text style={styles.sessionRowTitle}>{sanitizeTextForPdf(row.title)}</Text>
+                                    {row.text ? (
+                                        <Text style={styles.sessionRowText}>{sanitizeTextForPdf(row.text)}</Text>
+                                    ) : null}
                                 </View>
                             ))
                         )}
@@ -595,19 +578,23 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
             }
             case "terms":
                 return (
-                    <Page key={keyBase} size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
+                    <Page
+                        key={keyBase}
+                        size="A4"
+                        style={[styles.contentPage, styles.pageWithWatermark, { flexDirection: "column" }]}
+                    >
                         {renderDocumentWatermark()}
                         <View style={styles.header}>
                             <Text style={styles.headerTitle}>Condições Gerais</Text>
                         </View>
                         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-pdf Style doesn't type whiteSpace */}
-                        <Text style={{ fontSize: 10, lineHeight: 1.6, whiteSpace: "pre-wrap", marginBottom: 50 } as any}>
-                            {settings.closing_text}
+                        <Text style={{ fontSize: 10, whiteSpace: "pre-wrap", marginBottom: 12 } as any}>
+                            {pdfClosing}
                         </Text>
+                        <View style={{ height: 100 }} />
                         <View
                             style={{
                                 flexDirection: "row",
-                                marginTop: "auto",
                                 marginBottom: 50,
                                 justifyContent: "space-between",
                             }}
@@ -621,7 +608,7 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
                                     marginRight: 20,
                                 }}
                             >
-                                <Text style={{ fontSize: 11, fontFamily: theme.fonts.bold }}>{settings.company_name}</Text>
+                                <Text style={{ fontSize: 11, fontFamily: theme.fonts.bold }}>{pdfCompanyName}</Text>
                                 <Text style={{ fontSize: 9 }}>Diretoria Comercial</Text>
                             </View>
                             <View

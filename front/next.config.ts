@@ -5,6 +5,20 @@ const url = new URL(APP_URL);
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  /** Evita empacotar o motor PDF no bundle do Next (quebra renderToBuffer na rota API). */
+  serverExternalPackages: [
+    "@react-pdf/renderer",
+    "@react-pdf/render",
+    "@react-pdf/pdfkit",
+    "@react-pdf/layout",
+    "@react-pdf/font",
+    "@react-pdf/reconciler",
+    "@react-pdf/primitives",
+    "@react-pdf/fns",
+    "@react-pdf/types",
+    "@react-pdf/textkit",
+    "yoga-layout",
+  ],
   experimental: {
     serverActions: {
       bodySizeLimit: "20mb",

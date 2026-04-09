@@ -2,9 +2,10 @@
  * Evita valores numéricos absurdos no CSS que quebram o Yoga (@react-pdf):
  * "unsupported number: -1.8054132924569344e+21"
  *
- * Estratégia: além de scrub em CSS, removemos `<style>` embutidos (TipTap/prose)
- * e todos os `style="..."` da capa no PDF — o `coverHtmlStylesheet` continua a
- * estilizar tags (p, h1, strong, …).
+ * - `sanitizeRichHtmlForStorage`: ao salvar (compositor), remove `<style>` e CSS perigoso,
+ *   mantendo estilos inline seguros no TipTap.
+ * - `sanitizeCoverHtmlForPdf`: na capa do PDF, remove CSS perigoso / SVG / embed; mantém estilos
+ *   inline seguros para o parser da capa (`<p>` com text-align, etc.).
  */
 
 /** Decodifica entidades mínimas para o regex apanhar atributos guardados como &quot;…&quot; */
@@ -19,18 +20,6 @@ function decodeCommonEntitiesForAttributeScan(html: string): string {
 
 function removeEmbeddedStyleTags(html: string): string {
     return html.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "");
-}
-
-/** Remove todos os atributos style (inclui valores multilinha). */
-function stripAllInlineStyleAttributes(html: string): string {
-    let out = html;
-    let prev = "";
-    while (out !== prev) {
-        prev = out;
-        out = out.replace(/\sstyle\s*=\s*"[\s\S]*?"/gi, "");
-        out = out.replace(/\sstyle\s*=\s*'[\s\S]*?'/gi, "");
-    }
-    return out;
 }
 
 /** width/height numéricos absurdos em atributos HTML */
@@ -54,6 +43,24 @@ function clampColspanAttributes(html: string): string {
     return out;
 }
 
+/** `react-pdf-html` repassa atributos SVG ao Yoga; valores enormes quebram o layout. */
+function stripSvgBlocksFromHtml(html: string): string {
+    let out = html;
+    let prev = "";
+    while (out !== prev) {
+        prev = out;
+        out = out.replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gi, "");
+    }
+    return out;
+}
+
+function stripEmbeddedExternalTags(html: string): string {
+    return html
+        .replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi, "")
+        .replace(/<object\b[^>]*>[\s\S]*?<\/object>/gi, "")
+        .replace(/<embed\b[^>]*>/gi, "");
+}
+
 /** Troca sequências numéricas perigosas em CSS (trechos que ainda sobrevivam). */
 export function scrubExtremeNumbersInCssFragment(css: string): string {
     let s = css.replace(/\u2212/g, "-");
@@ -68,8 +75,19 @@ export function scrubExtremeNumbersInCssFragment(css: string): string {
 function declarationIsUnsafeForPdf(decl: string): boolean {
     const colon = decl.indexOf(":");
     if (colon === -1) return false;
+    const prop = decl.slice(0, colon).trim().toLowerCase();
     const val = decl.slice(colon + 1).trim();
     if (!val) return false;
+    // react-pdf-html repassa ao Yoga; matrix/calc costuma gerar overflow (-1.8e+21).
+    if (
+        prop === "transform" ||
+        prop === "filter" ||
+        prop === "backdrop-filter" ||
+        prop === "perspective" ||
+        prop === "will-change"
+    ) {
+        return true;
+    }
     if (/[0-9][eE][+-]?\d+/i.test(val)) return true;
     const dim = /(-?\d*\.?\d+)\s*(px|pt|em|rem|ch|cm|mm|in)\b/gi;
     let m: RegExpExecArray | null;
@@ -120,12 +138,55 @@ export function sanitizeInlineStylesInHtmlForPdf(html: string): string {
     return out;
 }
 
-/** Capa no PDF: máxima proteção contra Yoga (remove estilos inline + blocos style). */
-export function sanitizeCoverHtmlForPdf(html: string): string {
-    let out = decodeCommonEntitiesForAttributeScan(html);
-    out = removeEmbeddedStyleTags(out);
-    out = stripAllInlineStyleAttributes(out);
+/**
+ * Sanitiza HTML rico do compositor ao salvar / antes do PDF.
+ * Remove `<style>` embutido, declarações CSS perigosas e dimensões absurdas,
+ * preservando estilos inline seguros (ex.: text-align, color) para o TipTap.
+ */
+export function sanitizeRichHtmlForStorage(html: string): string {
+    let out = removeEmbeddedStyleTags(html);
+    out = sanitizeInlineStylesInHtmlForPdf(out);
     out = stripExtremeWidthHeightAttributes(out);
     out = clampColspanAttributes(out);
     return out;
+}
+
+/**
+ * Capa no PDF: remove CSS perigoso e SVG/embed, mas mantém estilos inline seguros
+ * (ex.: text-align, tamanho de fonte) para o renderizador nativo interpretar `<p>` / `<h1>`…
+ */
+export function sanitizeCoverHtmlForPdf(html: string): string {
+    let out = decodeCommonEntitiesForAttributeScan(html);
+    out = sanitizeRichHtmlForStorage(out);
+    out = stripExtremeWidthHeightAttributes(out);
+    out = clampColspanAttributes(out);
+    out = stripSvgBlocksFromHtml(out);
+    out = stripEmbeddedExternalTags(out);
+    return out;
+}
+
+/** Campos HTML por tipo de bloco do compositor — alinhado a `budget-compositor-types`. */
+const COMPOSITOR_BLOCK_HTML_FIELDS: Record<string, readonly string[]> = {
+    cover: ["cover_document_html"],
+    session: ["description"],
+    text: ["content"],
+    location: ["description"],
+    section: ["description"],
+};
+
+/** Sanitiza strings HTML nas props antes de persistir (reforço server-side). */
+export function sanitizeCompositorBlockPropsForPersistence(
+    type: string,
+    props: Record<string, unknown>
+): Record<string, unknown> {
+    const keys = COMPOSITOR_BLOCK_HTML_FIELDS[type];
+    if (!keys?.length) return props;
+    const next = { ...props };
+    for (const key of keys) {
+        const v = next[key];
+        if (typeof v === "string") {
+            next[key] = sanitizeRichHtmlForStorage(v);
+        }
+    }
+    return next;
 }

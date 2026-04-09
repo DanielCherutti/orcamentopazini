@@ -1,37 +1,25 @@
 "use client";
 
-import React, { useMemo } from 'react';
-import { ProposalDocument } from './proposal-document';
-import { PdfBlobPreviewFrame } from './pdf-blob-preview-frame';
-import type { CompositorPdfPayload } from './compositor-pdf-types';
-import type { Budget } from '@/types/budget-types';
-import type { ProposalSettings } from '@/actions/settings-actions';
+import { budgetPdfApiUrl } from "@/lib/budgets/budget-path";
 
 interface PdfClientViewerProps {
-    budget: Budget;
-    settings: ProposalSettings;
-    compositorPdf?: CompositorPdfPayload;
+  budgetId: string;
 }
 
-export function PdfClientViewer({ budget, settings, compositorPdf }: PdfClientViewerProps) {
-    const document = useMemo(
-        () => (
-            <ProposalDocument
-                budget={budget}
-                settings={settings}
-                compositorPdf={compositorPdf}
-            />
-        ),
-        [budget, settings, compositorPdf]
-    );
+export function PdfClientViewer({ budgetId }: PdfClientViewerProps) {
+  const src = budgetPdfApiUrl(budgetId);
 
-    return (
-        <div className="flex h-[calc(100vh-64px)] w-full flex-col bg-slate-100">
-            <div className="flex items-center justify-between bg-white p-4 shadow">
-                <h1 className="text-lg font-semibold">Visualização de PDF</h1>
-                <span className="text-sm text-muted-foreground">O PDF é gerado em tempo real no cliente.</span>
-            </div>
-            <PdfBlobPreviewFrame document={document} className="min-h-0 flex-1" />
-        </div>
-    );
+  return (
+    <div className="flex h-[calc(100vh-64px)] w-full flex-col bg-slate-100">
+      <div className="flex items-center justify-between bg-white p-4 shadow">
+        <h1 className="text-lg font-semibold">Visualização de PDF</h1>
+        <span className="text-sm text-muted-foreground">PDF gerado no servidor.</span>
+      </div>
+      <iframe
+        title="Pré-visualização do PDF"
+        src={src}
+        className="min-h-0 w-full flex-1 border-none bg-white shadow-inner"
+      />
+    </div>
+  );
 }

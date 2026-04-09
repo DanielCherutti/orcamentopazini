@@ -21,6 +21,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { useDebouncedCallback } from "use-debounce";
+import { sanitizeRichHtmlForStorage } from "@/lib/pdf/sanitize-inline-styles-for-pdf";
 
 // ─── CollapsibleEditorSection ─────────────────────────────────────────────────
 
@@ -234,7 +235,7 @@ export const CompositorRichTextEditor = memo(function CompositorRichTextEditor({
   return (
     <RichTextEditor
       value={value}
-      onChange={onChange}
+      onChange={(html) => onChange(sanitizeRichHtmlForStorage(html))}
       placeholder={placeholder}
       variant={variant}
       readOnly={readOnly}
