@@ -9,7 +9,30 @@ import { flattenTree } from "@/types/budget-compositor-types";
 import { proxyPdfImageUrlCore } from "@/lib/pdf/pdf-image-src";
 
 const LIMIT_INPUT_PIXELS = 50_000_000;
-const MAX_SIDE = 2048;
+/** Redimensionamento no embed: menor que o proxy HTTP para acelerar o PDF. */
+const MAX_EMBED_SIDE = 1600;
+const MAX_PASSTHROUGH_BYTES = 2_000_000;
+
+function embedConcurrency(): number {
+    const n = Number(process.env.PDF_EMBED_CONCURRENCY);
+    if (Number.isFinite(n) && n >= 1 && n <= 16) return Math.trunc(n);
+    return 6;
+}
+
+async function mapPool<T>(items: readonly T[], concurrency: number, fn: (item: T) => Promise<void>): Promise<void> {
+    if (items.length === 0) return;
+    const n = Math.max(1, Math.min(concurrency, items.length));
+    let index = 0;
+    await Promise.all(
+        Array.from({ length: n }, async () => {
+            while (true) {
+                const i = index++;
+                if (i >= items.length) break;
+                await fn(items[i]!);
+            }
+        }),
+    );
+}
 
 function collectImgSrcFromHtml(html: string): string[] {
     const out: string[] = [];
@@ -112,14 +135,33 @@ async function loadImageBufferForPdfEmbed(absoluteUrl: string): Promise<Buffer |
     }
 }
 
-async function bufferToPngDataUri(buf: Buffer): Promise<string | undefined> {
+/**
+ * Pass-through rápido para PNG/JPEG já pequenos; senão um único pipeline Sharp (PNG nível 6).
+ */
+async function bufferToEmbedDataUri(buf: Buffer): Promise<string | undefined> {
     try {
+        if (buf.length <= MAX_PASSTHROUGH_BYTES) {
+            const meta = await sharp(buf, { limitInputPixels: LIMIT_INPUT_PIXELS }).metadata();
+            const w = meta.width ?? 0;
+            const h = meta.height ?? 0;
+            const fmt = meta.format;
+            if (
+                (fmt === "png" || fmt === "jpeg" || fmt === "jpg") &&
+                w > 0 &&
+                h > 0 &&
+                w <= MAX_EMBED_SIDE &&
+                h <= MAX_EMBED_SIDE
+            ) {
+                const mime = fmt === "png" ? "image/png" : "image/jpeg";
+                return `data:${mime};base64,${buf.toString("base64")}`;
+            }
+        }
         const out = await sharp(buf, {
             animated: true,
             limitInputPixels: LIMIT_INPUT_PIXELS,
         })
-            .resize(MAX_SIDE, MAX_SIDE, { fit: "inside", withoutEnlargement: true })
-            .png({ compressionLevel: 9 })
+            .resize(MAX_EMBED_SIDE, MAX_EMBED_SIDE, { fit: "inside", withoutEnlargement: true })
+            .png({ compressionLevel: 6 })
             .toBuffer();
         return `data:image/png;base64,${out.toString("base64")}`;
     } catch (e) {
@@ -144,25 +186,30 @@ export async function buildPdfEmbeddedImagesMap(
     const out: Record<string, string> = {};
     const base = publicBase?.trim() || undefined;
     const seenCore = new Set<string>();
+    const cores: string[] = [];
     for (const raw of rawUrls) {
         const core = proxyPdfImageUrlCore(raw, base);
         if (!core || seenCore.has(core)) continue;
         seenCore.add(core);
+        cores.push(core);
+    }
+    const conc = embedConcurrency();
+    await mapPool(cores, conc, async (core) => {
         const buf = await loadImageBufferForPdfEmbed(core);
         if (!buf) {
             if (process.env.NODE_ENV === "development") {
                 console.warn("[pdf-embed] sem dados:", core.slice(0, 160));
             }
-            continue;
+            return;
         }
-        const dataUri = await bufferToPngDataUri(buf);
+        const dataUri = await bufferToEmbedDataUri(buf);
         if (!dataUri || dataUri.length > MAX_EMBED_DATA_URI_CHARS) {
             if (process.env.NODE_ENV === "development" && dataUri && dataUri.length > MAX_EMBED_DATA_URI_CHARS) {
                 console.warn("[pdf-embed] imagem demasiado grande para inline, usa URL:", core.slice(0, 120));
             }
-            continue;
+            return;
         }
         out[core] = dataUri;
-    }
+    });
     return out;
 }
