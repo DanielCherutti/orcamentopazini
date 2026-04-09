@@ -25,16 +25,24 @@ export async function GET(
     try {
         const imagePublicBase =
             loaded.settings.app_public_url?.trim() || pdfRequestOrigin || undefined;
-        const pdfEmbeddedImages = await buildPdfEmbeddedImagesMap(
-            collectRawPdfImageUrlsForPdf(loaded.budget, loaded.compositorPdf),
-            imagePublicBase,
-        );
+        let pdfEmbeddedImages: Record<string, string> | undefined;
+        try {
+            pdfEmbeddedImages = await buildPdfEmbeddedImagesMap(
+                collectRawPdfImageUrlsForPdf(loaded.budget, loaded.compositorPdf),
+                imagePublicBase,
+            );
+        } catch (embedErr) {
+            console.error("budget pdf: falha ao pré-carregar imagens (PDF segue sem inline):", embedErr);
+            pdfEmbeddedImages = undefined;
+        }
         const element = React.createElement(ProposalDocument, {
             budget: loaded.budget,
             settings: loaded.settings,
             compositorPdf: loaded.compositorPdf,
             omitDocumentWatermark: process.env.PDF_OMIT_DOC_WATERMARK === "1",
-            pdfEmbeddedImages,
+            ...(pdfEmbeddedImages && Object.keys(pdfEmbeddedImages).length > 0
+                ? { pdfEmbeddedImages }
+                : {}),
         });
         // renderToBuffer tipa a raiz como <Document>; ProposalDocument encapsula <Document>.
         const buffer = await renderToBuffer(

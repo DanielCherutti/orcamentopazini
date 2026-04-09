@@ -134,11 +134,14 @@ async function bufferToPngDataUri(buf: Buffer): Promise<string | undefined> {
  * Pré-carrega imagens no processo Node (disco + opcionalmente fetch) e devolve data URIs PNG.
  * Chaves = saída de `proxyPdfImageUrlCore` (o mesmo valor que `<Image src>` usaria sem inline).
  */
+/** Evita data URIs gigantes que podem derrubar o layout do React-PDF (~6MB base64). */
+const MAX_EMBED_DATA_URI_CHARS = 6_000_000;
+
 export async function buildPdfEmbeddedImagesMap(
     rawUrls: readonly string[],
     publicBase: string | undefined,
-): Promise<Map<string, string>> {
-    const map = new Map<string, string>();
+): Promise<Record<string, string>> {
+    const out: Record<string, string> = {};
     const base = publicBase?.trim() || undefined;
     const seenCore = new Set<string>();
     for (const raw of rawUrls) {
@@ -153,7 +156,13 @@ export async function buildPdfEmbeddedImagesMap(
             continue;
         }
         const dataUri = await bufferToPngDataUri(buf);
-        if (dataUri) map.set(core, dataUri);
+        if (!dataUri || dataUri.length > MAX_EMBED_DATA_URI_CHARS) {
+            if (process.env.NODE_ENV === "development" && dataUri && dataUri.length > MAX_EMBED_DATA_URI_CHARS) {
+                console.warn("[pdf-embed] imagem demasiado grande para inline, usa URL:", core.slice(0, 120));
+            }
+            continue;
+        }
+        out[core] = dataUri;
     }
-    return map;
+    return out;
 }

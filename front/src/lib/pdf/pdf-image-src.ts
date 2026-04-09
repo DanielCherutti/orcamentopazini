@@ -49,7 +49,8 @@ export function proxyPdfImageUrlCore(url: string | undefined, publicBase?: strin
     return `${origin}/api/pdf/image?src=${encodeURIComponent(resolved)}`;
 }
 
-export type PdfEmbeddedImages = ReadonlyMap<string, string>;
+/** URL proxy (core) → data URI. Objeto plano evita surpresas com `Map` nas props do React-PDF. */
+export type PdfEmbeddedImages = Readonly<Record<string, string>>;
 
 /**
  * `embedded`: mapa URL final (core) → `data:image/png;base64,...` gerado no servidor
@@ -62,7 +63,7 @@ export function proxyPdfImageSrc(
 ): string | undefined {
     const core = proxyPdfImageUrlCore(url, publicBase);
     if (!core) return undefined;
-    const inlined = embedded?.get(core);
+    const inlined = embedded && Object.prototype.hasOwnProperty.call(embedded, core) ? embedded[core] : undefined;
     if (inlined) return inlined;
     return core;
 }

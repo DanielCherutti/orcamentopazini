@@ -4,23 +4,20 @@ import type { Budget } from "@/types/budget-types";
 import type { ProposalSettings } from "@/actions/settings-actions";
 import type { CoverBlockProps } from "@/types/budget-compositor-types";
 import { mergeCoverDocumentProps } from "@/lib/budgets/cover-document";
-import { type PdfEmbeddedImages, proxyPdfImageSrc } from "@/lib/pdf/pdf-image-src";
+import { type PdfEmbeddedImages, proxyPdfImageSrc, proxyPdfImageUrlCore } from "@/lib/pdf/pdf-image-src";
 import { sanitizeCoverHtmlForPdf } from "@/lib/pdf/sanitize-inline-styles-for-pdf";
 import { splitCoverHtmlIntoPdfBlocks, splitCoverHtmlFragmentToSegments } from "@/lib/pdf/cover-pdf-blocks";
 import { theme } from "../theme";
 
-function rewriteImgSrcInHtml(
-  html: string,
-  publicBase?: string,
-  embedded?: PdfEmbeddedImages,
-): string {
+/** Só URL HTTP(S) no HTML — nunca data URI (strings enormes quebram sanitize/split e o layout). */
+function rewriteImgSrcInHtml(html: string, publicBase?: string): string {
   if (!html.trim()) return html;
   return html.replace(/<img\b[^>]*>/gi, (tag) => {
     const m = tag.match(/\bsrc=(["'])([^"']*)\1/i);
     if (!m) return tag;
     const q = m[1];
     const src = m[2];
-    const proxied = proxyPdfImageSrc(src, publicBase, embedded) ?? src;
+    const proxied = proxyPdfImageUrlCore(src, publicBase) ?? src;
     return tag.replace(/\bsrc=(["'])([^"']*)\1/i, `src=${q}${proxied}${q}`);
   });
 }
@@ -122,7 +119,7 @@ export function CompositorCoverPdfPage({
   );
   const wmOpacity = clampOpacity(coverProps.cover_watermark_opacity, 0.12);
   const html = sanitizeCoverHtmlForPdf(
-    rewriteImgSrcInHtml(coverProps.cover_document_html ?? "", settings.app_public_url, pdfEmbeddedImages),
+    rewriteImgSrcInHtml(coverProps.cover_document_html ?? "", settings.app_public_url),
   );
   const blocks = splitCoverHtmlIntoPdfBlocks(html);
 
