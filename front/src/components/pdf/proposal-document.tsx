@@ -7,12 +7,8 @@ import { theme } from './theme';
 import { BudgetTable } from './sections/budget-table';
 import { CompositorCoverPdfPage } from './sections/compositor-cover-pdf';
 import type { CompositorPdfPayload } from './compositor-pdf-types';
-import {
-    type BudgetBlock,
-    flattenTree,
-    type CoverBlockProps,
-} from '@/types/budget-compositor-types';
-import { mergeCoverDocumentProps } from '@/lib/budgets/cover-document';
+import { type BudgetBlock, flattenTree } from '@/types/budget-compositor-types';
+import { mergeCoverDocumentProps, resolveInnerPagesWatermark } from '@/lib/budgets/cover-document';
 import { type PdfEmbeddedImages, proxyPdfImageSrc } from '@/lib/pdf/pdf-image-src';
 import { stripHtmlToText } from '@/lib/pdf/html-to-plain-text';
 import { sanitizeTextForPdf } from '@/lib/pdf/sanitize-pdf-text';
@@ -157,15 +153,6 @@ const styles = StyleSheet.create({
         lineHeight: 1.35,
     },
 });
-
-function clampDocumentOpacity(value: number | undefined, fallback: number): number {
-    const n = typeof value === "number" ? value : fallback;
-    if (!Number.isFinite(n)) return fallback;
-    if (n < 0) return 0;
-    // Marca d'água das páginas internas precisa ser mais discreta que a capa.
-    if (n > 0.12) return 0.12;
-    return n;
-}
 
 /** Indentação no PDF: `Math.min(depth, 6)` com depth negativo devolve o próprio negativo (ex.: ID mal tipado) e quebra o Yoga. */
 function safeLayoutIndentDepth(raw: unknown, maxDepth: number): number {
@@ -371,7 +358,7 @@ function InnerPdfPage({
             ]}
         >
             {!omitDocumentWatermark && docWatermarkSrc ? (
-                <View style={[styles.documentWatermarkLayer, { top: wmTop, height: wmHeight }]} fixed>
+                <View style={[styles.documentWatermarkLayer, { top: wmTop, height: wmHeight }]}>
                     {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
                     <Image
                         src={docWatermarkSrc}
@@ -491,12 +478,9 @@ export const ProposalDocument = ({
                   page: detailPage,
               }))
             : [];
-    const docWatermarkSource =
-        compositorCoverMerged.document_watermark_url?.trim()
-            ? compositorCoverMerged.document_watermark_url
-            : compositorCoverMerged.cover_watermark_url;
+    const { url: docWatermarkSource, opacity: docWatermarkOpacity } =
+        resolveInnerPagesWatermark(compositorCoverMerged);
     const docWatermarkSrc = proxyPdfImageSrc(docWatermarkSource, settings.app_public_url, pdfEmbeddedImages);
-    const docWatermarkOpacity = clampDocumentOpacity(compositorCoverMerged.document_watermark_opacity, 0.06);
 
     const pdfCompanyName = sanitizeTextForPdf(settings.company_name);
     const pdfIntroduction = sanitizeTextForPdf(settings.introduction_text);
