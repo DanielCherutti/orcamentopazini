@@ -139,6 +139,20 @@ const styles = StyleSheet.create({
     fontSize: 8,
     color: theme.colors.textLight,
   },
+  /** Logomarca do cliente (canto da área de texto; independente do cabeçalho da empresa). */
+  clientLogoCorner: {
+    position: "absolute",
+    top: 4,
+    right: 0,
+    width: 120,
+    height: 48,
+    zIndex: 3,
+  },
+  clientLogoImg: {
+    width: 120,
+    height: 48,
+    objectFit: "contain",
+  },
 });
 
 function clampOpacity(value: number | undefined, fallback: number): number {
@@ -180,6 +194,10 @@ export function CompositorCoverPdfPage({
   const logoSrc = logoUrlRaw
     ? proxyPdfImageSrc(logoUrlRaw, settings.app_public_url, pdfEmbeddedImages)
     : undefined;
+  const clientLogoUrlRaw = coverProps.client_logo_url?.trim();
+  const clientLogoSrc = clientLogoUrlRaw
+    ? proxyPdfImageSrc(clientLogoUrlRaw, settings.app_public_url, pdfEmbeddedImages)
+    : undefined;
   const showCoverHeader = shouldShowCoverPdfHeaderBand(coverProps, settings);
   const showCoverFooter = resolveCoverPdfShowFooterBand(coverProps);
   const footerLeft = sanitizeTextForPdf(formatCoverPdfFooterLeftText(coverProps, bandCtx));
@@ -220,6 +238,12 @@ export function CompositorCoverPdfPage({
         </View>
       ) : null}
       <View style={styles.body} wrap>
+        {clientLogoSrc ? (
+          <View style={styles.clientLogoCorner}>
+            {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
+            <Image src={clientLogoSrc} style={styles.clientLogoImg} />
+          </View>
+        ) : null}
         {blocks.map((b, i) => {
           if (b.type === "img") {
             const src = proxyPdfImageSrc(b.src, settings.app_public_url, pdfEmbeddedImages) ?? b.src;

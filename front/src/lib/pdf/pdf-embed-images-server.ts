@@ -66,6 +66,7 @@ export function collectRawPdfImageUrlsForPdf(
     const cover = mergeCoverDocumentProps(coverBlock?.props as Record<string, unknown> | undefined);
     addUrl(set, cover.cover_watermark_url);
     addUrl(set, cover.document_watermark_url);
+    addUrl(set, cover.client_logo_url);
     addUrl(set, cover.cover_pdf_header_logo_url_override);
     if (settings?.company_logo_url?.trim()) {
         addUrl(set, settings.company_logo_url);

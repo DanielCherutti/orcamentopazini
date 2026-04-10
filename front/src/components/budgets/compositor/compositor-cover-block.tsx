@@ -1,17 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
 import Link from "next/link";
 import {
   ImageIcon,
   LayoutTemplate,
+  Loader2,
   Maximize2,
   Minimize2,
   RefreshCw,
   Settings2,
   SlidersHorizontal,
   Sparkles,
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,6 +55,12 @@ export function CompositorCoverBlock({
   const [coverSettingsOpen, setCoverSettingsOpen] = useState(false);
   const [coverPdfBandsOpen, setCoverPdfBandsOpen] = useState(false);
   const [coverExpanded, setCoverExpanded] = useState(false);
+  const [coverMediaUploading, setCoverMediaUploading] = useState<
+    null | "client_logo_url" | "cover_watermark_url" | "document_watermark_url"
+  >(null);
+  const clientLogoFileRef = useRef<HTMLInputElement>(null);
+  const coverWatermarkFileRef = useRef<HTMLInputElement>(null);
+  const documentWatermarkFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setProps(mergeCoverDocumentProps(block.props as Record<string, unknown>));
@@ -106,6 +114,35 @@ export function CompositorCoverBlock({
     [persist]
   );
 
+  const uploadCoverMediaField = useCallback(
+    async (
+      field: "client_logo_url" | "cover_watermark_url" | "document_watermark_url",
+      e: React.ChangeEvent<HTMLInputElement>
+    ) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      if (!file || isReadOnly) return;
+      setCoverMediaUploading(field);
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch("/api/upload/library", { method: "POST", body: fd });
+        const json = (await res.json()) as { url?: string; error?: string };
+        if (!res.ok || !json.url) {
+          toast.error(json.error || "Falha ao enviar a imagem");
+          return;
+        }
+        patch({ [field]: json.url });
+        toast.success("Imagem enviada e aplicada.");
+      } catch {
+        toast.error("Erro ao enviar a imagem");
+      } finally {
+        setCoverMediaUploading(null);
+      }
+    },
+    [isReadOnly, patch]
+  );
+
   const fillFromCustomer = async () => {
     if (!budget?.client_id || isReadOnly) return;
     const cid =
@@ -144,33 +181,93 @@ export function CompositorCoverBlock({
   const mediaPanel = (
     <div className="space-y-4 p-1">
       <p className="text-[11px] leading-snug text-muted-foreground">
-        URLs públicas (biblioteca de imagens ou CDN). Use o editor acima para inserir imagens no texto (upload ou galeria).
+        Informe uma URL pública ou envie uma imagem (JPG, PNG, GIF ou WEBP). No texto da capa, use o editor para inserir imagens no corpo do documento.
       </p>
       <div className="space-y-2">
         <Label htmlFor={`cover-clogo-${block.id}`} className="text-xs">
           Logomarca do cliente
         </Label>
-        <Input
-          id={`cover-clogo-${block.id}`}
-          placeholder="https://..."
-          value={props.client_logo_url ?? ""}
-          onChange={(e) => patch({ client_logo_url: e.target.value })}
-          disabled={isReadOnly}
-          className="h-8 text-xs"
-        />
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Input
+            id={`cover-clogo-${block.id}`}
+            placeholder="URL ou envie um arquivo ao lado"
+            value={props.client_logo_url ?? ""}
+            onChange={(e) => patch({ client_logo_url: e.target.value })}
+            disabled={isReadOnly}
+            className="h-8 min-w-0 flex-1 text-xs"
+          />
+          <input
+            ref={clientLogoFileRef}
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            className="sr-only"
+            onChange={(e) => uploadCoverMediaField("client_logo_url", e)}
+            disabled={isReadOnly}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 shrink-0 text-xs"
+            disabled={isReadOnly || coverMediaUploading === "client_logo_url"}
+            onClick={() => clientLogoFileRef.current?.click()}
+          >
+            {coverMediaUploading === "client_logo_url" ? (
+              <>
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                Enviando…
+              </>
+            ) : (
+              <>
+                <Upload className="mr-1.5 h-3.5 w-3.5" />
+                Enviar imagem
+              </>
+            )}
+          </Button>
+        </div>
       </div>
       <div className="space-y-2">
         <Label htmlFor={`cover-wm1-${block.id}`} className="text-xs">
           Marca d’água da capa
         </Label>
-        <Input
-          id={`cover-wm1-${block.id}`}
-          placeholder="https://..."
-          value={props.cover_watermark_url ?? ""}
-          onChange={(e) => patch({ cover_watermark_url: e.target.value })}
-          disabled={isReadOnly}
-          className="h-8 text-xs"
-        />
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Input
+            id={`cover-wm1-${block.id}`}
+            placeholder="URL ou envie um arquivo ao lado"
+            value={props.cover_watermark_url ?? ""}
+            onChange={(e) => patch({ cover_watermark_url: e.target.value })}
+            disabled={isReadOnly}
+            className="h-8 min-w-0 flex-1 text-xs"
+          />
+          <input
+            ref={coverWatermarkFileRef}
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            className="sr-only"
+            onChange={(e) => uploadCoverMediaField("cover_watermark_url", e)}
+            disabled={isReadOnly}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 shrink-0 text-xs"
+            disabled={isReadOnly || coverMediaUploading === "cover_watermark_url"}
+            onClick={() => coverWatermarkFileRef.current?.click()}
+          >
+            {coverMediaUploading === "cover_watermark_url" ? (
+              <>
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                Enviando…
+              </>
+            ) : (
+              <>
+                <Upload className="mr-1.5 h-3.5 w-3.5" />
+                Enviar imagem
+              </>
+            )}
+          </Button>
+        </div>
       </div>
       <div className="space-y-1">
         <Label className="text-xs">Opacidade na capa</Label>
@@ -190,14 +287,44 @@ export function CompositorCoverBlock({
         <Label htmlFor={`cover-wm2-${block.id}`} className="text-xs">
           Marca d’água do documento (demais páginas)
         </Label>
-        <Input
-          id={`cover-wm2-${block.id}`}
-          placeholder="https://..."
-          value={props.document_watermark_url ?? ""}
-          onChange={(e) => patch({ document_watermark_url: e.target.value })}
-          disabled={isReadOnly}
-          className="h-8 text-xs"
-        />
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Input
+            id={`cover-wm2-${block.id}`}
+            placeholder="URL ou envie um arquivo ao lado"
+            value={props.document_watermark_url ?? ""}
+            onChange={(e) => patch({ document_watermark_url: e.target.value })}
+            disabled={isReadOnly}
+            className="h-8 min-w-0 flex-1 text-xs"
+          />
+          <input
+            ref={documentWatermarkFileRef}
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            className="sr-only"
+            onChange={(e) => uploadCoverMediaField("document_watermark_url", e)}
+            disabled={isReadOnly}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 shrink-0 text-xs"
+            disabled={isReadOnly || coverMediaUploading === "document_watermark_url"}
+            onClick={() => documentWatermarkFileRef.current?.click()}
+          >
+            {coverMediaUploading === "document_watermark_url" ? (
+              <>
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                Enviando…
+              </>
+            ) : (
+              <>
+                <Upload className="mr-1.5 h-3.5 w-3.5" />
+                Enviar imagem
+              </>
+            )}
+          </Button>
+        </div>
       </div>
       <div className="space-y-1">
         <Label className="text-xs">Opacidade no documento</Label>
@@ -322,16 +449,16 @@ export function CompositorCoverBlock({
 
       <Dialog open={coverSettingsOpen} onOpenChange={setCoverSettingsOpen}>
         <DialogContent
-          className="flex max-h-[min(88vh,560px)] w-full max-w-lg flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
+          className="flex min-h-0 max-h-[min(92vh,640px)] w-full max-w-lg flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
           showCloseButton
         >
-          <DialogHeader className="shrink-0 border-b border-border px-4 py-3 text-left">
+          <DialogHeader className="shrink-0 border-b border-border px-4 py-3 pr-12 text-left">
             <DialogTitle className="text-base">Ajustes da capa</DialogTitle>
             <p className="text-xs font-normal text-muted-foreground">
-              Marca d’água, logomarca do cliente e URLs de mídia.
+              Marca d’água, logomarca do cliente e mídia (URL ou arquivo).
             </p>
           </DialogHeader>
-          <ScrollArea className="max-h-[min(52vh,400px)]">
+          <ScrollArea className="h-[min(60vh,520px)] w-full min-h-0 shrink">
             <div className="p-4">
               <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                 <ImageIcon className="h-3.5 w-3.5 opacity-70" />
@@ -352,6 +479,9 @@ export function CompositorCoverBlock({
           readOnly={Boolean(isReadOnly)}
           value={props.cover_document_html ?? ""}
           onChange={(html) => patch({ cover_document_html: html })}
+          wordPageWatermarkUrl={props.cover_watermark_url?.trim() || undefined}
+          wordPageWatermarkOpacity={props.cover_watermark_opacity ?? 0.12}
+          wordPageClientLogoUrl={props.client_logo_url?.trim() || undefined}
         />
       </div>
     </div>

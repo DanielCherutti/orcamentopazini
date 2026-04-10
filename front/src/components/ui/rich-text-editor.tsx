@@ -24,6 +24,12 @@ interface RichTextEditorProps {
   /** Faixa tipo Microsoft Word (abas + grupos Fonte / Parágrafo / Estilos). */
   variant?: 'default' | 'word';
   readOnly?: boolean;
+  /**
+   * Só `variant="word"`: imagens na “folha” A4 atrás do texto (capa do compositor).
+   */
+  wordPageWatermarkUrl?: string;
+  wordPageWatermarkOpacity?: number;
+  wordPageClientLogoUrl?: string;
 }
 
 const WORD_RIBBON_TABS = [
@@ -77,6 +83,9 @@ export function RichTextEditor({
   onEditorReady,
   variant = 'default',
   readOnly = false,
+  wordPageWatermarkUrl,
+  wordPageWatermarkOpacity = 0.12,
+  wordPageClientLogoUrl,
 }: RichTextEditorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [wordRibbonTab, setWordRibbonTab] = useState<WordRibbonTabId>("home");
@@ -457,14 +466,38 @@ export function RichTextEditor({
               </div>
               <div
                 className={cn(
-                  "col-start-2 row-start-2 box-border min-w-0 self-start overflow-x-hidden border border-l-0 border-t-0 border-neutral-500/45 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.12)]",
+                  "relative col-start-2 row-start-2 box-border min-w-0 self-start overflow-x-hidden border border-l-0 border-t-0 border-neutral-500/45 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.12)]",
                 )}
                 style={{
                   width: "100%",
                   aspectRatio: "210 / 297",
                 }}
               >
-                <EditorContent editor={editor} />
+                {wordPageWatermarkUrl?.trim() ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={wordPageWatermarkUrl.trim()}
+                    alt=""
+                    className="pointer-events-none absolute inset-0 z-0 m-auto max-h-[78%] max-w-[78%] object-contain"
+                    style={{
+                      opacity: Math.min(
+                        0.32,
+                        Math.max(0, Number.isFinite(wordPageWatermarkOpacity) ? wordPageWatermarkOpacity : 0.12),
+                      ),
+                    }}
+                  />
+                ) : null}
+                {wordPageClientLogoUrl?.trim() ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={wordPageClientLogoUrl.trim()}
+                    alt=""
+                    className="pointer-events-none absolute right-3 top-3 z-[1] max-h-14 max-w-[min(40%,140px)] object-contain"
+                  />
+                ) : null}
+                <div className="relative z-[2] min-h-full [&_.tiptap]:!bg-transparent [&_.tiptap]:min-h-full">
+                  <EditorContent editor={editor} />
+                </div>
               </div>
             </div>
           </div>

@@ -87,6 +87,10 @@ interface CompositorRichTextEditorProps {
   galleryImages?: BudgetImage[];
   variant?: "default" | "word";
   readOnly?: boolean;
+  /** Pré-visualização na folha A4 (capa): marca d’água e logomarca do cliente. */
+  wordPageWatermarkUrl?: string;
+  wordPageWatermarkOpacity?: number;
+  wordPageClientLogoUrl?: string;
 }
 
 export const CompositorRichTextEditor = memo(function CompositorRichTextEditor({
@@ -96,6 +100,9 @@ export const CompositorRichTextEditor = memo(function CompositorRichTextEditor({
   galleryImages,
   variant = "default",
   readOnly,
+  wordPageWatermarkUrl,
+  wordPageWatermarkOpacity,
+  wordPageClientLogoUrl,
 }: CompositorRichTextEditorProps) {
   const [insertImage, setInsertImage] = useState<((url: string) => void) | null>(null);
   const [galleryOpen, setGalleryOpen] = useState(false);
@@ -242,6 +249,9 @@ export const CompositorRichTextEditor = memo(function CompositorRichTextEditor({
       onUploadImage={handleUploadImage}
       extraToolbarItems={extraToolbarItems}
       onEditorReady={(fn) => setInsertImage(() => fn)}
+      wordPageWatermarkUrl={wordPageWatermarkUrl}
+      wordPageWatermarkOpacity={wordPageWatermarkOpacity}
+      wordPageClientLogoUrl={wordPageClientLogoUrl}
     />
   );
 });
