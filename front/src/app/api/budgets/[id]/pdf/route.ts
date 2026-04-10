@@ -28,7 +28,7 @@ export async function GET(
         let pdfEmbeddedImages: Record<string, string> | undefined;
         try {
             pdfEmbeddedImages = await buildPdfEmbeddedImagesMap(
-                collectRawPdfImageUrlsForPdf(loaded.budget, loaded.compositorPdf),
+                collectRawPdfImageUrlsForPdf(loaded.budget, loaded.compositorPdf, loaded.settings),
                 imagePublicBase,
             );
         } catch (embedErr) {

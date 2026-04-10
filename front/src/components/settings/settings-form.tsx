@@ -197,7 +197,8 @@ export function SettingsForm({ initialSettings }: { initialSettings: ProposalSet
                     <CardTitle>Cabeçalho das propostas (PDF)</CardTitle>
                     <CardDescription>
                         Layout em duas colunas: marca à esquerda e contatos à direita — como no modelo comercial. Usa a{" "}
-                        <strong>cor primária</strong> acima.
+                        <strong>cor primária</strong> acima. Só entra no PDF com a opção abaixo ativada (nome, logo,
+                        subtítulo e contatos somem se estiver desligada).
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -217,8 +218,9 @@ export function SettingsForm({ initialSettings }: { initialSettings: ProposalSet
                                 Usar estes dados no cabeçalho do PDF
                             </Label>
                             <p className="text-xs text-muted-foreground leading-snug">
-                                Desligado, o cabeçalho das propostas fica em branco (até você ativar). Você ainda pode
-                                definir substituições só na capa, no compositor.
+                                Nas páginas internas e na capa (quando a faixa superior estiver ligada no compositor),
+                                estes dados só aparecem com esta opção ativa. Desligada, o cabeçalho fica vazio; na capa
+                                você ainda pode usar substituições só no bloco Capa.
                             </p>
                         </div>
                     </div>

@@ -184,6 +184,10 @@ export function CompositorCoverPdfBandsDialog({
     }
   };
 
+  const bothCoverBandsOff =
+    coverProps.cover_pdf_show_header_band === false &&
+    coverProps.cover_pdf_show_footer_band === false;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -203,32 +207,61 @@ export function CompositorCoverPdfBandsDialog({
         <div className="grid min-h-0 min-h-[min(72vh,640px)] flex-1 grid-cols-1 gap-0 lg:grid-cols-[1fr_minmax(280px,400px)] lg:divide-x lg:divide-border">
           <div className="min-h-0 overflow-y-auto p-5">
             <div className="space-y-4">
-              <div className="flex flex-wrap items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="cover-pdf-hdr"
-                    checked={coverProps.cover_pdf_show_header_band !== false}
-                    onCheckedChange={(v) =>
-                      patch({ cover_pdf_show_header_band: v === true })
-                    }
-                    disabled={isReadOnly}
-                  />
-                  <Label htmlFor="cover-pdf-hdr" className="cursor-pointer text-sm font-normal">
-                    Mostrar faixa superior (logo + nome)
-                  </Label>
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="cover-pdf-hdr"
+                      checked={coverProps.cover_pdf_show_header_band !== false}
+                      onCheckedChange={(v) =>
+                        patch({ cover_pdf_show_header_band: v === true })
+                      }
+                      disabled={isReadOnly}
+                    />
+                    <Label htmlFor="cover-pdf-hdr" className="cursor-pointer text-sm font-normal">
+                      Mostrar faixa superior (logo + nome)
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="cover-pdf-ftr"
+                      checked={coverProps.cover_pdf_show_footer_band !== false}
+                      onCheckedChange={(v) =>
+                        patch({ cover_pdf_show_footer_band: v === true })
+                      }
+                      disabled={isReadOnly}
+                    />
+                    <Label htmlFor="cover-pdf-ftr" className="cursor-pointer text-sm font-normal">
+                      Mostrar faixa inferior (textos)
+                    </Label>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="cover-pdf-ftr"
-                    checked={coverProps.cover_pdf_show_footer_band !== false}
-                    onCheckedChange={(v) =>
-                      patch({ cover_pdf_show_footer_band: v === true })
-                    }
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="h-8 px-2.5 text-xs"
                     disabled={isReadOnly}
-                  />
-                  <Label htmlFor="cover-pdf-ftr" className="cursor-pointer text-sm font-normal">
-                    Mostrar faixa inferior (textos)
-                  </Label>
+                    onClick={() => {
+                      if (bothCoverBandsOff) {
+                        patch({
+                          cover_pdf_show_header_band: true,
+                          cover_pdf_show_footer_band: true,
+                        });
+                      } else {
+                        patch({
+                          cover_pdf_show_header_band: false,
+                          cover_pdf_show_footer_band: false,
+                        });
+                      }
+                    }}
+                  >
+                    {bothCoverBandsOff ? "Mostrar faixas na capa" : "Sem faixas na capa"}
+                  </Button>
+                  <span className="text-[11px] text-muted-foreground">
+                    Atalho: desliga ou liga cabeçalho e rodapé desta capa no PDF.
+                  </span>
                 </div>
               </div>
               <Separator />

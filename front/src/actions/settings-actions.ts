@@ -21,7 +21,7 @@ export interface ProposalSettings {
     company_header_subtitle?: string;
     /**
      * Se true, o cabeçalho do PDF usa nome da empresa, URL do logo, subtítulo e contatos desta tela.
-     * Se false (padrão), o cabeçalho fica em branco até você ativar (exceto substituições na capa no compositor).
+     * Se false, o cabeçalho fica em branco (exceto substituições só na capa no compositor).
      */
     pdf_header_fill_from_settings?: boolean;
     /** Contatos exibidos à direita no cabeçalho das propostas (PDF). */
@@ -57,7 +57,7 @@ export type PublicProposalBranding = {
 };
 
 const PROPOSAL_SETTINGS_DEFAULTS: ProposalSettings = {
-  pdf_header_fill_from_settings: false,
+  pdf_header_fill_from_settings: true,
   company_name: "Pazini - Móveis Planejados",
   introduction_text: `Prezado Cliente,
 
@@ -148,6 +148,15 @@ export async function getProposalSettingsAction() {
             const s = settings.smtp_secure as unknown;
             settings.smtp_secure =
                 s === true || s === "true" || s === 1 || s === "1";
+        }
+
+        if (settings.pdf_header_fill_from_settings != null && typeof settings.pdf_header_fill_from_settings !== "boolean") {
+            const s = settings.pdf_header_fill_from_settings as unknown;
+            settings.pdf_header_fill_from_settings =
+                s === true || s === "true" || s === 1 || s === "1";
+        }
+        if (settings.pdf_header_fill_from_settings == null) {
+            settings.pdf_header_fill_from_settings = true;
         }
 
         return { success: true, data: settings };

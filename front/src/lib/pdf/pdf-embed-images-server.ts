@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
+import type { ProposalSettings } from "@/actions/settings-actions";
 import type { CompositorPdfPayload } from "@/components/pdf/compositor-pdf-types";
 import { mergeCoverDocumentProps } from "@/lib/budgets/cover-document";
 import { getUploadsRoot } from "@/lib/upload";
@@ -52,10 +53,11 @@ function addUrl(set: Set<string>, u?: string | null) {
     set.add(t);
 }
 
-/** Todas as URLs brutas que o PDF pode pedir (capa + cenas do orçamento). */
+/** Todas as URLs brutas que o PDF pode pedir (capa + cenas do orçamento + logo do cabeçalho). */
 export function collectRawPdfImageUrlsForPdf(
     budget: Budget,
     compositorPdf?: CompositorPdfPayload,
+    settings?: ProposalSettings | null,
 ): string[] {
     const set = new Set<string>();
     const coverBlock = compositorPdf?.roots?.length
@@ -64,6 +66,10 @@ export function collectRawPdfImageUrlsForPdf(
     const cover = mergeCoverDocumentProps(coverBlock?.props as Record<string, unknown> | undefined);
     addUrl(set, cover.cover_watermark_url);
     addUrl(set, cover.document_watermark_url);
+    addUrl(set, cover.cover_pdf_header_logo_url_override);
+    if (settings?.company_logo_url?.trim()) {
+        addUrl(set, settings.company_logo_url);
+    }
     for (const src of collectImgSrcFromHtml(cover.cover_document_html ?? "")) {
         addUrl(set, src);
     }
