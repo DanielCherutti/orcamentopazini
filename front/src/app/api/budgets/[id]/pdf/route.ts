@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import React from "react";
 import { renderToBuffer } from "@react-pdf/renderer";
+import type { ProposalSettings } from "@/actions/settings-actions";
 import { ProposalDocument } from "@/components/pdf/proposal-document";
 import { loadBudgetPdfPayload } from "@/lib/budgets/budget-pdf-payload";
 import {
@@ -23,12 +24,17 @@ export async function GET(
     }
 
     try {
+        /** Mesma base que `buildPdfEmbeddedImagesMap` — senão as chaves de inline não batem com `proxyPdfImageSrc` e o React-PDF não desenha imagens (marca d’água, logos). */
         const imagePublicBase =
             loaded.settings.app_public_url?.trim() || pdfRequestOrigin || undefined;
+        const settingsForPdf: ProposalSettings = {
+            ...loaded.settings,
+            app_public_url: imagePublicBase ?? loaded.settings.app_public_url ?? "",
+        };
         let pdfEmbeddedImages: Record<string, string> | undefined;
         try {
             pdfEmbeddedImages = await buildPdfEmbeddedImagesMap(
-                collectRawPdfImageUrlsForPdf(loaded.budget, loaded.compositorPdf, loaded.settings),
+                collectRawPdfImageUrlsForPdf(loaded.budget, loaded.compositorPdf, settingsForPdf),
                 imagePublicBase,
             );
         } catch (embedErr) {
@@ -37,7 +43,7 @@ export async function GET(
         }
         const element = React.createElement(ProposalDocument, {
             budget: loaded.budget,
-            settings: loaded.settings,
+            settings: settingsForPdf,
             compositorPdf: loaded.compositorPdf,
             omitDocumentWatermark: process.env.PDF_OMIT_DOC_WATERMARK === "1",
             ...(pdfEmbeddedImages && Object.keys(pdfEmbeddedImages).length > 0

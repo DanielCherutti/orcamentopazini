@@ -65,5 +65,14 @@ export function proxyPdfImageSrc(
     if (!core) return undefined;
     const inlined = embedded && Object.prototype.hasOwnProperty.call(embedded, core) ? embedded[core] : undefined;
     if (inlined) return inlined;
+    /**
+     * Sem data URI embutido: preferir URL absoluta direta (ex. `/api/uploads/...`) em vez do proxy
+     * `/api/pdf/image?src=...`. Durante `renderToBuffer` na mesma instância Node, um fetch ao proxy
+     * pode falhar ou devolver vazio; o ficheiro em disco continua acessível pela rota de uploads.
+     */
+    const direct = resolvePdfImageSrc(url, publicBase);
+    if (direct && /^https?:\/\//i.test(direct)) {
+        return direct;
+    }
     return core;
 }

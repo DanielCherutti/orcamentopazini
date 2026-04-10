@@ -27,24 +27,42 @@ interface ProposalDocumentProps {
     pdfEmbeddedImages?: PdfEmbeddedImages;
 }
 
+/** A4 em pt (igual `compositor-cover-pdf`) — Yoga precisa de largura explícita na camada absoluta. */
+const PDF_PAGE_W = 595.28;
+const PDF_PAGE_H = 841.89;
+const INNER_PAD = 35;
+
 const styles = StyleSheet.create({
     pageWithWatermark: {
         position: 'relative',
     },
-    /** Altura/top são definidos por página (marca d’água entre cabeçalho e rodapé). */
+    /** Igual `compositor-cover-pdf` (`watermarkLayer`): primeiro filho = pintado por baixo (evita bugs de `zIndex` no react-pdf). */
     documentWatermarkLayer: {
         position: 'absolute',
         left: 0,
-        right: 0,
-        zIndex: 0,
+        width: PDF_PAGE_W,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    /** Dimensões fixas em pt; `contain` encaixa a arte sem esticar (evita caixa vazia no viewer). */
+    /** Mesmas dimensões que `watermarkImg` na capa (0,82 × A4). */
     documentWatermarkImage: {
-        width: Math.round(595.28 * 0.82),
-        height: Math.round(841.89 * 0.82),
+        width: Math.round(PDF_PAGE_W * 0.82),
+        height: Math.round(PDF_PAGE_H * 0.82),
         objectFit: 'contain',
+    },
+    /** `Page` interno sem padding — o recuo fica só no corpo (evita clipping da marca absoluta). */
+    innerPageRoot: {
+        position: 'relative',
+        fontFamily: theme.fonts.body,
+        fontSize: 11,
+        color: theme.colors.text,
+    },
+    /** Conteúdo por cima da marca (fundos transparentes — só texto/tabelas tapam a arte). */
+    innerPageForeground: {
+        position: 'relative',
+    },
+    innerPageContentWrap: {
+        position: 'relative',
     },
     contentPage: {
         padding: 35,
@@ -69,7 +87,6 @@ const styles = StyleSheet.create({
         paddingBottom: 8,
         borderBottomWidth: 1,
         borderBottomColor: '#e5e7eb',
-        zIndex: 2,
     },
     runningFooterBand: {
         position: 'absolute',
@@ -82,7 +99,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        zIndex: 2,
     },
     runningFooterMuted: {
         fontSize: 8,
@@ -299,10 +315,9 @@ function collectSessionTocRowsForPrintedLayout(
     return out;
 }
 
-const INNER_PAD = 35;
 const INNER_HEADER_RESERVE = 88;
 const INNER_FOOTER_RESERVE = 30;
-const INNER_PAGE_H = 841.89;
+const INNER_PAGE_H = PDF_PAGE_H;
 
 /** Páginas internas: faixas fixas (logo + empresa; código + páginas) como na capa; marca d’água entre as faixas. */
 function InnerPdfPage({
@@ -342,30 +357,46 @@ function InnerPdfPage({
 
     const wmTop = showRunningHeader ? INNER_PAD + INNER_HEADER_RESERVE : INNER_PAD;
     const wmHeight = Math.max(40, INNER_PAGE_H - wmTop - (INNER_PAD + INNER_FOOTER_RESERVE));
+    const wmOpacity = Math.min(0.22, Math.max(docWatermarkOpacity, 0.08));
 
     return (
-        <Page
-            key={pageKey}
-            size="A4"
-            style={[
-                styles.contentPage,
-                styles.pageWithWatermark,
-                {
-                    paddingTop: INNER_PAD + (showRunningHeader ? INNER_HEADER_RESERVE : 0),
-                    paddingBottom: INNER_PAD + INNER_FOOTER_RESERVE,
-                },
-                ...(pageStyleExtra ? [pageStyleExtra] : []),
-            ]}
-        >
+        <Page key={pageKey} size="A4" style={[styles.innerPageRoot, styles.pageWithWatermark]}>
+            {/* Ordem: marca → miolo → faixas (últimas = por cima). Sem zIndex (issue #1721 react-pdf). */}
             {!omitDocumentWatermark && docWatermarkSrc ? (
-                <View style={[styles.documentWatermarkLayer, { top: wmTop, height: wmHeight }]}>
+                <View
+                    style={[
+                        styles.documentWatermarkLayer,
+                        {
+                            top: wmTop,
+                            height: wmHeight,
+                        },
+                    ]}
+                >
                     {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
                     <Image
                         src={docWatermarkSrc}
-                        style={[styles.documentWatermarkImage, { opacity: docWatermarkOpacity }]}
+                        style={[styles.documentWatermarkImage, { opacity: wmOpacity }]}
                     />
                 </View>
             ) : null}
+            <View
+                style={[
+                    styles.innerPageContentWrap,
+                    {
+                        paddingTop: INNER_PAD + (showRunningHeader ? INNER_HEADER_RESERVE : 0),
+                        paddingBottom: INNER_PAD + INNER_FOOTER_RESERVE,
+                        paddingHorizontal: INNER_PAD,
+                    },
+                    ...(pageStyleExtra ? [pageStyleExtra] : []),
+                ]}
+            >
+                <View style={styles.innerPageForeground}>
+                    <View style={styles.segmentHeader}>
+                        <Text style={styles.headerTitle}>{title}</Text>
+                    </View>
+                    {children}
+                </View>
+            </View>
             {showRunningHeader ? (
                 <View style={styles.runningHeaderBand} fixed>
                     <PdfProposalHeaderBand settings={settings} logoSrc={logoSrc} companyName={company} />
@@ -378,10 +409,6 @@ function InnerPdfPage({
                     render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
                 />
             </View>
-            <View style={styles.segmentHeader}>
-                <Text style={styles.headerTitle}>{title}</Text>
-            </View>
-            {children}
         </Page>
     );
 }
@@ -480,7 +507,24 @@ export const ProposalDocument = ({
             : [];
     const { url: docWatermarkSource, opacity: docWatermarkOpacity } =
         resolveInnerPagesWatermark(compositorCoverMerged);
-    const docWatermarkSrc = proxyPdfImageSrc(docWatermarkSource, settings.app_public_url, pdfEmbeddedImages);
+    let docWatermarkSrc = proxyPdfImageSrc(docWatermarkSource, settings.app_public_url, pdfEmbeddedImages);
+    let effectiveInnerWatermarkOpacity = docWatermarkOpacity;
+    /**
+     * Se `document_watermark_url` existir mas falhar no embed/proxy, a capa ainda pode mostrar só
+     * `cover_watermark_url` — usa a mesma fonte da capa para o miolo.
+     */
+    if (!docWatermarkSrc) {
+        const coverOnly = compositorCoverMerged.cover_watermark_url?.trim();
+        if (coverOnly) {
+            const fromCover = proxyPdfImageSrc(coverOnly, settings.app_public_url, pdfEmbeddedImages);
+            if (fromCover) {
+                docWatermarkSrc = fromCover;
+                const o = compositorCoverMerged.cover_watermark_opacity;
+                effectiveInnerWatermarkOpacity =
+                    typeof o === "number" && Number.isFinite(o) ? o : 0.12;
+            }
+        }
+    }
 
     const pdfCompanyName = sanitizeTextForPdf(settings.company_name);
     const pdfIntroduction = sanitizeTextForPdf(settings.introduction_text);
@@ -493,7 +537,7 @@ export const ProposalDocument = ({
             budget,
             pdfEmbeddedImages,
             docWatermarkSrc,
-            docWatermarkOpacity,
+            docWatermarkOpacity: effectiveInnerWatermarkOpacity,
             omitDocumentWatermark,
         };
         switch (seg.kind) {
