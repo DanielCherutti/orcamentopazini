@@ -26,6 +26,12 @@ export interface CoverBlockProps {
   subtitle?: string;
   /** Logomarca do cliente (URL pública) */
   client_logo_url?: string;
+  /** Posição/tamanho na folha A4 (%, origem canto superior esquerdo da imagem). */
+  client_logo_x_pct?: number;
+  client_logo_y_pct?: number;
+  client_logo_width_pct?: number;
+  /** naturalWidth / naturalHeight — usado no PDF e para limitar arraste. */
+  client_logo_aspect?: number;
   /** Marca d’água só na capa */
   cover_watermark_url?: string;
   cover_watermark_opacity?: number;

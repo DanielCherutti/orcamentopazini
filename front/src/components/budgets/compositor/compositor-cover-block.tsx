@@ -36,6 +36,7 @@ import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { mergeCoverDocumentProps } from "@/lib/budgets/cover-document";
 import { CompositorRichTextEditor } from "@/components/budgets/compositor/compositor-rich-text-editor";
+import { DEFAULT_CLIENT_LOGO_LAYOUT } from "@/lib/budgets/cover-client-logo-layout";
 import { CompositorCoverPdfBandsDialog } from "@/components/budgets/compositor/compositor-cover-pdf-bands-dialog";
 
 export function CompositorCoverBlock({
@@ -187,6 +188,9 @@ export function CompositorCoverBlock({
         <Label htmlFor={`cover-clogo-${block.id}`} className="text-xs">
           Logomarca do cliente
         </Label>
+        <p className="text-[10px] leading-snug text-muted-foreground">
+          Na folha da capa, arraste a logo para posicionar e use o quadrado no canto inferior direito para redimensionar.
+        </p>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Input
             id={`cover-clogo-${block.id}`}
@@ -481,7 +485,25 @@ export function CompositorCoverBlock({
           onChange={(html) => patch({ cover_document_html: html })}
           wordPageWatermarkUrl={props.cover_watermark_url?.trim() || undefined}
           wordPageWatermarkOpacity={props.cover_watermark_opacity ?? 0.12}
-          wordPageClientLogoUrl={props.client_logo_url?.trim() || undefined}
+          wordPageClientLogo={
+            props.client_logo_url?.trim()
+              ? {
+                  url: props.client_logo_url.trim(),
+                  readOnly: Boolean(isReadOnly),
+                  xPct: props.client_logo_x_pct ?? DEFAULT_CLIENT_LOGO_LAYOUT.xPct,
+                  yPct: props.client_logo_y_pct ?? DEFAULT_CLIENT_LOGO_LAYOUT.yPct,
+                  widthPct: props.client_logo_width_pct ?? DEFAULT_CLIENT_LOGO_LAYOUT.widthPct,
+                  aspect: props.client_logo_aspect,
+                  onLayoutChange: (l) =>
+                    patch({
+                      client_logo_x_pct: l.xPct,
+                      client_logo_y_pct: l.yPct,
+                      client_logo_width_pct: l.widthPct,
+                    }),
+                  onAspectChange: (aspect) => patch({ client_logo_aspect: aspect }),
+                }
+              : undefined
+          }
         />
       </div>
     </div>

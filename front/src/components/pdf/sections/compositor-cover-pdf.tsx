@@ -19,6 +19,7 @@ import {
     resolveCoverPdfShowFooterBand,
 } from "@/lib/pdf/cover-pdf-band-resolve";
 import { PdfProposalHeaderBand } from "@/components/pdf/pdf-proposal-header-band";
+import { DEFAULT_CLIENT_LOGO_LAYOUT } from "@/lib/budgets/cover-client-logo-layout";
 
 /** Só URL HTTP(S) no HTML — nunca data URI (strings enormes quebram sanitize/split e o layout). */
 function rewriteImgSrcInHtml(html: string, publicBase?: string): string {
@@ -139,21 +140,34 @@ const styles = StyleSheet.create({
     fontSize: 8,
     color: theme.colors.textLight,
   },
-  /** Logomarca do cliente (canto da área de texto; independente do cabeçalho da empresa). */
-  clientLogoCorner: {
-    position: "absolute",
-    top: 4,
-    right: 0,
-    width: 120,
-    height: 48,
-    zIndex: 3,
-  },
-  clientLogoImg: {
-    width: 120,
-    height: 48,
-    objectFit: "contain",
-  },
 });
+
+function resolveClientLogoPdfBox(
+  coverProps: CoverBlockProps,
+  showCoverHeader: boolean,
+  showCoverFooter: boolean,
+): { left: number; top: number; width: number; height: number } | null {
+  if (!coverProps.client_logo_url?.trim()) return null;
+  const xPct = coverProps.client_logo_x_pct ?? DEFAULT_CLIENT_LOGO_LAYOUT.xPct;
+  const yPct = coverProps.client_logo_y_pct ?? DEFAULT_CLIENT_LOGO_LAYOUT.yPct;
+  const widthPct = coverProps.client_logo_width_pct ?? DEFAULT_CLIENT_LOGO_LAYOUT.widthPct;
+  const aspect =
+    coverProps.client_logo_aspect && coverProps.client_logo_aspect > 0
+      ? coverProps.client_logo_aspect
+      : 1;
+
+  const padTop = showCoverHeader ? BODY_PAD_V + COVER_HEADER_RESERVE : BODY_PAD_V;
+  const padBottom = showCoverFooter ? BODY_PAD_V + COVER_FOOTER_RESERVE : BODY_PAD_V;
+  const innerW = PAGE_W - 2 * BODY_PAD_H;
+  const innerH = PAGE_H - padTop - padBottom;
+
+  const w = (widthPct / 100) * innerW;
+  const h = w / aspect;
+  const left = BODY_PAD_H + (xPct / 100) * innerW;
+  const top = padTop + (yPct / 100) * innerH;
+
+  return { left, top, width: w, height: h };
+}
 
 function clampOpacity(value: number | undefined, fallback: number): number {
   const n = typeof value === "number" ? value : fallback;
@@ -207,6 +221,7 @@ export function CompositorCoverPdfPage({
   const wmTopInset = showCoverHeader ? BODY_PAD_V + COVER_HEADER_RESERVE : 0;
   const wmBottomInset = showCoverFooter ? BODY_PAD_V + COVER_FOOTER_RESERVE : 0;
   const wmHeight = Math.max(40, PAGE_H - wmTopInset - wmBottomInset);
+  const clientLogoBox = resolveClientLogoPdfBox(coverProps, showCoverHeader, showCoverFooter);
 
   return (
     <Page
@@ -237,13 +252,29 @@ export function CompositorCoverPdfPage({
           <Text style={styles.coverFooterMuted}>{footerRight}</Text>
         </View>
       ) : null}
+      {clientLogoSrc && clientLogoBox ? (
+        <View
+          style={{
+            position: "absolute",
+            left: clientLogoBox.left,
+            top: clientLogoBox.top,
+            width: clientLogoBox.width,
+            height: clientLogoBox.height,
+            zIndex: 3,
+          }}
+        >
+          {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
+          <Image
+            src={clientLogoSrc}
+            style={{
+              width: clientLogoBox.width,
+              height: clientLogoBox.height,
+              objectFit: "contain",
+            }}
+          />
+        </View>
+      ) : null}
       <View style={styles.body} wrap>
-        {clientLogoSrc ? (
-          <View style={styles.clientLogoCorner}>
-            {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
-            <Image src={clientLogoSrc} style={styles.clientLogoImg} />
-          </View>
-        ) : null}
         {blocks.map((b, i) => {
           if (b.type === "img") {
             const src = proxyPdfImageSrc(b.src, settings.app_public_url, pdfEmbeddedImages) ?? b.src;

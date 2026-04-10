@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { WordPageClientLogo } from '@/components/budgets/compositor/word-page-client-logo';
 
 interface RichTextEditorProps {
   value: string;
@@ -29,7 +30,17 @@ interface RichTextEditorProps {
    */
   wordPageWatermarkUrl?: string;
   wordPageWatermarkOpacity?: number;
-  wordPageClientLogoUrl?: string;
+  /** Logomarca do cliente na folha (arrastar/redimensionar). */
+  wordPageClientLogo?: {
+    url: string;
+    readOnly: boolean;
+    xPct: number;
+    yPct: number;
+    widthPct: number;
+    aspect?: number;
+    onLayoutChange: (layout: { xPct: number; yPct: number; widthPct: number }) => void;
+    onAspectChange: (aspect: number) => void;
+  };
 }
 
 const WORD_RIBBON_TABS = [
@@ -85,9 +96,10 @@ export function RichTextEditor({
   readOnly = false,
   wordPageWatermarkUrl,
   wordPageWatermarkOpacity = 0.12,
-  wordPageClientLogoUrl,
+  wordPageClientLogo,
 }: RichTextEditorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const wordPaperRef = useRef<HTMLDivElement>(null);
   const [wordRibbonTab, setWordRibbonTab] = useState<WordRibbonTabId>("home");
 
   const isWord = variant === 'word';
@@ -465,6 +477,7 @@ export function RichTextEditor({
                 <RulerVertical className="min-h-0 flex-1" />
               </div>
               <div
+                ref={wordPaperRef}
                 className={cn(
                   "relative col-start-2 row-start-2 box-border min-w-0 self-start overflow-x-hidden border border-l-0 border-t-0 border-neutral-500/45 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.12)]",
                 )}
@@ -487,12 +500,17 @@ export function RichTextEditor({
                     }}
                   />
                 ) : null}
-                {wordPageClientLogoUrl?.trim() ? (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
-                    src={wordPageClientLogoUrl.trim()}
-                    alt=""
-                    className="pointer-events-none absolute right-3 top-3 z-[1] max-h-14 max-w-[min(40%,140px)] object-contain"
+                {wordPageClientLogo?.url?.trim() ? (
+                  <WordPageClientLogo
+                    url={wordPageClientLogo.url.trim()}
+                    readOnly={wordPageClientLogo.readOnly}
+                    paperRef={wordPaperRef}
+                    xPct={wordPageClientLogo.xPct}
+                    yPct={wordPageClientLogo.yPct}
+                    widthPct={wordPageClientLogo.widthPct}
+                    aspect={wordPageClientLogo.aspect}
+                    onLayoutChange={wordPageClientLogo.onLayoutChange}
+                    onAspectChange={wordPageClientLogo.onAspectChange}
                   />
                 ) : null}
                 <div className="relative z-[2] min-h-full [&_.tiptap]:!bg-transparent [&_.tiptap]:min-h-full">
