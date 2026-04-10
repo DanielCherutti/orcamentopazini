@@ -17,11 +17,16 @@ export function defaultCoverHtmlFromLegacy(p: Partial<CoverBlockProps>): string 
   return `<p style="text-align:center"><strong>${main}</strong></p><p style="text-align:center">${sub}</p><p><br></p>`;
 }
 
-/** Mescla props da capa e garante HTML do documento quando vazio. */
+/**
+ * Mescla props da capa. Só aplica HTML inicial legado quando `cover_document_html` nunca foi
+ * definido no registro — se o usuário esvaziar o editor, não recoloca o texto padrão.
+ */
 export function mergeCoverDocumentProps(raw: Record<string, unknown> | undefined): CoverBlockProps {
   const merged: CoverBlockProps = { ...DEFAULT_COVER_PROPS, ...(raw as CoverBlockProps) };
   const html = (merged.cover_document_html ?? "").trim();
-  if (!html) {
+  const coverHtmlWasExplicit =
+    raw != null && typeof raw === "object" && "cover_document_html" in raw && raw.cover_document_html !== undefined;
+  if (!html && !coverHtmlWasExplicit) {
     merged.cover_document_html = defaultCoverHtmlFromLegacy(merged);
   }
   return merged;

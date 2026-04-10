@@ -17,6 +17,19 @@ export interface ProposalSettings {
     closing_text?: string;
     company_name?: string;
     company_logo_url?: string;
+    /** Linha abaixo do nome no cabeçalho do PDF (ex.: ENGENHARIA). */
+    company_header_subtitle?: string;
+    /**
+     * Se true, o cabeçalho do PDF usa nome da empresa, URL do logo, subtítulo e contatos desta tela.
+     * Se false (padrão), o cabeçalho fica em branco até você ativar (exceto substituições na capa no compositor).
+     */
+    pdf_header_fill_from_settings?: boolean;
+    /** Contatos exibidos à direita no cabeçalho das propostas (PDF). */
+    pdf_contact_whatsapp?: string;
+    pdf_contact_facebook?: string;
+    pdf_contact_email?: string;
+    pdf_contact_website?: string;
+    pdf_contact_location?: string;
     primary_color?: string;
     secondary_color?: string;
     /** URL pública do site (links do convite por e-mail), ex.: https://portal.empresa.com */
@@ -44,6 +57,7 @@ export type PublicProposalBranding = {
 };
 
 const PROPOSAL_SETTINGS_DEFAULTS: ProposalSettings = {
+  pdf_header_fill_from_settings: false,
   company_name: "Pazini - Móveis Planejados",
   introduction_text: `Prezado Cliente,
 

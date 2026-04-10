@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
     ProposalSettings,
     updateProposalSettingsAction,
@@ -13,13 +13,15 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/lib/toast";
-import { Loader2, Mail } from "lucide-react";
+import { Loader2, Mail, Upload } from "lucide-react";
 
 export function SettingsForm({ initialSettings }: { initialSettings: ProposalSettings }) {
     const router = useRouter();
     const [formData, setFormData] = useState(initialSettings);
     const [smtpPassNew, setSmtpPassNew] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const [logoUploading, setLogoUploading] = useState(false);
+    const logoFileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         setFormData(initialSettings);
@@ -44,6 +46,29 @@ export function SettingsForm({ initialSettings }: { initialSettings: ProposalSet
             toast.error("Erro inesperado");
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleLogoFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = "";
+        if (!file) return;
+        setLogoUploading(true);
+        try {
+            const fd = new FormData();
+            fd.append("file", file);
+            const res = await fetch("/api/upload/library", { method: "POST", body: fd });
+            const json = (await res.json()) as { url?: string; error?: string };
+            if (!res.ok || !json.url) {
+                toast.error(json.error || "Falha ao enviar a imagem");
+                return;
+            }
+            setFormData((prev) => ({ ...prev, company_logo_url: json.url }));
+            toast.success("Logo enviado. Clique em Salvar para aplicar.");
+        } catch {
+            toast.error("Erro ao enviar a imagem");
+        } finally {
+            setLogoUploading(false);
         }
     };
 
@@ -82,13 +107,47 @@ export function SettingsForm({ initialSettings }: { initialSettings: ProposalSet
                             />
                         </div>
                         <div className="space-y-2">
-                            <Label>URL do Logo</Label>
-                            <Input
-                                value={formData.company_logo_url || ""}
-                                onChange={e => setFormData({ ...formData, company_logo_url: e.target.value })}
-                                placeholder="https://..."
-                            />
-                            <p className="text-xs text-muted-foreground">Cole uma URL pública ou Data URI da sua logo.</p>
+                            <Label>Logo</Label>
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                <Input
+                                    className="sm:flex-1"
+                                    value={formData.company_logo_url || ""}
+                                    onChange={e =>
+                                        setFormData({ ...formData, company_logo_url: e.target.value })
+                                    }
+                                    placeholder="https://... ou envie um arquivo"
+                                />
+                                <input
+                                    ref={logoFileInputRef}
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/gif,image/webp"
+                                    className="sr-only"
+                                    onChange={handleLogoFileSelected}
+                                />
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="shrink-0"
+                                    disabled={logoUploading}
+                                    onClick={() => logoFileInputRef.current?.click()}
+                                >
+                                    {logoUploading ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                            Enviando…
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Upload className="h-4 w-4 mr-2" />
+                                            Enviar imagem
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                Cole uma URL pública, use Data URI, ou envie JPG, PNG, GIF ou WEBP (até 5&nbsp;MB). Salve
+                                as alterações após o upload.
+                            </p>
                         </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -127,6 +186,100 @@ export function SettingsForm({ initialSettings }: { initialSettings: ProposalSet
                                     onChange={e => setFormData({ ...formData, secondary_color: e.target.value })}
                                 />
                             </div>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Cabeçalho do PDF */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Cabeçalho das propostas (PDF)</CardTitle>
+                    <CardDescription>
+                        Layout em duas colunas: marca à esquerda e contatos à direita — como no modelo comercial. Usa a{" "}
+                        <strong>cor primária</strong> acima.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-4">
+                        <Checkbox
+                            id="pdf_header_fill_from_settings"
+                            checked={formData.pdf_header_fill_from_settings === true}
+                            onCheckedChange={(c) =>
+                                setFormData({
+                                    ...formData,
+                                    pdf_header_fill_from_settings: c === true,
+                                })
+                            }
+                        />
+                        <div className="space-y-1">
+                            <Label htmlFor="pdf_header_fill_from_settings" className="cursor-pointer text-sm font-medium">
+                                Usar estes dados no cabeçalho do PDF
+                            </Label>
+                            <p className="text-xs text-muted-foreground leading-snug">
+                                Desligado, o cabeçalho das propostas fica em branco (até você ativar). Você ainda pode
+                                definir substituições só na capa, no compositor.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Linha abaixo do nome (opcional)</Label>
+                        <Input
+                            value={formData.company_header_subtitle || ""}
+                            onChange={(e) =>
+                                setFormData({ ...formData, company_header_subtitle: e.target.value })
+                            }
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            Aparece em fonte menor, abaixo do nome da empresa (ex.: segunda linha da marca).
+                        </p>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <div className="space-y-2">
+                            <Label>WhatsApp</Label>
+                            <Input
+                                value={formData.pdf_contact_whatsapp || ""}
+                                onChange={(e) =>
+                                    setFormData({ ...formData, pdf_contact_whatsapp: e.target.value })
+                                }
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Facebook / rede</Label>
+                            <Input
+                                value={formData.pdf_contact_facebook || ""}
+                                onChange={(e) =>
+                                    setFormData({ ...formData, pdf_contact_facebook: e.target.value })
+                                }
+                            />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                            <Label>E-mail</Label>
+                            <Input
+                                type="email"
+                                value={formData.pdf_contact_email || ""}
+                                onChange={(e) =>
+                                    setFormData({ ...formData, pdf_contact_email: e.target.value })
+                                }
+                            />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                            <Label>Site</Label>
+                            <Input
+                                value={formData.pdf_contact_website || ""}
+                                onChange={(e) =>
+                                    setFormData({ ...formData, pdf_contact_website: e.target.value })
+                                }
+                            />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                            <Label>Local / cidade</Label>
+                            <Input
+                                value={formData.pdf_contact_location || ""}
+                                onChange={(e) =>
+                                    setFormData({ ...formData, pdf_contact_location: e.target.value })
+                                }
+                            />
                         </div>
                     </div>
                 </CardContent>

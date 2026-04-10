@@ -3,7 +3,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
 import Link from "next/link";
-import { ImageIcon, Maximize2, Minimize2, RefreshCw, Settings2, SlidersHorizontal, Sparkles } from "lucide-react";
+import {
+  ImageIcon,
+  LayoutTemplate,
+  Maximize2,
+  Minimize2,
+  RefreshCw,
+  Settings2,
+  SlidersHorizontal,
+  Sparkles,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +34,7 @@ import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { mergeCoverDocumentProps } from "@/lib/budgets/cover-document";
 import { CompositorRichTextEditor } from "@/components/budgets/compositor/compositor-rich-text-editor";
+import { CompositorCoverPdfBandsDialog } from "@/components/budgets/compositor/compositor-cover-pdf-bands-dialog";
 
 export function CompositorCoverBlock({
   block,
@@ -41,6 +51,7 @@ export function CompositorCoverBlock({
   const [budget, setBudget] = useState<Budget | null>(null);
   const [loadingClient, setLoadingClient] = useState(false);
   const [coverSettingsOpen, setCoverSettingsOpen] = useState(false);
+  const [coverPdfBandsOpen, setCoverPdfBandsOpen] = useState(false);
   const [coverExpanded, setCoverExpanded] = useState(false);
 
   useEffect(() => {
@@ -274,6 +285,17 @@ export function CompositorCoverBlock({
             variant="outline"
             size="sm"
             className="h-8 border-neutral-300 bg-white text-xs shadow-sm dark:border-neutral-600 dark:bg-neutral-800"
+            onClick={() => setCoverPdfBandsOpen(true)}
+            title="Cabeçalho e rodapé fixos da capa no PDF"
+          >
+            <LayoutTemplate className="mr-1.5 h-3.5 w-3.5" />
+            Cabeçalho / rodapé (PDF)
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 border-neutral-300 bg-white text-xs shadow-sm dark:border-neutral-600 dark:bg-neutral-800"
             asChild
           >
             <Link href="/settings">
@@ -288,6 +310,15 @@ export function CompositorCoverBlock({
           </span>
         ) : null}
       </header>
+
+      <CompositorCoverPdfBandsDialog
+        open={coverPdfBandsOpen}
+        onOpenChange={setCoverPdfBandsOpen}
+        coverProps={props}
+        patch={patch}
+        budget={budget}
+        isReadOnly={isReadOnly}
+      />
 
       <Dialog open={coverSettingsOpen} onOpenChange={setCoverSettingsOpen}>
         <DialogContent

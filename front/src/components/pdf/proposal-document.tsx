@@ -16,6 +16,8 @@ import { mergeCoverDocumentProps } from '@/lib/budgets/cover-document';
 import { type PdfEmbeddedImages, proxyPdfImageSrc } from '@/lib/pdf/pdf-image-src';
 import { stripHtmlToText } from '@/lib/pdf/html-to-plain-text';
 import { sanitizeTextForPdf } from '@/lib/pdf/sanitize-pdf-text';
+import { pdfInnerRunningHeaderShouldShow } from '@/lib/pdf/pdf-proposal-header';
+import { PdfProposalHeaderBand } from '@/components/pdf/pdf-proposal-header-band';
 import type { BudgetItem } from '@/types/budget-types';
 
 interface ProposalDocumentProps {
@@ -33,12 +35,11 @@ const styles = StyleSheet.create({
     pageWithWatermark: {
         position: 'relative',
     },
+    /** Altura/top são definidos por página (marca d’água entre cabeçalho e rodapé). */
     documentWatermarkLayer: {
         position: 'absolute',
         left: 0,
-        top: 0,
         right: 0,
-        bottom: 0,
         zIndex: 0,
         justifyContent: 'center',
         alignItems: 'center',
@@ -57,27 +58,49 @@ const styles = StyleSheet.create({
         fontSize: 11,
         color: theme.colors.text,
     },
-    header: {
-        marginBottom: 20,
+    /** Título da seção (faixa de empresa fixa fica acima, igual à capa). */
+    segmentHeader: {
+        marginBottom: 14,
         borderBottomWidth: 2,
         borderBottomColor: theme.colors.secondary,
         paddingBottom: 5,
+    },
+    runningHeaderBand: {
+        position: 'absolute',
+        top: 35,
+        left: 35,
+        right: 35,
+        paddingBottom: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#e5e7eb',
+        zIndex: 2,
+    },
+    runningFooterBand: {
+        position: 'absolute',
+        bottom: 35,
+        left: 35,
+        right: 35,
+        paddingTop: 6,
+        borderTopWidth: 1,
+        borderTopColor: '#e5e7eb',
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'flex-end'
+        alignItems: 'center',
+        zIndex: 2,
+    },
+    runningFooterMuted: {
+        fontSize: 8,
+        color: theme.colors.textLight,
+    },
+    runningFooterPage: {
+        fontSize: 9,
+        color: theme.colors.textLight,
     },
     headerTitle: {
         color: theme.colors.primary,
         fontFamily: theme.fonts.bold,
         fontSize: 14,
         textTransform: 'uppercase'
-    },
-    footerNumber: {
-        position: 'absolute',
-        bottom: 20,
-        right: 35,
-        fontSize: 9,
-        color: theme.colors.textLight
     },
     totalBlock: {
         marginTop: 30,
@@ -289,6 +312,93 @@ function collectSessionTocRowsForPrintedLayout(
     return out;
 }
 
+const INNER_PAD = 35;
+const INNER_HEADER_RESERVE = 88;
+const INNER_FOOTER_RESERVE = 30;
+const INNER_PAGE_H = 841.89;
+
+/** Páginas internas: faixas fixas (logo + empresa; código + páginas) como na capa; marca d’água entre as faixas. */
+function InnerPdfPage({
+    pageKey,
+    title,
+    children,
+    settings,
+    budget,
+    pdfEmbeddedImages,
+    docWatermarkSrc,
+    docWatermarkOpacity,
+    omitDocumentWatermark,
+    pageStyleExtra,
+}: {
+    pageKey: string;
+    title: string;
+    children: React.ReactNode;
+    settings: ProposalSettings;
+    budget: Budget;
+    pdfEmbeddedImages?: PdfEmbeddedImages;
+    docWatermarkSrc: string | undefined;
+    docWatermarkOpacity: number;
+    omitDocumentWatermark: boolean;
+    /** Ex.: `{ flexDirection: 'column' }` na página de condições. */
+    pageStyleExtra?: { flexDirection?: "row" | "column" };
+}) {
+    const fill = settings.pdf_header_fill_from_settings === true;
+    const company = fill
+        ? sanitizeTextForPdf(settings.company_name?.trim() || "")
+        : "";
+    const logoUrl = fill ? settings.company_logo_url?.trim() : undefined;
+    const logoSrc = logoUrl
+        ? proxyPdfImageSrc(logoUrl, settings.app_public_url, pdfEmbeddedImages)
+        : undefined;
+    const showRunningHeader = pdfInnerRunningHeaderShouldShow(settings);
+    const code = sanitizeTextForPdf((budget.code || "").trim() || "—");
+
+    const wmTop = showRunningHeader ? INNER_PAD + INNER_HEADER_RESERVE : INNER_PAD;
+    const wmHeight = Math.max(40, INNER_PAGE_H - wmTop - (INNER_PAD + INNER_FOOTER_RESERVE));
+
+    return (
+        <Page
+            key={pageKey}
+            size="A4"
+            style={[
+                styles.contentPage,
+                styles.pageWithWatermark,
+                {
+                    paddingTop: INNER_PAD + (showRunningHeader ? INNER_HEADER_RESERVE : 0),
+                    paddingBottom: INNER_PAD + INNER_FOOTER_RESERVE,
+                },
+                ...(pageStyleExtra ? [pageStyleExtra] : []),
+            ]}
+        >
+            {!omitDocumentWatermark && docWatermarkSrc ? (
+                <View style={[styles.documentWatermarkLayer, { top: wmTop, height: wmHeight }]} fixed>
+                    {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
+                    <Image
+                        src={docWatermarkSrc}
+                        style={[styles.documentWatermarkImage, { opacity: docWatermarkOpacity }]}
+                    />
+                </View>
+            ) : null}
+            {showRunningHeader ? (
+                <View style={styles.runningHeaderBand} fixed>
+                    <PdfProposalHeaderBand settings={settings} logoSrc={logoSrc} companyName={company} />
+                </View>
+            ) : null}
+            <View style={styles.runningFooterBand} fixed>
+                <Text style={styles.runningFooterMuted}>Cód. {code}</Text>
+                <Text
+                    style={styles.runningFooterPage}
+                    render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
+                />
+            </View>
+            <View style={styles.segmentHeader}>
+                <Text style={styles.headerTitle}>{title}</Text>
+            </View>
+            {children}
+        </Page>
+    );
+}
+
 export const ProposalDocument = ({
     budget,
     settings,
@@ -392,19 +502,16 @@ export const ProposalDocument = ({
     const pdfIntroduction = sanitizeTextForPdf(settings.introduction_text);
     const pdfClosing = sanitizeTextForPdf(settings.closing_text);
 
-    const renderDocumentWatermark = () =>
-        !omitDocumentWatermark && docWatermarkSrc ? (
-            <View style={styles.documentWatermarkLayer} fixed>
-                {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
-                <Image
-                    src={docWatermarkSrc}
-                    style={[styles.documentWatermarkImage, { opacity: docWatermarkOpacity }]}
-                />
-            </View>
-        ) : null;
-
     const renderPdfSegment = (seg: PdfSegment, i: number): React.ReactNode => {
         const keyBase = `pdf-${i}-${seg.kind}`;
+        const innerCommon = {
+            settings,
+            budget,
+            pdfEmbeddedImages,
+            docWatermarkSrc,
+            docWatermarkOpacity,
+            omitDocumentWatermark,
+        };
         switch (seg.kind) {
             case "cover":
                 return (
@@ -418,31 +525,16 @@ export const ProposalDocument = ({
                 );
             case "intro":
                 return (
-                    <Page key={keyBase} size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
-                        {renderDocumentWatermark()}
-                        <View style={styles.header}>
-                            <Text style={styles.headerTitle}>Apresentação</Text>
-                            <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{pdfCompanyName}</Text>
-                        </View>
+                    <InnerPdfPage pageKey={keyBase} title="Apresentação" {...innerCommon}>
                         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-pdf Style não tipa whiteSpace */}
                         <Text style={{ whiteSpace: "pre-wrap", textAlign: "left" } as any}>
                             {pdfIntroduction}
                         </Text>
-                        <Text
-                            style={styles.footerNumber}
-                            render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
-                            fixed
-                        />
-                    </Page>
+                    </InnerPdfPage>
                 );
             case "toc":
                 return (
-                    <Page key={keyBase} size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
-                        {renderDocumentWatermark()}
-                        <View style={styles.header}>
-                            <Text style={styles.headerTitle}>Sumário</Text>
-                            <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{pdfCompanyName}</Text>
-                        </View>
+                    <InnerPdfPage pageKey={keyBase} title="Sumário" {...innerCommon}>
                         <Text style={{ fontSize: 9, color: theme.colors.textLight, marginBottom: 14 }}>
                             Páginas calculadas conforme a impressão atual do documento.
                         </Text>
@@ -467,21 +559,11 @@ export const ProposalDocument = ({
                                 </View>
                             ))
                         )}
-                        <Text
-                            style={styles.footerNumber}
-                            render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
-                            fixed
-                        />
-                    </Page>
+                    </InnerPdfPage>
                 );
             case "figures":
                 return (
-                    <Page key={keyBase} size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
-                        {renderDocumentWatermark()}
-                        <View style={styles.header}>
-                            <Text style={styles.headerTitle}>Lista de Figuras</Text>
-                            <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{pdfCompanyName}</Text>
-                        </View>
+                    <InnerPdfPage pageKey={keyBase} title="Lista de Figuras" {...innerCommon}>
                         <Text style={{ fontSize: 9, color: theme.colors.textLight, marginBottom: 14 }}>
                             Figuras do Escopo. A página indicada referencia o início do detalhamento impresso.
                         </Text>
@@ -496,20 +578,11 @@ export const ProposalDocument = ({
                                 </Text>
                             </View>
                         ))}
-                        <Text
-                            style={styles.footerNumber}
-                            render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
-                            fixed
-                        />
-                    </Page>
+                    </InnerPdfPage>
                 );
             case "detail":
                 return (
-                    <Page key={keyBase} size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
-                        {renderDocumentWatermark()}
-                        <View style={styles.header}>
-                            <Text style={styles.headerTitle}>Detalhamento do Projeto</Text>
-                        </View>
+                    <InnerPdfPage pageKey={keyBase} title="Detalhamento do Projeto" {...innerCommon}>
                         <BudgetTable
                             locations={locations}
                             sectionNumber={sectionNumberPdf}
@@ -527,27 +600,13 @@ export const ProposalDocument = ({
                                 {formatMoney(budget.total_value || 0)}
                             </Text>
                         </View>
-                        <Text
-                            style={styles.footerNumber}
-                            render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
-                            fixed
-                        />
-                    </Page>
+                    </InnerPdfPage>
                 );
             case "session": {
                 const sessionRoot = seg.block;
                 const rows = collectSessionPrintRows(sessionRoot, compositorPdf?.items || {});
                 return (
-                    <Page
-                        key={`session-page-${sessionRoot.id}`}
-                        size="A4"
-                        style={[styles.contentPage, styles.pageWithWatermark]}
-                    >
-                        {renderDocumentWatermark()}
-                        <View style={styles.header}>
-                            <Text style={styles.headerTitle}>Sessão do Compositor</Text>
-                            <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{pdfCompanyName}</Text>
-                        </View>
+                    <InnerPdfPage pageKey={`session-page-${sessionRoot.id}`} title="Sessão do Compositor" {...innerCommon}>
                         <Text style={styles.sessionTitle}>
                             {sanitizeTextForPdf(
                                 `${sessionRoot.number ? `${sessionRoot.number} ` : ""}${(sessionRoot.label || "Sessão").trim()}`
@@ -568,25 +627,17 @@ export const ProposalDocument = ({
                                 </View>
                             ))
                         )}
-                        <Text
-                            style={styles.footerNumber}
-                            render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
-                            fixed
-                        />
-                    </Page>
+                    </InnerPdfPage>
                 );
             }
             case "terms":
                 return (
-                    <Page
-                        key={keyBase}
-                        size="A4"
-                        style={[styles.contentPage, styles.pageWithWatermark, { flexDirection: "column" }]}
+                    <InnerPdfPage
+                        pageKey={keyBase}
+                        title="Condições Gerais"
+                        pageStyleExtra={{ flexDirection: "column" }}
+                        {...innerCommon}
                     >
-                        {renderDocumentWatermark()}
-                        <View style={styles.header}>
-                            <Text style={styles.headerTitle}>Condições Gerais</Text>
-                        </View>
                         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-pdf Style doesn't type whiteSpace */}
                         <Text style={{ fontSize: 10, whiteSpace: "pre-wrap", marginBottom: 12 } as any}>
                             {pdfClosing}
@@ -624,12 +675,7 @@ export const ProposalDocument = ({
                                 <Text style={{ fontSize: 9 }}>Cliente</Text>
                             </View>
                         </View>
-                        <Text
-                            style={styles.footerNumber}
-                            render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
-                            fixed
-                        />
-                    </Page>
+                    </InnerPdfPage>
                 );
             default:
                 return null;

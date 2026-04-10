@@ -8,6 +8,17 @@ import { type PdfEmbeddedImages, proxyPdfImageSrc, proxyPdfImageUrlCore } from "
 import { sanitizeCoverHtmlForPdf } from "@/lib/pdf/sanitize-inline-styles-for-pdf";
 import { splitCoverHtmlIntoPdfBlocks, splitCoverHtmlFragmentToSegments } from "@/lib/pdf/cover-pdf-blocks";
 import { theme } from "../theme";
+import { sanitizeTextForPdf } from "@/lib/pdf/sanitize-pdf-text";
+import {
+    buildCoverPdfBandContext,
+    formatCoverPdfFooterLeftText,
+    formatCoverPdfFooterRightText,
+    resolveCoverPdfHeaderCompanyText,
+    resolveCoverPdfHeaderLogoUrl,
+    shouldShowCoverPdfHeaderBand,
+    resolveCoverPdfShowFooterBand,
+} from "@/lib/pdf/cover-pdf-band-resolve";
+import { PdfProposalHeaderBand } from "@/components/pdf/pdf-proposal-header-band";
 
 /** Só URL HTTP(S) no HTML — nunca data URI (strings enormes quebram sanitize/split e o layout). */
 function rewriteImgSrcInHtml(html: string, publicBase?: string): string {
@@ -26,22 +37,33 @@ const PAGE_W = 595.28;
 const PAGE_H = 841.89;
 const BODY_PAD_H = Math.round((22 / 210) * PAGE_W);
 const BODY_PAD_V = Math.round((18 / 297) * PAGE_H);
+/** Espaço reservado para cabeçalho (duas colunas: marca + contatos). */
+const COVER_HEADER_RESERVE = 88;
+const COVER_FOOTER_RESERVE = 34;
 
 const styles = StyleSheet.create({
   page: {
     fontFamily: theme.fonts.body,
     backgroundColor: "#FFFFFF",
     position: "relative",
-    paddingTop: BODY_PAD_V,
-    paddingBottom: BODY_PAD_V,
     paddingHorizontal: BODY_PAD_H,
+  },
+  pagePadTopWithHeader: {
+    paddingTop: BODY_PAD_V + COVER_HEADER_RESERVE,
+  },
+  pagePadTopNoHeader: {
+    paddingTop: BODY_PAD_V,
+  },
+  pagePadBottomWithFooter: {
+    paddingBottom: BODY_PAD_V + COVER_FOOTER_RESERVE,
+  },
+  pagePadBottomNoFooter: {
+    paddingBottom: BODY_PAD_V,
   },
   watermarkLayer: {
     position: "absolute",
     left: 0,
-    top: 0,
     width: PAGE_W,
-    height: PAGE_H,
     zIndex: 0,
     justifyContent: "center",
     alignItems: "center",
@@ -90,6 +112,33 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     objectFit: "contain",
   },
+  coverHeaderBand: {
+    position: "absolute",
+    top: BODY_PAD_V,
+    left: BODY_PAD_H,
+    right: BODY_PAD_H,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+    zIndex: 2,
+  },
+  coverFooterBand: {
+    position: "absolute",
+    bottom: BODY_PAD_V,
+    left: BODY_PAD_H,
+    right: BODY_PAD_H,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: "#e5e7eb",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    zIndex: 2,
+  },
+  coverFooterMuted: {
+    fontSize: 8,
+    color: theme.colors.textLight,
+  },
 });
 
 function clampOpacity(value: number | undefined, fallback: number): number {
@@ -101,7 +150,7 @@ function clampOpacity(value: number | undefined, fallback: number): number {
 }
 
 export function CompositorCoverPdfPage({
-  budget: _budget,
+  budget,
   settings,
   coverProps: raw,
   pdfEmbeddedImages,
@@ -122,13 +171,52 @@ export function CompositorCoverPdfPage({
     rewriteImgSrcInHtml(coverProps.cover_document_html ?? "", settings.app_public_url),
   );
   const blocks = splitCoverHtmlIntoPdfBlocks(html);
+  const bandCtx = buildCoverPdfBandContext(budget);
+  const fill = settings.pdf_header_fill_from_settings === true;
+  const companyName = sanitizeTextForPdf(
+    resolveCoverPdfHeaderCompanyText(coverProps, fill ? settings.company_name : undefined),
+  );
+  const logoUrlRaw = resolveCoverPdfHeaderLogoUrl(coverProps, fill ? settings.company_logo_url : undefined);
+  const logoSrc = logoUrlRaw
+    ? proxyPdfImageSrc(logoUrlRaw, settings.app_public_url, pdfEmbeddedImages)
+    : undefined;
+  const showCoverHeader = shouldShowCoverPdfHeaderBand(coverProps, settings);
+  const showCoverFooter = resolveCoverPdfShowFooterBand(coverProps);
+  const footerLeft = sanitizeTextForPdf(formatCoverPdfFooterLeftText(coverProps, bandCtx));
+  const footerRight = sanitizeTextForPdf(formatCoverPdfFooterRightText(coverProps, bandCtx));
+
+  /** Marca d’água não pode ocupar a página inteira: cobria cabeçalho/rodapé no PDF (ordem de pintura). */
+  const wmTopInset = showCoverHeader ? BODY_PAD_V + COVER_HEADER_RESERVE : 0;
+  const wmBottomInset = showCoverFooter ? BODY_PAD_V + COVER_FOOTER_RESERVE : 0;
+  const wmHeight = Math.max(40, PAGE_H - wmTopInset - wmBottomInset);
 
   return (
-    <Page size="A4" style={styles.page}>
+    <Page
+      size="A4"
+      style={[
+        styles.page,
+        showCoverHeader ? styles.pagePadTopWithHeader : styles.pagePadTopNoHeader,
+        showCoverFooter ? styles.pagePadBottomWithFooter : styles.pagePadBottomNoFooter,
+      ]}
+    >
+      {/* Marca d’água primeiro; cabeçalho/rodapé com zIndex maior para não ficarem ocultos. */}
       {wmResolved ? (
-        <View style={styles.watermarkLayer}>
+        <View
+          style={[styles.watermarkLayer, { top: wmTopInset, height: wmHeight }]}
+        >
           {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
           <Image src={wmResolved} style={[styles.watermarkImg, { opacity: wmOpacity }]} />
+        </View>
+      ) : null}
+      {showCoverHeader ? (
+        <View style={styles.coverHeaderBand} fixed>
+          <PdfProposalHeaderBand settings={settings} logoSrc={logoSrc} companyName={companyName} />
+        </View>
+      ) : null}
+      {showCoverFooter ? (
+        <View style={styles.coverFooterBand} fixed>
+          <Text style={styles.coverFooterMuted}>{footerLeft}</Text>
+          <Text style={styles.coverFooterMuted}>{footerRight}</Text>
         </View>
       ) : null}
       <View style={styles.body} wrap>

@@ -46,6 +46,18 @@ export interface CoverBlockProps {
   issuer_city_line?: string;
   /** Ex.: "Rev. 02" — exibido junto ao código do orçamento */
   revision_label?: string;
+
+  /** Faixas fixas da capa no PDF (fora do HTML) — editáveis no compositor. */
+  cover_pdf_show_header_band?: boolean;
+  cover_pdf_show_footer_band?: boolean;
+  /** Substitui o nome da empresa (Configurações) no cabeçalho do PDF. */
+  cover_pdf_header_company_override?: string;
+  /** Substitui a URL do logo (Configurações) no cabeçalho do PDF. */
+  cover_pdf_header_logo_url_override?: string;
+  /** Rodapé esquerdo. Placeholders: {{date}} {{code}} {{title}}. Vazio = texto automático. */
+  cover_pdf_footer_left_template?: string;
+  /** Rodapé direito. Placeholders: {{date}} {{code}} {{title}}. Vazio = texto automático. */
+  cover_pdf_footer_right_template?: string;
 }
 
 export const DEFAULT_COVER_PROPS: CoverBlockProps = {
