@@ -39,8 +39,8 @@ const PAGE_H = 841.89;
 const BODY_PAD_H = Math.round((22 / 210) * PAGE_W);
 const BODY_PAD_V = Math.round((18 / 297) * PAGE_H);
 /** Espaço reservado para cabeçalho (duas colunas: marca + contatos). */
-const COVER_HEADER_RESERVE = 88;
-const COVER_FOOTER_RESERVE = 34;
+const COVER_HEADER_RESERVE = 108;
+const COVER_FOOTER_RESERVE = 44;
 
 const styles = StyleSheet.create({
   page: {
@@ -118,6 +118,7 @@ const styles = StyleSheet.create({
     top: BODY_PAD_V,
     left: BODY_PAD_H,
     right: BODY_PAD_H,
+    minHeight: COVER_HEADER_RESERVE - 10,
     paddingBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: "#e5e7eb",
@@ -128,6 +129,7 @@ const styles = StyleSheet.create({
     bottom: BODY_PAD_V,
     left: BODY_PAD_H,
     right: BODY_PAD_H,
+    minHeight: COVER_FOOTER_RESERVE - 8,
     paddingTop: 6,
     borderTopWidth: 1,
     borderTopColor: "#e5e7eb",

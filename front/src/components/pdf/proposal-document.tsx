@@ -81,18 +81,20 @@ const styles = StyleSheet.create({
     },
     runningHeaderBand: {
         position: 'absolute',
-        top: 35,
-        left: 35,
-        right: 35,
+        top: INNER_PAD,
+        left: INNER_PAD,
+        right: INNER_PAD,
+        minHeight: 98,
         paddingBottom: 8,
         borderBottomWidth: 1,
         borderBottomColor: '#e5e7eb',
     },
     runningFooterBand: {
         position: 'absolute',
-        bottom: 35,
-        left: 35,
-        right: 35,
+        bottom: INNER_PAD,
+        left: INNER_PAD,
+        right: INNER_PAD,
+        minHeight: 36,
         paddingTop: 6,
         borderTopWidth: 1,
         borderTopColor: '#e5e7eb',
@@ -315,8 +317,8 @@ function collectSessionTocRowsForPrintedLayout(
     return out;
 }
 
-const INNER_HEADER_RESERVE = 88;
-const INNER_FOOTER_RESERVE = 30;
+const INNER_HEADER_RESERVE = 108;
+const INNER_FOOTER_RESERVE = 44;
 const INNER_PAGE_H = PDF_PAGE_H;
 
 /** Páginas internas: faixas fixas (logo + empresa; código + páginas) como na capa; marca d’água entre as faixas. */
@@ -360,10 +362,27 @@ function InnerPdfPage({
     const wmOpacity = Math.min(0.22, Math.max(docWatermarkOpacity, 0.08));
 
     return (
-        <Page key={pageKey} size="A4" style={[styles.innerPageRoot, styles.pageWithWatermark]}>
-            {/* Ordem: marca → miolo → faixas (últimas = por cima). Sem zIndex (issue #1721 react-pdf). */}
+        <Page
+            key={pageKey}
+            size="A4"
+            style={[
+                styles.innerPageRoot,
+                styles.pageWithWatermark,
+                {
+                    paddingTop: INNER_PAD + (showRunningHeader ? INNER_HEADER_RESERVE : 0),
+                    paddingBottom: INNER_PAD + INNER_FOOTER_RESERVE,
+                    paddingHorizontal: INNER_PAD,
+                },
+            ]}
+        >
+            {/*
+              `Page` tem wrap=true por defeito; ao partir conteúdo em várias folhas PDF, só nós `fixed`
+              são repetidos em cada subpágina (@react-pdf/layout splitNodes). Sem isto a marca ficava
+              só na primeira fatia (a capa costuma ser uma única subpágina).
+            */}
             {!omitDocumentWatermark && docWatermarkSrc ? (
                 <View
+                    fixed
                     style={[
                         styles.documentWatermarkLayer,
                         {
@@ -382,11 +401,6 @@ function InnerPdfPage({
             <View
                 style={[
                     styles.innerPageContentWrap,
-                    {
-                        paddingTop: INNER_PAD + (showRunningHeader ? INNER_HEADER_RESERVE : 0),
-                        paddingBottom: INNER_PAD + INNER_FOOTER_RESERVE,
-                        paddingHorizontal: INNER_PAD,
-                    },
                     ...(pageStyleExtra ? [pageStyleExtra] : []),
                 ]}
             >
