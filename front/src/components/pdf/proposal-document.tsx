@@ -15,6 +15,8 @@ import { sanitizeTextForPdf } from '@/lib/pdf/sanitize-pdf-text';
 import { pdfInnerRunningHeaderShouldShow } from '@/lib/pdf/pdf-proposal-header';
 import { PdfProposalHeaderBand } from '@/components/pdf/pdf-proposal-header-band';
 import type { BudgetItem } from '@/types/budget-types';
+import type { BudgetLocation } from '@/types/budget-types';
+import { applyQuoteRowAdjustments } from '@/lib/budgets/scope-pricing';
 
 interface ProposalDocumentProps {
     budget: Budget;
@@ -26,6 +28,18 @@ interface ProposalDocumentProps {
     /** Data URIs pré-carregadas na rota API (evita `fetch` HTTP durante `renderToBuffer`). */
     pdfEmbeddedImages?: PdfEmbeddedImages;
 }
+
+type CompositorQuoteSection = {
+    id: string;
+    title: string;
+    items: BudgetItem[];
+};
+
+type CompositorQuoteLocation = {
+    id: string;
+    title: string;
+    sections: CompositorQuoteSection[];
+};
 
 /** A4 em pt (igual `compositor-cover-pdf`) — Yoga precisa de largura explícita na camada absoluta. */
 const PDF_PAGE_W = 595.28;
@@ -170,6 +184,72 @@ const styles = StyleSheet.create({
         color: theme.colors.text,
         lineHeight: 1.35,
     },
+    quoteHeaderBar: {
+        borderBottomWidth: 1,
+        borderBottomColor: '#d1d5db',
+        backgroundColor: '#f3f4f6',
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        marginBottom: 6,
+    },
+    quoteHeaderTitle: {
+        fontSize: 10,
+        fontFamily: theme.fonts.bold,
+        color: theme.colors.text,
+        textTransform: 'uppercase',
+        textAlign: 'center',
+    },
+    quoteTableHeader: {
+        flexDirection: "row",
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.border,
+        backgroundColor: theme.colors.bgHeader,
+        paddingVertical: 5,
+    },
+    quoteRow: {
+        flexDirection: "row",
+        borderBottomWidth: 0.5,
+        borderBottomColor: theme.colors.border,
+        paddingVertical: 4,
+    },
+    quoteColIndex: { flex: 3, fontSize: 9 },
+    quoteColDesc: { flex: 14, fontSize: 9 },
+    quoteColEquip: { flex: 6, textAlign: "right", fontSize: 9 },
+    quoteColAsm: { flex: 6, textAlign: "right", fontSize: 9 },
+    quoteLocRow: {
+        backgroundColor: '#f7fafc',
+    },
+    quoteSecRow: {
+        backgroundColor: '#ffffff',
+    },
+    quoteTotalRow: {
+        flexDirection: "row",
+        borderTopWidth: 1,
+        borderTopColor: '#f59e0b',
+        backgroundColor: '#fef3c7',
+        paddingVertical: 6,
+        marginTop: 4,
+    },
+    quoteTotalLabel: {
+        flex: 17,
+        fontSize: 9,
+        fontFamily: theme.fonts.bold,
+        textTransform: 'uppercase',
+        textAlign: 'right',
+    },
+    quoteTotalValue: {
+        flex: 6,
+        fontSize: 9,
+        fontFamily: theme.fonts.bold,
+        textAlign: 'right',
+    },
+    quoteGrandRow: {
+        flexDirection: "row",
+        borderTopWidth: 1,
+        borderTopColor: '#f59e0b',
+        backgroundColor: '#fffbeb',
+        paddingVertical: 4,
+    },
 });
 
 /** Indentação no PDF: `Math.min(depth, 6)` com depth negativo devolve o próprio negativo (ex.: ID mal tipado) e quebra o Yoga. */
@@ -225,6 +305,111 @@ function collectSessionPrintRows(
     return rows;
 }
 
+function readQuoteSplitPercents(b: Budget): {
+    markupEquip: number;
+    discountEquip: number;
+    markupAsm: number;
+    discountAsm: number;
+} {
+    const r = b as unknown as Record<string, unknown>;
+    const legacyMarkup = Number(r.quote_markup_percent ?? 0);
+    const legacyDiscount = Number(r.quote_discount_percent ?? 0);
+    const hasExplicitSplit =
+        r.quote_markup_equipment_percent !== undefined ||
+        r.quote_discount_equipment_percent !== undefined ||
+        r.quote_markup_assembly_percent !== undefined ||
+        r.quote_discount_assembly_percent !== undefined;
+    if (hasExplicitSplit) {
+        return {
+            markupEquip: Number(r.quote_markup_equipment_percent ?? 0),
+            discountEquip: Number(r.quote_discount_equipment_percent ?? 0),
+            markupAsm: Number(r.quote_markup_assembly_percent ?? 0),
+            discountAsm: Number(r.quote_discount_assembly_percent ?? 0),
+        };
+    }
+    return {
+        markupEquip: legacyMarkup,
+        discountEquip: legacyDiscount,
+        markupAsm: legacyMarkup,
+        discountAsm: legacyDiscount,
+    };
+}
+
+function computeSectionEquipAssembly(items: BudgetItem[]): { equipment: number; assembly: number } {
+    let equipment = 0;
+    let assembly = 0;
+    for (const item of items) {
+        const qty = Number(item.quantity ?? 0);
+        const unit = Number(item.unit_price ?? 0);
+        const labor = Number(item.labor_cost ?? 0);
+        const baseEquip = qty * unit;
+        const baseAssembly = qty * labor;
+        const base = baseEquip + baseAssembly;
+        const explicitTotal = Number(item.total ?? 0);
+        if (Number.isFinite(explicitTotal) && explicitTotal > 0 && base > 0) {
+            const ratioEquip = baseEquip / base;
+            const ratioAssembly = baseAssembly / base;
+            equipment += explicitTotal * ratioEquip;
+            assembly += explicitTotal * ratioAssembly;
+        } else {
+            equipment += Number.isFinite(baseEquip) ? baseEquip : 0;
+            assembly += Number.isFinite(baseAssembly) ? baseAssembly : 0;
+        }
+    }
+    return { equipment, assembly };
+}
+
+function collectCompositorQuoteLocations(
+    roots: BudgetBlock[],
+    itemsByBlock: Record<string, BudgetItem[]>
+): CompositorQuoteLocation[] {
+    const out: CompositorQuoteLocation[] = [];
+
+    const collectSections = (node: BudgetBlock, acc: CompositorQuoteSection[]) => {
+        if (node.type === "section") {
+            acc.push({
+                id: node.id,
+                title: (node.label || "Trecho").trim() || "Trecho",
+                items: itemsByBlock[node.id] ?? [],
+            });
+        }
+        for (const child of node.children) collectSections(child, acc);
+    };
+
+    const visit = (node: BudgetBlock) => {
+        if (node.type === "location") {
+            const sections: CompositorQuoteSection[] = [];
+            for (const child of node.children) collectSections(child, sections);
+            out.push({
+                id: node.id,
+                title: (node.label || "Local").trim() || "Local",
+                sections,
+            });
+        }
+        for (const child of node.children) visit(child);
+    };
+
+    for (const root of roots) visit(root);
+    return out;
+}
+
+function collectScopeQuoteLocations(locations: BudgetLocation[] | undefined): CompositorQuoteLocation[] {
+    const out: CompositorQuoteLocation[] = [];
+    for (const loc of locations ?? []) {
+        const sections = (loc.sections ?? []).map((sec) => ({
+            id: String(sec.id ?? `${loc.id}-sec-${sec.order_index ?? 0}`),
+            title: (sec.name || "Trecho").trim() || "Trecho",
+            items: sec.items ?? [],
+        }));
+        out.push({
+            id: String(loc.id ?? `loc-${loc.order_index ?? 0}`),
+            title: (loc.name || "Local").trim() || "Local",
+            sections,
+        });
+    }
+    return out;
+}
+
 type PdfSegment =
     | { kind: "cover" }
     | { kind: "intro" }
@@ -240,6 +425,8 @@ function buildPdfSegmentsFromCompositorRoots(
 ): PdfSegment[] {
     const segments: PdfSegment[] = [];
     let placedIntro = false;
+    let placedDetail = false;
+    const hasQuoteRoot = roots.some((b) => b.type === "quote");
     for (const b of roots) {
         if (b.type === "cover") {
             segments.push({ kind: "cover" });
@@ -251,8 +438,13 @@ function buildPdfSegmentsFromCompositorRoots(
             segments.push({ kind: "toc" });
         } else if (b.type === "figures" && includeFiguresPage) {
             segments.push({ kind: "figures" });
-        } else if (b.type === "scope") {
+        } else if (b.type === "quote" && !placedDetail) {
             segments.push({ kind: "detail" });
+            placedDetail = true;
+        } else if (!hasQuoteRoot && b.type === "scope" && !placedDetail) {
+            // Retrocompatibilidade: sem bloco ORÇAMENTO, o ESCOPO continua a definir o detalhamento.
+            segments.push({ kind: "detail" });
+            placedDetail = true;
         } else if (b.type === "session") {
             segments.push({ kind: "session", block: b });
         }
@@ -485,6 +677,16 @@ export const ProposalDocument = ({
 
     const hasCompositorStructure =
         !!compositorPdf && Array.isArray(compositorPdf.roots) && compositorPdf.roots.length > 0;
+    const hasQuoteRoot = hasCompositorStructure
+        ? compositorPdf!.roots.some((b) => b.type === "quote")
+        : false;
+    const compositorQuoteLocations =
+        hasCompositorStructure && hasQuoteRoot
+            ? collectCompositorQuoteLocations(compositorPdf!.roots, compositorPdf!.items || {})
+            : [];
+    const quoteLocationsForPdf = hasQuoteRoot
+        ? (compositorQuoteLocations.length > 0 ? compositorQuoteLocations : collectScopeQuoteLocations(locations))
+        : [];
 
     const coverBlock = compositorPdf
         ? flattenTree(compositorPdf.roots).find((b) => b.type === 'cover')
@@ -506,6 +708,11 @@ export const ProposalDocument = ({
     }
 
     const { detailPage, sessionPages } = assignPdfSegmentPages(segments);
+    const detailSectionTitle = hasQuoteRoot ? "Orçamento" : "Detalhamento do Projeto";
+    const quoteShowSections = Boolean(
+        (budget as unknown as Record<string, unknown>).quote_show_sections ?? false
+    );
+    const quotePercents = readQuoteSplitPercents(budget);
 
     const tocRows = hasCompositorStructure
         ? collectSessionTocRowsForPrintedLayout(compositorPdf!.roots, sessionPages)
@@ -624,15 +831,145 @@ export const ProposalDocument = ({
                 );
             case "detail":
                 return (
-                    <InnerPdfPage pageKey={keyBase} title="Detalhamento do Projeto" {...innerCommon}>
-                        <BudgetTable
-                            locations={locations}
-                            sectionNumber={sectionNumberPdf}
-                            showCosts={detailShowCosts}
-                            costsDisplayMode={detailCostsMode}
-                            pdfImagePublicBase={settings.app_public_url}
-                            pdfEmbeddedImages={pdfEmbeddedImages}
-                        />
+                    <InnerPdfPage pageKey={keyBase} title={detailSectionTitle} {...innerCommon}>
+                        {hasQuoteRoot && quoteLocationsForPdf.length > 0 ? (
+                            <View>
+                                <View style={styles.quoteHeaderBar}>
+                                    <Text style={styles.quoteHeaderTitle}>Custos de equipamentos - Pazini</Text>
+                                </View>
+                                <View style={styles.quoteTableHeader}>
+                                    <Text style={styles.quoteColIndex}>Nº</Text>
+                                    <Text style={styles.quoteColDesc}>Local / trecho</Text>
+                                    <Text style={styles.quoteColEquip}>Equipamentos</Text>
+                                    <Text style={styles.quoteColAsm}>Montagem</Text>
+                                </View>
+                                {quoteLocationsForPdf.map((loc, locIdx) => {
+                                    const locNumber = `${sectionNumberPdf}.${locIdx + 1}`;
+                                    const locationBase = loc.sections.reduce(
+                                        (sum, sec) => {
+                                            const calc = computeSectionEquipAssembly(sec.items);
+                                            return {
+                                                equipment: sum.equipment + calc.equipment,
+                                                assembly: sum.assembly + calc.assembly,
+                                            };
+                                        },
+                                        { equipment: 0, assembly: 0 }
+                                    );
+                                    const locationAdjusted = applyQuoteRowAdjustments(
+                                        locationBase.equipment,
+                                        locationBase.assembly,
+                                        quotePercents.markupEquip,
+                                        quotePercents.discountEquip,
+                                        quotePercents.markupAsm,
+                                        quotePercents.discountAsm
+                                    );
+                                    return (
+                                        <View key={`q-loc-${loc.id}`}>
+                                            <View style={[styles.quoteRow, styles.quoteLocRow]}>
+                                                <Text style={[styles.quoteColIndex, { fontFamily: theme.fonts.bold }]}>
+                                                    {sanitizeTextForPdf(String(locIdx + 1))}
+                                                </Text>
+                                                <Text style={[styles.quoteColDesc, { fontFamily: theme.fonts.bold }]}>
+                                                    {sanitizeTextForPdf(loc.title)}
+                                                </Text>
+                                                <Text style={[styles.quoteColEquip, { fontFamily: theme.fonts.bold }]}>
+                                                    {formatMoney(locationAdjusted.equipment)}
+                                                </Text>
+                                                <Text style={[styles.quoteColAsm, { fontFamily: theme.fonts.bold }]}>
+                                                    {formatMoney(locationAdjusted.assembly)}
+                                                </Text>
+                                            </View>
+                                            {quoteShowSections && loc.sections.map((sec, secIdx) => {
+                                                const secNumber = `${locNumber}.${secIdx + 1}`;
+                                                const sectionBase = computeSectionEquipAssembly(sec.items);
+                                                const sectionAdjusted = applyQuoteRowAdjustments(
+                                                    sectionBase.equipment,
+                                                    sectionBase.assembly,
+                                                    quotePercents.markupEquip,
+                                                    quotePercents.discountEquip,
+                                                    quotePercents.markupAsm,
+                                                    quotePercents.discountAsm
+                                                );
+                                                return (
+                                                    <View key={`q-sec-${loc.id}-${sec.id}`}>
+                                                        <View style={[styles.quoteRow, styles.quoteSecRow]}>
+                                                            <Text style={styles.quoteColIndex}>—</Text>
+                                                            <Text style={[styles.quoteColDesc, { color: theme.colors.textLight }]}>
+                                                                {sanitizeTextForPdf(`${secNumber} — ${sec.title}`)}
+                                                            </Text>
+                                                            <Text style={styles.quoteColEquip}>
+                                                                {formatMoney(sectionAdjusted.equipment)}
+                                                            </Text>
+                                                            <Text style={styles.quoteColAsm}>
+                                                                {formatMoney(sectionAdjusted.assembly)}
+                                                            </Text>
+                                                        </View>
+                                                    </View>
+                                                );
+                                            })}
+                                        </View>
+                                    );
+                                })}
+                                {(() => {
+                                    const totals = quoteLocationsForPdf.reduce(
+                                        (sum, loc) => {
+                                            const locBase = loc.sections.reduce(
+                                                (inner, sec) => {
+                                                    const calc = computeSectionEquipAssembly(sec.items);
+                                                    return {
+                                                        equipment: inner.equipment + calc.equipment,
+                                                        assembly: inner.assembly + calc.assembly,
+                                                    };
+                                                },
+                                                { equipment: 0, assembly: 0 }
+                                            );
+                                            const adj = applyQuoteRowAdjustments(
+                                                locBase.equipment,
+                                                locBase.assembly,
+                                                quotePercents.markupEquip,
+                                                quotePercents.discountEquip,
+                                                quotePercents.markupAsm,
+                                                quotePercents.discountAsm
+                                            );
+                                            return {
+                                                equipment: sum.equipment + adj.equipment,
+                                                assembly: sum.assembly + adj.assembly,
+                                            };
+                                        },
+                                        { equipment: 0, assembly: 0 }
+                                    );
+                                    return (
+                                        <>
+                                            <View style={styles.quoteTotalRow}>
+                                                <Text style={styles.quoteTotalLabel}>Totais</Text>
+                                                <Text style={styles.quoteTotalValue}>
+                                                    {formatMoney(totals.equipment)}
+                                                </Text>
+                                                <Text style={styles.quoteTotalValue}>
+                                                    {formatMoney(totals.assembly)}
+                                                </Text>
+                                            </View>
+                                            <View style={styles.quoteGrandRow}>
+                                                <Text style={styles.quoteTotalLabel}>Total geral</Text>
+                                                <Text style={styles.quoteTotalValue}>
+                                                    {formatMoney(totals.equipment + totals.assembly)}
+                                                </Text>
+                                                <Text style={styles.quoteTotalValue}>—</Text>
+                                            </View>
+                                        </>
+                                    );
+                                })()}
+                            </View>
+                        ) : (
+                            <BudgetTable
+                                locations={locations}
+                                sectionNumber={sectionNumberPdf}
+                                showCosts={detailShowCosts}
+                                costsDisplayMode={detailCostsMode}
+                                pdfImagePublicBase={settings.app_public_url}
+                                pdfEmbeddedImages={pdfEmbeddedImages}
+                            />
+                        )}
                         <View style={styles.totalBlock}>
                             <View>
                                 <Text style={{ fontSize: 12, fontFamily: theme.fonts.bold }}>INVESTIMENTO TOTAL</Text>

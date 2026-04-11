@@ -10,6 +10,7 @@ export type BlockType =
   | "cover"     // Capa do documento (PDF / proposta) — uma por orçamento, criada automaticamente
   | "toc"       // Sumário automático (sempre após a capa) — conteúdo derivado da árvore
   | "figures"   // Lista de figuras (após sumário) — imagens do Escopo, automático
+  | "quote"     // Orçamento (tabela/valores) — bloco raiz que referencia a aba Orçamento
   | "session"   // Contêiner: sessão / sub-sessão (qualquer profundidade)
   | "text"      // Texto rico (Tiptap HTML)
   | "location"  // Local / Ambiente (com descrição + galeria + trechos)

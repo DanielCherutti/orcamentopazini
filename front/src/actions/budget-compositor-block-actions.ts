@@ -213,6 +213,63 @@ export async function ensureCompositorTocBlockAction(
     }
 }
 
+/**
+ * Garante um bloco `quote` na raiz (ORÇAMENTO).
+ * Usado para permitir montagem integral no compositor com referência explícita à aba Orçamento.
+ */
+export async function ensureCompositorQuoteBlockAction(
+    budgetId: string,
+    options?: { skipRevalidate?: boolean }
+): Promise<{ success: boolean; error?: string }> {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const db = await getDb();
+    try {
+        const budgetRecordId = requireRecordId("budget", budgetId);
+        const rootsRes = await db.query<[Array<{ id: unknown; order_index: number; type: string }>]>(
+            "SELECT id, order_index, type FROM budget_block WHERE budget_id = $budgetId AND parent_id IS NONE AND deleted_at IS NONE ORDER BY order_index ASC",
+            { budgetId: budgetRecordId }
+        );
+        let roots = rootsRes[0] || [];
+
+        const quoteDupes = roots.filter((r) => r.type === "quote");
+        if (quoteDupes.length > 1) {
+            const sorted = [...quoteDupes].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+            for (let i = 1; i < sorted.length; i++) {
+                await deleteBlockCascade(db, String(sorted[i].id));
+            }
+            const rootsDeduped = await db.query<[Array<{ id: unknown; order_index: number; type: string }>]>(
+                "SELECT id, order_index, type FROM budget_block WHERE budget_id = $budgetId AND parent_id IS NONE AND deleted_at IS NONE ORDER BY order_index ASC",
+                { budgetId: budgetRecordId }
+            );
+            roots = rootsDeduped[0] || [];
+        }
+
+        if (!roots.some((r) => r.type === "quote")) {
+            await db.create(new Table("budget_block")).content({
+                budget_id: budgetRecordId,
+                type: "quote",
+                label: "ORÇAMENTO",
+                order_index: 99996,
+                props: {},
+            });
+        }
+
+        if (!options?.skipRevalidate) {
+            revalidatePath(budgetRevalidatePath(budgetId));
+        }
+        return { success: true };
+    } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
+        console.error("ensureCompositorQuoteBlockAction error:", error);
+        if (isTokenExpiredError(error)) resetDb();
+        return { success: false, error: "Erro ao garantir bloco de orçamento" };
+    }
+}
+
 async function deleteBlockCascade(db: Awaited<ReturnType<typeof getDb>>, blockId: string) {
     const blockRecordId = requireRecordId("budget_block", blockId);
 
@@ -353,6 +410,12 @@ export async function deleteBlockAction(
                 error: "A lista de figuras não pode ser removida — ela é gerada automaticamente após o sumário.",
             };
         }
+        if (row?.type === "quote") {
+            return {
+                success: false,
+                error: "O bloco Orçamento não pode ser removido — ele representa o detalhamento financeiro do documento.",
+            };
+        }
 
         await deleteBlockCascade(db, blockId);
         revalidatePath(budgetRevalidatePath(budgetId));
@@ -401,6 +464,14 @@ export async function moveBlockToParentAction(
                 return {
                     success: false,
                     error: "A lista de figuras deve permanecer na raiz do documento.",
+                };
+            }
+        }
+        if (row?.type === "quote") {
+            if (newParentId !== null) {
+                return {
+                    success: false,
+                    error: "O bloco Orçamento deve permanecer na raiz do documento.",
                 };
             }
         }

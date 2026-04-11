@@ -2,7 +2,7 @@
 
 import type { ComponentType, RefObject } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { FileText, Map as MapIcon, ArrowRight, Plus } from "lucide-react";
+import { FileText, Map as MapIcon, ArrowRight, Plus, Table2 } from "lucide-react";
 import {
     DndContext,
     PointerSensor,
@@ -604,6 +604,58 @@ function ScopeRenderer({ block, budgetId }: CompositorRendererProps) {
     );
 }
 
+function QuoteRenderer({ block, budgetId }: CompositorRendererProps) {
+    const [stats, setStats] = useState<{
+        locations: number;
+        sections: number;
+        items: number;
+    } | null>(null);
+    const { setActiveTab } = useWorkspaceTab();
+
+    useEffect(() => {
+        void getScopeStatsAction(budgetId).then((r) => {
+            if (r.success && r.data) setStats(r.data);
+        });
+    }, [budgetId]);
+
+    return (
+        <div
+            id={`block-${block.id}`}
+            className="rounded-lg border-2 border-dashed border-primary/30 bg-primary/5 p-5 space-y-3"
+        >
+            <div className="flex items-center gap-2">
+                <Table2 className="h-5 w-5 text-primary" />
+                <span className="font-bold text-sm text-primary uppercase tracking-wide">
+                    ORÇAMENTO
+                </span>
+            </div>
+            <p className="text-sm text-muted-foreground">
+                Este bloco representa o detalhamento financeiro (itens, valores e totais)
+                {stats ? (
+                    <span>
+                        : <strong>{stats.locations}</strong>{" "}
+                        {stats.locations === 1 ? "local" : "locais"},{" "}
+                        <strong>{stats.sections}</strong>{" "}
+                        {stats.sections === 1 ? "trecho" : "trechos"},{" "}
+                        <strong>{stats.items}</strong>{" "}
+                        {stats.items === 1 ? "item" : "itens"}.
+                    </span>
+                ) : (
+                    "."
+                )}
+            </p>
+            <button
+                type="button"
+                onClick={() => setActiveTab("quote")}
+                className="flex items-center gap-1.5 text-xs text-primary hover:underline font-medium"
+            >
+                <ArrowRight className="h-3.5 w-3.5" />
+                Ir para aba Orçamento
+            </button>
+        </div>
+    );
+}
+
 const RENDERERS: Record<string, ComponentType<CompositorRendererProps>> = {
     cover: CoverRenderer,
     toc: TocRenderer,
@@ -613,6 +665,7 @@ const RENDERERS: Record<string, ComponentType<CompositorRendererProps>> = {
     section: SectionRenderer,
     text: TextRenderer,
     scope: ScopeRenderer,
+    quote: QuoteRenderer,
 };
 
 interface BlockDocumentProps {
@@ -639,6 +692,7 @@ function BlockDocument({
     const isCover = block.type === "cover";
     const isToc = block.type === "toc";
     const isFigures = block.type === "figures";
+    const isQuote = block.type === "quote";
     const isRoot = block.depth === 0;
 
     return (
@@ -647,10 +701,11 @@ function BlockDocument({
             {isRoot && isCover && <hr className="border-border mb-6" />}
             {isRoot && isToc && <hr className="border-border mb-6" />}
             {isRoot && isFigures && <hr className="border-border mb-6" />}
+            {isRoot && isQuote && <hr className="border-border mb-6" />}
 
             <div
                 className={
-                    isCover || isToc || isFigures
+                    isCover || isToc || isFigures || isQuote
                         ? "mb-8"
                         : isSession
                           ? isRoot
@@ -755,6 +810,7 @@ export function CompositorContent({
         (focused.type === "cover" ||
             focused.type === "toc" ||
             focused.type === "figures" ||
+            focused.type === "quote" ||
             focused.type === "scope" ||
             focused.type === "session" ||
             focused.type === "location" ||
