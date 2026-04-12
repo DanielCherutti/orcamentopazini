@@ -27,7 +27,22 @@ interface ProposalDocumentProps {
     omitDocumentWatermark?: boolean;
     /** Data URIs pré-carregadas na rota API (evita `fetch` HTTP durante `renderToBuffer`). */
     pdfEmbeddedImages?: PdfEmbeddedImages;
+    /**
+     * Segunda passada do PDF: páginas iniciais reais de cada segmento (`detail`, `session:<id>`),
+     * coletadas na primeira renderização.
+     */
+    resolvedPagination?: ProposalResolvedPagination;
+    /** Primeira passada do PDF: coletor mutável de páginas iniciais por segmento. */
+    paginationCollector?: ProposalPaginationCollector;
 }
+
+export type ProposalResolvedPagination = {
+    segmentStartPages?: Record<string, number>;
+};
+
+export type ProposalPaginationCollector = {
+    segmentStartPages: Record<string, number>;
+};
 
 type CompositorQuoteSection = {
     id: string;
@@ -39,6 +54,11 @@ type CompositorQuoteLocation = {
     id: string;
     title: string;
     sections: CompositorQuoteSection[];
+};
+
+type PdfFigureEntry = {
+    id: string;
+    caption: string;
 };
 
 /** A4 em pt (igual `compositor-cover-pdf`) — Yoga precisa de largura explícita na camada absoluta. */
@@ -410,11 +430,84 @@ function collectScopeQuoteLocations(locations: BudgetLocation[] | undefined): Co
     return out;
 }
 
+/** Mesma origem de imagens exibidas no detalhamento (`BudgetTable`): 1ª imagem de cada trecho. */
+function collectRenderedPdfFigureEntries(locations: BudgetLocation[] | undefined): PdfFigureEntry[] {
+    const out: PdfFigureEntry[] = [];
+    const seen = new Set<string>();
+    for (const loc of locations ?? []) {
+        for (const sec of loc.sections ?? []) {
+            const firstImg = (sec.images ?? [])[0];
+            if (!firstImg?.id) continue;
+            const id = String(firstImg.id);
+            if (seen.has(id)) continue;
+            seen.add(id);
+            const rawCaption =
+                typeof firstImg.caption === "string" && firstImg.caption.trim()
+                    ? firstImg.caption.trim()
+                    : `Imagem padrão — ${(sec.name || "Trecho").trim() || "Trecho"}`;
+            out.push({ id, caption: rawCaption });
+        }
+    }
+    return out;
+}
+
+function estimateRenderedFigurePagesFromScope(
+    locations: BudgetLocation[] | undefined,
+    detailStartPage: number,
+    opts: { showRunningHeader: boolean; showCosts: boolean; costsDisplayMode: "location" | "section" | "general" }
+): Record<string, number> {
+    const out: Record<string, number> = {};
+    const pageContentMax =
+        PDF_PAGE_H -
+        (INNER_PAD + (opts.showRunningHeader ? INNER_HEADER_RESERVE : 0)) -
+        (INNER_PAD + INNER_FOOTER_RESERVE) -
+        28; // faixa do título da seção
+    let page = Math.max(1, Math.trunc(detailStartPage || 1));
+    let y = 0;
+
+    const ensureSpace = (h: number) => {
+        if (y > 0 && y + h > pageContentMax) {
+            page += 1;
+            y = 0;
+        }
+    };
+    const addHeight = (h: number) => {
+        ensureSpace(h);
+        y += h;
+    };
+
+    for (const loc of locations ?? []) {
+        addHeight(38); // locationHeader aprox.
+        for (const sec of loc.sections ?? []) {
+            addHeight(22); // sectionTitle aprox.
+            const firstImg = (sec.images ?? [])[0];
+            if (firstImg?.id) {
+                const imgBlockH = 262; // sceneImage(250) + margem + respiro
+                ensureSpace(imgBlockH);
+                out[String(firstImg.id)] = page;
+                y += imgBlockH;
+            }
+            const rows = (sec.items ?? []).length;
+            const tableH = 16 + rows * 17 + (opts.showCosts && opts.costsDisplayMode === "section" ? 14 : 0);
+            addHeight(Math.max(24, tableH));
+        }
+        if (opts.showCosts && opts.costsDisplayMode === "location") {
+            addHeight(14);
+        }
+        addHeight(10);
+    }
+    if (opts.showCosts && opts.costsDisplayMode === "general") {
+        addHeight(16);
+    }
+    return out;
+}
+
 type PdfSegment =
     | { kind: "cover" }
     | { kind: "intro" }
     | { kind: "toc" }
     | { kind: "figures" }
+    | { kind: "quote" }
     | { kind: "detail" }
     | { kind: "session"; block: BudgetBlock }
     | { kind: "terms" };
@@ -425,8 +518,8 @@ function buildPdfSegmentsFromCompositorRoots(
 ): PdfSegment[] {
     const segments: PdfSegment[] = [];
     let placedIntro = false;
+    let placedQuote = false;
     let placedDetail = false;
-    const hasQuoteRoot = roots.some((b) => b.type === "quote");
     for (const b of roots) {
         if (b.type === "cover") {
             segments.push({ kind: "cover" });
@@ -438,18 +531,18 @@ function buildPdfSegmentsFromCompositorRoots(
             segments.push({ kind: "toc" });
         } else if (b.type === "figures" && includeFiguresPage) {
             segments.push({ kind: "figures" });
-        } else if (b.type === "quote" && !placedDetail) {
-            segments.push({ kind: "detail" });
-            placedDetail = true;
-        } else if (!hasQuoteRoot && b.type === "scope" && !placedDetail) {
-            // Retrocompatibilidade: sem bloco ORÇAMENTO, o ESCOPO continua a definir o detalhamento.
+        } else if (b.type === "quote" && !placedQuote) {
+            segments.push({ kind: "quote" });
+            placedQuote = true;
+        } else if (b.type === "scope" && !placedDetail) {
             segments.push({ kind: "detail" });
             placedDetail = true;
         } else if (b.type === "session") {
             segments.push({ kind: "session", block: b });
         }
     }
-    if (!segments.some((s) => s.kind === "detail")) {
+    if (!placedQuote && !placedDetail) {
+        // Retrocompatibilidade: orçamentos sem blocos quote/scope ainda imprimem detalhamento.
         segments.push({ kind: "detail" });
     }
     segments.push({ kind: "terms" });
@@ -457,18 +550,23 @@ function buildPdfSegmentsFromCompositorRoots(
 }
 
 function defaultPdfSegmentsNoCompositor(): PdfSegment[] {
-    return [{ kind: "cover" }, { kind: "intro" }, { kind: "detail" }, { kind: "terms" }];
+    return [{ kind: "cover" }, { kind: "intro" }, { kind: "quote" }, { kind: "detail" }, { kind: "terms" }];
 }
 
 function assignPdfSegmentPages(segments: PdfSegment[]): {
+    quotePage: number;
     detailPage: number;
     sessionPages: Map<string, number>;
 } {
     let p = 1;
+    let quotePage = 1;
     let detailPage = 1;
     const sessionPages = new Map<string, number>();
     for (const seg of segments) {
         if (seg.kind === "cover" || seg.kind === "intro" || seg.kind === "toc" || seg.kind === "figures") {
+            p += 1;
+        } else if (seg.kind === "quote") {
+            quotePage = p;
             p += 1;
         } else if (seg.kind === "detail") {
             detailPage = p;
@@ -480,7 +578,7 @@ function assignPdfSegmentPages(segments: PdfSegment[]): {
             p += 1;
         }
     }
-    return { detailPage, sessionPages };
+    return { quotePage, detailPage, sessionPages };
 }
 
 function collectSessionTocRowsForPrintedLayout(
@@ -525,6 +623,8 @@ function InnerPdfPage({
     docWatermarkOpacity,
     omitDocumentWatermark,
     pageStyleExtra,
+    paginationProbeKey,
+    paginationCollector,
 }: {
     pageKey: string;
     title: string;
@@ -537,6 +637,9 @@ function InnerPdfPage({
     omitDocumentWatermark: boolean;
     /** Ex.: `{ flexDirection: 'column' }` na página de condições. */
     pageStyleExtra?: { flexDirection?: "row" | "column" };
+    /** Chave estável do segmento para coletar a página inicial real na 1ª passada. */
+    paginationProbeKey?: string;
+    paginationCollector?: ProposalPaginationCollector;
 }) {
     const fill = settings.pdf_header_fill_from_settings === true;
     const company = fill
@@ -612,7 +715,15 @@ function InnerPdfPage({
                 <Text style={styles.runningFooterMuted}>Cód. {code}</Text>
                 <Text
                     style={styles.runningFooterPage}
-                    render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
+                    render={({ pageNumber, totalPages }) => {
+                        if (paginationCollector && paginationProbeKey) {
+                            const prev = paginationCollector.segmentStartPages[paginationProbeKey];
+                            if (!Number.isFinite(prev) || pageNumber < prev) {
+                                paginationCollector.segmentStartPages[paginationProbeKey] = pageNumber;
+                            }
+                        }
+                        return `${pageNumber} / ${totalPages}`;
+                    }}
                 />
             </View>
         </Page>
@@ -625,6 +736,8 @@ export const ProposalDocument = ({
     compositorPdf,
     omitDocumentWatermark = false,
     pdfEmbeddedImages,
+    resolvedPagination,
+    paginationCollector,
 }: ProposalDocumentProps) => {
     const rawValidity = Number(budget.validity_days ?? 15);
     const validityDays =
@@ -693,10 +806,13 @@ export const ProposalDocument = ({
         : undefined;
     const compositorCoverMerged = mergeCoverDocumentProps(coverBlock?.props as Record<string, unknown> | undefined);
 
+    const renderedFigureEntries = collectRenderedPdfFigureEntries(locations);
     const figureEntries =
-        hasCompositorStructure && (compositorPdf!.scopeFigures?.length ?? 0) > 0
-            ? compositorPdf!.scopeFigures
-            : [];
+        renderedFigureEntries.length > 0
+            ? renderedFigureEntries
+            : hasCompositorStructure && (compositorPdf!.scopeFigures?.length ?? 0) > 0
+              ? compositorPdf!.scopeFigures
+              : [];
     const includeFiguresPage = figureEntries.length > 0;
 
     let segments: PdfSegment[] = hasCompositorStructure
@@ -707,8 +823,34 @@ export const ProposalDocument = ({
         segments = [{ kind: "cover" }, { kind: "intro" }, ...segments];
     }
 
-    const { detailPage, sessionPages } = assignPdfSegmentPages(segments);
-    const detailSectionTitle = hasQuoteRoot ? "Orçamento" : "Detalhamento do Projeto";
+    const { detailPage: fallbackDetailPage, sessionPages: fallbackSessionPages } =
+        assignPdfSegmentPages(segments);
+    const resolvedSegmentPages = resolvedPagination?.segmentStartPages ?? {};
+    const detailPage = Number.isFinite(resolvedSegmentPages.detail)
+        ? Math.max(1, Math.trunc(resolvedSegmentPages.detail))
+        : fallbackDetailPage;
+    const resolvedFigurePagesRaw = figureEntries.map((e) =>
+        Number.isFinite(resolvedSegmentPages[`figure:${e.id}`])
+            ? Math.max(1, Math.trunc(resolvedSegmentPages[`figure:${e.id}`]))
+            : NaN
+    );
+    const resolvedFigureDistinctPages = new Set(
+        resolvedFigurePagesRaw.filter((n) => Number.isFinite(n)).map((n) => Math.trunc(n))
+    );
+    const figurePageMarkersSuspicious =
+        figureEntries.length >= 5 && resolvedFigureDistinctPages.size <= 1;
+    const estimatedFigurePages = estimateRenderedFigurePagesFromScope(locations, detailPage, {
+        showRunningHeader: pdfInnerRunningHeaderShouldShow(settings),
+        showCosts: detailShowCosts,
+        costsDisplayMode: detailCostsMode,
+    });
+    const sessionPages = new Map<string, number>(fallbackSessionPages);
+    for (const [key, value] of Object.entries(resolvedSegmentPages)) {
+        if (!key.startsWith("session:")) continue;
+        if (!Number.isFinite(value) || value <= 0) continue;
+        sessionPages.set(key.slice("session:".length), Math.trunc(value));
+    }
+    const detailSectionTitle = "Detalhamento do Projeto";
     const quoteShowSections = Boolean(
         (budget as unknown as Record<string, unknown>).quote_show_sections ?? false
     );
@@ -723,7 +865,16 @@ export const ProposalDocument = ({
             ? figureEntries.map((entry, idx) => ({
                   n: idx + 1,
                   caption: entry.caption?.trim() || "(sem descrição)",
-                  page: detailPage,
+                  page: (() => {
+                      const resolved = Number.isFinite(resolvedSegmentPages[`figure:${entry.id}`])
+                          ? Math.max(1, Math.trunc(resolvedSegmentPages[`figure:${entry.id}`]))
+                          : NaN;
+                      const estimated = estimatedFigurePages[entry.id];
+                      if (figurePageMarkersSuspicious && Number.isFinite(estimated)) return estimated;
+                      if (Number.isFinite(resolved)) return resolved;
+                      if (Number.isFinite(estimated)) return estimated;
+                      return detailPage;
+                  })(),
               }))
             : [];
     const { url: docWatermarkSource, opacity: docWatermarkOpacity } =
@@ -760,6 +911,7 @@ export const ProposalDocument = ({
             docWatermarkSrc,
             docWatermarkOpacity: effectiveInnerWatermarkOpacity,
             omitDocumentWatermark,
+            paginationCollector,
         };
         switch (seg.kind) {
             case "cover":
@@ -774,7 +926,7 @@ export const ProposalDocument = ({
                 );
             case "intro":
                 return (
-                    <InnerPdfPage pageKey={keyBase} title="Apresentação" {...innerCommon}>
+                    <InnerPdfPage pageKey={keyBase} title="Apresentação" paginationProbeKey="intro" {...innerCommon}>
                         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-pdf Style não tipa whiteSpace */}
                         <Text style={{ whiteSpace: "pre-wrap", textAlign: "left" } as any}>
                             {pdfIntroduction}
@@ -783,7 +935,7 @@ export const ProposalDocument = ({
                 );
             case "toc":
                 return (
-                    <InnerPdfPage pageKey={keyBase} title="Sumário" {...innerCommon}>
+                    <InnerPdfPage pageKey={keyBase} title="Sumário" paginationProbeKey="toc" {...innerCommon}>
                         <Text style={{ fontSize: 9, color: theme.colors.textLight, marginBottom: 14 }}>
                             Páginas calculadas conforme a impressão atual do documento.
                         </Text>
@@ -812,7 +964,7 @@ export const ProposalDocument = ({
                 );
             case "figures":
                 return (
-                    <InnerPdfPage pageKey={keyBase} title="Lista de Figuras" {...innerCommon}>
+                    <InnerPdfPage pageKey={keyBase} title="Lista de Figuras" paginationProbeKey="figures" {...innerCommon}>
                         <Text style={{ fontSize: 9, color: theme.colors.textLight, marginBottom: 14 }}>
                             Figuras do Escopo. A página indicada referencia o início do detalhamento impresso.
                         </Text>
@@ -829,10 +981,10 @@ export const ProposalDocument = ({
                         ))}
                     </InnerPdfPage>
                 );
-            case "detail":
+            case "quote":
                 return (
-                    <InnerPdfPage pageKey={keyBase} title={detailSectionTitle} {...innerCommon}>
-                        {hasQuoteRoot && quoteLocationsForPdf.length > 0 ? (
+                    <InnerPdfPage pageKey={keyBase} title="Orçamento" paginationProbeKey="quote" {...innerCommon}>
+                        {quoteLocationsForPdf.length > 0 ? (
                             <View>
                                 <View style={styles.quoteHeaderBar}>
                                     <Text style={styles.quoteHeaderTitle}>Custos de equipamentos - Pazini</Text>
@@ -961,15 +1113,24 @@ export const ProposalDocument = ({
                                 })()}
                             </View>
                         ) : (
-                            <BudgetTable
-                                locations={locations}
-                                sectionNumber={sectionNumberPdf}
-                                showCosts={detailShowCosts}
-                                costsDisplayMode={detailCostsMode}
-                                pdfImagePublicBase={settings.app_public_url}
-                                pdfEmbeddedImages={pdfEmbeddedImages}
-                            />
+                            <Text style={{ fontSize: 9, color: theme.colors.textLight }}>
+                                Sem dados de orçamento para exibir.
+                            </Text>
                         )}
+                    </InnerPdfPage>
+                );
+            case "detail":
+                return (
+                    <InnerPdfPage pageKey={keyBase} title={detailSectionTitle} paginationProbeKey="detail" {...innerCommon}>
+                        <BudgetTable
+                            locations={locations}
+                            sectionNumber={sectionNumberPdf}
+                            showCosts={detailShowCosts}
+                            costsDisplayMode={detailCostsMode}
+                            pdfImagePublicBase={settings.app_public_url}
+                            pdfEmbeddedImages={pdfEmbeddedImages}
+                            figurePageCollector={paginationCollector}
+                        />
                         <View style={styles.totalBlock}>
                             <View>
                                 <Text style={{ fontSize: 12, fontFamily: theme.fonts.bold }}>INVESTIMENTO TOTAL</Text>
@@ -985,7 +1146,12 @@ export const ProposalDocument = ({
                 const sessionRoot = seg.block;
                 const rows = collectSessionPrintRows(sessionRoot, compositorPdf?.items || {});
                 return (
-                    <InnerPdfPage pageKey={`session-page-${sessionRoot.id}`} title="Sessão do Compositor" {...innerCommon}>
+                    <InnerPdfPage
+                        pageKey={`session-page-${sessionRoot.id}`}
+                        title="Sessão do Compositor"
+                        paginationProbeKey={`session:${sessionRoot.id}`}
+                        {...innerCommon}
+                    >
                         <Text style={styles.sessionTitle}>
                             {sanitizeTextForPdf(
                                 `${sessionRoot.number ? `${sessionRoot.number} ` : ""}${(sessionRoot.label || "Sessão").trim()}`
@@ -1015,6 +1181,7 @@ export const ProposalDocument = ({
                         pageKey={keyBase}
                         title="Condições Gerais"
                         pageStyleExtra={{ flexDirection: "column" }}
+                        paginationProbeKey="terms"
                         {...innerCommon}
                     >
                         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-pdf Style doesn't type whiteSpace */}

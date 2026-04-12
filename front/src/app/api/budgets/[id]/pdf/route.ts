@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import React from "react";
 import { renderToBuffer } from "@react-pdf/renderer";
 import type { ProposalSettings } from "@/actions/settings-actions";
-import { ProposalDocument } from "@/components/pdf/proposal-document";
+import {
+    ProposalDocument,
+    type ProposalPaginationCollector,
+    type ProposalResolvedPagination,
+} from "@/components/pdf/proposal-document";
 import { loadBudgetPdfPayload } from "@/lib/budgets/budget-pdf-payload";
 import {
     buildPdfEmbeddedImagesMap,
@@ -41,11 +45,39 @@ export async function GET(
             console.error("budget pdf: falha ao pré-carregar imagens (PDF segue sem inline):", embedErr);
             pdfEmbeddedImages = undefined;
         }
+        const paginationCollector: ProposalPaginationCollector = { segmentStartPages: {} };
+        const firstPassElement = React.createElement(ProposalDocument, {
+            budget: loaded.budget,
+            settings: settingsForPdf,
+            compositorPdf: loaded.compositorPdf,
+            omitDocumentWatermark: process.env.PDF_OMIT_DOC_WATERMARK === "1",
+            paginationCollector,
+            ...(pdfEmbeddedImages && Object.keys(pdfEmbeddedImages).length > 0
+                ? { pdfEmbeddedImages }
+                : {}),
+        });
+        // 1ª passada: coleta páginas iniciais reais dos segmentos (sumário/lista de figuras).
+        await renderToBuffer(firstPassElement as Parameters<typeof renderToBuffer>[0]);
+        if (process.env.NODE_ENV === "development") {
+            const keys = Object.keys(paginationCollector.segmentStartPages);
+            const figKeys = keys.filter((k) => k.startsWith("figure:"));
+            console.info(
+                "[budget-pdf] first pass markers:",
+                `all=${keys.length}`,
+                `figures=${figKeys.length}`,
+                figKeys.slice(0, 10)
+            );
+        }
+
+        const resolvedPagination: ProposalResolvedPagination = {
+            segmentStartPages: paginationCollector.segmentStartPages,
+        };
         const element = React.createElement(ProposalDocument, {
             budget: loaded.budget,
             settings: settingsForPdf,
             compositorPdf: loaded.compositorPdf,
             omitDocumentWatermark: process.env.PDF_OMIT_DOC_WATERMARK === "1",
+            resolvedPagination,
             ...(pdfEmbeddedImages && Object.keys(pdfEmbeddedImages).length > 0
                 ? { pdfEmbeddedImages }
                 : {}),

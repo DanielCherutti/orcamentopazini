@@ -200,6 +200,7 @@ export const BudgetTable = ({
     costsDisplayMode = 'section',
     pdfImagePublicBase,
     pdfEmbeddedImages,
+    figurePageCollector,
 }: {
     locations: BudgetLocation[];
     sectionNumber?: number;
@@ -208,6 +209,8 @@ export const BudgetTable = ({
     /** Base pública (ex. `settings.app_public_url`) para proxy `/api/pdf/image` nas cenas compostas. */
     pdfImagePublicBase?: string;
     pdfEmbeddedImages?: PdfEmbeddedImages;
+    /** Primeira passada do PDF: coleta página real por figura (`figure:<id>`). */
+    figurePageCollector?: { segmentStartPages: Record<string, number> };
 }) => (
     <View>
         {locations.map((loc, locIdx) => {
@@ -241,9 +244,41 @@ export const BudgetTable = ({
                             const raw = firstImg?.composed_url || firstImg?.url;
                             if (!raw) return null;
                             const src = proxyPdfImageSrc(raw, pdfImagePublicBase, pdfEmbeddedImages) ?? raw;
+                            const figureId = firstImg?.id ? String(firstImg.id) : undefined;
                             return (
-                                /* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt prop */
-                                <Image src={src} style={styles.sceneImage} />
+                                <View>
+                                    {figurePageCollector && figureId ? (
+                                        <View
+                                            /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- `render` não tipado no react-pdf */
+                                            render={({ pageNumber }: { pageNumber: number }) => {
+                                                const key = `figure:${figureId}`;
+                                                const prev = figurePageCollector.segmentStartPages[key];
+                                                if (!Number.isFinite(prev) || pageNumber < prev) {
+                                                    figurePageCollector.segmentStartPages[key] = pageNumber;
+                                                }
+                                                return null;
+                                            }}
+                                            /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-pdf */
+                                            style={{ width: 0, height: 0, opacity: 0 } as any}
+                                        />
+                                    ) : null}
+                                    {figurePageCollector && figureId ? (
+                                        <Text
+                                            /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- fallback extra em texto invisível */
+                                            style={{ fontSize: 0.1, lineHeight: 0.1, color: '#ffffff', opacity: 0 } as any}
+                                            render={({ pageNumber }) => {
+                                                const key = `figure:${figureId}`;
+                                                const prev = figurePageCollector.segmentStartPages[key];
+                                                if (!Number.isFinite(prev) || pageNumber < prev) {
+                                                    figurePageCollector.segmentStartPages[key] = pageNumber;
+                                                }
+                                                return '';
+                                            }}
+                                        />
+                                    ) : null}
+                                    {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt prop */}
+                                    <Image src={src} style={styles.sceneImage} />
+                                </View>
                             );
                         })()}
 
