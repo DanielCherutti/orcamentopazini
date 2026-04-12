@@ -40,6 +40,10 @@ const styles = StyleSheet.create({
         backgroundColor: theme.colors.bgHeader,
         padding: 4
     },
+    /** Bloco não fracionável para manter título + imagem juntos na troca de página. */
+    sectionLead: {
+        marginBottom: 6,
+    },
     /** Largura fixa (A4 − margens ~525pt) + contain para a imagem aparecer inteira no PDF. */
     sceneImage: {
         width: 525,
@@ -234,53 +238,55 @@ export const BudgetTable = ({
                     const laborCols = showCosts && sectionWantsLaborSplitOnPrint(sec);
                     return (
                     <View key={sec.id} style={styles.sectionBlock}>
-                        <Text style={styles.sectionTitle}>
-                            {sanitizeTextForPdf(`${secNum} — ${(sec.name ?? '').toUpperCase()}`)}
-                        </Text>
+                        <View style={styles.sectionLead} wrap={false}>
+                            <Text style={styles.sectionTitle}>
+                                {sanitizeTextForPdf(`${secNum} — ${(sec.name ?? '').toUpperCase()}`)}
+                            </Text>
 
-                        {/* Cena Composta — proxy limita dimensões (evita Yoga "unsupported number"). */}
-                        {(() => {
-                            const firstImg = (sec.images || [])[0];
-                            const raw = firstImg?.composed_url || firstImg?.url;
-                            if (!raw) return null;
-                            const src = proxyPdfImageSrc(raw, pdfImagePublicBase, pdfEmbeddedImages) ?? raw;
-                            const figureId = firstImg?.id ? String(firstImg.id) : undefined;
-                            return (
-                                <View>
-                                    {figurePageCollector && figureId ? (
-                                        <View
-                                            /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- `render` não tipado no react-pdf */
-                                            render={({ pageNumber }: { pageNumber: number }) => {
-                                                const key = `figure:${figureId}`;
-                                                const prev = figurePageCollector.segmentStartPages[key];
-                                                if (!Number.isFinite(prev) || pageNumber < prev) {
-                                                    figurePageCollector.segmentStartPages[key] = pageNumber;
-                                                }
-                                                return null;
-                                            }}
-                                            /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-pdf */
-                                            style={{ width: 0, height: 0, opacity: 0 } as any}
-                                        />
-                                    ) : null}
-                                    {figurePageCollector && figureId ? (
-                                        <Text
-                                            /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- fallback extra em texto invisível */
-                                            style={{ fontSize: 0.1, lineHeight: 0.1, color: '#ffffff', opacity: 0 } as any}
-                                            render={({ pageNumber }) => {
-                                                const key = `figure:${figureId}`;
-                                                const prev = figurePageCollector.segmentStartPages[key];
-                                                if (!Number.isFinite(prev) || pageNumber < prev) {
-                                                    figurePageCollector.segmentStartPages[key] = pageNumber;
-                                                }
-                                                return '';
-                                            }}
-                                        />
-                                    ) : null}
-                                    {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt prop */}
-                                    <Image src={src} style={styles.sceneImage} />
-                                </View>
-                            );
-                        })()}
+                            {/* Cena Composta — proxy limita dimensões (evita Yoga "unsupported number"). */}
+                            {(() => {
+                                const firstImg = (sec.images || [])[0];
+                                const raw = firstImg?.composed_url || firstImg?.url;
+                                if (!raw) return null;
+                                const src = proxyPdfImageSrc(raw, pdfImagePublicBase, pdfEmbeddedImages) ?? raw;
+                                const figureId = firstImg?.id ? String(firstImg.id) : undefined;
+                                return (
+                                    <View>
+                                        {figurePageCollector && figureId ? (
+                                            <View
+                                                /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- `render` não tipado no react-pdf */
+                                                render={({ pageNumber }: { pageNumber: number }) => {
+                                                    const key = `figure:${figureId}`;
+                                                    const prev = figurePageCollector.segmentStartPages[key];
+                                                    if (!Number.isFinite(prev) || pageNumber < prev) {
+                                                        figurePageCollector.segmentStartPages[key] = pageNumber;
+                                                    }
+                                                    return null;
+                                                }}
+                                                /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-pdf */
+                                                style={{ width: 0, height: 0, opacity: 0 } as any}
+                                            />
+                                        ) : null}
+                                        {figurePageCollector && figureId ? (
+                                            <Text
+                                                /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- fallback extra em texto invisível */
+                                                style={{ fontSize: 0.1, lineHeight: 0.1, color: '#ffffff', opacity: 0 } as any}
+                                                render={({ pageNumber }) => {
+                                                    const key = `figure:${figureId}`;
+                                                    const prev = figurePageCollector.segmentStartPages[key];
+                                                    if (!Number.isFinite(prev) || pageNumber < prev) {
+                                                        figurePageCollector.segmentStartPages[key] = pageNumber;
+                                                    }
+                                                    return '';
+                                                }}
+                                            />
+                                        ) : null}
+                                        {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt prop */}
+                                        <Image src={src} style={styles.sceneImage} />
+                                    </View>
+                                );
+                            })()}
+                        </View>
 
                         {/* Lista de Itens */}
                         <View style={styles.table}>
