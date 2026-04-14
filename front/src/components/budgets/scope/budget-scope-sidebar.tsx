@@ -986,7 +986,8 @@ function LocationNode({
     const [duplicating, setDuplicating] = useState(false);
 
     const isEmptyLocation = location.sections.length === 0;
-    const displayLocationLoading = isEmptyLocation ? false : locationTotalsLoading;
+    const displayLocationLoading =
+        isEmptyLocation ? false : locationTotalsLoading || locationTotal === undefined;
     const displayLocationTotal = isEmptyLocation ? 0 : (locationTotal ?? 0);
 
     const isSelected = selected?.type === "location" && selected.id === location.id;

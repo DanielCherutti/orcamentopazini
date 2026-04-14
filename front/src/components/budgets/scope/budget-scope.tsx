@@ -29,6 +29,7 @@ import {
 import {
     clearScopeItemPriceAdjustmentsAction,
     getBudgetItemsGroupedByBudgetIdLightAction,
+    getBudgetItemsBySectionIdsLightAction,
 } from "@/actions/budget-hierarchy-section-items-actions";
 import { listProductGroupsAction, type ProductGroup } from "@/actions/product-group-actions";
 import { Button } from "@/components/ui/button";
@@ -169,12 +170,22 @@ export function BudgetScope({
 
         setLocationTotalsLoading(true);
         void (async () => {
-            const grouped = await getBudgetItemsGroupedByBudgetIdLightAction(budgetId);
+            let grouped = await getBudgetItemsGroupedByBudgetIdLightAction(budgetId);
             if (cancelled) return;
 
+            // Fallback de compatibilidade: se a action em lote falhar, volta ao caminho por local
+            // (mais lento, porém evita mostrar 0,00 indevidamente).
             if (!grouped.success || !grouped.data) {
-                setLocationTotalsById({});
-                return;
+                const fallbackGrouped: Record<string, BudgetItem[]> = {};
+                for (const loc of locations) {
+                    const secIds = loc.sections.map((sec) => sec.id);
+                    if (secIds.length === 0) continue;
+                    const byLoc = await getBudgetItemsBySectionIdsLightAction(secIds);
+                    if (cancelled) return;
+                    if (!byLoc.success || !byLoc.data) continue;
+                    Object.assign(fallbackGrouped, byLoc.data);
+                }
+                grouped = { success: true, data: fallbackGrouped };
             }
 
             const nextTotals: Record<string, number> = {};
