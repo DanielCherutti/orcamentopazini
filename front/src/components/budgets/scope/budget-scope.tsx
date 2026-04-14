@@ -36,7 +36,10 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { ScopeFiguresProvider } from "./scope-figures-context";
-import { prefetchScopeSectionPayloadDebounced } from "@/lib/budgets/scope-section-payload-cache";
+import {
+    loadScopeSectionPayloadCached,
+    prefetchScopeSectionPayloadDebounced,
+} from "@/lib/budgets/scope-section-payload-cache";
 import type { BudgetItem } from "@/types/budget-types";
 import { budgetItemsFromGroupedBySectionId } from "@/lib/budgets/budget-section-items-grouped";
 
@@ -71,6 +74,8 @@ export function BudgetScope({
     /** Incrementa após cada refresh para forçar recálculo dos totais por local no índice. */
     const [scopeDataVersion, setScopeDataVersion] = useState(0);
     const [loading, setLoading] = useState(true);
+    const [loadingProgress, setLoadingProgress] = useState(0);
+    const [loadingStatusText, setLoadingStatusText] = useState("A carregar estrutura do escopo…");
     const [selected, setSelected] = useState<Selection | null>(null);
     const [scopeNumber, setScopeNumber] = useState<string>("");
     const [locationTotalsById, setLocationTotalsById] = useState<Record<string, number>>({});
@@ -83,16 +88,28 @@ export function BudgetScope({
     const [assemblyMode, setAssemblyMode] = useState<LocationAssemblyMode>("percent");
     const [assemblyValue, setAssemblyValue] = useState(0);
     const [costConfigOpen, setCostConfigOpen] = useState(false);
+    const [productGroups, setProductGroups] = useState<ProductGroup[] | undefined>(undefined);
     const toggleBtnClass =
         "inline-flex h-8 items-center justify-center rounded-md border px-3 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50";
 
-    const loadLocations = useCallback(async () => {
+    const loadLocations = useCallback(async (): Promise<{
+        locations: ScopeLocation[];
+        scopeVersion: number;
+    }> => {
+        const scopeVersion = Date.now();
         const locResult = await getLocationsAction(budgetId);
         if (locResult.success && locResult.data) {
             setLocations(locResult.data);
-            setScopeDataVersion((v) => v + 1);
+            setScopeDataVersion(scopeVersion);
+            return { locations: locResult.data, scopeVersion };
         }
+        return { locations: [], scopeVersion };
     }, [budgetId]);
+
+    const loadProductGroups = useCallback(async () => {
+        const r = await listProductGroupsAction();
+        if (r.success && r.data) setProductGroups(r.data);
+    }, []);
 
     const loadScopeNumber = useCallback(async () => {
         const { getCompositorTreeSnapshotAction } = await import(
@@ -122,14 +139,67 @@ export function BudgetScope({
 
     useEffect(() => {
         let cancelled = false;
-        setLoading(true);
-        void loadLocations().finally(() => {
-            if (!cancelled) setLoading(false);
-        });
+        void (async () => {
+            setLoading(true);
+            setLoadingProgress(0);
+            setLoadingStatusText("A carregar estrutura do escopo…");
+
+            // Etapa 1: estrutura base + cabeçalho do escopo + grupos para cards de produtos.
+            const [locPack] = await Promise.all([
+                loadLocations(),
+                loadScopeNumber(),
+                loadProductGroups(),
+            ]);
+            if (cancelled) return;
+            setLoadingProgress(35);
+            setLoadingStatusText("Estrutura carregada. A preparar trechos…");
+
+            // Etapa 2: payload completo de cada trecho (itens + imagens) para evitar "carregando..." ao abrir.
+            const sectionIds = locPack.locations.flatMap((loc) => loc.sections.map((sec) => sec.id));
+            if (sectionIds.length > 0) {
+                let completed = 0;
+                const total = sectionIds.length;
+                setLoadingStatusText(`Carregando trecho 1 de ${total}…`);
+                await Promise.all(
+                    sectionIds.map(async (sectionId) => {
+                        await loadScopeSectionPayloadCached(locPack.scopeVersion, sectionId, {
+                            skipRead: true,
+                            skipWrite: false,
+                        });
+                        completed += 1;
+                        if (!cancelled) {
+                            const pct = 35 + Math.round((completed / total) * 65);
+                            setLoadingProgress(Math.min(100, pct));
+                            const nextIdx = Math.min(completed + 1, total);
+                            setLoadingStatusText(
+                                completed >= total
+                                    ? "Finalizando carregamento do escopo…"
+                                    : `Carregando trecho ${nextIdx} de ${total}…`
+                            );
+                        }
+                    })
+                );
+            } else {
+                setLoadingProgress(100);
+                setLoadingStatusText("Nenhum trecho encontrado. Finalizando…");
+            }
+            if (cancelled) return;
+            setLoadingStatusText("Escopo pronto.");
+            setLoading(false);
+        })();
         return () => {
             cancelled = true;
         };
-    }, [loadLocations]);
+    }, [loadLocations, loadScopeNumber, loadProductGroups]);
+
+    useEffect(() => {
+        if (!loading) return;
+        // Segurança visual: se algum trecho demorar, mantém micro progresso sem "travar".
+        const timer = setInterval(() => {
+            setLoadingProgress((p) => (p >= 97 ? p : p + 1));
+        }, 280);
+        return () => clearInterval(timer);
+    }, [loading]);
 
     useEffect(() => {
         void loadScopeNumber();
@@ -331,18 +401,32 @@ export function BudgetScope({
     }, [budgetId, selected]);
 
     const [sidebarOpen, setSidebarOpen] = useState(true);
-    const [productGroups, setProductGroups] = useState<ProductGroup[] | undefined>(undefined);
-
-    useEffect(() => {
-        void listProductGroupsAction().then((r) => {
-            if (r.success && r.data) setProductGroups(r.data);
-        });
-    }, []);
 
     if (loading) {
         return (
-            <div className="flex flex-1 items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 bg-white p-8 shadow-inner">
+                <p className="text-center text-sm text-muted-foreground">
+                    {loadingStatusText}
+                </p>
+                <div className="w-full max-w-md">
+                    <div
+                        className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200"
+                        role="progressbar"
+                        aria-valuenow={loadingProgress}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-label="Progresso estimado de carregamento do escopo"
+                    >
+                        <div
+                            className="h-full rounded-full bg-primary transition-[width] duration-200 ease-out"
+                            style={{ width: `${loadingProgress}%` }}
+                        />
+                    </div>
+                    <div className="mt-2 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span className="tabular-nums">{loadingProgress}%</span>
+                    </div>
+                </div>
             </div>
         );
     }
