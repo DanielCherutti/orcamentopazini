@@ -7,7 +7,7 @@ const store = new Map<string, Payload>();
 
 export function scopeSectionPayloadCacheKey(scopeDataVersion: number, sectionId: string): string {
     /* Prefixo versiona entradas antigas (payload vazio/errado após mudanças de agrupamento). */
-    return `scope-payload-v3::${scopeDataVersion}::${sectionId}`;
+    return `scope-payload-v4::${scopeDataVersion}::${sectionId}`;
 }
 
 export function readScopeSectionPayloadFromCache(

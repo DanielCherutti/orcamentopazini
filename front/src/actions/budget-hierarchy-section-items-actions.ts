@@ -167,6 +167,7 @@ async function serializeBudgetItemsFromRawQueryRows(
                     description: product.description ?? product.name,
                     name: product.name,
                     unit: product.unit,
+                    imageUrl: product.imageUrl ?? product.image_url ?? undefined,
                 };
             }
             return it;
@@ -224,11 +225,93 @@ function budgetItemSectionGroupKey(raw: unknown): string {
 function serializeBudgetItemsLight(rawRows: Array<Record<string, unknown>>): BudgetItem[] {
     return rawRows.map((row) => {
         const s = serializeBudgetEntity(row) as Record<string, unknown>;
-        const pid = s.product_id;
-        if (pid && typeof pid === "object" && pid !== null && "id" in (pid as object)) {
-            s.product_id = String((pid as Record<string, unknown>).id ?? "");
+        // `serializeBudgetEntity` pode transformar RecordId do Surreal em `{}` (props não enumeráveis).
+        // Preservamos IDs relacionais diretamente da linha original da query.
+        const sectionId = recordIdToString(row.section_id ?? s.section_id);
+        if (sectionId) s.section_id = sectionId;
+
+        const productId = recordIdToString(row.product_id ?? s.product_id);
+        if (productId) {
+            s.product_id = productId;
+        } else {
+            const pid = s.product_id;
+            if (pid && typeof pid === "object" && pid !== null && "id" in (pid as object)) {
+                s.product_id = String((pid as Record<string, unknown>).id ?? "");
+            }
         }
         return toPlain(s) as BudgetItem;
+    });
+}
+
+/**
+ * Enriquecimento leve para UI (anotador/catálogo): injeta `product_data` e
+ * relação `product_id` expandida com campos essenciais, incluindo `imageUrl`.
+ */
+async function hydrateLightItemsProductData(
+    db: Awaited<ReturnType<typeof getDb>>,
+    items: BudgetItem[]
+): Promise<BudgetItem[]> {
+    const ids = [
+        ...new Set(
+            items
+                .map((it) => extractProductId((it as unknown as Record<string, unknown>).product_id))
+                .filter(Boolean)
+        ),
+    ] as string[];
+    if (ids.length === 0) return items;
+
+    const byId = new Map<string, Record<string, unknown>>();
+    await Promise.all(
+        ids.map(async (rawId) => {
+            const clean = rawId.replace(/^product:/, "");
+            const rid = safeStringRecordId("product", clean);
+            if (!rid) return;
+            try {
+                const selected = await db.select(rid);
+                const p = (Array.isArray(selected) ? selected[0] : selected) as
+                    | Record<string, unknown>
+                    | undefined;
+                if (!p) return;
+                const normalized: Record<string, unknown> = {
+                    id: String(p.id ?? `product:${clean}`),
+                    code: p.code,
+                    description: p.description ?? p.name ?? "",
+                    name: p.name,
+                    unit: p.unit,
+                    imageUrl: p.imageUrl ?? p.image_url ?? undefined,
+                };
+                byId.set(rawId, normalized);
+                byId.set(clean, normalized);
+                byId.set(`product:${clean}`, normalized);
+            } catch {
+                // ignore produto inexistente
+            }
+        })
+    );
+
+    return items.map((it) => {
+        const row = it as unknown as Record<string, unknown>;
+        const pid = extractProductId(row.product_id);
+        const currentPd =
+            row.product_data && typeof row.product_data === "object"
+                ? (row.product_data as Record<string, unknown>)
+                : null;
+        const mergedPd = {
+            ...(currentPd ?? {}),
+            ...(pid ? byId.get(pid) ?? {} : {}),
+        };
+        if (Object.keys(mergedPd).length > 0) {
+            row.product_data = mergedPd;
+            // Compatibilidade com pontos da UI que leem `item.product_id` como objeto.
+            row.product_id = mergedPd;
+        } else if (pid && row.product_name) {
+            row.product_id = {
+                id: pid,
+                description: row.product_name,
+                unit: row.product_unit,
+            };
+        }
+        return it;
     });
 }
 
@@ -266,17 +349,19 @@ export async function getBudgetItemsBySectionIdsLightAction(sectionIds: string[]
                 })
             )
         ).flat();
-        const buckets = new Map<string, Record<string, unknown>[]>();
-        for (const row of rawRows) {
+        const hydrated = await hydrateLightItemsProductData(db, serializeBudgetItemsLight(rawRows));
+        const buckets = new Map<string, BudgetItem[]>();
+        for (const item of hydrated) {
+            const row = item as unknown as Record<string, unknown>;
             const sid = budgetItemSectionGroupKey(row.section_id);
             if (!sid) continue;
             const list = buckets.get(sid) ?? [];
-            list.push(row);
+            list.push(item);
             buckets.set(sid, list);
         }
         const grouped: Record<string, BudgetItem[]> = {};
         for (const [sid, bucket] of buckets) {
-            grouped[sid] = serializeBudgetItemsLight(bucket).map((it) => {
+            grouped[sid] = bucket.map((it) => {
                 (it as BudgetItem).section_id = sid;
                 return it;
             });

@@ -312,15 +312,30 @@ export function CatalogDock({
                                     </p>
                                 )}
                                 {availableItems.map((item) => {
-                                    const product = (typeof item.product_id === "object" ? item.product_id : null) as Record<string, string | undefined> | null;
-                                    if (!product?.id) return null;
+                                    const row = item as unknown as Record<string, unknown>;
+                                    const product = (
+                                        (typeof item.product_id === "object" ? item.product_id : null) ??
+                                        (typeof row.product_data === "object" ? row.product_data : null)
+                                    ) as Record<string, string | undefined> | null;
+                                    const imageUrl = product?.imageUrl ?? product?.image_url;
+                                    const name =
+                                        product?.description ||
+                                        product?.name ||
+                                        (typeof row.product_name === "string" ? row.product_name : "") ||
+                                        "Sem nome";
+                                    if (!name.trim()) return null;
 
                                     return (
                                         <ProductCard
                                             key={item.id}
-                                            name={product.description || "Sem nome"}
-                                            imageUrl={product.imageUrl}
-                                            unit={product.unit}
+                                            name={name}
+                                            imageUrl={imageUrl}
+                                            unit={
+                                                product?.unit ||
+                                                (typeof row.product_unit === "string"
+                                                    ? row.product_unit
+                                                    : undefined)
+                                            }
                                             hint="Arraste para compor"
                                             onDragStart={(e) => onDragStartBudgetItem(e, item)}
                                         />

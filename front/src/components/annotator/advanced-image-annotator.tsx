@@ -502,11 +502,28 @@ export function AdvancedImageAnnotator({
 
     const handleDragStartItem = (e: DragEvent, item: BudgetItem) => {
         if (readOnly) return;
-        const product = (typeof item.product_id === 'object' ? item.product_id : {}) as Record<string, string | undefined>;
-        e.dataTransfer.setData('product_id', product.id || '');
-        e.dataTransfer.setData('image_url', product.imageUrl || '');
-        e.dataTransfer.setData('product_name', product.description || 'Produto');
-        e.dataTransfer.setData('product_unit', (product.unit || '').trim());
+        const row = item as unknown as Record<string, unknown>;
+        const product = (
+            (typeof item.product_id === 'object' ? item.product_id : null) ??
+            (typeof row.product_data === 'object' ? row.product_data : null)
+        ) as Record<string, string | undefined> | null;
+        const productId =
+            product?.id ||
+            (typeof item.product_id === 'string' ? item.product_id : '');
+        const imageUrl = product?.imageUrl || product?.image_url || '';
+        const productName =
+            product?.description ||
+            product?.name ||
+            (typeof row.product_name === 'string' ? row.product_name : '') ||
+            'Produto';
+        const productUnit =
+            product?.unit ||
+            (typeof row.product_unit === 'string' ? row.product_unit : '') ||
+            '';
+        e.dataTransfer.setData('product_id', productId);
+        e.dataTransfer.setData('image_url', imageUrl);
+        e.dataTransfer.setData('product_name', productName);
+        e.dataTransfer.setData('product_unit', productUnit.trim());
         e.dataTransfer.setData('item_id', item.id || '');
         e.dataTransfer.setData('source', 'budget');
         e.dataTransfer.effectAllowed = 'copy';
