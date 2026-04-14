@@ -219,8 +219,8 @@ export async function syncDraftPricesAction(
     const auth = await assertActionSession();
     if (!auth.ok) return { success: false, updatedCount: 0, error: auth.error };
 
-    const db = await getDb();
-    try {
+    const runSync = async (): Promise<number> => {
+        const db = await getDb();
         const budgetRecordId = requireRecordId("budget", budgetId);
 
         const itemsRes = await db.query<[Array<Record<string, unknown>>]>(
@@ -262,14 +262,40 @@ export async function syncDraftPricesAction(
                 .merge({ total_value: grandTotal, updated_at: new Date().toISOString() });
         }
 
+        return updatedCount;
+    };
+
+    try {
+        const updatedCount = await runSync();
         return { success: true, updatedCount };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
             return { success: false, updatedCount: 0, error: error.message };
         }
+        if (isTokenExpiredError(error)) {
+            resetDb();
+            try {
+                const updatedCount = await runSync();
+                return { success: true, updatedCount };
+            } catch (e2) {
+                if (e2 instanceof InvalidRecordIdError) {
+                    return { success: false, updatedCount: 0, error: e2.message };
+                }
+                console.error("syncDraftPricesAction retry error:", e2);
+                if (isTokenExpiredError(e2)) resetDb();
+                return {
+                    success: false,
+                    updatedCount: 0,
+                    error: "Erro ao sincronizar preços (SurrealDB). Verifique se o servidor está no ar e se SURREALDB_PASS/SURREAL_PASS está correto.",
+                };
+            }
+        }
         console.error("syncDraftPricesAction error:", error);
-        if (isTokenExpiredError(error)) resetDb();
-        return { success: false, updatedCount: 0, error: "Erro ao sincronizar preços" };
+        return {
+            success: false,
+            updatedCount: 0,
+            error: "Erro ao sincronizar preços (SurrealDB). Verifique conexão e credenciais.",
+        };
     }
 }
 

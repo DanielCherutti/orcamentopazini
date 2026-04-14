@@ -3,8 +3,7 @@
 import { useContext, useEffect, useMemo, useState } from "react";
 import { getProposalSettingsAction, type ProposalSettings } from "@/actions/settings-actions";
 import type { BudgetBlock } from "@/types/budget-compositor-types";
-import type { CoverBlockProps } from "@/types/budget-compositor-types";
-import { mergeCoverDocumentProps } from "@/lib/budgets/cover-document";
+import { mergeCoverDocumentProps, resolveInnerPagesWatermark } from "@/lib/budgets/cover-document";
 import { CompositorDocumentContext } from "./compositor-document-context";
 import { buildFiguresListModel, type ScopeFigureEntry } from "./compositor-figures-utils";
 
@@ -34,8 +33,7 @@ export function CompositorFiguresBlock({ block }: { block: BudgetBlock; isReadOn
     return buildFiguresListModel(entries, doc.roots, doc.items);
   }, [doc]);
 
-  const wmUrl = coverProps.cover_watermark_url?.trim();
-  const wmOpacity = coverProps.cover_watermark_opacity ?? 0.12;
+  const { url: wmUrl, opacity: wmOpacity } = resolveInnerPagesWatermark(coverProps);
 
   return (
     <div

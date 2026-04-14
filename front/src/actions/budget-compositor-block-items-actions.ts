@@ -63,6 +63,7 @@ export async function addItemToBlockAction(
 
         await db.create(new Table("budget_item")).content({
             block_id: requireRecordId("budget_block", blockId),
+            budget_id: requireRecordId("budget", budgetId),
             product_id: productRecordId,
             quantity,
             unit_price: unitPrice,
@@ -131,6 +132,7 @@ export async function addGroupToBlockAction(
 
             await db.create(new Table("budget_item")).content({
                 block_id: requireRecordId("budget_block", blockId),
+                budget_id: requireRecordId("budget", budgetId),
                 product_id: requireRecordId("product", productId),
                 quantity,
                 unit_price: unitPrice,

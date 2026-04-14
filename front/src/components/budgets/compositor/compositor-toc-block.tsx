@@ -3,8 +3,7 @@
 import { useContext, useEffect, useMemo, useState } from "react";
 import { getProposalSettingsAction, type ProposalSettings } from "@/actions/settings-actions";
 import type { BudgetBlock } from "@/types/budget-compositor-types";
-import type { CoverBlockProps } from "@/types/budget-compositor-types";
-import { mergeCoverDocumentProps } from "@/lib/budgets/cover-document";
+import { mergeCoverDocumentProps, resolveInnerPagesWatermark } from "@/lib/budgets/cover-document";
 import { cn } from "@/lib/utils";
 import { CompositorDocumentContext } from "./compositor-document-context";
 import { buildTocModel } from "./compositor-toc-utils";
@@ -34,8 +33,7 @@ export function CompositorTocBlock({ block }: { block: BudgetBlock; isReadOnly?:
     return buildTocModel(doc.roots, doc.items);
   }, [doc]);
 
-  const wmUrl = coverProps.cover_watermark_url?.trim();
-  const wmOpacity = coverProps.cover_watermark_opacity ?? 0.12;
+  const { url: wmUrl, opacity: wmOpacity } = resolveInnerPagesWatermark(coverProps);
 
   return (
     <div className="overflow-hidden rounded-lg border border-neutral-300/80 bg-white shadow-sm dark:border-neutral-700 dark:bg-neutral-950" data-compositor-block={block.id}>

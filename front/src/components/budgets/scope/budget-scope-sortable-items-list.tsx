@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
     DndContext,
@@ -22,7 +22,11 @@ import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import type { ProductGroup } from "@/actions/product-group-actions";
 import type { BudgetItem } from "@/types/budget-types";
-import { reorderSectionItemsAction } from "@/actions/budget-hierarchy-section-items-actions";
+import {
+    deleteBudgetItemsBulkAction,
+    reorderSectionItemsAction,
+} from "@/actions/budget-hierarchy-section-items-actions";
+import { Button } from "@/components/ui/button";
 import { buildItemSegments, type ItemSegment } from "./budget-scope-utils";
 import { ScopeItemRow } from "./budget-scope-item-row";
 import type { LocationAssemblyMode, PriceAdjustmentMode } from "@/lib/budgets/scope-pricing";
@@ -241,6 +245,26 @@ function SortableItemsListEditable({
 }: SortableItemsListProps) {
     const [segments, setSegments] = useState<ItemSegment[]>(() => buildItemSegments(items));
     const segmentsRef = useRef(segments);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+    const [bulkDeleting, setBulkDeleting] = useState(false);
+
+    const selectableItemIds = useMemo(
+        () => items.map((i) => i.id).filter((id): id is string => Boolean(id)),
+        [items]
+    );
+
+    useEffect(() => {
+        const valid = new Set(selectableItemIds);
+        setSelectedIds((prev) => {
+            let changed = false;
+            const next = new Set<string>();
+            for (const id of prev) {
+                if (valid.has(id)) next.add(id);
+                else changed = true;
+            }
+            return changed ? next : prev;
+        });
+    }, [selectableItemIds]);
 
     useEffect(() => {
         segmentsRef.current = segments;
@@ -249,6 +273,44 @@ function SortableItemsListEditable({
     useEffect(() => {
         setSegments(buildItemSegments(items));
     }, [items]);
+
+    const toggleItemSelected = useCallback((id: string, checked: boolean) => {
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (checked) next.add(id);
+            else next.delete(id);
+            return next;
+        });
+    }, []);
+
+    const selectAllItems = useCallback(() => {
+        setSelectedIds(new Set(selectableItemIds));
+    }, [selectableItemIds]);
+
+    const handleBulkDelete = useCallback(async () => {
+        const ids = [...selectedIds];
+        if (ids.length === 0) return;
+        if (!confirm(`Remover ${ids.length} produto(s) deste trecho?`)) return;
+        setBulkDeleting(true);
+        try {
+            const result = await deleteBudgetItemsBulkAction(ids, budgetId);
+            if (!result.success) {
+                toast.error(result.error || "Erro ao remover produtos");
+                return;
+            }
+            if (result.deletedCount > 0) {
+                toast.success(
+                    result.deletedCount === 1
+                        ? "1 produto removido."
+                        : `${result.deletedCount} produtos removidos.`
+                );
+            }
+            setSelectedIds(new Set());
+            onRefresh();
+        } finally {
+            setBulkDeleting(false);
+        }
+    }, [selectedIds, budgetId, onRefresh]);
 
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -302,51 +364,103 @@ function SortableItemsListEditable({
     );
 
     return (
-        <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleOuterDragEnd}
-        >
-            <SortableContext items={segmentIds} strategy={verticalListSortingStrategy}>
-                <div className="space-y-1">
-                    {segments.map((seg) =>
-                        seg.type === "standalone" ? (
-                            <SortableStandaloneItem
-                                key={getSegmentSortableId(seg)}
-                                item={seg.item}
-                                budgetId={budgetId}
-                                isReadOnly={false}
-                                onRefresh={onRefresh}
-                                groups={groups}
-                                assemblyMode={assemblyMode}
-                                assemblyByItemId={assemblyByItemId}
-                                priceAdjustmentEnabled={priceAdjustmentEnabled}
-                                priceAdjustmentInputMode={priceAdjustmentInputMode}
-                                quoteMarkupPercent={quoteMarkupPercent}
-                                quoteDiscountPercent={quoteDiscountPercent}
-                            />
-                        ) : (
-                            <SortableGroup
-                                key={getSegmentSortableId(seg)}
-                                seg={seg}
-                                sensors={sensors}
-                                budgetId={budgetId}
-                                isReadOnly={false}
-                                onRefresh={onRefresh}
-                                onItemReorder={handleGroupItemReorder}
-                                groups={groups}
-                                assemblyMode={assemblyMode}
-                                assemblyByItemId={assemblyByItemId}
-                                priceAdjustmentEnabled={priceAdjustmentEnabled}
-                                priceAdjustmentInputMode={priceAdjustmentInputMode}
-                                quoteMarkupPercent={quoteMarkupPercent}
-                                quoteDiscountPercent={quoteDiscountPercent}
-                            />
-                        )
+        <>
+            {selectableItemIds.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 px-1 pb-2">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={selectAllItems}
+                        disabled={bulkDeleting}
+                    >
+                        Selecionar todos
+                    </Button>
+                    {selectedIds.size > 0 && (
+                        <>
+                            <span className="text-xs text-muted-foreground tabular-nums">
+                                {selectedIds.size} selecionado(s)
+                            </span>
+                            <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => void handleBulkDelete()}
+                                disabled={bulkDeleting}
+                            >
+                                Remover selecionados
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => setSelectedIds(new Set())}
+                                disabled={bulkDeleting}
+                            >
+                                Limpar seleção
+                            </Button>
+                        </>
                     )}
                 </div>
-            </SortableContext>
-        </DndContext>
+            )}
+            <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleOuterDragEnd}
+            >
+                <SortableContext items={segmentIds} strategy={verticalListSortingStrategy}>
+                    <div className="max-h-[min(75vh,900px)] overflow-y-auto rounded-md [scrollbar-gutter:stable]">
+                        <div className="space-y-1">
+                            {segments.map((seg) =>
+                                seg.type === "standalone" ? (
+                                    <SortableStandaloneItem
+                                        key={getSegmentSortableId(seg)}
+                                        item={seg.item}
+                                        budgetId={budgetId}
+                                        isReadOnly={false}
+                                        onRefresh={onRefresh}
+                                        groups={groups}
+                                        assemblyMode={assemblyMode}
+                                        assemblyByItemId={assemblyByItemId}
+                                        priceAdjustmentEnabled={priceAdjustmentEnabled}
+                                        priceAdjustmentInputMode={priceAdjustmentInputMode}
+                                        quoteMarkupPercent={quoteMarkupPercent}
+                                        quoteDiscountPercent={quoteDiscountPercent}
+                                        selectionEnabled
+                                        selected={Boolean(seg.item.id && selectedIds.has(seg.item.id))}
+                                        onToggleSelected={(checked) => {
+                                            if (seg.item.id) toggleItemSelected(seg.item.id, checked);
+                                        }}
+                                    />
+                                ) : (
+                                    <SortableGroup
+                                        key={getSegmentSortableId(seg)}
+                                        seg={seg}
+                                        sensors={sensors}
+                                        budgetId={budgetId}
+                                        isReadOnly={false}
+                                        onRefresh={onRefresh}
+                                        onItemReorder={handleGroupItemReorder}
+                                        groups={groups}
+                                        assemblyMode={assemblyMode}
+                                        assemblyByItemId={assemblyByItemId}
+                                        priceAdjustmentEnabled={priceAdjustmentEnabled}
+                                        priceAdjustmentInputMode={priceAdjustmentInputMode}
+                                        quoteMarkupPercent={quoteMarkupPercent}
+                                        quoteDiscountPercent={quoteDiscountPercent}
+                                        selectedIds={selectedIds}
+                                        onToggleItemSelected={toggleItemSelected}
+                                    />
+                                )
+                            )}
+                        </div>
+                    </div>
+                </SortableContext>
+            </DndContext>
+        </>
     );
 }
 
@@ -369,6 +483,9 @@ function SortableStandaloneItem({
     priceAdjustmentInputMode,
     quoteMarkupPercent = 0,
     quoteDiscountPercent = 0,
+    selectionEnabled = false,
+    selected = false,
+    onToggleSelected,
 }: {
     item: BudgetItem;
     budgetId: string;
@@ -381,6 +498,9 @@ function SortableStandaloneItem({
     priceAdjustmentInputMode: PriceAdjustmentMode;
     quoteMarkupPercent?: number;
     quoteDiscountPercent?: number;
+    selectionEnabled?: boolean;
+    selected?: boolean;
+    onToggleSelected?: (checked: boolean) => void;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: item.id!,
@@ -405,6 +525,9 @@ function SortableStandaloneItem({
                 quoteMarkupPercent={quoteMarkupPercent}
                 quoteDiscountPercent={quoteDiscountPercent}
                 dragHandleProps={isReadOnly ? undefined : { ...attributes, ...listeners }}
+                selectionEnabled={selectionEnabled}
+                selected={selected}
+                onSelectionChange={onToggleSelected}
             />
         </div>
     );
@@ -424,6 +547,8 @@ function SortableGroup({
     priceAdjustmentInputMode,
     quoteMarkupPercent = 0,
     quoteDiscountPercent = 0,
+    selectedIds,
+    onToggleItemSelected,
 }: {
     seg: Extract<ItemSegment, { type: "group" }>;
     sensors: ReturnType<typeof useSensors>;
@@ -438,6 +563,8 @@ function SortableGroup({
     priceAdjustmentInputMode: PriceAdjustmentMode;
     quoteMarkupPercent?: number;
     quoteDiscountPercent?: number;
+    selectedIds: Set<string>;
+    onToggleItemSelected: (id: string, checked: boolean) => void;
 }) {
     const outerId = getSegmentSortableId(seg);
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -503,6 +630,11 @@ function SortableGroup({
                                 priceAdjustmentInputMode={priceAdjustmentInputMode}
                                 quoteMarkupPercent={quoteMarkupPercent}
                                 quoteDiscountPercent={quoteDiscountPercent}
+                                selectionEnabled
+                                selected={Boolean(item.id && selectedIds.has(item.id))}
+                                onToggleSelected={(checked) => {
+                                    if (item.id) onToggleItemSelected(item.id, checked);
+                                }}
                             />
                         ))}
                     </SortableContext>
@@ -532,6 +664,9 @@ function SortableGroupItem({
     priceAdjustmentInputMode,
     quoteMarkupPercent = 0,
     quoteDiscountPercent = 0,
+    selectionEnabled = false,
+    selected = false,
+    onToggleSelected,
 }: {
     item: BudgetItem;
     budgetId: string;
@@ -544,6 +679,9 @@ function SortableGroupItem({
     priceAdjustmentInputMode: PriceAdjustmentMode;
     quoteMarkupPercent?: number;
     quoteDiscountPercent?: number;
+    selectionEnabled?: boolean;
+    selected?: boolean;
+    onToggleSelected?: (checked: boolean) => void;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: item.id!,
@@ -569,6 +707,9 @@ function SortableGroupItem({
                 quoteMarkupPercent={quoteMarkupPercent}
                 quoteDiscountPercent={quoteDiscountPercent}
                 dragHandleProps={isReadOnly ? undefined : { ...attributes, ...listeners }}
+                selectionEnabled={selectionEnabled}
+                selected={selected}
+                onSelectionChange={onToggleSelected}
             />
         </div>
     );

@@ -1,18 +1,11 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
-import { getBudgetAction } from "@/actions/budget-actions";
-import { getCompositorTreeSnapshotAction } from "@/actions/budget-compositor-tree-actions";
-import { getScopeFiguresListAction } from "@/actions/budget-scope-actions";
-import { buildTree } from "@/types/budget-compositor-types";
-import type { CompositorPdfPayload } from "@/components/pdf/compositor-pdf-types";
-import type { ProposalSettings } from "@/actions/settings-actions";
+import { notFound } from "next/navigation";
+import { PdfClientViewerEntry } from "@/components/pdf/pdf-client-viewer-entry";
+import { loadBudgetPdfPayload } from "@/lib/budgets/budget-pdf-payload";
 
 export const metadata: Metadata = {
   title: "Exportar PDF",
 };
-import { getProposalSettingsAction } from "@/actions/settings-actions";
-import { PdfClientViewer } from "@/components/pdf/pdf-client-viewer";
-import { notFound } from "next/navigation";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -20,56 +13,15 @@ interface PageProps {
 
 export default async function BudgetPdfPage({ params }: PageProps) {
   const { id } = await params;
-  const requestHeaders = await headers();
-
-  const [budgetRes, settingsRes] = await Promise.all([
-    getBudgetAction(id),
-    getProposalSettingsAction(),
-  ]);
-
-  if (!budgetRes.success || !budgetRes.data) {
-    return notFound();
+  const loaded = await loadBudgetPdfPayload(id);
+  if (!loaded.ok) {
+    if (loaded.status === 404) return notFound();
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center p-8 text-center text-destructive">
+        {loaded.error}
+      </div>
+    );
   }
 
-  const settings = (settingsRes.data || {}) as ProposalSettings;
-  const forwardedHost = requestHeaders.get("x-forwarded-host");
-  const host = forwardedHost || requestHeaders.get("host") || "";
-  const forwardedProto = requestHeaders.get("x-forwarded-proto");
-  const protocol =
-    forwardedProto || (host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http" : "https");
-  const requestOrigin = host ? `${protocol}://${host}` : undefined;
-  const appPublicUrl = settings.app_public_url?.trim() || requestOrigin;
-  const settingsWithPublicUrl: ProposalSettings = {
-    ...settings,
-    app_public_url: appPublicUrl,
-  };
-  const budget = budgetRes.data;
-
-  let compositorPdf: CompositorPdfPayload | undefined;
-  if (budget.use_compositor && budget.id) {
-    const budgetId = String(budget.id);
-    const [snap, figRes] = await Promise.all([
-      getCompositorTreeSnapshotAction(budgetId),
-      getScopeFiguresListAction(budgetId),
-    ]);
-    if (snap.success && snap.blocks?.length) {
-      const tree = buildTree(snap.blocks, snap.items ?? {});
-      compositorPdf = {
-        roots: tree.blocks,
-        items: tree.items,
-        scopeFigures:
-          figRes.success && figRes.entries?.length
-            ? figRes.entries.map((e) => ({ id: e.id, caption: e.caption }))
-            : [],
-      };
-    }
-  }
-
-  return (
-    <PdfClientViewer
-      budget={budget}
-      settings={settingsWithPublicUrl}
-      compositorPdf={compositorPdf}
-    />
-  );
+  return <PdfClientViewerEntry budgetId={String(loaded.budget.id)} />;
 }

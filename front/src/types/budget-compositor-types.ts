@@ -10,6 +10,7 @@ export type BlockType =
   | "cover"     // Capa do documento (PDF / proposta) — uma por orçamento, criada automaticamente
   | "toc"       // Sumário automático (sempre após a capa) — conteúdo derivado da árvore
   | "figures"   // Lista de figuras (após sumário) — imagens do Escopo, automático
+  | "quote"     // Orçamento (tabela/valores) — bloco raiz que referencia a aba Orçamento
   | "session"   // Contêiner: sessão / sub-sessão (qualquer profundidade)
   | "text"      // Texto rico (Tiptap HTML)
   | "location"  // Local / Ambiente (com descrição + galeria + trechos)
@@ -26,6 +27,12 @@ export interface CoverBlockProps {
   subtitle?: string;
   /** Logomarca do cliente (URL pública) */
   client_logo_url?: string;
+  /** Posição/tamanho na folha A4 (%, origem canto superior esquerdo da imagem). */
+  client_logo_x_pct?: number;
+  client_logo_y_pct?: number;
+  client_logo_width_pct?: number;
+  /** naturalWidth / naturalHeight — usado no PDF e para limitar arraste. */
+  client_logo_aspect?: number;
   /** Marca d’água só na capa */
   cover_watermark_url?: string;
   cover_watermark_opacity?: number;
@@ -46,6 +53,18 @@ export interface CoverBlockProps {
   issuer_city_line?: string;
   /** Ex.: "Rev. 02" — exibido junto ao código do orçamento */
   revision_label?: string;
+
+  /** Faixas fixas da capa no PDF (fora do HTML) — editáveis no compositor. */
+  cover_pdf_show_header_band?: boolean;
+  cover_pdf_show_footer_band?: boolean;
+  /** Substitui o nome da empresa (Configurações) no cabeçalho do PDF. */
+  cover_pdf_header_company_override?: string;
+  /** Substitui a URL do logo (Configurações) no cabeçalho do PDF. */
+  cover_pdf_header_logo_url_override?: string;
+  /** Rodapé esquerdo. Placeholders: {{date}} {{code}} {{title}}. Vazio = texto automático. */
+  cover_pdf_footer_left_template?: string;
+  /** Rodapé direito. Placeholders: {{date}} {{code}} {{title}}. Vazio = texto automático. */
+  cover_pdf_footer_right_template?: string;
 }
 
 export const DEFAULT_COVER_PROPS: CoverBlockProps = {

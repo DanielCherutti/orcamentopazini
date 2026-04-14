@@ -1,3 +1,5 @@
+import { canonicalTableRecordId } from "@/lib/surreal-record-ids";
+
 export type PriceAdjustmentMode = "percent" | "fixed";
 export type LocationAssemblyMode = "percent" | "fixed" | "manual";
 export type CostDisplayMode = "location" | "section" | "general";
@@ -90,7 +92,7 @@ export function computeLocationScopeTotal(params: {
     >();
     const sectionIds: string[] = [];
     for (const row of params.sections) {
-        const sectionId = row.id;
+        const sectionId = canonicalTableRecordId("budget_section", row.id);
         sectionIds.push(sectionId);
         const hasOwnAssembly = row.assembly_mode != null || row.assembly_value != null;
         const modeRaw = String(row.assembly_mode ?? "percent");
@@ -103,7 +105,7 @@ export function computeLocationScopeTotal(params: {
     const itemsByLocationFallback: ScopePricingItem[] = [];
     const itemsBySection = new Map<string, ScopePricingItem[]>();
     for (const row of params.items) {
-        const sectionId = row.section_id;
+        const sectionId = canonicalTableRecordId("budget_section", row.section_id);
         const item: ScopePricingItem = {
             id: row.id,
             quantity: row.quantity,
@@ -139,12 +141,6 @@ export function computeLocationScopeTotal(params: {
     );
     const assemblyFallback = computeLocationAssemblyTotal(locMode, locValue, itemsByLocationFallback);
     grandTotal += itemSubtotalFallback + assemblyFallback;
-
-    for (const [sectionId, cfg] of sectionConfig.entries()) {
-        if (!cfg.hasOwnAssembly) continue;
-        if (itemsBySection.has(sectionId)) continue;
-        grandTotal += computeLocationAssemblyTotal(cfg.mode, cfg.value, []);
-    }
 
     const hasFallbackItems = itemsByLocationFallback.length > 0;
     if (!hasFallbackItems) {

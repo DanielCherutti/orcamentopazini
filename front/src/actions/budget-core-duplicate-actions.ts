@@ -132,6 +132,7 @@ export async function duplicateBudgetAction(
                         await db.create(new Table("budget_item")).content({
                             ...buildDuplicatedBudgetItemContent(item as Record<string, unknown>),
                             section_id: new StringRecordId(newSecId),
+                            budget_id: newBudgetRecordId,
                         });
                     }
                 }

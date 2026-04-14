@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Layers, Copy, Trash2, Pencil, FileText } from "lucide-react";
+import { Layers, Copy, Trash2, Pencil, FileText, Loader2 } from "lucide-react";
 import {
     Dialog,
     DialogContent,
@@ -22,15 +22,16 @@ import { BudgetPhotoAnnotatorDialog } from "@/components/budgets/budget-photo-an
 import { parseAnnotatorViewport } from "@/components/annotator/annotator-viewport-types";
 import type { BudgetImage, BudgetItem } from "@/types/budget-types";
 import type { ScopeLocation, ScopeSection } from "@/actions/budget-scope-actions";
-import type { ProductGroup } from "@/actions/product-group-actions";
-import { getItemsBySectionAction } from "@/actions/budget-hierarchy-section-items-actions";
 import {
     updateSectionAction,
     deleteSectionAction,
     duplicateSectionAction,
 } from "@/actions/budget-hierarchy-scope-structure-actions";
-import { listProductGroupsAction } from "@/actions/product-group-actions";
+import { listProductGroupsAction, type ProductGroup } from "@/actions/product-group-actions";
+import { getBudgetItemsBySectionIdsLightAction } from "@/actions/budget-hierarchy-section-items-actions";
+import { budgetItemsFromGroupedBySectionId } from "@/lib/budgets/budget-section-items-grouped";
 import { getBudgetImagesBySection, deleteBudgetImage } from "@/actions/budget-annotations";
+import { loadScopeSectionPayloadCached } from "@/lib/budgets/scope-section-payload-cache";
 import { formatCurrency } from "./budget-scope-utils";
 import { SortableItemsList } from "./budget-scope-sortable-items-list";
 import { ScopeGroupAdder, ScopeItemCreator } from "./budget-scope-item-creator";
@@ -70,6 +71,12 @@ interface SectionDetailProps {
     quoteDiscountPercent?: number;
     /** Incrementado no pai após `loadLocations` — força recarregar itens do trecho (ex.: zerar ajustes). */
     scopeDataVersion?: number;
+    /** Lista de grupos carregada uma vez no `BudgetScope` (evita N× `listProductGroupsAction`). */
+    productGroups?: ProductGroup[];
+    /** Editor legado: não usar cache cliente do payload do trecho. */
+    disableScopePayloadCache?: boolean;
+    /** Vista só-trecho: itens de todo o local (montagem) já agregados pelo pai. */
+    batchedLocationItems?: BudgetItem[];
 }
 
 export function SectionDetail({
@@ -88,12 +95,15 @@ export function SectionDetail({
     quoteMarkupPercent = 0,
     quoteDiscountPercent = 0,
     scopeDataVersion = 0,
+    productGroups: productGroupsFromParent,
+    disableScopePayloadCache = false,
+    batchedLocationItems,
 }: SectionDetailProps) {
     const [name, setName] = useState(section?.name ?? "");
     const [editingName, setEditingName] = useState(false);
     const [description, setDescription] = useState(section?.description ?? "");
     const [items, setItems] = useState<BudgetItem[]>([]);
-    const [groups, setGroups] = useState<ProductGroup[]>([]);
+    const [groups, setGroups] = useState<ProductGroup[]>(productGroupsFromParent ?? []);
     const [images, setImages] = useState<BudgetImage[]>([]);
     const [locationItems, setLocationItems] = useState<BudgetItem[]>([]);
     const [addPhotoOpen, setAddPhotoOpen] = useState(false);
@@ -101,6 +111,7 @@ export function SectionDetail({
     const [dupDialog, setDupDialog] = useState(false);
     const [dupName, setDupName] = useState("");
     const [dupSectioning, setDupSectioning] = useState(false);
+    const [itemsLoading, setItemsLoading] = useState(true);
     const [descSectionOpen, setDescSectionOpen] = useState(() =>
         !isRichTextContentEmpty(section?.description)
     );
@@ -139,25 +150,49 @@ export function SectionDetail({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sectionId]);
 
-    const loadItems = useCallback(async () => {
-        const result = await getItemsBySectionAction(sectionId);
-        if (result.success && result.data) {
-            setItems(result.data as unknown as BudgetItem[]);
+    useEffect(() => {
+        let cancelled = false;
+        setItemsLoading(true);
+        void loadScopeSectionPayloadCached(scopeDataVersion, sectionId, {
+            skipRead: disableScopePayloadCache,
+            skipWrite: disableScopePayloadCache,
+        })
+            .then((res) => {
+                if (cancelled) return;
+                if (res.success && res.data) {
+                    setItems(res.data.items);
+                    setImages(res.data.images);
+                } else {
+                    setItems([]);
+                    setImages([]);
+                }
+                setItemsLoading(false);
+            })
+            .catch(() => {
+                if (cancelled) return;
+                setItems([]);
+                setImages([]);
+                setItemsLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [sectionId, scopeDataVersion, disableScopePayloadCache]);
+
+    useEffect(() => {
+        if (productGroupsFromParent !== undefined) {
+            setGroups(productGroupsFromParent);
+            return;
         }
-    }, [sectionId]);
-
-    useEffect(() => {
-        loadItems();
-        getBudgetImagesBySection(sectionId).then((imgs) =>
-            setImages(imgs as unknown as BudgetImage[])
-        );
-    }, [sectionId, loadItems, scopeDataVersion]);
-
-    useEffect(() => {
-        listProductGroupsAction().then((res) => {
+        let cancelled = false;
+        void listProductGroupsAction().then((res) => {
+            if (cancelled) return;
             if (res.success && res.data) setGroups(res.data);
         });
-    }, []);
+        return () => {
+            cancelled = true;
+        };
+    }, [productGroupsFromParent]);
 
     const currentLocation = useMemo(
         () => locations.find((loc) => loc.id === locationId) ?? null,
@@ -167,24 +202,39 @@ export function SectionDetail({
     const sectionIdsKey = currentLocation?.sections?.map((s) => s.id).join(",") ?? "";
 
     useEffect(() => {
+        if (batchedLocationItems !== undefined) {
+            setLocationItems(batchedLocationItems);
+            return;
+        }
         if (!currentLocation?.sections?.length) {
             setLocationItems([]);
             return;
         }
         let cancelled = false;
-        Promise.all(currentLocation.sections.map((s) => getItemsBySectionAction(s.id))).then((results) => {
+        const ids = currentLocation.sections.map((s) => s.id);
+        void getBudgetItemsBySectionIdsLightAction(ids).then((res) => {
             if (cancelled) return;
-            const all = results.flatMap((r) =>
-                r.success && r.data ? (r.data as unknown as BudgetItem[]) : []
-            );
-            setLocationItems(all);
+            if (res.success && res.data) {
+                const all: BudgetItem[] = [];
+                for (const sid of ids) {
+                    all.push(...budgetItemsFromGroupedBySectionId(res.data, sid));
+                }
+                setLocationItems(all);
+            } else {
+                setLocationItems([]);
+            }
         });
         return () => {
             cancelled = true;
         };
-        // currentLocation.sections coberto por sectionIdsKey + length
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentLocation?.id, currentLocation?.sections?.length, sectionIdsKey, scopeDataVersion]);
+    }, [
+        batchedLocationItems,
+        currentLocation?.id,
+        currentLocation?.sections?.length,
+        sectionIdsKey,
+        scopeDataVersion,
+    ]);
 
     const locationAssemblyModeRaw = String(
         (currentLocation as unknown as Record<string, unknown> | null)?.assembly_mode ?? "percent"
@@ -265,9 +315,19 @@ export function SectionDetail({
     };
 
     const refreshSectionAndScope = useCallback(() => {
-        void loadItems();
+        setItemsLoading(true);
+        void loadScopeSectionPayloadCached(scopeDataVersion, sectionId, {
+            skipRead: true,
+            skipWrite: disableScopePayloadCache,
+        }).then((res) => {
+            if (res.success && res.data) {
+                setItems(res.data.items);
+                setImages(res.data.images);
+            }
+            setItemsLoading(false);
+        });
         onRefresh();
-    }, [loadItems, onRefresh]);
+    }, [scopeDataVersion, sectionId, onRefresh, disableScopePayloadCache]);
 
     const totalRaw = items.reduce((sum, i) => {
         const subtotal = computeItemSubtotal(i);
@@ -424,32 +484,41 @@ export function SectionDetail({
 
             <CollapsibleEditorSection
                 label="Produtos"
-                rightContent={items.length > 0 ? formatCurrency(total) : undefined}
+                rightContent={!itemsLoading && items.length > 0 ? formatCurrency(total) : undefined}
             >
-                {items.length > 0 && (
-                    <div className="grid grid-cols-12 gap-2 px-2 py-1 text-xs text-muted-foreground font-medium">
-                        <div className="col-span-3">Produto</div>
-                        <div className="col-span-2 text-center">Qtd / un.</div>
-                        <div className="col-span-1 text-right">Equipto.</div>
-                        <div className="col-span-2 text-right">Ajuste de Preço</div>
-                        <div className="col-span-1 text-right">MO unit.</div>
-                        <div className="col-span-1 text-right">Total</div>
-                        <div className="col-span-2" />
+                {itemsLoading ? (
+                    <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
+                        <Loader2 className="h-5 w-5 animate-spin shrink-0" />
+                        <span className="text-sm">A carregar itens…</span>
                     </div>
+                ) : (
+                    <>
+                        {items.length > 0 && (
+                            <div className="grid grid-cols-12 gap-2 px-2 py-1 text-xs text-muted-foreground font-medium">
+                                <div className="col-span-3">Produto</div>
+                                <div className="col-span-2 text-center">Qtd / un.</div>
+                                <div className="col-span-1 text-right">Equipto.</div>
+                                <div className="col-span-2 text-right">Ajuste de Preço</div>
+                                <div className="col-span-1 text-right">MO unit.</div>
+                                <div className="col-span-1 text-right">Total</div>
+                                <div className="col-span-2" />
+                            </div>
+                        )}
+                        <SortableItemsList
+                            items={items}
+                            budgetId={budgetId}
+                            isReadOnly={isReadOnly}
+                            onRefresh={refreshSectionAndScope}
+                            groups={groups}
+                            assemblyMode={effectiveAssemblyMode}
+                            assemblyByItemId={effectiveAssemblyByItemId}
+                            priceAdjustmentEnabled={priceAdjustmentEnabled}
+                            priceAdjustmentInputMode={priceAdjustmentInputMode}
+                            quoteMarkupPercent={quoteMarkupPercent}
+                            quoteDiscountPercent={quoteDiscountPercent}
+                        />
+                    </>
                 )}
-                <SortableItemsList
-                    items={items}
-                    budgetId={budgetId}
-                    isReadOnly={isReadOnly}
-                    onRefresh={refreshSectionAndScope}
-                    groups={groups}
-                    assemblyMode={effectiveAssemblyMode}
-                    assemblyByItemId={effectiveAssemblyByItemId}
-                    priceAdjustmentEnabled={priceAdjustmentEnabled}
-                    priceAdjustmentInputMode={priceAdjustmentInputMode}
-                    quoteMarkupPercent={quoteMarkupPercent}
-                    quoteDiscountPercent={quoteDiscountPercent}
-                />
                 {!isReadOnly && (
                     <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
                         <ScopeItemCreator

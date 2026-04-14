@@ -7,39 +7,96 @@ import { theme } from './theme';
 import { BudgetTable } from './sections/budget-table';
 import { CompositorCoverPdfPage } from './sections/compositor-cover-pdf';
 import type { CompositorPdfPayload } from './compositor-pdf-types';
-import {
-    type BudgetBlock,
-    flattenTree,
-    type CoverBlockProps,
-} from '@/types/budget-compositor-types';
-import { mergeCoverDocumentProps } from '@/lib/budgets/cover-document';
+import { type BudgetBlock, flattenTree } from '@/types/budget-compositor-types';
+import { mergeCoverDocumentProps, resolveInnerPagesWatermark } from '@/lib/budgets/cover-document';
+import { type PdfEmbeddedImages, proxyPdfImageSrc } from '@/lib/pdf/pdf-image-src';
+import { stripHtmlToText } from '@/lib/pdf/html-to-plain-text';
+import { sanitizeTextForPdf } from '@/lib/pdf/sanitize-pdf-text';
+import { pdfInnerRunningHeaderShouldShow } from '@/lib/pdf/pdf-proposal-header';
+import { PdfProposalHeaderBand } from '@/components/pdf/pdf-proposal-header-band';
 import type { BudgetItem } from '@/types/budget-types';
+import type { BudgetLocation } from '@/types/budget-types';
+import { applyQuoteRowAdjustments } from '@/lib/budgets/scope-pricing';
 
 interface ProposalDocumentProps {
     budget: Budget;
     settings: ProposalSettings;
     /** Quando presente, sumário/lista de figuras seguem o compositor; detalhamento continua pelo Escopo (`locations`). */
     compositorPdf?: CompositorPdfPayload;
+    /** Evita marca d’água nas páginas internas (útil se imagem remota corromper o layout). */
+    omitDocumentWatermark?: boolean;
+    /** Data URIs pré-carregadas na rota API (evita `fetch` HTTP durante `renderToBuffer`). */
+    pdfEmbeddedImages?: PdfEmbeddedImages;
+    /**
+     * Segunda passada do PDF: páginas iniciais reais de cada segmento (`detail`, `session:<id>`),
+     * coletadas na primeira renderização.
+     */
+    resolvedPagination?: ProposalResolvedPagination;
+    /** Primeira passada do PDF: coletor mutável de páginas iniciais por segmento. */
+    paginationCollector?: ProposalPaginationCollector;
 }
+
+export type ProposalResolvedPagination = {
+    segmentStartPages?: Record<string, number>;
+};
+
+export type ProposalPaginationCollector = {
+    segmentStartPages: Record<string, number>;
+};
+
+type CompositorQuoteSection = {
+    id: string;
+    title: string;
+    items: BudgetItem[];
+};
+
+type CompositorQuoteLocation = {
+    id: string;
+    title: string;
+    sections: CompositorQuoteSection[];
+};
+
+type PdfFigureEntry = {
+    id: string;
+    caption: string;
+};
+
+/** A4 em pt (igual `compositor-cover-pdf`) — Yoga precisa de largura explícita na camada absoluta. */
+const PDF_PAGE_W = 595.28;
+const PDF_PAGE_H = 841.89;
+const INNER_PAD = 35;
 
 const styles = StyleSheet.create({
     pageWithWatermark: {
         position: 'relative',
     },
+    /** Igual `compositor-cover-pdf` (`watermarkLayer`): primeiro filho = pintado por baixo (evita bugs de `zIndex` no react-pdf). */
     documentWatermarkLayer: {
         position: 'absolute',
         left: 0,
-        top: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 0,
+        width: PDF_PAGE_W,
         justifyContent: 'center',
         alignItems: 'center',
     },
+    /** Mesmas dimensões que `watermarkImg` na capa (0,82 × A4). */
     documentWatermarkImage: {
-        width: '82%',
-        height: '82%',
+        width: Math.round(PDF_PAGE_W * 0.82),
+        height: Math.round(PDF_PAGE_H * 0.82),
         objectFit: 'contain',
+    },
+    /** `Page` interno sem padding — o recuo fica só no corpo (evita clipping da marca absoluta). */
+    innerPageRoot: {
+        position: 'relative',
+        fontFamily: theme.fonts.body,
+        fontSize: 11,
+        color: theme.colors.text,
+    },
+    /** Conteúdo por cima da marca (fundos transparentes — só texto/tabelas tapam a arte). */
+    innerPageForeground: {
+        position: 'relative',
+    },
+    innerPageContentWrap: {
+        position: 'relative',
     },
     contentPage: {
         padding: 35,
@@ -47,17 +104,45 @@ const styles = StyleSheet.create({
         paddingBottom: 50,
         fontFamily: theme.fonts.body,
         fontSize: 11,
-        lineHeight: 1.5,
-        color: theme.colors.text
+        color: theme.colors.text,
     },
-    header: {
-        marginBottom: 20,
+    /** Título da seção (faixa de empresa fixa fica acima, igual à capa). */
+    segmentHeader: {
+        marginBottom: 14,
         borderBottomWidth: 2,
         borderBottomColor: theme.colors.secondary,
         paddingBottom: 5,
+    },
+    runningHeaderBand: {
+        position: 'absolute',
+        top: INNER_PAD,
+        left: INNER_PAD,
+        right: INNER_PAD,
+        minHeight: 98,
+        paddingBottom: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#e5e7eb',
+    },
+    runningFooterBand: {
+        position: 'absolute',
+        bottom: INNER_PAD,
+        left: INNER_PAD,
+        right: INNER_PAD,
+        minHeight: 36,
+        paddingTop: 6,
+        borderTopWidth: 1,
+        borderTopColor: '#e5e7eb',
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'flex-end'
+        alignItems: 'center',
+    },
+    runningFooterMuted: {
+        fontSize: 8,
+        color: theme.colors.textLight,
+    },
+    runningFooterPage: {
+        fontSize: 9,
+        color: theme.colors.textLight,
     },
     headerTitle: {
         color: theme.colors.primary,
@@ -65,18 +150,10 @@ const styles = StyleSheet.create({
         fontSize: 14,
         textTransform: 'uppercase'
     },
-    footerNumber: {
-        position: 'absolute',
-        bottom: 20,
-        right: 35,
-        fontSize: 9,
-        color: theme.colors.textLight
-    },
     totalBlock: {
         marginTop: 30,
         backgroundColor: theme.colors.bgHeader,
         padding: 15,
-        borderRadius: 4,
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center'
@@ -88,6 +165,7 @@ const styles = StyleSheet.create({
     },
     tocDots: {
         flex: 1,
+        minWidth: 24,
         borderBottomWidth: 0.5,
         borderBottomColor: '#888',
         marginHorizontal: 6,
@@ -126,58 +204,81 @@ const styles = StyleSheet.create({
         color: theme.colors.text,
         lineHeight: 1.35,
     },
+    quoteHeaderBar: {
+        borderBottomWidth: 1,
+        borderBottomColor: '#d1d5db',
+        backgroundColor: '#f3f4f6',
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        marginBottom: 6,
+    },
+    quoteHeaderTitle: {
+        fontSize: 10,
+        fontFamily: theme.fonts.bold,
+        color: theme.colors.text,
+        textTransform: 'uppercase',
+        textAlign: 'center',
+    },
+    quoteTableHeader: {
+        flexDirection: "row",
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.border,
+        backgroundColor: theme.colors.bgHeader,
+        paddingVertical: 5,
+    },
+    quoteRow: {
+        flexDirection: "row",
+        borderBottomWidth: 0.5,
+        borderBottomColor: theme.colors.border,
+        paddingVertical: 4,
+    },
+    quoteColIndex: { flex: 3, fontSize: 9 },
+    quoteColDesc: { flex: 14, fontSize: 9 },
+    quoteColEquip: { flex: 6, textAlign: "right", fontSize: 9 },
+    quoteColAsm: { flex: 6, textAlign: "right", fontSize: 9 },
+    quoteLocRow: {
+        backgroundColor: '#f7fafc',
+    },
+    quoteSecRow: {
+        backgroundColor: '#ffffff',
+    },
+    quoteTotalRow: {
+        flexDirection: "row",
+        borderTopWidth: 1,
+        borderTopColor: '#f59e0b',
+        backgroundColor: '#fef3c7',
+        paddingVertical: 6,
+        marginTop: 4,
+    },
+    quoteTotalLabel: {
+        flex: 17,
+        fontSize: 9,
+        fontFamily: theme.fonts.bold,
+        textTransform: 'uppercase',
+        textAlign: 'right',
+    },
+    quoteTotalValue: {
+        flex: 6,
+        fontSize: 9,
+        fontFamily: theme.fonts.bold,
+        textAlign: 'right',
+    },
+    quoteGrandRow: {
+        flexDirection: "row",
+        borderTopWidth: 1,
+        borderTopColor: '#f59e0b',
+        backgroundColor: '#fffbeb',
+        paddingVertical: 4,
+    },
 });
 
-function resolvePdfImageSrc(url: string | undefined, publicBase?: string): string | undefined {
-    const u = url?.trim();
-    if (!u) return undefined;
-    if (/^data:/i.test(u)) return u;
-    if (/^https?:\/\//i.test(u)) return u;
-    if (u.startsWith("//")) return `https:${u}`;
-    const origin =
-        typeof window !== "undefined" && window.location?.origin
-            ? window.location.origin
-            : publicBase?.replace(/\/$/, "");
-    if (u.startsWith("/")) return origin ? `${origin}${u}` : u;
-    if (origin) return `${origin}/${u.replace(/^\.?\//, "")}`;
-    return `/${u.replace(/^\.?\//, "")}`;
-}
-
-function proxyPdfImageSrc(url: string | undefined, publicBase?: string): string | undefined {
-    const resolved = resolvePdfImageSrc(url, publicBase);
-    if (!resolved || /^data:/i.test(resolved)) return resolved;
-    if (resolved.includes("/api/pdf/image?src=")) return resolved;
-    const origin =
-        typeof window !== "undefined" && window.location?.origin
-            ? window.location.origin
-            : publicBase?.replace(/\/$/, "");
-    if (!origin) return resolved;
-    return `${origin}/api/pdf/image?src=${encodeURIComponent(resolved)}`;
-}
-
-function clampDocumentOpacity(value: number | undefined, fallback: number): number {
-    const n = typeof value === "number" ? value : fallback;
-    if (!Number.isFinite(n)) return fallback;
-    if (n < 0) return 0;
-    // Marca d'água das páginas internas precisa ser mais discreta que a capa.
-    if (n > 0.12) return 0.12;
-    return n;
-}
-
-function stripHtmlToText(raw: string | undefined): string {
-    if (!raw) return '';
-    return raw
-        .replace(/<br\s*\/?>/gi, '\n')
-        .replace(/<\/p>/gi, '\n')
-        .replace(/<[^>]*>/g, ' ')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/\s+\n/g, '\n')
-        .replace(/\n{3,}/g, '\n\n')
-        .replace(/[ \t]{2,}/g, ' ')
-        .trim();
+/** Indentação no PDF: `Math.min(depth, 6)` com depth negativo devolve o próprio negativo (ex.: ID mal tipado) e quebra o Yoga. */
+function safeLayoutIndentDepth(raw: unknown, maxDepth: number): number {
+    const n = typeof raw === "number" ? raw : Number(raw);
+    if (!Number.isFinite(n)) return 0;
+    const i = Math.trunc(n);
+    if (i < 0) return 0;
+    return Math.min(i, maxDepth);
 }
 
 function collectSessionPrintRows(
@@ -224,11 +325,189 @@ function collectSessionPrintRows(
     return rows;
 }
 
+function readQuoteSplitPercents(b: Budget): {
+    markupEquip: number;
+    discountEquip: number;
+    markupAsm: number;
+    discountAsm: number;
+} {
+    const r = b as unknown as Record<string, unknown>;
+    const legacyMarkup = Number(r.quote_markup_percent ?? 0);
+    const legacyDiscount = Number(r.quote_discount_percent ?? 0);
+    const hasExplicitSplit =
+        r.quote_markup_equipment_percent !== undefined ||
+        r.quote_discount_equipment_percent !== undefined ||
+        r.quote_markup_assembly_percent !== undefined ||
+        r.quote_discount_assembly_percent !== undefined;
+    if (hasExplicitSplit) {
+        return {
+            markupEquip: Number(r.quote_markup_equipment_percent ?? 0),
+            discountEquip: Number(r.quote_discount_equipment_percent ?? 0),
+            markupAsm: Number(r.quote_markup_assembly_percent ?? 0),
+            discountAsm: Number(r.quote_discount_assembly_percent ?? 0),
+        };
+    }
+    return {
+        markupEquip: legacyMarkup,
+        discountEquip: legacyDiscount,
+        markupAsm: legacyMarkup,
+        discountAsm: legacyDiscount,
+    };
+}
+
+function computeSectionEquipAssembly(items: BudgetItem[]): { equipment: number; assembly: number } {
+    let equipment = 0;
+    let assembly = 0;
+    for (const item of items) {
+        const qty = Number(item.quantity ?? 0);
+        const unit = Number(item.unit_price ?? 0);
+        const labor = Number(item.labor_cost ?? 0);
+        const baseEquip = qty * unit;
+        const baseAssembly = qty * labor;
+        const base = baseEquip + baseAssembly;
+        const explicitTotal = Number(item.total ?? 0);
+        if (Number.isFinite(explicitTotal) && explicitTotal > 0 && base > 0) {
+            const ratioEquip = baseEquip / base;
+            const ratioAssembly = baseAssembly / base;
+            equipment += explicitTotal * ratioEquip;
+            assembly += explicitTotal * ratioAssembly;
+        } else {
+            equipment += Number.isFinite(baseEquip) ? baseEquip : 0;
+            assembly += Number.isFinite(baseAssembly) ? baseAssembly : 0;
+        }
+    }
+    return { equipment, assembly };
+}
+
+function collectCompositorQuoteLocations(
+    roots: BudgetBlock[],
+    itemsByBlock: Record<string, BudgetItem[]>
+): CompositorQuoteLocation[] {
+    const out: CompositorQuoteLocation[] = [];
+
+    const collectSections = (node: BudgetBlock, acc: CompositorQuoteSection[]) => {
+        if (node.type === "section") {
+            acc.push({
+                id: node.id,
+                title: (node.label || "Trecho").trim() || "Trecho",
+                items: itemsByBlock[node.id] ?? [],
+            });
+        }
+        for (const child of node.children) collectSections(child, acc);
+    };
+
+    const visit = (node: BudgetBlock) => {
+        if (node.type === "location") {
+            const sections: CompositorQuoteSection[] = [];
+            for (const child of node.children) collectSections(child, sections);
+            out.push({
+                id: node.id,
+                title: (node.label || "Local").trim() || "Local",
+                sections,
+            });
+        }
+        for (const child of node.children) visit(child);
+    };
+
+    for (const root of roots) visit(root);
+    return out;
+}
+
+function collectScopeQuoteLocations(locations: BudgetLocation[] | undefined): CompositorQuoteLocation[] {
+    const out: CompositorQuoteLocation[] = [];
+    for (const loc of locations ?? []) {
+        const sections = (loc.sections ?? []).map((sec) => ({
+            id: String(sec.id ?? `${loc.id}-sec-${sec.order_index ?? 0}`),
+            title: (sec.name || "Trecho").trim() || "Trecho",
+            items: sec.items ?? [],
+        }));
+        out.push({
+            id: String(loc.id ?? `loc-${loc.order_index ?? 0}`),
+            title: (loc.name || "Local").trim() || "Local",
+            sections,
+        });
+    }
+    return out;
+}
+
+/** Mesma origem de imagens exibidas no detalhamento (`BudgetTable`): 1ª imagem de cada trecho. */
+function collectRenderedPdfFigureEntries(locations: BudgetLocation[] | undefined): PdfFigureEntry[] {
+    const out: PdfFigureEntry[] = [];
+    const seen = new Set<string>();
+    for (const loc of locations ?? []) {
+        for (const sec of loc.sections ?? []) {
+            const firstImg = (sec.images ?? [])[0];
+            if (!firstImg?.id) continue;
+            const id = String(firstImg.id);
+            if (seen.has(id)) continue;
+            seen.add(id);
+            const rawCaption =
+                typeof firstImg.caption === "string" && firstImg.caption.trim()
+                    ? firstImg.caption.trim()
+                    : `Imagem padrão — ${(sec.name || "Trecho").trim() || "Trecho"}`;
+            out.push({ id, caption: rawCaption });
+        }
+    }
+    return out;
+}
+
+function estimateRenderedFigurePagesFromScope(
+    locations: BudgetLocation[] | undefined,
+    detailStartPage: number,
+    opts: { showRunningHeader: boolean; showCosts: boolean; costsDisplayMode: "location" | "section" | "general" }
+): Record<string, number> {
+    const out: Record<string, number> = {};
+    const pageContentMax =
+        PDF_PAGE_H -
+        (INNER_PAD + (opts.showRunningHeader ? INNER_HEADER_RESERVE : 0)) -
+        (INNER_PAD + INNER_FOOTER_RESERVE) -
+        28; // faixa do título da seção
+    let page = Math.max(1, Math.trunc(detailStartPage || 1));
+    let y = 0;
+
+    const ensureSpace = (h: number) => {
+        if (y > 0 && y + h > pageContentMax) {
+            page += 1;
+            y = 0;
+        }
+    };
+    const addHeight = (h: number) => {
+        ensureSpace(h);
+        y += h;
+    };
+
+    for (const loc of locations ?? []) {
+        addHeight(38); // locationHeader aprox.
+        for (const sec of loc.sections ?? []) {
+            addHeight(22); // sectionTitle aprox.
+            const firstImg = (sec.images ?? [])[0];
+            if (firstImg?.id) {
+                const imgBlockH = 262; // sceneImage(250) + margem + respiro
+                ensureSpace(imgBlockH);
+                out[String(firstImg.id)] = page;
+                y += imgBlockH;
+            }
+            const rows = (sec.items ?? []).length;
+            const tableH = 16 + rows * 17 + (opts.showCosts && opts.costsDisplayMode === "section" ? 14 : 0);
+            addHeight(Math.max(24, tableH));
+        }
+        if (opts.showCosts && opts.costsDisplayMode === "location") {
+            addHeight(14);
+        }
+        addHeight(10);
+    }
+    if (opts.showCosts && opts.costsDisplayMode === "general") {
+        addHeight(16);
+    }
+    return out;
+}
+
 type PdfSegment =
     | { kind: "cover" }
     | { kind: "intro" }
     | { kind: "toc" }
     | { kind: "figures" }
+    | { kind: "quote" }
     | { kind: "detail" }
     | { kind: "session"; block: BudgetBlock }
     | { kind: "terms" };
@@ -239,6 +518,8 @@ function buildPdfSegmentsFromCompositorRoots(
 ): PdfSegment[] {
     const segments: PdfSegment[] = [];
     let placedIntro = false;
+    let placedQuote = false;
+    let placedDetail = false;
     for (const b of roots) {
         if (b.type === "cover") {
             segments.push({ kind: "cover" });
@@ -250,13 +531,18 @@ function buildPdfSegmentsFromCompositorRoots(
             segments.push({ kind: "toc" });
         } else if (b.type === "figures" && includeFiguresPage) {
             segments.push({ kind: "figures" });
-        } else if (b.type === "scope") {
+        } else if (b.type === "quote" && !placedQuote) {
+            segments.push({ kind: "quote" });
+            placedQuote = true;
+        } else if (b.type === "scope" && !placedDetail) {
             segments.push({ kind: "detail" });
+            placedDetail = true;
         } else if (b.type === "session") {
             segments.push({ kind: "session", block: b });
         }
     }
-    if (!segments.some((s) => s.kind === "detail")) {
+    if (!placedQuote && !placedDetail) {
+        // Retrocompatibilidade: orçamentos sem blocos quote/scope ainda imprimem detalhamento.
         segments.push({ kind: "detail" });
     }
     segments.push({ kind: "terms" });
@@ -264,18 +550,23 @@ function buildPdfSegmentsFromCompositorRoots(
 }
 
 function defaultPdfSegmentsNoCompositor(): PdfSegment[] {
-    return [{ kind: "cover" }, { kind: "intro" }, { kind: "detail" }, { kind: "terms" }];
+    return [{ kind: "cover" }, { kind: "intro" }, { kind: "quote" }, { kind: "detail" }, { kind: "terms" }];
 }
 
 function assignPdfSegmentPages(segments: PdfSegment[]): {
+    quotePage: number;
     detailPage: number;
     sessionPages: Map<string, number>;
 } {
     let p = 1;
+    let quotePage = 1;
     let detailPage = 1;
     const sessionPages = new Map<string, number>();
     for (const seg of segments) {
         if (seg.kind === "cover" || seg.kind === "intro" || seg.kind === "toc" || seg.kind === "figures") {
+            p += 1;
+        } else if (seg.kind === "quote") {
+            quotePage = p;
             p += 1;
         } else if (seg.kind === "detail") {
             detailPage = p;
@@ -287,7 +578,7 @@ function assignPdfSegmentPages(segments: PdfSegment[]): {
             p += 1;
         }
     }
-    return { detailPage, sessionPages };
+    return { quotePage, detailPage, sessionPages };
 }
 
 function collectSessionTocRowsForPrintedLayout(
@@ -302,8 +593,8 @@ function collectSessionTocRowsForPrintedLayout(
             out.push({
                 number: node.number || "",
                 title: (node.label || "Sessão").trim() || "Sessão",
-                depth: node.depth,
-                page,
+                depth: safeLayoutIndentDepth(node.depth, 24),
+                page: Number.isFinite(page) && page > 0 ? Math.min(Math.trunc(page), 99999) : 1,
             });
         }
         node.children.forEach((child) => collectSessionsDfs(child, page));
@@ -316,9 +607,151 @@ function collectSessionTocRowsForPrintedLayout(
     return out;
 }
 
-export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDocumentProps) => {
-    const validityDays = Number(budget.validity_days ?? 15);
-    const formatMoney = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+const INNER_HEADER_RESERVE = 108;
+const INNER_FOOTER_RESERVE = 44;
+const INNER_PAGE_H = PDF_PAGE_H;
+
+/** Páginas internas: faixas fixas (logo + empresa; código + páginas) como na capa; marca d’água entre as faixas. */
+function InnerPdfPage({
+    pageKey,
+    title,
+    children,
+    settings,
+    budget,
+    pdfEmbeddedImages,
+    docWatermarkSrc,
+    docWatermarkOpacity,
+    omitDocumentWatermark,
+    pageStyleExtra,
+    paginationProbeKey,
+    paginationCollector,
+}: {
+    pageKey: string;
+    title: string;
+    children: React.ReactNode;
+    settings: ProposalSettings;
+    budget: Budget;
+    pdfEmbeddedImages?: PdfEmbeddedImages;
+    docWatermarkSrc: string | undefined;
+    docWatermarkOpacity: number;
+    omitDocumentWatermark: boolean;
+    /** Ex.: `{ flexDirection: 'column' }` na página de condições. */
+    pageStyleExtra?: { flexDirection?: "row" | "column" };
+    /** Chave estável do segmento para coletar a página inicial real na 1ª passada. */
+    paginationProbeKey?: string;
+    paginationCollector?: ProposalPaginationCollector;
+}) {
+    const fill = settings.pdf_header_fill_from_settings === true;
+    const company = fill
+        ? sanitizeTextForPdf(settings.company_name?.trim() || "")
+        : "";
+    const logoUrl = fill ? settings.company_logo_url?.trim() : undefined;
+    const logoSrc = logoUrl
+        ? proxyPdfImageSrc(logoUrl, settings.app_public_url, pdfEmbeddedImages)
+        : undefined;
+    const showRunningHeader = pdfInnerRunningHeaderShouldShow(settings);
+    const code = sanitizeTextForPdf((budget.code || "").trim() || "—");
+
+    const wmTop = showRunningHeader ? INNER_PAD + INNER_HEADER_RESERVE : INNER_PAD;
+    const wmHeight = Math.max(40, INNER_PAGE_H - wmTop - (INNER_PAD + INNER_FOOTER_RESERVE));
+    const wmOpacity = Math.min(0.22, Math.max(docWatermarkOpacity, 0.08));
+
+    return (
+        <Page
+            key={pageKey}
+            size="A4"
+            style={[
+                styles.innerPageRoot,
+                styles.pageWithWatermark,
+                {
+                    paddingTop: INNER_PAD + (showRunningHeader ? INNER_HEADER_RESERVE : 0),
+                    paddingBottom: INNER_PAD + INNER_FOOTER_RESERVE,
+                    paddingHorizontal: INNER_PAD,
+                },
+            ]}
+        >
+            {/*
+              `Page` tem wrap=true por defeito; ao partir conteúdo em várias folhas PDF, só nós `fixed`
+              são repetidos em cada subpágina (@react-pdf/layout splitNodes). Sem isto a marca ficava
+              só na primeira fatia (a capa costuma ser uma única subpágina).
+            */}
+            {!omitDocumentWatermark && docWatermarkSrc ? (
+                <View
+                    fixed
+                    style={[
+                        styles.documentWatermarkLayer,
+                        {
+                            top: wmTop,
+                            height: wmHeight,
+                        },
+                    ]}
+                >
+                    {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
+                    <Image
+                        src={docWatermarkSrc}
+                        style={[styles.documentWatermarkImage, { opacity: wmOpacity }]}
+                    />
+                </View>
+            ) : null}
+            <View
+                style={[
+                    styles.innerPageContentWrap,
+                    ...(pageStyleExtra ? [pageStyleExtra] : []),
+                ]}
+            >
+                <View style={styles.innerPageForeground}>
+                    <View style={styles.segmentHeader}>
+                        <Text style={styles.headerTitle}>{title}</Text>
+                    </View>
+                    {children}
+                </View>
+            </View>
+            {showRunningHeader ? (
+                <View style={styles.runningHeaderBand} fixed>
+                    <PdfProposalHeaderBand settings={settings} logoSrc={logoSrc} companyName={company} />
+                </View>
+            ) : null}
+            <View style={styles.runningFooterBand} fixed>
+                <Text style={styles.runningFooterMuted}>Cód. {code}</Text>
+                <Text
+                    style={styles.runningFooterPage}
+                    render={({ pageNumber, totalPages }) => {
+                        if (paginationCollector && paginationProbeKey) {
+                            const prev = paginationCollector.segmentStartPages[paginationProbeKey];
+                            if (!Number.isFinite(prev) || pageNumber < prev) {
+                                paginationCollector.segmentStartPages[paginationProbeKey] = pageNumber;
+                            }
+                        }
+                        return `${pageNumber} / ${totalPages}`;
+                    }}
+                />
+            </View>
+        </Page>
+    );
+}
+
+export const ProposalDocument = ({
+    budget,
+    settings,
+    compositorPdf,
+    omitDocumentWatermark = false,
+    pdfEmbeddedImages,
+    resolvedPagination,
+    paginationCollector,
+}: ProposalDocumentProps) => {
+    const rawValidity = Number(budget.validity_days ?? 15);
+    const validityDays =
+        Number.isFinite(rawValidity) && rawValidity >= 0 ? Math.min(Math.trunc(rawValidity), 3650) : 15;
+    const rawSectionNumber = Number(budget.section_number ?? 1);
+    const sectionNumberPdf =
+        Number.isFinite(rawSectionNumber) && rawSectionNumber >= 0 && rawSectionNumber <= 999
+            ? Math.trunc(rawSectionNumber)
+            : 1;
+    const formatMoney = (val: number) => {
+        const n = Number(val);
+        const safe = Number.isFinite(n) ? Math.min(Math.max(n, -1e15), 1e15) : 0;
+        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(safe);
+    };
     const locations = budget.locations || [];
     const normalizeCostsMode = (raw: unknown): "location" | "section" | "general" => {
         const mode = String(raw ?? "section");
@@ -357,16 +790,29 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
 
     const hasCompositorStructure =
         !!compositorPdf && Array.isArray(compositorPdf.roots) && compositorPdf.roots.length > 0;
+    const hasQuoteRoot = hasCompositorStructure
+        ? compositorPdf!.roots.some((b) => b.type === "quote")
+        : false;
+    const compositorQuoteLocations =
+        hasCompositorStructure && hasQuoteRoot
+            ? collectCompositorQuoteLocations(compositorPdf!.roots, compositorPdf!.items || {})
+            : [];
+    const quoteLocationsForPdf = hasQuoteRoot
+        ? (compositorQuoteLocations.length > 0 ? compositorQuoteLocations : collectScopeQuoteLocations(locations))
+        : [];
 
     const coverBlock = compositorPdf
         ? flattenTree(compositorPdf.roots).find((b) => b.type === 'cover')
         : undefined;
     const compositorCoverMerged = mergeCoverDocumentProps(coverBlock?.props as Record<string, unknown> | undefined);
 
+    const renderedFigureEntries = collectRenderedPdfFigureEntries(locations);
     const figureEntries =
-        hasCompositorStructure && (compositorPdf!.scopeFigures?.length ?? 0) > 0
-            ? compositorPdf!.scopeFigures
-            : [];
+        renderedFigureEntries.length > 0
+            ? renderedFigureEntries
+            : hasCompositorStructure && (compositorPdf!.scopeFigures?.length ?? 0) > 0
+              ? compositorPdf!.scopeFigures
+              : [];
     const includeFiguresPage = figureEntries.length > 0;
 
     let segments: PdfSegment[] = hasCompositorStructure
@@ -377,7 +823,38 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
         segments = [{ kind: "cover" }, { kind: "intro" }, ...segments];
     }
 
-    const { detailPage, sessionPages } = assignPdfSegmentPages(segments);
+    const { detailPage: fallbackDetailPage, sessionPages: fallbackSessionPages } =
+        assignPdfSegmentPages(segments);
+    const resolvedSegmentPages = resolvedPagination?.segmentStartPages ?? {};
+    const detailPage = Number.isFinite(resolvedSegmentPages.detail)
+        ? Math.max(1, Math.trunc(resolvedSegmentPages.detail))
+        : fallbackDetailPage;
+    const resolvedFigurePagesRaw = figureEntries.map((e) =>
+        Number.isFinite(resolvedSegmentPages[`figure:${e.id}`])
+            ? Math.max(1, Math.trunc(resolvedSegmentPages[`figure:${e.id}`]))
+            : NaN
+    );
+    const resolvedFigureDistinctPages = new Set(
+        resolvedFigurePagesRaw.filter((n) => Number.isFinite(n)).map((n) => Math.trunc(n))
+    );
+    const figurePageMarkersSuspicious =
+        figureEntries.length >= 5 && resolvedFigureDistinctPages.size <= 1;
+    const estimatedFigurePages = estimateRenderedFigurePagesFromScope(locations, detailPage, {
+        showRunningHeader: pdfInnerRunningHeaderShouldShow(settings),
+        showCosts: detailShowCosts,
+        costsDisplayMode: detailCostsMode,
+    });
+    const sessionPages = new Map<string, number>(fallbackSessionPages);
+    for (const [key, value] of Object.entries(resolvedSegmentPages)) {
+        if (!key.startsWith("session:")) continue;
+        if (!Number.isFinite(value) || value <= 0) continue;
+        sessionPages.set(key.slice("session:".length), Math.trunc(value));
+    }
+    const detailSectionTitle = "Detalhamento do Projeto";
+    const quoteShowSections = Boolean(
+        (budget as unknown as Record<string, unknown>).quote_show_sections ?? false
+    );
+    const quotePercents = readQuoteSplitPercents(budget);
 
     const tocRows = hasCompositorStructure
         ? collectSessionTocRowsForPrintedLayout(compositorPdf!.roots, sessionPages)
@@ -388,29 +865,54 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
             ? figureEntries.map((entry, idx) => ({
                   n: idx + 1,
                   caption: entry.caption?.trim() || "(sem descrição)",
-                  page: detailPage,
+                  page: (() => {
+                      const resolved = Number.isFinite(resolvedSegmentPages[`figure:${entry.id}`])
+                          ? Math.max(1, Math.trunc(resolvedSegmentPages[`figure:${entry.id}`]))
+                          : NaN;
+                      const estimated = estimatedFigurePages[entry.id];
+                      if (figurePageMarkersSuspicious && Number.isFinite(estimated)) return estimated;
+                      if (Number.isFinite(resolved)) return resolved;
+                      if (Number.isFinite(estimated)) return estimated;
+                      return detailPage;
+                  })(),
               }))
             : [];
-    const docWatermarkSource =
-        compositorCoverMerged.document_watermark_url?.trim()
-            ? compositorCoverMerged.document_watermark_url
-            : compositorCoverMerged.cover_watermark_url;
-    const docWatermarkSrc = proxyPdfImageSrc(docWatermarkSource, settings.app_public_url);
-    const docWatermarkOpacity = clampDocumentOpacity(compositorCoverMerged.document_watermark_opacity, 0.06);
+    const { url: docWatermarkSource, opacity: docWatermarkOpacity } =
+        resolveInnerPagesWatermark(compositorCoverMerged);
+    let docWatermarkSrc = proxyPdfImageSrc(docWatermarkSource, settings.app_public_url, pdfEmbeddedImages);
+    let effectiveInnerWatermarkOpacity = docWatermarkOpacity;
+    /**
+     * Se `document_watermark_url` existir mas falhar no embed/proxy, a capa ainda pode mostrar só
+     * `cover_watermark_url` — usa a mesma fonte da capa para o miolo.
+     */
+    if (!docWatermarkSrc) {
+        const coverOnly = compositorCoverMerged.cover_watermark_url?.trim();
+        if (coverOnly) {
+            const fromCover = proxyPdfImageSrc(coverOnly, settings.app_public_url, pdfEmbeddedImages);
+            if (fromCover) {
+                docWatermarkSrc = fromCover;
+                const o = compositorCoverMerged.cover_watermark_opacity;
+                effectiveInnerWatermarkOpacity =
+                    typeof o === "number" && Number.isFinite(o) ? o : 0.12;
+            }
+        }
+    }
 
-    const renderDocumentWatermark = () =>
-        docWatermarkSrc ? (
-            <View style={styles.documentWatermarkLayer} fixed>
-                {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
-                <Image
-                    src={docWatermarkSrc}
-                    style={[styles.documentWatermarkImage, { opacity: docWatermarkOpacity }]}
-                />
-            </View>
-        ) : null;
+    const pdfCompanyName = sanitizeTextForPdf(settings.company_name);
+    const pdfIntroduction = sanitizeTextForPdf(settings.introduction_text);
+    const pdfClosing = sanitizeTextForPdf(settings.closing_text);
 
     const renderPdfSegment = (seg: PdfSegment, i: number): React.ReactNode => {
         const keyBase = `pdf-${i}-${seg.kind}`;
+        const innerCommon = {
+            settings,
+            budget,
+            pdfEmbeddedImages,
+            docWatermarkSrc,
+            docWatermarkOpacity: effectiveInnerWatermarkOpacity,
+            omitDocumentWatermark,
+            paginationCollector,
+        };
         switch (seg.kind) {
             case "cover":
                 return (
@@ -419,35 +921,21 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
                         budget={budget}
                         settings={settings}
                         coverProps={compositorCoverMerged}
+                        pdfEmbeddedImages={pdfEmbeddedImages}
                     />
                 );
             case "intro":
                 return (
-                    <Page key={keyBase} size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
-                        {renderDocumentWatermark()}
-                        <View style={styles.header}>
-                            <Text style={styles.headerTitle}>Apresentação</Text>
-                            <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{settings.company_name}</Text>
-                        </View>
-                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-pdf Style doesn't type whiteSpace */}
-                        <Text style={{ whiteSpace: "pre-wrap", textAlign: "justify" } as any}>
-                            {settings.introduction_text}
+                    <InnerPdfPage pageKey={keyBase} title="Apresentação" paginationProbeKey="intro" {...innerCommon}>
+                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-pdf Style não tipa whiteSpace */}
+                        <Text style={{ whiteSpace: "pre-wrap", textAlign: "left" } as any}>
+                            {pdfIntroduction}
                         </Text>
-                        <Text
-                            style={styles.footerNumber}
-                            render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
-                            fixed
-                        />
-                    </Page>
+                    </InnerPdfPage>
                 );
             case "toc":
                 return (
-                    <Page key={keyBase} size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
-                        {renderDocumentWatermark()}
-                        <View style={styles.header}>
-                            <Text style={styles.headerTitle}>Sumário</Text>
-                            <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{settings.company_name}</Text>
-                        </View>
+                    <InnerPdfPage pageKey={keyBase} title="Sumário" paginationProbeKey="toc" {...innerCommon}>
                         <Text style={{ fontSize: 9, color: theme.colors.textLight, marginBottom: 14 }}>
                             Páginas calculadas conforme a impressão atual do documento.
                         </Text>
@@ -460,65 +948,190 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
                             tocRows.map((row, idx) => (
                                 <View
                                     key={`toc-${row.number}-${idx}`}
-                                    style={[styles.tocRow, { paddingLeft: Math.min(row.depth, 6) * 10 }]}
-                                    wrap={false}
+                                    style={[styles.tocRow, { paddingLeft: safeLayoutIndentDepth(row.depth, 6) * 10 }]}
                                 >
                                     <Text style={styles.tocTitle}>
-                                        {row.number} {row.title}
+                                        {sanitizeTextForPdf(`${row.number} ${row.title}`.trim())}
                                     </Text>
                                     <View style={styles.tocDots} />
-                                    <Text style={styles.tocPage}>{row.page}</Text>
+                                    <Text style={styles.tocPage}>
+                                        {Number.isFinite(row.page) ? row.page : 1}
+                                    </Text>
                                 </View>
                             ))
                         )}
-                        <Text
-                            style={styles.footerNumber}
-                            render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
-                            fixed
-                        />
-                    </Page>
+                    </InnerPdfPage>
                 );
             case "figures":
                 return (
-                    <Page key={keyBase} size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
-                        {renderDocumentWatermark()}
-                        <View style={styles.header}>
-                            <Text style={styles.headerTitle}>Lista de Figuras</Text>
-                            <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{settings.company_name}</Text>
-                        </View>
+                    <InnerPdfPage pageKey={keyBase} title="Lista de Figuras" paginationProbeKey="figures" {...innerCommon}>
                         <Text style={{ fontSize: 9, color: theme.colors.textLight, marginBottom: 14 }}>
                             Figuras do Escopo. A página indicada referencia o início do detalhamento impresso.
                         </Text>
                         {figureRows.map((row) => (
-                            <View key={`fig-${row.n}`} style={styles.tocRow} wrap={false}>
+                            <View key={`fig-${row.n}`} style={styles.tocRow}>
                                 <Text style={styles.tocTitle}>
-                                    Figura {row.n} — {row.caption}
+                                    {sanitizeTextForPdf(`Figura ${row.n} — ${row.caption}`)}
                                 </Text>
                                 <View style={styles.tocDots} />
-                                <Text style={styles.tocPage}>{row.page}</Text>
+                                <Text style={styles.tocPage}>
+                                    {Number.isFinite(row.page) ? row.page : 1}
+                                </Text>
                             </View>
                         ))}
-                        <Text
-                            style={styles.footerNumber}
-                            render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
-                            fixed
-                        />
-                    </Page>
+                    </InnerPdfPage>
+                );
+            case "quote":
+                return (
+                    <InnerPdfPage pageKey={keyBase} title="Orçamento" paginationProbeKey="quote" {...innerCommon}>
+                        {quoteLocationsForPdf.length > 0 ? (
+                            <View>
+                                <View style={styles.quoteHeaderBar}>
+                                    <Text style={styles.quoteHeaderTitle}>Custos de equipamentos - Pazini</Text>
+                                </View>
+                                <View style={styles.quoteTableHeader}>
+                                    <Text style={styles.quoteColIndex}>Nº</Text>
+                                    <Text style={styles.quoteColDesc}>Local / trecho</Text>
+                                    <Text style={styles.quoteColEquip}>Equipamentos</Text>
+                                    <Text style={styles.quoteColAsm}>Montagem</Text>
+                                </View>
+                                {quoteLocationsForPdf.map((loc, locIdx) => {
+                                    const locNumber = `${sectionNumberPdf}.${locIdx + 1}`;
+                                    const locationBase = loc.sections.reduce(
+                                        (sum, sec) => {
+                                            const calc = computeSectionEquipAssembly(sec.items);
+                                            return {
+                                                equipment: sum.equipment + calc.equipment,
+                                                assembly: sum.assembly + calc.assembly,
+                                            };
+                                        },
+                                        { equipment: 0, assembly: 0 }
+                                    );
+                                    const locationAdjusted = applyQuoteRowAdjustments(
+                                        locationBase.equipment,
+                                        locationBase.assembly,
+                                        quotePercents.markupEquip,
+                                        quotePercents.discountEquip,
+                                        quotePercents.markupAsm,
+                                        quotePercents.discountAsm
+                                    );
+                                    return (
+                                        <View key={`q-loc-${loc.id}`}>
+                                            <View style={[styles.quoteRow, styles.quoteLocRow]}>
+                                                <Text style={[styles.quoteColIndex, { fontFamily: theme.fonts.bold }]}>
+                                                    {sanitizeTextForPdf(String(locIdx + 1))}
+                                                </Text>
+                                                <Text style={[styles.quoteColDesc, { fontFamily: theme.fonts.bold }]}>
+                                                    {sanitizeTextForPdf(loc.title)}
+                                                </Text>
+                                                <Text style={[styles.quoteColEquip, { fontFamily: theme.fonts.bold }]}>
+                                                    {formatMoney(locationAdjusted.equipment)}
+                                                </Text>
+                                                <Text style={[styles.quoteColAsm, { fontFamily: theme.fonts.bold }]}>
+                                                    {formatMoney(locationAdjusted.assembly)}
+                                                </Text>
+                                            </View>
+                                            {quoteShowSections && loc.sections.map((sec, secIdx) => {
+                                                const secNumber = `${locNumber}.${secIdx + 1}`;
+                                                const sectionBase = computeSectionEquipAssembly(sec.items);
+                                                const sectionAdjusted = applyQuoteRowAdjustments(
+                                                    sectionBase.equipment,
+                                                    sectionBase.assembly,
+                                                    quotePercents.markupEquip,
+                                                    quotePercents.discountEquip,
+                                                    quotePercents.markupAsm,
+                                                    quotePercents.discountAsm
+                                                );
+                                                return (
+                                                    <View key={`q-sec-${loc.id}-${sec.id}`}>
+                                                        <View style={[styles.quoteRow, styles.quoteSecRow]}>
+                                                            <Text style={styles.quoteColIndex}>—</Text>
+                                                            <Text style={[styles.quoteColDesc, { color: theme.colors.textLight }]}>
+                                                                {sanitizeTextForPdf(`${secNumber} — ${sec.title}`)}
+                                                            </Text>
+                                                            <Text style={styles.quoteColEquip}>
+                                                                {formatMoney(sectionAdjusted.equipment)}
+                                                            </Text>
+                                                            <Text style={styles.quoteColAsm}>
+                                                                {formatMoney(sectionAdjusted.assembly)}
+                                                            </Text>
+                                                        </View>
+                                                    </View>
+                                                );
+                                            })}
+                                        </View>
+                                    );
+                                })}
+                                {(() => {
+                                    const totals = quoteLocationsForPdf.reduce(
+                                        (sum, loc) => {
+                                            const locBase = loc.sections.reduce(
+                                                (inner, sec) => {
+                                                    const calc = computeSectionEquipAssembly(sec.items);
+                                                    return {
+                                                        equipment: inner.equipment + calc.equipment,
+                                                        assembly: inner.assembly + calc.assembly,
+                                                    };
+                                                },
+                                                { equipment: 0, assembly: 0 }
+                                            );
+                                            const adj = applyQuoteRowAdjustments(
+                                                locBase.equipment,
+                                                locBase.assembly,
+                                                quotePercents.markupEquip,
+                                                quotePercents.discountEquip,
+                                                quotePercents.markupAsm,
+                                                quotePercents.discountAsm
+                                            );
+                                            return {
+                                                equipment: sum.equipment + adj.equipment,
+                                                assembly: sum.assembly + adj.assembly,
+                                            };
+                                        },
+                                        { equipment: 0, assembly: 0 }
+                                    );
+                                    return (
+                                        <>
+                                            <View style={styles.quoteTotalRow}>
+                                                <Text style={styles.quoteTotalLabel}>Totais</Text>
+                                                <Text style={styles.quoteTotalValue}>
+                                                    {formatMoney(totals.equipment)}
+                                                </Text>
+                                                <Text style={styles.quoteTotalValue}>
+                                                    {formatMoney(totals.assembly)}
+                                                </Text>
+                                            </View>
+                                            <View style={styles.quoteGrandRow}>
+                                                <Text style={styles.quoteTotalLabel}>Total geral</Text>
+                                                <Text style={styles.quoteTotalValue}>
+                                                    {formatMoney(totals.equipment + totals.assembly)}
+                                                </Text>
+                                                <Text style={styles.quoteTotalValue}>—</Text>
+                                            </View>
+                                        </>
+                                    );
+                                })()}
+                            </View>
+                        ) : (
+                            <Text style={{ fontSize: 9, color: theme.colors.textLight }}>
+                                Sem dados de orçamento para exibir.
+                            </Text>
+                        )}
+                    </InnerPdfPage>
                 );
             case "detail":
                 return (
-                    <Page key={keyBase} size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
-                        {renderDocumentWatermark()}
-                        <View style={styles.header}>
-                            <Text style={styles.headerTitle}>Detalhamento do Projeto</Text>
-                        </View>
+                    <InnerPdfPage pageKey={keyBase} title={detailSectionTitle} paginationProbeKey="detail" {...innerCommon}>
                         <BudgetTable
                             locations={locations}
-                            sectionNumber={budget.section_number ?? 1}
+                            sectionNumber={sectionNumberPdf}
                             showCosts={detailShowCosts}
                             costsDisplayMode={detailCostsMode}
+                            pdfImagePublicBase={settings.app_public_url}
+                            pdfEmbeddedImages={pdfEmbeddedImages}
+                            figurePageCollector={paginationCollector}
                         />
-                        <View style={styles.totalBlock} break={false}>
+                        <View style={styles.totalBlock}>
                             <View>
                                 <Text style={{ fontSize: 12, fontFamily: theme.fonts.bold }}>INVESTIMENTO TOTAL</Text>
                                 <Text style={{ fontSize: 10 }}>Validade: {validityDays} dias</Text>
@@ -527,30 +1140,22 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
                                 {formatMoney(budget.total_value || 0)}
                             </Text>
                         </View>
-                        <Text
-                            style={styles.footerNumber}
-                            render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
-                            fixed
-                        />
-                    </Page>
+                    </InnerPdfPage>
                 );
             case "session": {
                 const sessionRoot = seg.block;
                 const rows = collectSessionPrintRows(sessionRoot, compositorPdf?.items || {});
                 return (
-                    <Page
-                        key={`session-page-${sessionRoot.id}`}
-                        size="A4"
-                        style={[styles.contentPage, styles.pageWithWatermark]}
+                    <InnerPdfPage
+                        pageKey={`session-page-${sessionRoot.id}`}
+                        title="Sessão do Compositor"
+                        paginationProbeKey={`session:${sessionRoot.id}`}
+                        {...innerCommon}
                     >
-                        {renderDocumentWatermark()}
-                        <View style={styles.header}>
-                            <Text style={styles.headerTitle}>Sessão do Compositor</Text>
-                            <Text style={{ fontSize: 9, color: theme.colors.textLight }}>{settings.company_name}</Text>
-                        </View>
                         <Text style={styles.sessionTitle}>
-                            {sessionRoot.number ? `${sessionRoot.number} ` : ""}
-                            {(sessionRoot.label || "Sessão").trim()}
+                            {sanitizeTextForPdf(
+                                `${sessionRoot.number ? `${sessionRoot.number} ` : ""}${(sessionRoot.label || "Sessão").trim()}`
+                            )}
                         </Text>
                         {rows.length === 0 ? (
                             <Text style={styles.sessionRowText}>Sem conteúdo textual nesta sessão.</Text>
@@ -558,56 +1163,65 @@ export const ProposalDocument = ({ budget, settings, compositorPdf }: ProposalDo
                             rows.map((row, idx) => (
                                 <View
                                     key={`session-row-${sessionRoot.id}-${idx}`}
-                                    style={[styles.sessionRow, { marginLeft: Math.min(row.depth, 5) * 10 }]}
+                                    style={[styles.sessionRow, { marginLeft: safeLayoutIndentDepth(row.depth, 5) * 10 }]}
                                 >
-                                    <Text style={styles.sessionRowTitle}>{row.title}</Text>
-                                    {row.text ? <Text style={styles.sessionRowText}>{row.text}</Text> : null}
+                                    <Text style={styles.sessionRowTitle}>{sanitizeTextForPdf(row.title)}</Text>
+                                    {row.text ? (
+                                        <Text style={styles.sessionRowText}>{sanitizeTextForPdf(row.text)}</Text>
+                                    ) : null}
                                 </View>
                             ))
                         )}
-                        <Text
-                            style={styles.footerNumber}
-                            render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
-                            fixed
-                        />
-                    </Page>
+                    </InnerPdfPage>
                 );
             }
             case "terms":
                 return (
-                    <Page key={keyBase} size="A4" style={[styles.contentPage, styles.pageWithWatermark]}>
-                        {renderDocumentWatermark()}
-                        <View style={styles.header}>
-                            <Text style={styles.headerTitle}>Condições Gerais</Text>
-                        </View>
+                    <InnerPdfPage
+                        pageKey={keyBase}
+                        title="Condições Gerais"
+                        pageStyleExtra={{ flexDirection: "column" }}
+                        paginationProbeKey="terms"
+                        {...innerCommon}
+                    >
                         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-pdf Style doesn't type whiteSpace */}
-                        <Text style={{ fontSize: 10, lineHeight: 1.6, whiteSpace: "pre-wrap", marginBottom: 50 } as any}>
-                            {settings.closing_text}
+                        <Text style={{ fontSize: 10, whiteSpace: "pre-wrap", marginBottom: 12 } as any}>
+                            {pdfClosing}
                         </Text>
+                        <View style={{ height: 100 }} />
                         <View
                             style={{
                                 flexDirection: "row",
-                                marginTop: "auto",
                                 marginBottom: 50,
                                 justifyContent: "space-between",
-                                gap: 40,
                             }}
                         >
-                            <View style={{ borderTopWidth: 1, flex: 1, alignItems: "center", paddingTop: 10 }}>
-                                <Text style={{ fontSize: 11, fontFamily: theme.fonts.bold }}>{settings.company_name}</Text>
+                            <View
+                                style={{
+                                    borderTopWidth: 1,
+                                    flex: 1,
+                                    alignItems: "center",
+                                    paddingTop: 10,
+                                    marginRight: 20,
+                                }}
+                            >
+                                <Text style={{ fontSize: 11, fontFamily: theme.fonts.bold }}>{pdfCompanyName}</Text>
                                 <Text style={{ fontSize: 9 }}>Diretoria Comercial</Text>
                             </View>
-                            <View style={{ borderTopWidth: 1, flex: 1, alignItems: "center", paddingTop: 10 }}>
+                            <View
+                                style={{
+                                    borderTopWidth: 1,
+                                    flex: 1,
+                                    alignItems: "center",
+                                    paddingTop: 10,
+                                    marginLeft: 20,
+                                }}
+                            >
                                 <Text style={{ fontSize: 11, fontFamily: theme.fonts.bold }}>De Acordo</Text>
                                 <Text style={{ fontSize: 9 }}>Cliente</Text>
                             </View>
                         </View>
-                        <Text
-                            style={styles.footerNumber}
-                            render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
-                            fixed
-                        />
-                    </Page>
+                    </InnerPdfPage>
                 );
             default:
                 return null;

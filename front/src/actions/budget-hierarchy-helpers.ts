@@ -96,10 +96,20 @@ export async function recalculateBudgetTotal(budgetId: string) {
             ),
             db.query<[Array<Record<string, unknown>>]>(
                 `SELECT id, section_id, quantity, unit_price, labor_cost, price_adjustment_mode, price_adjustment_value, observation_extra_value, assembly_manual_value
-                 FROM budget_item WHERE section_id.budget_id = $budgetId AND deleted_at IS NONE FETCH section_id`,
+                 FROM budget_item WHERE budget_id = $budgetId AND section_id IS NOT NONE AND deleted_at IS NONE FETCH section_id`,
                 { budgetId: budgetRecordId }
             ),
         ]);
+
+        let itemRows = itemRowsRes[0] ?? [];
+        if (itemRows.length === 0) {
+            const fallback = await db.query<[Array<Record<string, unknown>>]>(
+                `SELECT id, section_id, quantity, unit_price, labor_cost, price_adjustment_mode, price_adjustment_value, observation_extra_value, assembly_manual_value
+                 FROM budget_item WHERE section_id.budget_id = $budgetId AND deleted_at IS NONE FETCH section_id`,
+                { budgetId: budgetRecordId }
+            );
+            itemRows = fallback[0] ?? [];
+        }
 
         const locationConfig = new Map<
             string,
@@ -148,7 +158,7 @@ export async function recalculateBudgetTotal(budgetId: string) {
 
         const itemsByLocationFallback = new Map<string, ScopePricingItem[]>();
         const itemsBySection = new Map<string, ScopePricingItem[]>();
-        for (const row of itemRowsRes[0] ?? []) {
+        for (const row of itemRows) {
             const section = row.section_id as Record<string, unknown> | undefined;
             const sectionIdRaw = section && typeof section === "object" ? section.id : undefined;
             if (!sectionIdRaw) continue;

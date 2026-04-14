@@ -14,9 +14,14 @@ export function budgetEditUrl(id: string): string {
   return `/budgets/budget/${budgetIdToPath(id)}`;
 }
 
-/** Monta a URL do PDF do orçamento */
+/** Monta a URL da página de visualização do PDF (shell com iframe). */
 export function budgetPdfUrl(id: string): string {
   return `/budgets/budget/${budgetIdToPath(id)}/pdf`;
+}
+
+/** Stream PDF gerado no servidor (cookies de sessão enviados no mesmo site). */
+export function budgetPdfApiUrl(id: string): string {
+  return `/api/budgets/${budgetIdToPath(id)}/pdf`;
 }
 
 /** Caminho para revalidatePath (página de edição do orçamento) */

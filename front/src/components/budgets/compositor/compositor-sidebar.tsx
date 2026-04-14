@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, createContext, useContext, useMemo, type CSSProperties } from "react";
-import { ChevronRight, ChevronDown, MapPin, Layers, FileText, Plus, Trash2, FolderOpen, GripVertical, Map as MapIcon, BookOpen, ListOrdered, ImageIcon } from "lucide-react";
+import { ChevronRight, ChevronDown, MapPin, Layers, FileText, Plus, Trash2, FolderOpen, GripVertical, Map as MapIcon, BookOpen, ListOrdered, ImageIcon, Table2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -157,6 +157,7 @@ const BLOCK_ICONS: Record<string, React.ReactNode> = {
   cover:    <BookOpen className="h-3.5 w-3.5 shrink-0 text-primary" />,
   toc:      <ListOrdered className="h-3.5 w-3.5 shrink-0 text-primary" />,
   figures:  <ImageIcon className="h-3.5 w-3.5 shrink-0 text-primary" />,
+  quote:    <Table2 className="h-3.5 w-3.5 shrink-0 text-primary" />,
   session:  <FolderOpen className="h-3.5 w-3.5 shrink-0" />,
   location: <MapPin className="h-3.5 w-3.5 shrink-0" />,
   section:  <Layers className="h-3.5 w-3.5 shrink-0" />,
@@ -167,25 +168,27 @@ const BLOCK_ICONS: Record<string, React.ReactNode> = {
 // Opções disponíveis por tipo de pai
 // session → pode conter sub-sessões, locais, texto (mas NÃO trecho direto)
 // location → pode conter trechos e texto (mas NÃO sessão ou local)
-// null (raiz) → sessão + escopo
+// null (raiz) → sessão + escopo + orçamento
 const ALL_OPTIONS: { type: BlockType; label: string; short: string }[] = [
   { type: "session",  label: "Sub-sessão",      short: "Sessão"  },
   { type: "location", label: "Local (ambiente)", short: "Local"   },
   { type: "section",  label: "Trecho",           short: "Trecho"  },
   { type: "text",     label: "Texto livre",      short: "Texto"   },
   { type: "scope",    label: "Bloco Escopo",     short: "ESCOPO"  },
+  { type: "quote",    label: "Bloco Orçamento",  short: "ORÇAMENTO"  },
 ];
 
-function getAddOptions(parentType: string | null, hasScopeBlock: boolean): typeof ALL_OPTIONS {
+function getAddOptions(parentType: string | null, hasScopeBlock: boolean, hasQuoteBlock: boolean): typeof ALL_OPTIONS {
   if (parentType === null) {
     return ALL_OPTIONS.filter((o) => {
       if (o.type === "scope") return !hasScopeBlock; // só se ainda não existe
+      if (o.type === "quote") return !hasQuoteBlock; // só se ainda não existe
       return o.type === "session";
     });
   }
   if (parentType === "location") return ALL_OPTIONS.filter((o) => o.type === "section" || o.type === "text");
   // session (e qualquer outro contêiner futuro): session, location, text
-  return ALL_OPTIONS.filter((o) => o.type !== "section" && o.type !== "scope");
+  return ALL_OPTIONS.filter((o) => o.type !== "section" && o.type !== "scope" && o.type !== "quote");
 }
 
 /** Pré-visualização no portal: segue o ponteiro com o offset do clique (simétrico pra cima/baixo). */
@@ -200,6 +203,7 @@ function SidebarDragPreview({
   const depth = block.depth;
   const indentPx = depth * 12 + 8;
   const isScope = block.type === "scope";
+  const isQuote = block.type === "quote";
   const isSelected = selectedId === block.id;
   const isExpandable = (block.type === "session" || block.type === "location") && !isScope;
 
@@ -231,10 +235,10 @@ function SidebarDragPreview({
       <span
         className={cn(
           "min-w-0 flex-1 truncate text-xs font-medium leading-none",
-          (block.type === "session" || isScope || block.type === "toc" || block.type === "figures") && "uppercase"
+          (block.type === "session" || isScope || isQuote || block.type === "toc" || block.type === "figures") && "uppercase"
         )}
       >
-        {isScope ? "ESCOPO" : block.type === "toc" ? "SUMÁRIO" : block.type === "figures" ? "LISTA DE FIGURAS" : (block.label || `(${block.type})`)}
+        {isScope ? "ESCOPO" : isQuote ? "ORÇAMENTO" : block.type === "toc" ? "SUMÁRIO" : block.type === "figures" ? "LISTA DE FIGURAS" : (block.label || `(${block.type})`)}
       </span>
     </div>
   );
@@ -249,16 +253,17 @@ interface InlineAdderProps {
   parentType: string | null;
   depth: number;
   hasScopeBlock?: boolean;
+  hasQuoteBlock?: boolean;
   onSuccess: () => void;
   onCancel: () => void;
 }
 
-function InlineAdder({ budgetId, parentId, parentType, depth, hasScopeBlock = false, onSuccess, onCancel }: InlineAdderProps) {
+function InlineAdder({ budgetId, parentId, parentType, depth, hasScopeBlock = false, hasQuoteBlock = false, onSuccess, onCancel }: InlineAdderProps) {
   const [selectedType, setSelectedType] = useState<BlockType | null>(null);
   const [label, setLabel] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const options = getAddOptions(parentType, hasScopeBlock);
+  const options = getAddOptions(parentType, hasScopeBlock, hasQuoteBlock);
   const indentPx = (depth + 1) * 12 + 8;
 
   const handleCreate = async (overrideType?: BlockType, overrideLabel?: string) => {
@@ -278,6 +283,7 @@ function InlineAdder({ budgetId, parentId, parentType, depth, hasScopeBlock = fa
   const handleTypeSelect = (type: BlockType) => {
     const directCreate: Partial<Record<BlockType, string>> = {
       scope: "ESCOPO",
+      quote: "ORÇAMENTO",
       session: "Sessão",
     };
     if (type in directCreate) {
@@ -435,12 +441,13 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
   const isDragActive = !!(ctx?.activeDragId && ctx.activeDragId !== block.id);
 
   const isScope = block.type === "scope";
+  const isQuote = block.type === "quote";
   const isCover = block.type === "cover";
   const isToc = block.type === "toc";
   const isFigures = block.type === "figures";
   const isSelected = selectedId === block.id;
-  const isExpandable = (block.type === "session" || block.type === "location") && !isScope;
-  const canAdd = (block.type === "session" || block.type === "location") && !isScope;
+  const isExpandable = (block.type === "session" || block.type === "location") && !isScope && !isQuote;
+  const canAdd = (block.type === "session" || block.type === "location") && !isScope && !isQuote;
   const localChildren = ctx?.childrenReg[block.id] ?? block.children;
   const hasChildren = localChildren.length > 0;
   const indentPx = depth * 12 + 8;
@@ -499,7 +506,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
             <GripVertical className="h-3 w-3" />
           </div>
         ) : (
-          (isCover || isToc || isFigures || (isScope && depth === 0)) && (
+          (isCover || isToc || isFigures || isQuote || (isScope && depth === 0)) && (
             <span className="w-5 shrink-0" aria-hidden />
           )
         )}
@@ -528,7 +535,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
         )}
 
         {/* Label — duplo-clique para editar (exceto scope) */}
-        {editingLabel && !isReadOnly && !isScope && !isCover && !isToc && !isFigures ? (
+        {editingLabel && !isReadOnly && !isScope && !isQuote && !isCover && !isToc && !isFigures ? (
           <input
             ref={labelInputRef}
             value={labelDraft}
@@ -545,11 +552,11 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
           <span
             className={cn(
               "min-w-0 flex-1 truncate text-xs font-medium leading-none [text-size-adjust:100%]",
-              (block.type === "session" || isScope || isCover || isToc || isFigures) && "uppercase"
+              (block.type === "session" || isScope || isQuote || isCover || isToc || isFigures) && "uppercase"
             )}
-            onDoubleClick={(e) => { if (!isReadOnly && !isScope && !isCover && !isToc && !isFigures) { e.stopPropagation(); setLabelDraft(block.label || ""); setEditingLabel(true); } }}
+            onDoubleClick={(e) => { if (!isReadOnly && !isScope && !isQuote && !isCover && !isToc && !isFigures) { e.stopPropagation(); setLabelDraft(block.label || ""); setEditingLabel(true); } }}
           >
-            {isScope ? "ESCOPO" : isCover ? "CAPA" : isToc ? "SUMÁRIO" : isFigures ? "LISTA DE FIGURAS" : (block.label || `(${block.type})`)}
+            {isScope ? "ESCOPO" : isQuote ? "ORÇAMENTO" : isCover ? "CAPA" : isToc ? "SUMÁRIO" : isFigures ? "LISTA DE FIGURAS" : (block.label || `(${block.type})`)}
           </span>
         )}
 
@@ -589,7 +596,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
         )}
 
         {/* Botão excluir — oculto em isReadOnly e scope */}
-        {!isReadOnly && !isScope && !isCover && !isToc && !isFigures && (
+        {!isReadOnly && !isScope && !isQuote && !isCover && !isToc && !isFigures && (
           <button
             disabled={deleting}
             onClick={handleDelete}
@@ -689,9 +696,10 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
         activeBlock?.type === "cover" ||
         activeBlock?.type === "toc" ||
         activeBlock?.type === "figures" ||
+        activeBlock?.type === "quote" ||
         activeBlock?.type === "scope"
       ) {
-        toast.error("Escopo, capa, sumário e lista de figuras só podem ficar na raiz do documento.");
+        toast.error("Escopo, orçamento, capa, sumário e lista de figuras só podem ficar na raiz do documento.");
         return;
       }
       const targetParentId = overId.slice(5);
@@ -713,12 +721,13 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
 
     if (
       (activeBlock?.type === "scope" ||
+        activeBlock?.type === "quote" ||
         activeBlock?.type === "cover" ||
         activeBlock?.type === "toc" ||
         activeBlock?.type === "figures") &&
       overParentId !== null
     ) {
-      toast.error("Escopo, capa, sumário e lista de figuras só podem ser reordenados na raiz.");
+      toast.error("Escopo, orçamento, capa, sumário e lista de figuras só podem ser reordenados na raiz.");
       return;
     }
 

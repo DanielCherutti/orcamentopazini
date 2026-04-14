@@ -17,15 +17,30 @@ const MAX_CONNECTION_AGE_MS = 50 * 60 * 1000; // 50 minutos
 let db: Surreal | null = null;
 let dbReady: Promise<Surreal> | null = null;
 let dbConnectedAt = 0;
+let dbValidatedAt = 0;
 let dbInitialized = false;
+const HEALTHCHECK_INTERVAL_MS = 30_000;
 
-/** Detecta erros de token expirado / 401 Unauthorized do SurrealDB */
+/** Detecta erros de token expirado, 401 ou falha de autenticação HTTP do cliente SurrealDB */
 export function isTokenExpiredError(error: unknown): boolean {
     if (error && typeof error === "object") {
-        const e = error as { status?: number; message?: string };
+        const e = error as { status?: number; message?: string; name?: string };
         if (e.status === 401) return true;
-        if (typeof e.message === "string" &&
-            (e.message.includes("token has expired") || e.message.includes("Unauthorized"))) {
+        const msg = typeof e.message === "string" ? e.message : "";
+        const msgLc = msg.toLowerCase();
+        if (
+            msgLc.includes("token has expired") ||
+            msgLc.includes("token expired") ||
+            msgLc.includes("unauthorized") ||
+            msgLc.includes("problem with authentication")
+        ) {
+            return true;
+        }
+        if (
+            e.name === "HttpConnectionError" &&
+            msg.length > 0 &&
+            /authentication|unauthorized|401|token has expired|token expired/i.test(msg)
+        ) {
             return true;
         }
     }
@@ -37,8 +52,10 @@ export function isDbConnectionError(error: unknown): boolean {
     if (error && typeof error === "object") {
         const e = error as { status?: number; message?: string; name?: string };
         if (e.name === "HttpConnectionError") return true;
-        if (typeof e.message === "string" &&
-            e.message.includes("token has expired")) {
+        if (
+            typeof e.message === "string" &&
+            /token has expired|token expired|no active socket|disconnected/i.test(e.message)
+        ) {
             return true;
         }
     }
@@ -59,7 +76,21 @@ export function resetDb() {
     db = null;
     dbReady = null;
     dbConnectedAt = 0;
+    dbValidatedAt = 0;
     dbInitialized = false;
+}
+
+async function ensureLiveConnection(instance: Surreal): Promise<boolean> {
+    try {
+        await instance.query("RETURN 1");
+        dbValidatedAt = Date.now();
+        return true;
+    } catch (error) {
+        if (isTokenExpiredError(error) || isDbConnectionError(error)) {
+            return false;
+        }
+        throw error;
+    }
 }
 
 /**
@@ -90,6 +121,10 @@ async function ensureSchema(instance: Surreal): Promise<void> {
             DEFINE TABLE IF NOT EXISTS proposal_settings SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS portal_user SCHEMALESS;
             DEFINE INDEX IF NOT EXISTS idx_portal_user_email ON portal_user FIELDS email UNIQUE;
+            DEFINE INDEX IF NOT EXISTS idx_budget_item_budget_id ON budget_item FIELDS budget_id;
+            DEFINE INDEX IF NOT EXISTS idx_budget_item_section_id ON budget_item FIELDS section_id;
+            DEFINE INDEX IF NOT EXISTS idx_budget_section_location_id ON budget_section FIELDS location_id;
+            DEFINE INDEX IF NOT EXISTS idx_budget_location_budget_id ON budget_location FIELDS budget_id;
             INSERT IGNORE INTO company { id: company:0, name: 'Pazini', created_at: time::now() };
         `);
         dbInitialized = true;
@@ -116,36 +151,50 @@ export const getDb = async () => {
         db = null;
     }
 
-    // Se já existe instância válida e não há conexão pendente, devolve.
-    if (db) return db;
+    // Se já existe instância válida e não há conexão pendente, valida (janela curta) e devolve.
+    if (db) {
+        const recentlyValidated = Date.now() - dbValidatedAt < HEALTHCHECK_INTERVAL_MS;
+        if (recentlyValidated) return db;
+        const live = await ensureLiveConnection(db);
+        if (live) return db;
+        console.warn("SurrealDB: conexão inválida/expirada, reconectando...");
+        resetDb();
+    }
 
-    db = new Surreal();
+    const instance = new Surreal();
+    db = instance;
 
     // Connect and Auth for WebSocket/HTTP RPC
-    dbReady = (async () => {
+    const connectingPromise = (async () => {
         const password = requireSurrealPassword();
         console.log(`Connecting to SurrealDB at ${endpoint}...`);
-        await db!.connect(endpoint, {
+        await instance.connect(endpoint, {
             namespace,
             database,
             authentication: { username, password }
         });
         dbConnectedAt = Date.now();
+        dbValidatedAt = dbConnectedAt;
         console.log("SurrealDB connected successfully.");
-        await ensureSchema(db!);
-        return db!;
+        await ensureSchema(instance);
+        return instance;
     })().catch((e) => {
         console.error("SurrealDB connection failed:", e);
         // Evita ficar com singleton "meio conectado" (causa NoActiveSocket).
-        db = null;
-        dbReady = null;
-        dbConnectedAt = 0;
+        if (db === instance) {
+            db = null;
+            dbConnectedAt = 0;
+            dbValidatedAt = 0;
+        }
         throw e;
     }).finally(() => {
         // Quando termina (com sucesso ou erro), limpamos o marcador de "conectando".
         // Em caso de sucesso, `db` permanece setado.
-        dbReady = null;
+        if (dbReady === connectingPromise) {
+            dbReady = null;
+        }
     });
 
-    return dbReady;
+    dbReady = connectingPromise;
+    return connectingPromise;
 };

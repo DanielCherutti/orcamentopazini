@@ -55,7 +55,8 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import type { ScopeLocation, ScopeSection } from "@/actions/budget-scope-actions";
-import { getItemsBySectionAction } from "@/actions/budget-hierarchy-section-items-actions";
+import { getBudgetItemsBySectionIdsLightAction } from "@/actions/budget-hierarchy-section-items-actions";
+import { budgetItemsFromGroupedBySectionId } from "@/lib/budgets/budget-section-items-grouped";
 import {
     applyQuoteCommercialFactor,
     computeLocationScopeTotal,
@@ -243,6 +244,8 @@ interface ScopeSidebarProps {
     onRefresh: () => void;
     isReadOnly: boolean;
     scopeNumber: string;
+    /** Prefetch do payload leve do trecho (hover, debounce no handler). */
+    onPrefetchSection?: (sectionId: string) => void;
 }
 
 export function ScopeSidebar({
@@ -256,6 +259,7 @@ export function ScopeSidebar({
     onRefresh,
     isReadOnly,
     scopeNumber,
+    onPrefetchSection,
 }: ScopeSidebarProps) {
     const [localLocations, setLocalLocations] = useState(locations);
     useEffect(() => {
@@ -649,6 +653,7 @@ export function ScopeSidebar({
                                     onDelete={(e) => handleDeleteLocation(loc.id, e)}
                                     onDuplicate={(e) => openDupLocDialog(loc.id, loc.name, e)}
                                     isReadOnly={isReadOnly}
+                                    onPrefetchSection={onPrefetchSection}
                                 />
                             ))}
                         </SortableContext>
@@ -792,6 +797,7 @@ function SortableSectionRow({
     sectionIndex,
     locationIndex,
     scopeNumber,
+    onPrefetchSection,
 }: {
     sec: ScopeSection;
     locationId: string;
@@ -804,6 +810,7 @@ function SortableSectionRow({
     sectionIndex: number;
     locationIndex: number;
     scopeNumber: string;
+    onPrefetchSection?: (sectionId: string) => void;
 }) {
     const isSectionSelected = selected?.type === "section" && selected.id === sec.id;
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -824,6 +831,7 @@ function SortableSectionRow({
                 isDragging && "opacity-40"
             )}
             onClick={() => onSelect({ type: "section", id: sec.id, locationId })}
+            onMouseEnter={() => onPrefetchSection?.(sec.id)}
         >
             {!isReadOnly && (
                 <button
@@ -916,6 +924,7 @@ interface LocationNodeProps {
     onDelete: (e: MouseEvent) => void;
     onDuplicate: (e: MouseEvent) => void;
     isReadOnly: boolean;
+    onPrefetchSection?: (sectionId: string) => void;
 }
 
 function LocationNode({
@@ -934,6 +943,7 @@ function LocationNode({
     onDelete,
     onDuplicate,
     isReadOnly,
+    onPrefetchSection,
 }: LocationNodeProps) {
     const {
         attributes,
@@ -978,13 +988,16 @@ function LocationNode({
             if (cancelled) return;
             setLocationTotalLoading(true);
             try {
-                const results = await Promise.all(sections.map((s) => getItemsBySectionAction(s.id)));
+                const secIds = sections.map((s) => s.id);
+                const grouped = await getBudgetItemsBySectionIdsLightAction(secIds);
                 if (cancelled) return;
                 const itemsWithSection: Array<ScopePricingItem & { section_id: string }> = [];
-                sections.forEach((sec, idx) => {
-                    const r = results[idx];
-                    if (!r.success || !r.data) return;
-                    for (const it of r.data as BudgetItem[]) {
+                if (!grouped.success || !grouped.data) {
+                    setLocationScopeTotal(null);
+                    return;
+                }
+                sections.forEach((sec) => {
+                    for (const it of budgetItemsFromGroupedBySectionId(grouped.data, sec.id)) {
                         itemsWithSection.push(budgetItemToScopePricingWithSection(it, sec.id));
                     }
                 });
@@ -1217,6 +1230,7 @@ function LocationNode({
                                 sectionIndex={sectionIndex}
                                 locationIndex={locIndex}
                                 scopeNumber={scopeNumber}
+                                onPrefetchSection={onPrefetchSection}
                             />
                             );
                         })}

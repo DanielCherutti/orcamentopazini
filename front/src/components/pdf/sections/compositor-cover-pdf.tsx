@@ -1,42 +1,27 @@
 import React from "react";
-import { Page, View, Image, StyleSheet } from "@react-pdf/renderer";
-import Html from "react-pdf-html";
+import { Page, View, Image, Text, StyleSheet } from "@react-pdf/renderer";
 import type { Budget } from "@/types/budget-types";
 import type { ProposalSettings } from "@/actions/settings-actions";
 import type { CoverBlockProps } from "@/types/budget-compositor-types";
 import { mergeCoverDocumentProps } from "@/lib/budgets/cover-document";
+import { type PdfEmbeddedImages, proxyPdfImageSrc, proxyPdfImageUrlCore } from "@/lib/pdf/pdf-image-src";
+import { sanitizeCoverHtmlForPdf } from "@/lib/pdf/sanitize-inline-styles-for-pdf";
+import { splitCoverHtmlIntoPdfBlocks, splitCoverHtmlFragmentToSegments } from "@/lib/pdf/cover-pdf-blocks";
 import { theme } from "../theme";
+import { sanitizeTextForPdf } from "@/lib/pdf/sanitize-pdf-text";
+import {
+    buildCoverPdfBandContext,
+    formatCoverPdfFooterLeftText,
+    formatCoverPdfFooterRightText,
+    resolveCoverPdfHeaderCompanyText,
+    resolveCoverPdfHeaderLogoUrl,
+    shouldShowCoverPdfHeaderBand,
+    resolveCoverPdfShowFooterBand,
+} from "@/lib/pdf/cover-pdf-band-resolve";
+import { PdfProposalHeaderBand } from "@/components/pdf/pdf-proposal-header-band";
+import { DEFAULT_CLIENT_LOGO_LAYOUT } from "@/lib/budgets/cover-client-logo-layout";
 
-function resolvePdfImageSrc(url: string | undefined, publicBase?: string): string | undefined {
-  const u = url?.trim();
-  if (!u) return undefined;
-  if (/^data:/i.test(u)) return u;
-  if (/^https?:\/\//i.test(u)) return u;
-  if (u.startsWith("//")) return `https:${u}`;
-  const origin =
-    typeof window !== "undefined" && window.location?.origin
-      ? window.location.origin
-      : publicBase?.replace(/\/$/, "");
-  if (u.startsWith("/")) {
-    if (origin) return `${origin}${u}`;
-    return u;
-  }
-  if (origin) return `${origin}/${u.replace(/^\.?\//, "")}`;
-  return `/${u.replace(/^\.?\//, "")}`;
-}
-
-function proxyPdfImageSrc(url: string | undefined, publicBase?: string): string | undefined {
-  const resolved = resolvePdfImageSrc(url, publicBase);
-  if (!resolved || /^data:/i.test(resolved)) return resolved;
-  if (resolved.includes("/api/pdf/image?src=")) return resolved;
-  const origin =
-    typeof window !== "undefined" && window.location?.origin
-      ? window.location.origin
-      : publicBase?.replace(/\/$/, "");
-  if (!origin) return resolved;
-  return `${origin}/api/pdf/image?src=${encodeURIComponent(resolved)}`;
-}
-
+/** Só URL HTTP(S) no HTML — nunca data URI (strings enormes quebram sanitize/split e o layout). */
 function rewriteImgSrcInHtml(html: string, publicBase?: string): string {
   if (!html.trim()) return html;
   return html.replace(/<img\b[^>]*>/gi, (tag) => {
@@ -44,7 +29,7 @@ function rewriteImgSrcInHtml(html: string, publicBase?: string): string {
     if (!m) return tag;
     const q = m[1];
     const src = m[2];
-    const proxied = proxyPdfImageSrc(src, publicBase) ?? src;
+    const proxied = proxyPdfImageUrlCore(src, publicBase) ?? src;
     return tag.replace(/\bsrc=(["'])([^"']*)\1/i, `src=${q}${proxied}${q}`);
   });
 }
@@ -53,21 +38,33 @@ const PAGE_W = 595.28;
 const PAGE_H = 841.89;
 const BODY_PAD_H = Math.round((22 / 210) * PAGE_W);
 const BODY_PAD_V = Math.round((18 / 297) * PAGE_H);
+/** Espaço reservado para cabeçalho (duas colunas: marca + contatos). */
+const COVER_HEADER_RESERVE = 108;
+const COVER_FOOTER_RESERVE = 44;
 
 const styles = StyleSheet.create({
   page: {
     fontFamily: theme.fonts.body,
     backgroundColor: "#FFFFFF",
     position: "relative",
-    width: PAGE_W,
-    height: PAGE_H,
+    paddingHorizontal: BODY_PAD_H,
+  },
+  pagePadTopWithHeader: {
+    paddingTop: BODY_PAD_V + COVER_HEADER_RESERVE,
+  },
+  pagePadTopNoHeader: {
+    paddingTop: BODY_PAD_V,
+  },
+  pagePadBottomWithFooter: {
+    paddingBottom: BODY_PAD_V + COVER_FOOTER_RESERVE,
+  },
+  pagePadBottomNoFooter: {
+    paddingBottom: BODY_PAD_V,
   },
   watermarkLayer: {
     position: "absolute",
     left: 0,
-    top: 0,
     width: PAGE_W,
-    height: PAGE_H,
     zIndex: 0,
     justifyContent: "center",
     alignItems: "center",
@@ -78,17 +75,101 @@ const styles = StyleSheet.create({
     objectFit: "contain",
   },
   body: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    width: PAGE_W,
-    height: PAGE_H,
+    position: "relative",
     zIndex: 1,
-    paddingTop: BODY_PAD_V,
-    paddingBottom: BODY_PAD_V,
-    paddingHorizontal: BODY_PAD_H,
+  },
+  coverText: {
+    fontSize: 11,
+    fontFamily: theme.fonts.body,
+    lineHeight: 1.45,
+    color: "#171717",
+    marginBottom: 6,
+    textAlign: "left",
+  },
+  coverHeading1: {
+    fontSize: 20,
+    fontFamily: theme.fonts.bold,
+    lineHeight: 1.35,
+    color: "#171717",
+    marginBottom: 10,
+  },
+  coverHeading2: {
+    fontSize: 16,
+    fontFamily: theme.fonts.bold,
+    lineHeight: 1.35,
+    color: "#171717",
+    marginBottom: 8,
+  },
+  coverHeading3: {
+    fontSize: 13,
+    fontFamily: theme.fonts.bold,
+    lineHeight: 1.4,
+    color: "#171717",
+    marginBottom: 6,
+  },
+  coverImage: {
+    width: PAGE_W - 2 * BODY_PAD_H,
+    height: 280,
+    marginBottom: 8,
+    objectFit: "contain",
+  },
+  coverHeaderBand: {
+    position: "absolute",
+    top: BODY_PAD_V,
+    left: BODY_PAD_H,
+    right: BODY_PAD_H,
+    minHeight: COVER_HEADER_RESERVE - 10,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+    zIndex: 2,
+  },
+  coverFooterBand: {
+    position: "absolute",
+    bottom: BODY_PAD_V,
+    left: BODY_PAD_H,
+    right: BODY_PAD_H,
+    minHeight: COVER_FOOTER_RESERVE - 8,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: "#e5e7eb",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    zIndex: 2,
+  },
+  coverFooterMuted: {
+    fontSize: 8,
+    color: theme.colors.textLight,
   },
 });
+
+function resolveClientLogoPdfBox(
+  coverProps: CoverBlockProps,
+  showCoverHeader: boolean,
+  showCoverFooter: boolean,
+): { left: number; top: number; width: number; height: number } | null {
+  if (!coverProps.client_logo_url?.trim()) return null;
+  const xPct = coverProps.client_logo_x_pct ?? DEFAULT_CLIENT_LOGO_LAYOUT.xPct;
+  const yPct = coverProps.client_logo_y_pct ?? DEFAULT_CLIENT_LOGO_LAYOUT.yPct;
+  const widthPct = coverProps.client_logo_width_pct ?? DEFAULT_CLIENT_LOGO_LAYOUT.widthPct;
+  const aspect =
+    coverProps.client_logo_aspect && coverProps.client_logo_aspect > 0
+      ? coverProps.client_logo_aspect
+      : 1;
+
+  const padTop = showCoverHeader ? BODY_PAD_V + COVER_HEADER_RESERVE : BODY_PAD_V;
+  const padBottom = showCoverFooter ? BODY_PAD_V + COVER_FOOTER_RESERVE : BODY_PAD_V;
+  const innerW = PAGE_W - 2 * BODY_PAD_H;
+  const innerH = PAGE_H - padTop - padBottom;
+
+  const w = (widthPct / 100) * innerW;
+  const h = w / aspect;
+  const left = BODY_PAD_H + (xPct / 100) * innerW;
+  const top = padTop + (yPct / 100) * innerH;
+
+  return { left, top, width: w, height: h };
+}
 
 function clampOpacity(value: number | undefined, fallback: number): number {
   const n = typeof value === "number" ? value : fallback;
@@ -98,53 +179,143 @@ function clampOpacity(value: number | undefined, fallback: number): number {
   return n;
 }
 
-const coverHtmlStylesheet = {
-  p: {
-    fontSize: 11,
-    fontFamily: theme.fonts.body,
-    lineHeight: 1.45,
-    marginTop: 0,
-    marginBottom: 4,
-    color: "#171717",
-  },
-  strong: { fontFamily: theme.fonts.bold },
-  b: { fontFamily: theme.fonts.bold },
-  em: { fontFamily: theme.fonts.oblique },
-  i: { fontFamily: theme.fonts.oblique },
-  h1: { fontSize: 18, fontFamily: theme.fonts.bold, marginBottom: 8, marginTop: 0, color: "#171717" },
-  h2: { fontSize: 14, fontFamily: theme.fonts.bold, marginBottom: 6, marginTop: 0, color: "#171717" },
-  h3: { fontSize: 12, fontFamily: theme.fonts.bold, marginBottom: 4, marginTop: 0, color: "#171717" },
-  img: { maxWidth: "100%", objectFit: "contain" as const },
-  ul: { marginBottom: 6, marginTop: 0 },
-  ol: { marginBottom: 6, marginTop: 0 },
-  li: { fontSize: 11, fontFamily: theme.fonts.body, lineHeight: 1.45 },
-  a: { color: "#1e3a8a" },
-};
-
 export function CompositorCoverPdfPage({
-  budget: _budget,
+  budget,
   settings,
   coverProps: raw,
+  pdfEmbeddedImages,
 }: {
   budget: Budget;
   settings: ProposalSettings;
   coverProps: CoverBlockProps;
+  pdfEmbeddedImages?: PdfEmbeddedImages;
 }) {
   const coverProps = mergeCoverDocumentProps(raw as unknown as Record<string, unknown>);
-  const wmResolved = proxyPdfImageSrc(coverProps.cover_watermark_url, settings.app_public_url);
+  const wmResolved = proxyPdfImageSrc(
+    coverProps.cover_watermark_url,
+    settings.app_public_url,
+    pdfEmbeddedImages,
+  );
   const wmOpacity = clampOpacity(coverProps.cover_watermark_opacity, 0.12);
-  const html = rewriteImgSrcInHtml(coverProps.cover_document_html ?? "", settings.app_public_url);
+  const html = sanitizeCoverHtmlForPdf(
+    rewriteImgSrcInHtml(coverProps.cover_document_html ?? "", settings.app_public_url),
+  );
+  const blocks = splitCoverHtmlIntoPdfBlocks(html);
+  const bandCtx = buildCoverPdfBandContext(budget);
+  const fill = settings.pdf_header_fill_from_settings === true;
+  const companyName = sanitizeTextForPdf(
+    resolveCoverPdfHeaderCompanyText(coverProps, fill ? settings.company_name : undefined),
+  );
+  const logoUrlRaw = resolveCoverPdfHeaderLogoUrl(coverProps, fill ? settings.company_logo_url : undefined);
+  const logoSrc = logoUrlRaw
+    ? proxyPdfImageSrc(logoUrlRaw, settings.app_public_url, pdfEmbeddedImages)
+    : undefined;
+  const clientLogoUrlRaw = coverProps.client_logo_url?.trim();
+  const clientLogoSrc = clientLogoUrlRaw
+    ? proxyPdfImageSrc(clientLogoUrlRaw, settings.app_public_url, pdfEmbeddedImages)
+    : undefined;
+  const showCoverHeader = shouldShowCoverPdfHeaderBand(coverProps, settings);
+  const showCoverFooter = resolveCoverPdfShowFooterBand(coverProps);
+  const footerLeft = sanitizeTextForPdf(formatCoverPdfFooterLeftText(coverProps, bandCtx));
+  const footerRight = sanitizeTextForPdf(formatCoverPdfFooterRightText(coverProps, bandCtx));
+
+  /** Marca d’água não pode ocupar a página inteira: cobria cabeçalho/rodapé no PDF (ordem de pintura). */
+  const wmTopInset = showCoverHeader ? BODY_PAD_V + COVER_HEADER_RESERVE : 0;
+  const wmBottomInset = showCoverFooter ? BODY_PAD_V + COVER_FOOTER_RESERVE : 0;
+  const wmHeight = Math.max(40, PAGE_H - wmTopInset - wmBottomInset);
+  const clientLogoBox = resolveClientLogoPdfBox(coverProps, showCoverHeader, showCoverFooter);
 
   return (
-    <Page size="A4" style={styles.page}>
+    <Page
+      size="A4"
+      style={[
+        styles.page,
+        showCoverHeader ? styles.pagePadTopWithHeader : styles.pagePadTopNoHeader,
+        showCoverFooter ? styles.pagePadBottomWithFooter : styles.pagePadBottomNoFooter,
+      ]}
+    >
+      {/* Marca d’água primeiro; cabeçalho/rodapé com zIndex maior para não ficarem ocultos. */}
       {wmResolved ? (
-        <View style={styles.watermarkLayer}>
+        <View
+          style={[styles.watermarkLayer, { top: wmTopInset, height: wmHeight }]}
+        >
           {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
           <Image src={wmResolved} style={[styles.watermarkImg, { opacity: wmOpacity }]} />
         </View>
       ) : null}
-      <View style={styles.body}>
-        <Html stylesheet={coverHtmlStylesheet}>{html}</Html>
+      {showCoverHeader ? (
+        <View style={styles.coverHeaderBand} fixed>
+          <PdfProposalHeaderBand settings={settings} logoSrc={logoSrc} companyName={companyName} />
+        </View>
+      ) : null}
+      {showCoverFooter ? (
+        <View style={styles.coverFooterBand} fixed>
+          <Text style={styles.coverFooterMuted}>{footerLeft}</Text>
+          <Text style={styles.coverFooterMuted}>{footerRight}</Text>
+        </View>
+      ) : null}
+      {clientLogoSrc && clientLogoBox ? (
+        <View
+          style={{
+            position: "absolute",
+            left: clientLogoBox.left,
+            top: clientLogoBox.top,
+            width: clientLogoBox.width,
+            height: clientLogoBox.height,
+            zIndex: 3,
+          }}
+        >
+          {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
+          <Image
+            src={clientLogoSrc}
+            style={{
+              width: clientLogoBox.width,
+              height: clientLogoBox.height,
+              objectFit: "contain",
+            }}
+          />
+        </View>
+      ) : null}
+      <View style={styles.body} wrap>
+        {blocks.map((b, i) => {
+          if (b.type === "img") {
+            const src = proxyPdfImageSrc(b.src, settings.app_public_url, pdfEmbeddedImages) ?? b.src;
+            return (
+              /* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */
+              <Image key={`cover-img-${i}`} src={src} style={styles.coverImage} />
+            );
+          }
+          const segs = splitCoverHtmlFragmentToSegments(b.content);
+          if (!segs.length) return null;
+          return (
+            <React.Fragment key={`cover-txt-${i}`}>
+              {segs.map((seg, j) => {
+                if (seg.kind === "heading") {
+                  const hs =
+                    seg.level === 1
+                      ? styles.coverHeading1
+                      : seg.level === 2
+                        ? styles.coverHeading2
+                        : styles.coverHeading3;
+                  return (
+                    <Text key={`${i}-${j}`} style={hs}>
+                      {seg.text}
+                    </Text>
+                  );
+                }
+                const align = seg.textAlign;
+                return (
+                  <Text
+                    key={`${i}-${j}`}
+                    style={align ? [styles.coverText, { textAlign: align }] : styles.coverText}
+                  >
+                    {seg.text}
+                  </Text>
+                );
+              })}
+            </React.Fragment>
+          );
+        })}
       </View>
     </Page>
   );

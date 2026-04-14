@@ -8,7 +8,7 @@ import { BudgetTreeV2 } from "./editor/budget-tree-v2";
 import { BudgetWorkspaceHeader } from "./workspace/budget-workspace-header";
 import { toast } from "@/lib/toast";
 import { useBudgetsRepository } from "@/lib/budgets/use-budgets-repository";
-import { getBudgetAction } from "@/actions/budget-actions";
+import { getBudgetAction, getBudgetShellAction } from "@/actions/budget-actions";
 import { budgetPdfUrl } from "@/lib/budgets/budget-path";
 import { getBudgetStatusLabel, isBudgetEditableStatus } from "@/lib/budgets/budget-status";
 import { cn } from "@/lib/utils";
@@ -55,6 +55,8 @@ const TABS: { id: ActiveTab; label: string; icon: React.ReactNode }[] = [
 
 interface BudgetWorkspaceProps {
     initialBudget: Budget;
+    /** Carregamento inicial usou só shell (orçamento grande); refresh do header evita o grafo completo. */
+    initialUseLightScopeRead?: boolean;
     mode?: 'create' | 'edit';
 }
 
@@ -65,8 +67,13 @@ type EnvironmentsContextType = {
 
 const EnvironmentsContext = createContext<EnvironmentsContextType | null>(null);
 
-export function BudgetWorkspace({ initialBudget, mode: _mode = 'edit' }: BudgetWorkspaceProps) {
+export function BudgetWorkspace({
+    initialBudget,
+    initialUseLightScopeRead = false,
+    mode: _mode = 'edit',
+}: BudgetWorkspaceProps) {
     const [budget, setBudget] = useState<Budget>(initialBudget);
+    const [useLightScopeRead] = useState(Boolean(initialUseLightScopeRead));
     const [hasChanges, setHasChanges] = useState(false);
     const [environmentsExpanded, setEnvironmentsExpanded] = useState(false);
     const [activeTab, setActiveTab] = useState<ActiveTab>('budget');
@@ -82,7 +89,9 @@ export function BudgetWorkspace({ initialBudget, mode: _mode = 'edit' }: BudgetW
 
     const handleRefresh = async () => {
         const id = budget.id as string;
-        const result = await getBudgetAction(id);
+        const result = useLightScopeRead
+            ? await getBudgetShellAction(id)
+            : await getBudgetAction(id);
         if (result.success && result.data) {
             setBudget(result.data as Budget);
         }

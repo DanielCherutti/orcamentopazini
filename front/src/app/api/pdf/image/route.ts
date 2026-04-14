@@ -3,6 +3,11 @@ import sharp from "sharp";
 
 const PASSTHROUGH_TYPES = new Set(["image/png", "image/jpeg", "image/jpg"]);
 
+/** Lado máximo em px para o PDF (A4 ~300dpi); reduz memória do Yoga e acelera render. */
+const MAX_PDF_IMAGE_SIDE = 2048;
+/** Evita decompressão de imagens gigantes (pixel bombs). */
+const LIMIT_INPUT_PIXELS = 50_000_000;
+
 function getRequestOrigin(request: NextRequest): string | undefined {
   const forwardedHost = request.headers.get("x-forwarded-host");
   const host = forwardedHost || request.headers.get("host");
@@ -72,22 +77,43 @@ export async function GET(request: NextRequest) {
       .split(";")[0]
       .toLowerCase();
 
+    let pipeline = sharp(inputBuffer, {
+      animated: true,
+      limitInputPixels: LIMIT_INPUT_PIXELS,
+    });
+
+    let meta: sharp.Metadata;
+    try {
+      meta = await pipeline.metadata();
+    } catch {
+      return NextResponse.json({ error: "Invalid image data" }, { status: 422 });
+    }
+
+    const w = meta.width ?? 0;
+    const h = meta.height ?? 0;
+    if (w > MAX_PDF_IMAGE_SIDE || h > MAX_PDF_IMAGE_SIDE) {
+      pipeline = pipeline.resize(MAX_PDF_IMAGE_SIDE, MAX_PDF_IMAGE_SIDE, {
+        fit: "inside",
+        withoutEnlargement: true,
+      });
+    }
+
     if (PASSTHROUGH_TYPES.has(contentType)) {
-      return new NextResponse(new Uint8Array(inputBuffer), {
+      const outCt = contentType === "image/jpg" ? "image/jpeg" : contentType;
+      const body =
+        contentType === "image/png"
+          ? await pipeline.png({ compressionLevel: 9 }).toBuffer()
+          : await pipeline.jpeg({ quality: 88, mozjpeg: true }).toBuffer();
+      return new NextResponse(new Uint8Array(body), {
         headers: {
-          "Content-Type": contentType === "image/jpg" ? "image/jpeg" : contentType,
+          "Content-Type": outCt,
           "Cache-Control": "public, max-age=3600",
           "Access-Control-Allow-Origin": "*",
         },
       });
     }
 
-    const pngBuffer = await sharp(inputBuffer, {
-      animated: true,
-      limitInputPixels: false,
-    })
-      .png()
-      .toBuffer();
+    const pngBuffer = await pipeline.png().toBuffer();
 
     return new NextResponse(new Uint8Array(pngBuffer), {
       headers: {

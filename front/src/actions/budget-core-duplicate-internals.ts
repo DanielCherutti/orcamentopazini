@@ -64,6 +64,7 @@ export async function duplicateCompositorBlocks(
             await db.create(new Table("budget_item")).content({
                 ...buildDuplicatedBudgetItemContent(item),
                 block_id: newBlockRecordId,
+                budget_id: newBudgetRecordId,
             });
         }
     }

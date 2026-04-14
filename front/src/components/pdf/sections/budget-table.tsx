@@ -11,6 +11,8 @@ import {
     type CostDisplayMode,
     type LocationAssemblyMode,
 } from '@/lib/budgets/scope-pricing';
+import { type PdfEmbeddedImages, proxyPdfImageSrc } from '@/lib/pdf/pdf-image-src';
+import { sanitizeTextForPdf } from '@/lib/pdf/sanitize-pdf-text';
 
 const styles = StyleSheet.create({
     locationBlock: {
@@ -38,12 +40,16 @@ const styles = StyleSheet.create({
         backgroundColor: theme.colors.bgHeader,
         padding: 4
     },
+    /** Bloco não fracionável para manter título + imagem juntos na troca de página. */
+    sectionLead: {
+        marginBottom: 6,
+    },
+    /** Largura fixa (A4 − margens ~525pt) + contain para a imagem aparecer inteira no PDF. */
     sceneImage: {
-        width: '100%',
+        width: 525,
         height: 250,
-        objectFit: 'contain',
         marginBottom: 10,
-        borderRadius: 2
+        objectFit: 'contain',
     },
     table: {
         marginTop: 5,
@@ -63,10 +69,10 @@ const styles = StyleSheet.create({
         paddingVertical: 6,
         alignItems: 'center'
     },
-    colDesc: { flex: 5, paddingRight: 5 },
-    colQty: { flex: 1, textAlign: 'center' },
-    colMoney: { flex: 1.4, textAlign: 'right' },
-    colTotal: { flex: 2, textAlign: 'right' },
+    colDesc: { flex: 25, paddingRight: 5 },
+    colQty: { flex: 5, textAlign: 'center' },
+    colMoney: { flex: 7, textAlign: 'right' },
+    colTotal: { flex: 10, textAlign: 'right' },
     subtotalRow: {
         flexDirection: 'row',
         justifyContent: 'flex-end',
@@ -77,8 +83,12 @@ const styles = StyleSheet.create({
     textBold: { fontFamily: theme.fonts.bold, color: theme.colors.text }
 });
 
-const formatMoney = (val: number) =>
-    new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
+const formatMoney = (val: number) => {
+    const n = Number(val);
+    if (!Number.isFinite(n)) return '—';
+    const safe = Math.min(Math.max(n, -1e15), 1e15);
+    return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(safe);
+};
 
 function getLocationAssemblyMode(location: BudgetLocation): LocationAssemblyMode {
     const raw = String((location as unknown as Record<string, unknown>).assembly_mode ?? 'percent');
@@ -192,11 +202,19 @@ export const BudgetTable = ({
     sectionNumber = 1,
     showCosts = false,
     costsDisplayMode = 'section',
+    pdfImagePublicBase,
+    pdfEmbeddedImages,
+    figurePageCollector,
 }: {
     locations: BudgetLocation[];
     sectionNumber?: number;
     showCosts?: boolean;
     costsDisplayMode?: CostDisplayMode;
+    /** Base pública (ex. `settings.app_public_url`) para proxy `/api/pdf/image` nas cenas compostas. */
+    pdfImagePublicBase?: string;
+    pdfEmbeddedImages?: PdfEmbeddedImages;
+    /** Primeira passada do PDF: coleta página real por figura (`figure:<id>`). */
+    figurePageCollector?: { segmentStartPages: Record<string, number> };
 }) => (
     <View>
         {locations.map((loc, locIdx) => {
@@ -210,24 +228,65 @@ export const BudgetTable = ({
                 return sum + sectionTotal;
             }, 0);
             return (
-            <View key={loc.id} style={styles.locationBlock} break={false} wrap={false}>
-                <Text style={styles.locationHeader}>{locNum} — {loc.name}</Text>
+            <View key={loc.id} style={styles.locationBlock}>
+                <Text style={styles.locationHeader}>
+                    {sanitizeTextForPdf(`${locNum} — ${loc.name ?? ''}`)}
+                </Text>
 
                 {(loc.sections || []).map((sec, secIdx) => {
                     const secNum = `${locNum}.${secIdx + 1}`;
                     const laborCols = showCosts && sectionWantsLaborSplitOnPrint(sec);
                     return (
-                    <View key={sec.id} style={styles.sectionBlock} wrap={false}>
-                        <Text style={styles.sectionTitle}>{secNum} — {sec.name.toUpperCase()}</Text>
+                    <View key={sec.id} style={styles.sectionBlock}>
+                        <View style={styles.sectionLead} wrap={false}>
+                            <Text style={styles.sectionTitle}>
+                                {sanitizeTextForPdf(`${secNum} — ${(sec.name ?? '').toUpperCase()}`)}
+                            </Text>
 
-                        {/* Cena Composta */}
-                        {(sec.images || [])[0] && (sec.images![0].composed_url || sec.images![0].url) && (
-                            /* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt prop */
-                            <Image
-                                src={(sec.images![0].composed_url || sec.images![0].url)}
-                                style={styles.sceneImage}
-                            />
-                        )}
+                            {/* Cena Composta — proxy limita dimensões (evita Yoga "unsupported number"). */}
+                            {(() => {
+                                const firstImg = (sec.images || [])[0];
+                                const raw = firstImg?.composed_url || firstImg?.url;
+                                if (!raw) return null;
+                                const src = proxyPdfImageSrc(raw, pdfImagePublicBase, pdfEmbeddedImages) ?? raw;
+                                const figureId = firstImg?.id ? String(firstImg.id) : undefined;
+                                return (
+                                    <View>
+                                        {figurePageCollector && figureId ? (
+                                            <View
+                                                /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- `render` não tipado no react-pdf */
+                                                render={({ pageNumber }: { pageNumber: number }) => {
+                                                    const key = `figure:${figureId}`;
+                                                    const prev = figurePageCollector.segmentStartPages[key];
+                                                    if (!Number.isFinite(prev) || pageNumber < prev) {
+                                                        figurePageCollector.segmentStartPages[key] = pageNumber;
+                                                    }
+                                                    return null;
+                                                }}
+                                                /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-pdf */
+                                                style={{ width: 0, height: 0, opacity: 0 } as any}
+                                            />
+                                        ) : null}
+                                        {figurePageCollector && figureId ? (
+                                            <Text
+                                                /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- fallback extra em texto invisível */
+                                                style={{ fontSize: 0.1, lineHeight: 0.1, color: '#ffffff', opacity: 0 } as any}
+                                                render={({ pageNumber }) => {
+                                                    const key = `figure:${figureId}`;
+                                                    const prev = figurePageCollector.segmentStartPages[key];
+                                                    if (!Number.isFinite(prev) || pageNumber < prev) {
+                                                        figurePageCollector.segmentStartPages[key] = pageNumber;
+                                                    }
+                                                    return '';
+                                                }}
+                                            />
+                                        ) : null}
+                                        {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt prop */}
+                                        <Image src={src} style={styles.sceneImage} />
+                                    </View>
+                                );
+                            })()}
+                        </View>
 
                         {/* Lista de Itens */}
                         <View style={styles.table}>
@@ -253,19 +312,30 @@ export const BudgetTable = ({
                                 return (
                                 <View key={item.id} style={[styles.tableRow, { backgroundColor: idx % 2 === 0 ? 'white' : theme.colors.bgLight }]}>
                                     <Text style={[styles.textSmall, styles.colDesc]}>
-                                        {itemLabel(item)}
-                                        {Boolean(
-                                            (item as unknown as Record<string, unknown>).observation_show_on_print
-                                        ) &&
-                                        String(
-                                            (item as unknown as Record<string, unknown>).observation_text ?? ''
-                                        ).trim()
-                                            ? ` - Obs: ${String(
-                                                  (item as unknown as Record<string, unknown>).observation_text ?? ''
-                                              ).trim()}`
-                                            : ''}
+                                        {sanitizeTextForPdf(
+                                            [
+                                                itemLabel(item),
+                                                Boolean(
+                                                    (item as unknown as Record<string, unknown>)
+                                                        .observation_show_on_print
+                                                ) &&
+                                                    String(
+                                                        (item as unknown as Record<string, unknown>)
+                                                            .observation_text ?? ''
+                                                    ).trim()
+                                                    ? ` - Obs: ${String(
+                                                          (item as unknown as Record<string, unknown>)
+                                                              .observation_text ?? ''
+                                                      ).trim()}`
+                                                    : '',
+                                            ]
+                                                .filter(Boolean)
+                                                .join('')
+                                        )}
                                     </Text>
-                                    <Text style={[styles.textSmall, styles.colQty]}>{item.quantity}</Text>
+                                    <Text style={[styles.textSmall, styles.colQty]}>
+                                        {sanitizeTextForPdf(String(item.quantity ?? ''))}
+                                    </Text>
                                     {showCosts && laborCols ? (
                                         <>
                                             <Text style={[styles.textSmall, styles.colMoney]}>{cells.equip}</Text>

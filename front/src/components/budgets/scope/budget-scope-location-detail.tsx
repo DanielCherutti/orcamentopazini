@@ -20,7 +20,8 @@ import { BudgetPhotoAnnotatorDialog } from "@/components/budgets/budget-photo-an
 import { parseAnnotatorViewport } from "@/components/annotator/annotator-viewport-types";
 import type { BudgetImage, BudgetItem } from "@/types/budget-types";
 import type { ScopeLocation } from "@/actions/budget-scope-actions";
-import { getItemsBySectionAction } from "@/actions/budget-hierarchy-section-items-actions";
+import { getBudgetItemsBySectionIdsLightAction } from "@/actions/budget-hierarchy-section-items-actions";
+import { budgetItemsFromGroupedBySectionId } from "@/lib/budgets/budget-section-items-grouped";
 import {
     updateLocationAction,
     deleteLocationAction,
@@ -36,6 +37,7 @@ import {
     type LocationAssemblyMode,
     type PriceAdjustmentMode,
 } from "@/lib/budgets/scope-pricing";
+import type { ProductGroup } from "@/actions/product-group-actions";
 
 interface LocationDetailProps {
     locationId: string;
@@ -51,6 +53,8 @@ interface LocationDetailProps {
     quoteDiscountPercent?: number;
     /** Incrementado no pai após `loadLocations` — recarrega itens do local nos trechos. */
     scopeDataVersion?: number;
+    /** Grupos de produto carregados uma vez no `BudgetScope`. */
+    productGroups?: ProductGroup[];
 }
 
 export function LocationDetail({
@@ -65,6 +69,7 @@ export function LocationDetail({
     quoteMarkupPercent = 0,
     quoteDiscountPercent = 0,
     scopeDataVersion = 0,
+    productGroups,
 }: LocationDetailProps) {
     const [name, setName] = useState(location?.name ?? "");
     const [editingName, setEditingName] = useState(false);
@@ -73,7 +78,7 @@ export function LocationDetail({
     const [dupLocating, setDupLocating] = useState(false);
     const [description, setDescription] = useState(location?.description ?? "");
     const [images, setImages] = useState<BudgetImage[]>([]);
-    const [locationItems, setLocationItems] = useState<BudgetItem[]>([]);
+    const [itemsBySection, setItemsBySection] = useState<Record<string, BudgetItem[]> | null>(null);
     const [addPhotoOpen, setAddPhotoOpen] = useState(false);
     const [editingImage, setEditingImage] = useState<BudgetImage | null>(null);
     const [assemblyMode, setAssemblyMode] = useState<LocationAssemblyMode>(
@@ -117,23 +122,28 @@ export function LocationDetail({
 
     useEffect(() => {
         if (!location?.sections?.length) {
-            setLocationItems([]);
+            setItemsBySection({});
             return;
         }
         let cancelled = false;
-        Promise.all(location.sections.map((s) => getItemsBySectionAction(s.id))).then((results) => {
+        setItemsBySection(null);
+        const ids = location.sections.map((s) => s.id);
+        getBudgetItemsBySectionIdsLightAction(ids).then((res) => {
             if (cancelled) return;
-            const all = results.flatMap((r) =>
-                r.success && r.data ? (r.data as unknown as BudgetItem[]) : []
-            );
-            setLocationItems(all);
+            setItemsBySection(res.success && res.data ? res.data : {});
         });
         return () => {
             cancelled = true;
         };
-        // location.sections coberto por sectionIdsKey + length
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [location?.id, location?.sections?.length, sectionIdsKey, scopeDataVersion]);
+
+    const locationItems = useMemo(() => {
+        if (!itemsBySection || !location?.sections?.length) return [];
+        return location.sections.flatMap((s) =>
+            budgetItemsFromGroupedBySectionId(itemsBySection, s.id)
+        );
+    }, [itemsBySection, location?.sections]);
 
     const commitName = async () => {
         setEditingName(false);
@@ -324,6 +334,11 @@ export function LocationDetail({
 
             {location.sections.length > 0 && (
                 <div className="space-y-6 pt-2">
+                    {itemsBySection === null && (
+                        <p className="text-xs text-muted-foreground px-1">
+                            A carregar itens do local para montagem e totais…
+                        </p>
+                    )}
                     {location.sections.map((sec) => (
                         <SectionDetail
                             key={sec.id}
@@ -341,6 +356,8 @@ export function LocationDetail({
                             quoteMarkupPercent={quoteMarkupPercent}
                             quoteDiscountPercent={quoteDiscountPercent}
                             scopeDataVersion={scopeDataVersion}
+                            productGroups={productGroups}
+                            batchedLocationItems={locationItems}
                         />
                     ))}
                 </div>
