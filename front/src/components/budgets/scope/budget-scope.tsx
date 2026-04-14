@@ -188,23 +188,51 @@ export function BudgetScope({
                 grouped = { success: true, data: fallbackGrouped };
             }
 
-            const nextTotals: Record<string, number> = {};
-            for (const loc of locations) {
-                const itemsWithSection: Array<ScopePricingItem & { section_id: string }> = [];
-                for (const sec of loc.sections) {
-                    for (const it of budgetItemsFromGroupedBySectionId(grouped.data, sec.id)) {
-                        itemsWithSection.push(mapBudgetItemToScopePricingWithSection(it, sec.id));
+            const computeTotalsFromGrouped = (groupedData: Record<string, BudgetItem[]>) => {
+                const nextTotals: Record<string, number> = {};
+                let matchedItems = 0;
+                for (const loc of locations) {
+                    const itemsWithSection: Array<ScopePricingItem & { section_id: string }> = [];
+                    for (const sec of loc.sections) {
+                        const items = budgetItemsFromGroupedBySectionId(groupedData, sec.id);
+                        matchedItems += items.length;
+                        for (const it of items) {
+                            itemsWithSection.push(mapBudgetItemToScopePricingWithSection(it, sec.id));
+                        }
                     }
+                    nextTotals[loc.id] = computeLocationScopeTotal({
+                        location: {
+                            assembly_mode: loc.assembly_mode,
+                            assembly_value: loc.assembly_value,
+                        },
+                        sections: loc.sections,
+                        items: itemsWithSection,
+                    });
                 }
-                nextTotals[loc.id] = computeLocationScopeTotal({
-                    location: {
-                        assembly_mode: loc.assembly_mode,
-                        assembly_value: loc.assembly_value,
-                    },
-                    sections: loc.sections,
-                    items: itemsWithSection,
-                });
+                return { nextTotals, matchedItems };
+            };
+
+            let { nextTotals, matchedItems } = computeTotalsFromGrouped(grouped.data ?? {});
+
+            // Proteção extra: se nenhuma linha foi casada, tenta caminho por trecho/local.
+            if (
+                matchedItems === 0 &&
+                locations.some((loc) => loc.sections.length > 0)
+            ) {
+                const fallbackGrouped: Record<string, BudgetItem[]> = {};
+                for (const loc of locations) {
+                    const secIds = loc.sections.map((sec) => sec.id);
+                    if (secIds.length === 0) continue;
+                    const byLoc = await getBudgetItemsBySectionIdsLightAction(secIds);
+                    if (cancelled) return;
+                    if (!byLoc.success || !byLoc.data) continue;
+                    Object.assign(fallbackGrouped, byLoc.data);
+                }
+                const computed = computeTotalsFromGrouped(fallbackGrouped);
+                nextTotals = computed.nextTotals;
+                matchedItems = computed.matchedItems;
             }
+
             if (cancelled) return;
             totalsCacheRef.current.set(totalsCacheKey, nextTotals);
             setLocationTotalsById(nextTotals);

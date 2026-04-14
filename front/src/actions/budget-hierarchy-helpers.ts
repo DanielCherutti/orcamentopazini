@@ -1,5 +1,5 @@
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
-import { safeStringRecordId } from "@/lib/surreal-record-ids";
+import { recordIdToString, safeStringRecordId } from "@/lib/surreal-record-ids";
 import {
     computeItemSubtotal,
     computeLocationAssemblyTotal,
@@ -74,49 +74,98 @@ export async function recalculateBudgetTotal(budgetId: string) {
         const budgetRecordId = safeStringRecordId("budget", budgetId);
         if (!budgetRecordId) return;
 
-        const [locRowsRes, secRowsRes, itemRowsRes] = await Promise.all([
-            db.query<[Array<{ id: unknown; assembly_mode?: unknown; assembly_value?: unknown }>]>(
-                `SELECT id, assembly_mode, assembly_value FROM budget_location WHERE budget_id = $budgetId AND deleted_at IS NONE`,
-                { budgetId: budgetRecordId }
-            ),
-            db.query<
-                [
-                    Array<{
-                        id: unknown;
-                        location_id?: unknown;
-                        assembly_mode?: unknown;
-                        assembly_value?: unknown;
-                    }>,
-                ]
-            >(
-                `SELECT id, location_id, assembly_mode, assembly_value
-                 FROM budget_section
-                 WHERE budget_id = $budgetId AND deleted_at IS NONE`,
-                { budgetId: budgetRecordId }
-            ),
-            db.query<[Array<Record<string, unknown>>]>(
-                `SELECT id, section_id, quantity, unit_price, labor_cost, price_adjustment_mode, price_adjustment_value, observation_extra_value, assembly_manual_value
-                 FROM budget_item WHERE budget_id = $budgetId AND section_id IS NOT NONE AND deleted_at IS NONE FETCH section_id`,
-                { budgetId: budgetRecordId }
-            ),
-        ]);
+        const locRows =
+            (
+                await db.query<[Array<{ id: unknown; assembly_mode?: unknown; assembly_value?: unknown }>]>(
+                    `SELECT id, assembly_mode, assembly_value FROM budget_location WHERE budget_id = $budgetId AND deleted_at IS NONE`,
+                    { budgetId: budgetRecordId }
+                )
+            )?.[0] ?? [];
 
-        let itemRows = itemRowsRes[0] ?? [];
-        if (itemRows.length === 0) {
-            const fallback = await db.query<[Array<Record<string, unknown>>]>(
-                `SELECT id, section_id, quantity, unit_price, labor_cost, price_adjustment_mode, price_adjustment_value, observation_extra_value, assembly_manual_value
-                 FROM budget_item WHERE section_id.budget_id = $budgetId AND deleted_at IS NONE FETCH section_id`,
-                { budgetId: budgetRecordId }
-            );
-            itemRows = fallback[0] ?? [];
+        const sectionRowsRaw = (
+            await Promise.all(
+                locRows.map(async (loc) => {
+                    const sectionRes = await db.query<
+                        [
+                            Array<{
+                                id: unknown;
+                                location_id?: unknown;
+                                assembly_mode?: unknown;
+                                assembly_value?: unknown;
+                            }>,
+                        ]
+                    >(
+                        `SELECT id, location_id, assembly_mode, assembly_value
+                         FROM budget_section
+                         WHERE location_id = $locationId AND deleted_at IS NONE`,
+                        { locationId: loc.id }
+                    );
+                    return sectionRes[0] ?? [];
+                })
+            )
+        ).flat();
+
+        const sectionsById = new Map<
+            string,
+            {
+                id: unknown;
+                location_id?: unknown;
+                assembly_mode?: unknown;
+                assembly_value?: unknown;
+            }
+        >();
+        for (const row of sectionRowsRaw) {
+            const id = recordIdToString(row.id) || String(row.id ?? "");
+            if (!id) continue;
+            if (!sectionsById.has(id)) sectionsById.set(id, row);
         }
+        const sectionRows = Array.from(sectionsById.values());
+
+        const itemsById = new Map<string, Record<string, unknown>>();
+        const mergeItemRows = (rows: Array<Record<string, unknown>>) => {
+            for (const row of rows) {
+                const id = recordIdToString(row.id) || String(row.id ?? "");
+                if (!id) continue;
+                if (!itemsById.has(id)) itemsById.set(id, row);
+            }
+        };
+
+        mergeItemRows(
+            (
+                await db.query<[Array<Record<string, unknown>>]>(
+                    `SELECT id, section_id, quantity, unit_price, labor_cost, price_adjustment_mode, price_adjustment_value, observation_extra_value, assembly_manual_value
+                     FROM budget_item WHERE budget_id = $budgetId AND section_id IS NOT NONE AND deleted_at IS NONE FETCH section_id`,
+                    { budgetId: budgetRecordId }
+                )
+            )?.[0] ?? []
+        );
+        mergeItemRows(
+            (
+                await db.query<[Array<Record<string, unknown>>]>(
+                    `SELECT id, section_id, quantity, unit_price, labor_cost, price_adjustment_mode, price_adjustment_value, observation_extra_value, assembly_manual_value
+                     FROM budget_item WHERE section_id.location_id.budget_id = $budgetId AND deleted_at IS NONE FETCH section_id`,
+                    { budgetId: budgetRecordId }
+                )
+            )?.[0] ?? []
+        );
+        mergeItemRows(
+            (
+                await db.query<[Array<Record<string, unknown>>]>(
+                    `SELECT id, section_id, quantity, unit_price, labor_cost, price_adjustment_mode, price_adjustment_value, observation_extra_value, assembly_manual_value
+                     FROM budget_item WHERE section_id.budget_id = $budgetId AND deleted_at IS NONE FETCH section_id`,
+                    { budgetId: budgetRecordId }
+                )
+            )?.[0] ?? []
+        );
+        const itemRows = Array.from(itemsById.values());
 
         const locationConfig = new Map<
             string,
             { mode: LocationAssemblyMode; value: number }
         >();
-        for (const row of locRowsRes[0] ?? []) {
-            const id = String(row.id);
+        for (const row of locRows) {
+            const id = recordIdToString(row.id) || String(row.id ?? "");
+            if (!id) continue;
             const modeRaw = String(row.assembly_mode ?? "percent");
             const mode: LocationAssemblyMode =
                 modeRaw === "fixed" || modeRaw === "manual" ? modeRaw : "percent";
@@ -136,9 +185,9 @@ export async function recalculateBudgetTotal(budgetId: string) {
             }
         >();
         const sectionIdsByLocation = new Map<string, string[]>();
-        for (const row of secRowsRes[0] ?? []) {
-            const sectionId = String(row.id);
-            const locationId = String(row.location_id ?? "");
+        for (const row of sectionRows) {
+            const sectionId = recordIdToString(row.id) || String(row.id ?? "");
+            const locationId = recordIdToString(row.location_id) || String(row.location_id ?? "");
             if (!locationId) continue;
             const modeRaw = String(row.assembly_mode ?? "percent");
             const mode: LocationAssemblyMode =
@@ -162,11 +211,11 @@ export async function recalculateBudgetTotal(budgetId: string) {
             const section = row.section_id as Record<string, unknown> | undefined;
             const sectionIdRaw = section && typeof section === "object" ? section.id : undefined;
             if (!sectionIdRaw) continue;
-            const sectionId = String(sectionIdRaw);
+            const sectionId = recordIdToString(sectionIdRaw) || String(sectionIdRaw);
             const locationRaw =
                 section && typeof section === "object" ? section.location_id : undefined;
             if (!locationRaw) continue;
-            const locationId = String(locationRaw);
+            const locationId = recordIdToString(locationRaw) || String(locationRaw);
             const item: ScopePricingItem = {
                 id: String(row.id ?? ""),
                 quantity: Number(row.quantity ?? 1),

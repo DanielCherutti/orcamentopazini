@@ -252,14 +252,9 @@ export async function syncDraftPricesAction(
         }
 
         if (updatedCount > 0) {
-            const totalRes = await db.query<[{ grand_total: number }[]]>(
-                "SELECT math::sum(total) as grand_total FROM budget_item WHERE block_id.budget_id = $budgetId GROUP ALL",
-                { budgetId: budgetRecordId }
-            );
-            const grandTotal = totalRes[0]?.[0]?.grand_total || 0;
-            await db
-                .update(budgetRecordId)
-                .merge({ total_value: grandTotal, updated_at: new Date().toISOString() });
+            // Evita sobrescrever com soma parcial (somente block_id).
+            // O total oficial precisa considerar escopo (section_id) + compositor (block_id).
+            await recalculateBudgetTotal(budgetId);
         }
 
         return updatedCount;

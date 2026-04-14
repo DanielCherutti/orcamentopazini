@@ -251,11 +251,21 @@ export async function getBudgetItemsBySectionIdsLightAction(sectionIds: string[]
     const db = await getDb();
     try {
         const recordIds = sectionIds.map((sid) => requireRecordId("budget_section", sid));
-        const result = await db.query<[Array<Record<string, unknown>>]>(
-            `SELECT * FROM budget_item WHERE section_id INSIDE $sectionIds AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC`,
-            { sectionIds: recordIds }
-        );
-        const rawRows = result?.[0] ?? [];
+        /**
+         * Em alguns ambientes Surreal, `section_id INSIDE [ids...]` não retorna linhas de forma consistente.
+         * Fazemos consultas por trecho em paralelo (validado em produção) e consolidamos no cliente.
+         */
+        const rawRows = (
+            await Promise.all(
+                recordIds.map(async (sectionId) => {
+                    const result = await db.query<[Array<Record<string, unknown>>]>(
+                        `SELECT * FROM budget_item WHERE section_id = $sectionId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC`,
+                        { sectionId }
+                    );
+                    return result?.[0] ?? [];
+                })
+            )
+        ).flat();
         const buckets = new Map<string, Record<string, unknown>[]>();
         for (const row of rawRows) {
             const sid = budgetItemSectionGroupKey(row.section_id);
@@ -338,31 +348,44 @@ export async function getBudgetItemsGroupedByBudgetIdAction(budgetId: string): P
     const db = await getDb();
     try {
         const budgetRecordId = requireRecordId("budget", budgetId);
-        /** Preferir `budget_id` denormalizado; depois cadeia section → local → orçamento. */
-        let rawRows = (
-            await db.query<[Array<Record<string, unknown>>]>(
-                `SELECT * FROM budget_item WHERE budget_id = $budgetId AND section_id IS NOT NONE AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC FETCH product_id`,
-                { budgetId: budgetRecordId }
-            )
-        )?.[0] ?? [];
-        if (rawRows.length === 0) {
-            rawRows =
-                (
-                    await db.query<[Array<Record<string, unknown>>]>(
-                        `SELECT * FROM budget_item WHERE section_id.location_id.budget_id = $budgetId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC FETCH product_id`,
-                        { budgetId: budgetRecordId }
-                    )
-                )?.[0] ?? [];
-        }
-        if (rawRows.length === 0) {
-            rawRows =
-                (
-                    await db.query<[Array<Record<string, unknown>>]>(
-                        `SELECT * FROM budget_item WHERE section_id.budget_id = $budgetId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC FETCH product_id`,
-                        { budgetId: budgetRecordId }
-                    )
-                )?.[0] ?? [];
-        }
+        /**
+         * Em bases legadas/migradas parcialmente, há mistura de linhas com e sem `budget_id`
+         * denormalizado. Precisamos unir os três caminhos para não perder itens no agrupamento.
+         */
+        const mergedById = new Map<string, Record<string, unknown>>();
+        const mergeRows = (rows: Array<Record<string, unknown>>) => {
+            for (const row of rows) {
+                const rid = recordIdToString(row.id) || String(row.id ?? "");
+                if (!rid) continue;
+                if (!mergedById.has(rid)) mergedById.set(rid, row);
+            }
+        };
+
+        mergeRows(
+            (
+                await db.query<[Array<Record<string, unknown>>]>(
+                    `SELECT * FROM budget_item WHERE budget_id = $budgetId AND section_id IS NOT NONE AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC FETCH product_id`,
+                    { budgetId: budgetRecordId }
+                )
+            )?.[0] ?? []
+        );
+        mergeRows(
+            (
+                await db.query<[Array<Record<string, unknown>>]>(
+                    `SELECT * FROM budget_item WHERE section_id.location_id.budget_id = $budgetId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC FETCH product_id`,
+                    { budgetId: budgetRecordId }
+                )
+            )?.[0] ?? []
+        );
+        mergeRows(
+            (
+                await db.query<[Array<Record<string, unknown>>]>(
+                    `SELECT * FROM budget_item WHERE section_id.budget_id = $budgetId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC FETCH product_id`,
+                    { budgetId: budgetRecordId }
+                )
+            )?.[0] ?? []
+        );
+        const rawRows = Array.from(mergedById.values());
         const rows = await serializeBudgetItemsFromRawQueryRows(db, rawRows);
         const plain = toPlain(rows) as BudgetItem[];
         const grouped: Record<string, BudgetItem[]> = {};
@@ -400,30 +423,40 @@ export async function getBudgetItemsGroupedByBudgetIdLightAction(budgetId: strin
     const db = await getDb();
     try {
         const budgetRecordId = requireRecordId("budget", budgetId);
-        let rawRows = (
-            await db.query<[Array<Record<string, unknown>>]>(
-                `SELECT * FROM budget_item WHERE budget_id = $budgetId AND section_id IS NOT NONE AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC`,
-                { budgetId: budgetRecordId }
-            )
-        )?.[0] ?? [];
-        if (rawRows.length === 0) {
-            rawRows =
-                (
-                    await db.query<[Array<Record<string, unknown>>]>(
-                        `SELECT * FROM budget_item WHERE section_id.location_id.budget_id = $budgetId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC`,
-                        { budgetId: budgetRecordId }
-                    )
-                )?.[0] ?? [];
-        }
-        if (rawRows.length === 0) {
-            rawRows =
-                (
-                    await db.query<[Array<Record<string, unknown>>]>(
-                        `SELECT * FROM budget_item WHERE section_id.budget_id = $budgetId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC`,
-                        { budgetId: budgetRecordId }
-                    )
-                )?.[0] ?? [];
-        }
+        const mergedById = new Map<string, Record<string, unknown>>();
+        const mergeRows = (rows: Array<Record<string, unknown>>) => {
+            for (const row of rows) {
+                const rid = recordIdToString(row.id) || String(row.id ?? "");
+                if (!rid) continue;
+                if (!mergedById.has(rid)) mergedById.set(rid, row);
+            }
+        };
+
+        mergeRows(
+            (
+                await db.query<[Array<Record<string, unknown>>]>(
+                    `SELECT * FROM budget_item WHERE budget_id = $budgetId AND section_id IS NOT NONE AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC`,
+                    { budgetId: budgetRecordId }
+                )
+            )?.[0] ?? []
+        );
+        mergeRows(
+            (
+                await db.query<[Array<Record<string, unknown>>]>(
+                    `SELECT * FROM budget_item WHERE section_id.location_id.budget_id = $budgetId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC`,
+                    { budgetId: budgetRecordId }
+                )
+            )?.[0] ?? []
+        );
+        mergeRows(
+            (
+                await db.query<[Array<Record<string, unknown>>]>(
+                    `SELECT * FROM budget_item WHERE section_id.budget_id = $budgetId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC`,
+                    { budgetId: budgetRecordId }
+                )
+            )?.[0] ?? []
+        );
+        const rawRows = Array.from(mergedById.values());
 
         const plain = serializeBudgetItemsLight(rawRows);
         const grouped: Record<string, BudgetItem[]> = {};
