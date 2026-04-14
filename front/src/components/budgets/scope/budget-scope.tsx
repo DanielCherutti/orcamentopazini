@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
     Loader2,
     Map as MapIcon,
@@ -17,20 +17,48 @@ import type {
     CostDisplayMode,
     LocationAssemblyMode,
     PriceAdjustmentMode,
+    ScopePricingItem,
+} from "@/lib/budgets/scope-pricing";
+import {
+    computeLocationScopeTotal,
 } from "@/lib/budgets/scope-pricing";
 import {
     updateLocationAction,
     updateSectionAction,
 } from "@/actions/budget-hierarchy-scope-structure-actions";
-import { clearScopeItemPriceAdjustmentsAction } from "@/actions/budget-hierarchy-section-items-actions";
+import {
+    clearScopeItemPriceAdjustmentsAction,
+    getBudgetItemsGroupedByBudgetIdLightAction,
+} from "@/actions/budget-hierarchy-section-items-actions";
 import { listProductGroupsAction, type ProductGroup } from "@/actions/product-group-actions";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { ScopeFiguresProvider } from "./scope-figures-context";
 import { prefetchScopeSectionPayloadDebounced } from "@/lib/budgets/scope-section-payload-cache";
+import type { BudgetItem } from "@/types/budget-types";
+import { budgetItemsFromGroupedBySectionId } from "@/lib/budgets/budget-section-items-grouped";
 
 export type { BudgetScopeProps, Selection } from "./budget-scope-types";
+
+function mapBudgetItemToScopePricingWithSection(
+    it: BudgetItem,
+    sectionId: string
+): ScopePricingItem & { section_id: string } {
+    const mode = it.price_adjustment_mode;
+    return {
+        id: it.id,
+        section_id: sectionId,
+        quantity: it.quantity,
+        unit_price: it.unit_price,
+        labor_cost: it.labor_cost,
+        price_adjustment_mode:
+            mode === "percent" || mode === "fixed" ? mode : null,
+        price_adjustment_value: it.price_adjustment_value ?? 0,
+        observation_extra_value: it.observation_extra_value ?? 0,
+        assembly_manual_value: it.assembly_manual_value ?? 0,
+    };
+}
 
 export function BudgetScope({
     budgetId,
@@ -44,6 +72,8 @@ export function BudgetScope({
     const [loading, setLoading] = useState(true);
     const [selected, setSelected] = useState<Selection | null>(null);
     const [scopeNumber, setScopeNumber] = useState<string>("");
+    const [locationTotalsById, setLocationTotalsById] = useState<Record<string, number>>({});
+    const [locationTotalsLoading, setLocationTotalsLoading] = useState(false);
     const [showCostsOnPrint, setShowCostsOnPrint] = useState(false);
     const [costsDisplayMode, setCostsDisplayMode] = useState<CostDisplayMode>("section");
     const [priceAdjustmentEnabled, setPriceAdjustmentEnabled] = useState(false);
@@ -64,9 +94,11 @@ export function BudgetScope({
     }, [budgetId]);
 
     const loadScopeNumber = useCallback(async () => {
-        const { getCompositorTreeAction } = await import("@/actions/budget-compositor-tree-actions");
+        const { getCompositorTreeSnapshotAction } = await import(
+            "@/actions/budget-compositor-tree-actions"
+        );
         const { buildTree } = await import("@/types/budget-compositor-types");
-        const res = await getCompositorTreeAction(budgetId);
+        const res = await getCompositorTreeSnapshotAction(budgetId);
         if (res.success && res.blocks) {
             const tree = buildTree(res.blocks);
             const flattenLocal = (nodes: typeof tree.blocks): typeof tree.blocks => {
@@ -82,12 +114,97 @@ export function BudgetScope({
                 const rootIndex = tree.blocks.findIndex((b) => b.id === scopeBlock.id);
                 setScopeNumber(rootIndex >= 0 ? String(rootIndex + 1) : "");
             }
+        } else {
+            setScopeNumber("");
         }
     }, [budgetId]);
 
     useEffect(() => {
-        Promise.all([loadLocations(), loadScopeNumber()]).finally(() => setLoading(false));
-    }, [loadLocations, loadScopeNumber]);
+        let cancelled = false;
+        setLoading(true);
+        void loadLocations().finally(() => {
+            if (!cancelled) setLoading(false);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [loadLocations]);
+
+    useEffect(() => {
+        void loadScopeNumber();
+    }, [loadScopeNumber]);
+
+    const totalsCacheRef = useRef<Map<string, Record<string, number>>>(new Map());
+    const totalsCacheKey = useMemo(
+        () =>
+            `${scopeDataVersion}|${locations
+                .map(
+                    (loc) =>
+                        `${loc.id}:${loc.assembly_mode ?? "percent"}:${loc.assembly_value ?? 0}:${loc.sections
+                            .map((sec) => `${sec.id}:${sec.assembly_mode ?? ""}:${sec.assembly_value ?? ""}`)
+                            .join(",")}`
+                )
+                .join("|")}`,
+        [locations, scopeDataVersion]
+    );
+
+    useEffect(() => {
+        totalsCacheRef.current.clear();
+    }, [budgetId]);
+
+    useEffect(() => {
+        let cancelled = false;
+        if (locations.length === 0) {
+            setLocationTotalsById({});
+            setLocationTotalsLoading(false);
+            return;
+        }
+
+        const cached = totalsCacheRef.current.get(totalsCacheKey);
+        if (cached) {
+            setLocationTotalsById(cached);
+            setLocationTotalsLoading(false);
+            return;
+        }
+
+        setLocationTotalsLoading(true);
+        void (async () => {
+            const grouped = await getBudgetItemsGroupedByBudgetIdLightAction(budgetId);
+            if (cancelled) return;
+
+            if (!grouped.success || !grouped.data) {
+                setLocationTotalsById({});
+                return;
+            }
+
+            const nextTotals: Record<string, number> = {};
+            for (const loc of locations) {
+                const itemsWithSection: Array<ScopePricingItem & { section_id: string }> = [];
+                for (const sec of loc.sections) {
+                    for (const it of budgetItemsFromGroupedBySectionId(grouped.data, sec.id)) {
+                        itemsWithSection.push(mapBudgetItemToScopePricingWithSection(it, sec.id));
+                    }
+                }
+                nextTotals[loc.id] = computeLocationScopeTotal({
+                    location: {
+                        assembly_mode: loc.assembly_mode,
+                        assembly_value: loc.assembly_value,
+                    },
+                    sections: loc.sections,
+                    items: itemsWithSection,
+                });
+            }
+            if (cancelled) return;
+            totalsCacheRef.current.set(totalsCacheKey, nextTotals);
+            setLocationTotalsById(nextTotals);
+        })().finally(() => {
+            if (!cancelled) setLocationTotalsLoading(false);
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [budgetId, locations, totalsCacheKey]);
 
     const selectedLocation = useMemo(() => {
         if (!selected) return null;
@@ -199,7 +316,8 @@ export function BudgetScope({
                     key={budgetId}
                     budgetId={budgetId}
                     locations={locations}
-                    scopeDataVersion={scopeDataVersion}
+                    locationTotalsById={locationTotalsById}
+                    locationTotalsLoading={locationTotalsLoading}
                     quoteMarkupPercent={quoteMarkupPercent}
                     quoteDiscountPercent={quoteDiscountPercent}
                     selected={selected}

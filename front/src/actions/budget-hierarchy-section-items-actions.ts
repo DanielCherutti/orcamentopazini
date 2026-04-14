@@ -385,6 +385,67 @@ export async function getBudgetItemsGroupedByBudgetIdAction(budgetId: string): P
     }
 }
 
+/**
+ * Variante leve para o Escopo: agrupa por trecho sem FETCH de produto.
+ * Reduz payload e round-trips ao abrir índices grandes.
+ */
+export async function getBudgetItemsGroupedByBudgetIdLightAction(budgetId: string): Promise<{
+    success: boolean;
+    data?: Record<string, BudgetItem[]>;
+    error?: string;
+}> {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const db = await getDb();
+    try {
+        const budgetRecordId = requireRecordId("budget", budgetId);
+        let rawRows = (
+            await db.query<[Array<Record<string, unknown>>]>(
+                `SELECT * FROM budget_item WHERE budget_id = $budgetId AND section_id IS NOT NONE AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC`,
+                { budgetId: budgetRecordId }
+            )
+        )?.[0] ?? [];
+        if (rawRows.length === 0) {
+            rawRows =
+                (
+                    await db.query<[Array<Record<string, unknown>>]>(
+                        `SELECT * FROM budget_item WHERE section_id.location_id.budget_id = $budgetId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC`,
+                        { budgetId: budgetRecordId }
+                    )
+                )?.[0] ?? [];
+        }
+        if (rawRows.length === 0) {
+            rawRows =
+                (
+                    await db.query<[Array<Record<string, unknown>>]>(
+                        `SELECT * FROM budget_item WHERE section_id.budget_id = $budgetId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC`,
+                        { budgetId: budgetRecordId }
+                    )
+                )?.[0] ?? [];
+        }
+
+        const plain = serializeBudgetItemsLight(rawRows);
+        const grouped: Record<string, BudgetItem[]> = {};
+        for (const it of plain) {
+            const r = it as unknown as Record<string, unknown>;
+            const sid = budgetItemSectionGroupKey(r.section_id);
+            if (!sid) continue;
+            (it as BudgetItem).section_id = sid;
+            if (!grouped[sid]) grouped[sid] = [];
+            grouped[sid].push(it);
+        }
+        return { success: true, data: grouped };
+    } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
+        console.error("getBudgetItemsGroupedByBudgetIdLightAction error:", error);
+        if (isTokenExpiredError(error)) resetDb();
+        return { success: false, error: "Erro ao carregar itens do orçamento" };
+    }
+}
+
 export async function addItemAction(sectionId: string, budgetId: string, productId: string, quantity: number) {
     const auth = await assertActionSession();
     if (!auth.ok) return { success: false, error: auth.error };

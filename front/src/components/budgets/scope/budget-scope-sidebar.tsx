@@ -55,14 +55,9 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import type { ScopeLocation, ScopeSection } from "@/actions/budget-scope-actions";
-import { getBudgetItemsBySectionIdsLightAction } from "@/actions/budget-hierarchy-section-items-actions";
-import { budgetItemsFromGroupedBySectionId } from "@/lib/budgets/budget-section-items-grouped";
 import {
     applyQuoteCommercialFactor,
-    computeLocationScopeTotal,
-    type ScopePricingItem,
 } from "@/lib/budgets/scope-pricing";
-import type { BudgetItem } from "@/types/budget-types";
 import { formatCurrency } from "./budget-scope-utils";
 import {
     addLocationAction,
@@ -84,25 +79,6 @@ const SCOPE_SIDEBAR_WIDTH_MAX = 560;
 
 function clampScopeSidebarWidth(px: number): number {
     return Math.min(SCOPE_SIDEBAR_WIDTH_MAX, Math.max(SCOPE_SIDEBAR_WIDTH_MIN, Math.round(px)));
-}
-
-function budgetItemToScopePricingWithSection(
-    it: BudgetItem,
-    sectionId: string
-): ScopePricingItem & { section_id: string } {
-    const mode = it.price_adjustment_mode;
-    return {
-        id: it.id,
-        section_id: sectionId,
-        quantity: it.quantity,
-        unit_price: it.unit_price,
-        labor_cost: it.labor_cost,
-        price_adjustment_mode:
-            mode === "percent" || mode === "fixed" ? mode : null,
-        price_adjustment_value: it.price_adjustment_value ?? 0,
-        observation_extra_value: it.observation_extra_value ?? 0,
-        assembly_manual_value: it.assembly_manual_value ?? 0,
-    };
 }
 
 function persistScopeSidebarWidth(px: number) {
@@ -235,8 +211,8 @@ function ScopeSidebarDragOverlay({
 interface ScopeSidebarProps {
     budgetId: string;
     locations: ScopeLocation[];
-    /** Incrementa após cada refresh (itens/totais do local no índice). */
-    scopeDataVersion: number;
+    locationTotalsById: Record<string, number>;
+    locationTotalsLoading: boolean;
     quoteMarkupPercent?: number;
     quoteDiscountPercent?: number;
     selected: Selection | null;
@@ -251,7 +227,8 @@ interface ScopeSidebarProps {
 export function ScopeSidebar({
     budgetId,
     locations,
-    scopeDataVersion,
+    locationTotalsById,
+    locationTotalsLoading,
     quoteMarkupPercent = 0,
     quoteDiscountPercent = 0,
     selected,
@@ -265,6 +242,28 @@ export function ScopeSidebar({
     useEffect(() => {
         setLocalLocations(locations);
     }, [locations]);
+    const [visibleLocationsCount, setVisibleLocationsCount] = useState(24);
+
+    useEffect(() => {
+        let frame = 0;
+        const total = localLocations.length;
+        setVisibleLocationsCount(Math.min(24, total));
+        if (total <= 24) return;
+
+        const step = () => {
+            setVisibleLocationsCount((prev) => {
+                const next = Math.min(total, prev + 32);
+                if (next < total) {
+                    frame = window.requestAnimationFrame(step);
+                }
+                return next;
+            });
+        };
+        frame = window.requestAnimationFrame(step);
+        return () => {
+            if (frame) window.cancelAnimationFrame(frame);
+        };
+    }, [localLocations.length]);
 
     const dndSensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -479,7 +478,16 @@ export function ScopeSidebar({
                 if (!currentIds.has(id)) next.delete(id);
             }
             if (prevIds === null) {
-                for (const id of currentIds) next.add(id);
+                // Primeira renderização: manter apenas o primeiro local aberto para evitar montar
+                // centenas de linhas de trecho de uma vez.
+                if (selected?.type === "location") {
+                    next.add(selected.id);
+                } else if (selected?.type === "section") {
+                    next.add(selected.locationId);
+                } else {
+                    const firstId = locations[0]?.id;
+                    if (firstId) next.add(firstId);
+                }
             } else {
                 for (const id of currentIds) {
                     if (!prevIds.has(id)) next.add(id);
@@ -489,7 +497,7 @@ export function ScopeSidebar({
         });
 
         prevLocationIdSetRef.current = currentIds;
-    }, [locations]);
+    }, [locations, selected]);
 
     /** Local (pai): só ele expandido e todos os trechos visíveis. Trecho: só o pai expandido e só aquele trecho na lista. */
     useEffect(() => {
@@ -563,6 +571,7 @@ export function ScopeSidebar({
 
     const locationCount = localLocations.length;
     const sectionCount = localLocations.reduce((n, l) => n + l.sections.length, 0);
+    const visibleLocations = localLocations.slice(0, visibleLocationsCount);
 
     return (
         <aside
@@ -632,17 +641,18 @@ export function ScopeSidebar({
                             </div>
                         )}
                         <SortableContext
-                            items={localLocations.map((l) => `${LOCATION_SORT_PREFIX}${l.id}`)}
+                            items={visibleLocations.map((l) => `${LOCATION_SORT_PREFIX}${l.id}`)}
                             strategy={verticalListSortingStrategy}
                         >
-                            {localLocations.map((loc, locIdx) => (
+                            {visibleLocations.map((loc, locIdx) => (
                                 <LocationNode
                                     key={loc.id}
                                     location={loc}
                                     locIndex={locIdx + 1}
                                     scopeNumber={scopeNumber}
                                     budgetId={budgetId}
-                                    scopeDataVersion={scopeDataVersion}
+                                    locationTotal={locationTotalsById[loc.id]}
+                                    locationTotalsLoading={locationTotalsLoading}
                                     quoteMarkupPercent={quoteMarkupPercent}
                                     quoteDiscountPercent={quoteDiscountPercent}
                                     selected={selected}
@@ -657,6 +667,11 @@ export function ScopeSidebar({
                                 />
                             ))}
                         </SortableContext>
+                        {visibleLocationsCount < localLocations.length && (
+                            <div className="px-2 pb-1 text-center text-[11px] text-muted-foreground">
+                                Carregando mais locais...
+                            </div>
+                        )}
                     </nav>
                     <DragOverlay dropAnimation={null}>
                         <ScopeSidebarDragOverlay localLocations={localLocations} scopeNumber={scopeNumber} />
@@ -913,7 +928,8 @@ interface LocationNodeProps {
     locIndex: number;
     scopeNumber: string;
     budgetId: string;
-    scopeDataVersion: number;
+    locationTotal?: number;
+    locationTotalsLoading: boolean;
     quoteMarkupPercent: number;
     quoteDiscountPercent: number;
     selected: Selection | null;
@@ -932,7 +948,8 @@ function LocationNode({
     locIndex,
     scopeNumber,
     budgetId,
-    scopeDataVersion,
+    locationTotal,
+    locationTotalsLoading,
     quoteMarkupPercent,
     quoteDiscountPercent,
     selected,
@@ -967,66 +984,10 @@ function LocationNode({
     } | null>(null);
     const [duplicateName, setDuplicateName] = useState("");
     const [duplicating, setDuplicating] = useState(false);
-    const [locationScopeTotal, setLocationScopeTotal] = useState<number | null>(null);
-    const [locationTotalLoading, setLocationTotalLoading] = useState(
-        () => location.sections.length > 0
-    );
 
     const isEmptyLocation = location.sections.length === 0;
-    const displayLocationLoading = isEmptyLocation ? false : locationTotalLoading;
-    const displayLocationTotal = isEmptyLocation ? 0 : (locationScopeTotal ?? 0);
-
-    useEffect(() => {
-        if (location.sections.length === 0) return;
-        let cancelled = false;
-        const sections = location.sections;
-        const locAssemblyMode = location.assembly_mode;
-        const locAssemblyValue = location.assembly_value;
-
-        void (async () => {
-            await Promise.resolve();
-            if (cancelled) return;
-            setLocationTotalLoading(true);
-            try {
-                const secIds = sections.map((s) => s.id);
-                const grouped = await getBudgetItemsBySectionIdsLightAction(secIds);
-                if (cancelled) return;
-                const itemsWithSection: Array<ScopePricingItem & { section_id: string }> = [];
-                if (!grouped.success || !grouped.data) {
-                    setLocationScopeTotal(null);
-                    return;
-                }
-                sections.forEach((sec) => {
-                    for (const it of budgetItemsFromGroupedBySectionId(grouped.data, sec.id)) {
-                        itemsWithSection.push(budgetItemToScopePricingWithSection(it, sec.id));
-                    }
-                });
-                const total = computeLocationScopeTotal({
-                    location: {
-                        assembly_mode: locAssemblyMode,
-                        assembly_value: locAssemblyValue,
-                    },
-                    sections,
-                    items: itemsWithSection,
-                });
-                setLocationScopeTotal(total);
-            } catch {
-                if (!cancelled) setLocationScopeTotal(null);
-            } finally {
-                if (!cancelled) setLocationTotalLoading(false);
-            }
-        })();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [
-        location.id,
-        location.sections,
-        location.assembly_mode,
-        location.assembly_value,
-        scopeDataVersion,
-    ]);
+    const displayLocationLoading = isEmptyLocation ? false : locationTotalsLoading;
+    const displayLocationTotal = isEmptyLocation ? 0 : (locationTotal ?? 0);
 
     const isSelected = selected?.type === "location" && selected.id === location.id;
     /** Índice sempre lista todos os trechos; só o painel principal muda (todos empilhados vs um trecho). */
