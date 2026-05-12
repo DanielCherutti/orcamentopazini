@@ -135,10 +135,38 @@ function computeLocationItemValues(location: BudgetLocation) {
 }
 
 function itemLabel(item: BudgetItem): string {
-    if (typeof item.product_id === 'object' && item.product_id) {
-        return item.product_id.description || item.product_id.name || 'Produto';
-    }
-    return item.product_name || 'Produto';
+    const clean = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+    const isGeneric = (s: string): boolean => {
+        const n = s.toLowerCase();
+        return n === '' || n === 'produto' || n === 'product' || n === 'item';
+    };
+    const row = item as unknown as Record<string, unknown>;
+    const pidObj =
+        typeof item.product_id === 'object' && item.product_id
+            ? (item.product_id as Record<string, unknown>)
+            : undefined;
+    const pd =
+        row.product_data && typeof row.product_data === 'object'
+            ? (row.product_data as Record<string, unknown>)
+            : undefined;
+
+    const candidates = [
+        clean(item.product_name),
+        clean(row.product_name),
+        clean(pidObj?.description),
+        clean(pidObj?.name),
+        clean(pidObj?.title),
+        clean(pd?.description),
+        clean(pd?.name),
+        clean(pd?.title),
+        clean(row.description),
+        clean(row.name),
+        clean(row.title),
+        clean(pd?.code),
+        clean(pidObj?.code),
+    ];
+    const best = candidates.find((s) => !isGeneric(s));
+    return best || clean(item.product_name) || 'Produto';
 }
 
 function sectionWantsLaborSplitOnPrint(sec: { items?: BudgetItem[] }): boolean {

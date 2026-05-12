@@ -255,6 +255,9 @@ const styles = StyleSheet.create({
         lineHeight: 1.35,
         marginBottom: 2,
     },
+    sessionRichParagraphSpacer: {
+        height: 10,
+    },
     sessionRichImageBase: {
         marginTop: 4,
         marginBottom: 6,
@@ -935,7 +938,7 @@ export const ProposalDocument = ({
                     />
                 );
             }
-            const segs = splitCoverHtmlFragmentToSegments(b.content);
+            const segs = splitCoverHtmlFragmentToSegments(b.content, { preserveEmptyParagraphs: true });
             return segs.map((seg, j) => {
                 if (seg.kind === 'heading') {
                     return (
@@ -946,6 +949,9 @@ export const ProposalDocument = ({
                             {seg.text}
                         </Text>
                     );
+                }
+                if (seg.isEmpty) {
+                    return <View key={`${rowKey}-sp-${i}-${j}`} style={styles.sessionRichParagraphSpacer} />;
                 }
                 return (
                     <Text

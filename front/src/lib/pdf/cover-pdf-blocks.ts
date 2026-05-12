@@ -6,7 +6,7 @@ export type CoverPdfBlock =
     | { type: "img"; src: string; widthPt?: number; heightPt?: number };
 
 export type CoverPdfTextSegment =
-    | { kind: "paragraph"; text: string; textAlign?: "left" | "center" | "right" }
+    | { kind: "paragraph"; text: string; textAlign?: "left" | "center" | "right"; isEmpty?: boolean }
     | { kind: "heading"; level: 1 | 2 | 3; text: string; textAlign?: "left" | "center" | "right" };
 
 function parseTextAlignFromAttrs(attrs: string): "left" | "center" | "right" | undefined {
@@ -49,7 +49,10 @@ function parseImgDimensionPt(tag: string, prop: "width" | "height"): number | un
 /**
  * Dentro de um bloco de texto da capa, extrai `<p>`/`<div>` e `<h1>`–`<h3>` na ordem.
  */
-export function splitCoverHtmlFragmentToSegments(html: string): CoverPdfTextSegment[] {
+export function splitCoverHtmlFragmentToSegments(
+    html: string,
+    options?: { preserveEmptyParagraphs?: boolean }
+): CoverPdfTextSegment[] {
     const segments: CoverPdfTextSegment[] = [];
     const re = /<(p|div|h1|h2|h3)\b([^>]*)>([\s\S]*?)<\/\1>/gi;
     let m: RegExpExecArray | null;
@@ -57,11 +60,23 @@ export function splitCoverHtmlFragmentToSegments(html: string): CoverPdfTextSegm
         const tag = m[1].toLowerCase();
         const attrs = m[2];
         const inner = m[3];
+        const preserveEmpty = options?.preserveEmptyParagraphs === true;
         const text = sanitizeTextForPdf(stripHtmlToText(inner));
-        if (!text.trim()) continue;
         if (tag === "p" || tag === "div") {
-            segments.push({ kind: "paragraph", text, textAlign: parseTextAlignFromAttrs(attrs) });
+            if (!text.trim()) {
+                if (preserveEmpty) {
+                    segments.push({
+                        kind: "paragraph",
+                        text: "",
+                        textAlign: parseTextAlignFromAttrs(attrs),
+                        isEmpty: true,
+                    });
+                }
+                continue;
+            }
+            segments.push({ kind: "paragraph", text, textAlign: parseTextAlignFromAttrs(attrs), isEmpty: false });
         } else {
+            if (!text.trim()) continue;
             const level = (tag === "h1" ? 1 : tag === "h2" ? 2 : 3) as 1 | 2 | 3;
             segments.push({ kind: "heading", level, text, textAlign: parseTextAlignFromAttrs(attrs) });
         }
