@@ -13,10 +13,10 @@ import {
     buildCoverPdfBandContext,
     formatCoverPdfFooterLeftText,
     formatCoverPdfFooterRightText,
+    resolveCoverPageShowFooterBand,
+    resolveCoverPageShowHeaderBand,
     resolveCoverPdfHeaderCompanyText,
     resolveCoverPdfHeaderLogoUrl,
-    shouldShowCoverPdfHeaderBand,
-    resolveCoverPdfShowFooterBand,
 } from "@/lib/pdf/cover-pdf-band-resolve";
 import { PdfProposalHeaderBand } from "@/components/pdf/pdf-proposal-header-band";
 import { DEFAULT_CLIENT_LOGO_LAYOUT } from "@/lib/budgets/cover-client-logo-layout";
@@ -111,9 +111,7 @@ const styles = StyleSheet.create({
     color: "#171717",
     marginBottom: 6,
   },
-  coverImage: {
-    width: PAGE_W - 2 * BODY_PAD_H,
-    height: 280,
+  coverImageBase: {
     marginBottom: 8,
     objectFit: "contain",
   },
@@ -206,6 +204,24 @@ function clampOpacity(value: number | undefined, fallback: number): number {
   return n;
 }
 
+function clampCoverImagePt(value: number | undefined, min: number, max: number): number | undefined {
+  if (!Number.isFinite(value)) return undefined;
+  const n = Number(value);
+  if (n <= 0) return undefined;
+  return Math.max(min, Math.min(max, n));
+}
+
+function resolveCoverBlockImageStyle(block: { widthPt?: number; heightPt?: number }) {
+  const maxWidth = PAGE_W - 2 * BODY_PAD_H;
+  const maxHeight = PAGE_H * 0.56;
+  const width = clampCoverImagePt(block.widthPt, 36, maxWidth);
+  const height = clampCoverImagePt(block.heightPt, 24, maxHeight);
+  if (width && height) return { width, height };
+  if (width) return { width };
+  if (height) return { height };
+  return { width: maxWidth };
+}
+
 export function CompositorCoverPdfPage({
   budget,
   settings,
@@ -262,12 +278,17 @@ export function CompositorCoverPdfPage({
   const customCoverFooterText = sanitizeTextForPdf(
     stripHtmlToText(String(headerFooterProps?.cover_footer_html ?? ""))
   ).trim();
-  const showCoverHeader = customCoverHeaderText
-    ? true
-    : (headerFooterProps?.legacy_cover_pdf_show_header_band ?? shouldShowCoverPdfHeaderBand(coverProps, settings));
-  const showCoverFooter = customCoverFooterText
-    ? true
-    : (headerFooterProps?.legacy_cover_pdf_show_footer_band ?? resolveCoverPdfShowFooterBand(coverProps));
+  const showCoverHeader = resolveCoverPageShowHeaderBand(
+    coverProps,
+    settings,
+    headerFooterProps,
+    Boolean(customCoverHeaderText),
+  );
+  const showCoverFooter = resolveCoverPageShowFooterBand(
+    coverProps,
+    headerFooterProps,
+    Boolean(customCoverFooterText),
+  );
   const headerReserveFromCover = coverProps.cover_pdf_header_band_height_pt;
   const footerReserveFromCover = coverProps.cover_pdf_footer_band_height_pt;
   const headerReserve = customCoverHeaderText
@@ -375,7 +396,7 @@ export function CompositorCoverPdfPage({
             const src = proxyPdfImageSrc(b.src, settings.app_public_url, pdfEmbeddedImages) ?? b.src;
             return (
               /* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */
-              <Image key={`cover-img-${i}`} src={src} style={styles.coverImage} />
+              <Image key={`cover-img-${i}`} src={src} style={[styles.coverImageBase, resolveCoverBlockImageStyle(b)]} />
             );
           }
           const segs = splitCoverHtmlFragmentToSegments(b.content);
@@ -391,7 +412,10 @@ export function CompositorCoverPdfPage({
                         ? styles.coverHeading2
                         : styles.coverHeading3;
                   return (
-                    <Text key={`${i}-${j}`} style={hs}>
+                    <Text
+                      key={`${i}-${j}`}
+                      style={seg.textAlign ? [hs, { textAlign: seg.textAlign }] : hs}
+                    >
                       {seg.text}
                     </Text>
                   );

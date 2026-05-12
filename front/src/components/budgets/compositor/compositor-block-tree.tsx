@@ -785,6 +785,67 @@ function HeaderFooterRenderer({
                         onRefresh={onRefresh}
                     />
                 ) : null}
+                {key === "cover" ? (
+                    <div className="rounded-lg border bg-card p-3 space-y-3">
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Faixas da capa (PDF)
+                        </Label>
+                        <div className="flex flex-wrap items-center gap-4">
+                            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Checkbox
+                                    checked={props.cover_show_header_band !== false}
+                                    disabled={isReadOnly}
+                                    onCheckedChange={(v) => {
+                                        void handlePatch({ cover_show_header_band: v === true });
+                                    }}
+                                />
+                                Mostrar faixa superior
+                            </label>
+                            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Checkbox
+                                    checked={props.cover_show_footer_band !== false}
+                                    disabled={isReadOnly}
+                                    onCheckedChange={(v) => {
+                                        void handlePatch({ cover_show_footer_band: v === true });
+                                    }}
+                                />
+                                Mostrar faixa inferior
+                            </label>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                            Estes dois toggles do bloco <code>header_footer</code> são a fonte principal usada pelo PDF da capa.
+                        </p>
+                    </div>
+                ) : null}
+                {key === "inner" ? (
+                    <div className="rounded-lg border bg-card p-3 space-y-3">
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Faixas das páginas internas (PDF)
+                        </Label>
+                        <div className="flex flex-wrap items-center gap-4">
+                            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Checkbox
+                                    checked={props.inner_show_header_band !== false}
+                                    disabled={isReadOnly}
+                                    onCheckedChange={(v) => {
+                                        void handlePatch({ inner_show_header_band: v === true });
+                                    }}
+                                />
+                                Mostrar faixa superior
+                            </label>
+                            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Checkbox
+                                    checked={props.inner_show_footer_band !== false}
+                                    disabled={isReadOnly}
+                                    onCheckedChange={(v) => {
+                                        void handlePatch({ inner_show_footer_band: v === true });
+                                    }}
+                                />
+                                Mostrar faixa inferior
+                            </label>
+                        </div>
+                    </div>
+                ) : null}
                 <div className="rounded-lg border bg-card p-3 space-y-3">
                     <div className="flex items-center justify-between gap-3">
                         <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

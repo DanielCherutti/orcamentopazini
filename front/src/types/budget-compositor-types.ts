@@ -73,6 +73,10 @@ export interface CoverBlockProps {
 }
 
 export interface HeaderFooterBlockProps {
+  /** Controle principal da faixa superior da capa no PDF (bloco header_footer). */
+  cover_show_header_band?: boolean;
+  /** Controle principal da faixa inferior da capa no PDF (bloco header_footer). */
+  cover_show_footer_band?: boolean;
   cover_watermark_url?: string;
   cover_watermark_opacity?: number;
   cover_watermark_scale_pct?: number;
@@ -92,6 +96,10 @@ export interface HeaderFooterBlockProps {
   cover_footer_html?: string;
   cover_header_height?: number;
   cover_footer_height?: number;
+  /** Exibir faixa de cabeçalho nas páginas internas do PDF. */
+  inner_show_header_band?: boolean;
+  /** Exibir faixa de rodapé nas páginas internas do PDF. */
+  inner_show_footer_band?: boolean;
   inner_header_html?: string;
   inner_footer_html?: string;
   inner_header_height?: number;
@@ -106,6 +114,8 @@ export interface HeaderFooterBlockProps {
 }
 
 export const DEFAULT_HEADER_FOOTER_PROPS: HeaderFooterBlockProps = {
+  cover_show_header_band: false,
+  cover_show_footer_band: false,
   cover_watermark_url: "",
   cover_watermark_opacity: 0.12,
   cover_watermark_scale_pct: 100,
@@ -125,6 +135,8 @@ export const DEFAULT_HEADER_FOOTER_PROPS: HeaderFooterBlockProps = {
   cover_footer_html: "",
   cover_header_height: 108,
   cover_footer_height: 44,
+  inner_show_header_band: false,
+  inner_show_footer_band: false,
   inner_header_html: "",
   inner_footer_html: "",
   inner_header_height: 96,

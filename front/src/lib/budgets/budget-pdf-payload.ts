@@ -97,6 +97,7 @@ export async function loadBudgetPdfPayload(
             compositorPdf = {
                 roots: tree.blocks,
                 items: tree.items,
+                imagesByBlock: (snap.imagesByBlock ?? {}) as CompositorPdfPayload["imagesByBlock"],
                 scopeFigures:
                     figRes.success && figRes.entries?.length
                         ? figRes.entries.map((e) => ({ id: e.id, caption: e.caption }))

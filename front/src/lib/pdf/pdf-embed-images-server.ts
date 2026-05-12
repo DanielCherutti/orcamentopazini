@@ -47,6 +47,33 @@ function collectImgSrcFromHtml(html: string): string[] {
     return out;
 }
 
+function collectCompositorHtmlImageUrls(compositorPdf?: CompositorPdfPayload): string[] {
+    if (!compositorPdf?.roots?.length) return [];
+    const out = new Set<string>();
+    const flat = flattenTree(compositorPdf.roots);
+    for (const block of flat) {
+        const props = (block.props ?? {}) as Record<string, unknown>;
+        if (block.type === "cover") {
+            for (const src of collectImgSrcFromHtml(String(props.cover_document_html ?? ""))) {
+                out.add(src);
+            }
+            continue;
+        }
+        if (block.type === "session" || block.type === "location" || block.type === "section") {
+            for (const src of collectImgSrcFromHtml(String(props.description ?? ""))) {
+                out.add(src);
+            }
+            continue;
+        }
+        if (block.type === "text") {
+            for (const src of collectImgSrcFromHtml(String(props.content ?? ""))) {
+                out.add(src);
+            }
+        }
+    }
+    return [...out];
+}
+
 function addUrl(set: Set<string>, u?: string | null) {
     const t = u?.trim();
     if (!t || t.startsWith("blob:")) return;
@@ -80,6 +107,16 @@ export function collectRawPdfImageUrlsForPdf(
     }
     for (const src of collectImgSrcFromHtml(cover.cover_document_html ?? "")) {
         addUrl(set, src);
+    }
+    for (const src of collectCompositorHtmlImageUrls(compositorPdf)) {
+        addUrl(set, src);
+    }
+    const imagesByBlock = compositorPdf?.imagesByBlock ?? {};
+    for (const arr of Object.values(imagesByBlock)) {
+        for (const img of arr ?? []) {
+            addUrl(set, (img as { composed_url?: string }).composed_url);
+            addUrl(set, (img as { url?: string }).url);
+        }
     }
     for (const loc of budget.locations ?? []) {
         for (const sec of loc.sections ?? []) {

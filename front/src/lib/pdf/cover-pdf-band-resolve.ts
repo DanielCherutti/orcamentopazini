@@ -113,3 +113,40 @@ export function shouldShowCoverPdfHeaderBand(
     const sub = settings.company_header_subtitle?.trim();
     return Boolean(company || logo || sub || hasPdfContactLines(settings));
 }
+
+/**
+ * Faixa de cabeçalho na **página capa** do PDF.
+ * `cover_pdf_show_header_band === false` na capa prevalece sobre `legacy_cover_pdf_show_header_band === true`
+ * no bloco cabeçalho/rodapé (o antigo `true ?? shouldShow(...)` ignorava “sem cabeçalho”).
+ */
+export function resolveCoverPageShowHeaderBand(
+    coverProps: CoverBlockProps,
+    settings: ProposalSettings,
+    headerFooterProps:
+        | { cover_show_header_band?: boolean; legacy_cover_pdf_show_header_band?: boolean }
+        | undefined,
+    hasCustomCoverHeaderHtml: boolean,
+): boolean {
+    if (headerFooterProps?.cover_show_header_band === false) return false;
+    if (headerFooterProps?.cover_show_header_band === true) return true;
+    if (coverProps.cover_pdf_show_header_band === false) return false;
+    if (headerFooterProps?.legacy_cover_pdf_show_header_band === false) return false;
+    if (hasCustomCoverHeaderHtml) return true;
+    return shouldShowCoverPdfHeaderBand(coverProps, settings);
+}
+
+/** Rodapé da capa: idem com `cover_pdf_show_footer_band`. */
+export function resolveCoverPageShowFooterBand(
+    coverProps: CoverBlockProps,
+    headerFooterProps:
+        | { cover_show_footer_band?: boolean; legacy_cover_pdf_show_footer_band?: boolean }
+        | undefined,
+    hasCustomCoverFooterHtml: boolean,
+): boolean {
+    if (headerFooterProps?.cover_show_footer_band === false) return false;
+    if (headerFooterProps?.cover_show_footer_band === true) return true;
+    if (coverProps.cover_pdf_show_footer_band === false) return false;
+    if (headerFooterProps?.legacy_cover_pdf_show_footer_band === false) return false;
+    if (hasCustomCoverFooterHtml) return true;
+    return resolveCoverPdfShowFooterBand(coverProps);
+}

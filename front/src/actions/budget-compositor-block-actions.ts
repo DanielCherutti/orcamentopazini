@@ -60,6 +60,8 @@ function headerFooterLegacyPropsFromCover(coverProps: Record<string, unknown> | 
     const innerWm = String(c.document_watermark_url ?? "");
     return {
         ...DEFAULT_HEADER_FOOTER_PROPS,
+        cover_show_header_band: c.cover_pdf_show_header_band !== false,
+        cover_show_footer_band: c.cover_pdf_show_footer_band !== false,
         cover_watermark_url: coverWm,
         cover_watermark_opacity: Number(c.cover_watermark_opacity ?? 0.12),
         cover_watermark_scale_pct: 100,

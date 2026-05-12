@@ -3,24 +3,55 @@ import { sanitizeTextForPdf } from "@/lib/pdf/sanitize-pdf-text";
 
 export type CoverPdfBlock =
     | { type: "text"; content: string }
-    | { type: "img"; src: string };
+    | { type: "img"; src: string; widthPt?: number; heightPt?: number };
 
 export type CoverPdfTextSegment =
     | { kind: "paragraph"; text: string; textAlign?: "left" | "center" | "right" }
-    | { kind: "heading"; level: 1 | 2 | 3; text: string };
+    | { kind: "heading"; level: 1 | 2 | 3; text: string; textAlign?: "left" | "center" | "right" };
 
 function parseTextAlignFromAttrs(attrs: string): "left" | "center" | "right" | undefined {
-    const m = attrs.match(/text-align\s*:\s*(left|center|right)/i);
+    const m =
+        attrs.match(/text-align\s*:\s*(left|center|right)/i) ??
+        attrs.match(/\balign\s*=\s*["']?(left|center|right)/i);
     if (!m) return undefined;
     return m[1].toLowerCase() as "left" | "center" | "right";
 }
 
+function parseCssLengthToPt(raw: string | undefined): number | undefined {
+    if (!raw) return undefined;
+    const v = raw.trim().toLowerCase();
+    if (!v) return undefined;
+    const m = v.match(/^(-?\d*\.?\d+)\s*(px|pt)?$/i);
+    if (!m) return undefined;
+    const n = Number(m[1]);
+    if (!Number.isFinite(n) || n <= 0) return undefined;
+    const unit = (m[2] || "px").toLowerCase();
+    if (unit === "pt") return n;
+    return n * 0.75; // 1px ~ 0.75pt
+}
+
+function parseImgDimensionPt(tag: string, prop: "width" | "height"): number | undefined {
+    const styleQ =
+        tag.match(new RegExp(String.raw`style\s*=\s*"([^"]*)"`, "i"))?.[1] ??
+        tag.match(new RegExp(String.raw`style\s*=\s*'([^']*)'`, "i"))?.[1];
+    if (styleQ) {
+        const sm = styleQ.match(new RegExp(String.raw`\b${prop}\s*:\s*([^;]+)`, "i"));
+        const fromStyle = parseCssLengthToPt(sm?.[1]);
+        if (fromStyle) return fromStyle;
+    }
+    const attrQ =
+        tag.match(new RegExp(String.raw`\b${prop}\s*=\s*"([^"]+)"`, "i"))?.[1] ??
+        tag.match(new RegExp(String.raw`\b${prop}\s*=\s*'([^']+)'`, "i"))?.[1] ??
+        tag.match(new RegExp(String.raw`\b${prop}\s*=\s*([^\s>]+)`, "i"))?.[1];
+    return parseCssLengthToPt(attrQ);
+}
+
 /**
- * Dentro de um bloco de texto da capa, extrai `<p>` e `<h1>`–`<h3>` na ordem (alinhamento em `<p>`).
+ * Dentro de um bloco de texto da capa, extrai `<p>`/`<div>` e `<h1>`–`<h3>` na ordem.
  */
 export function splitCoverHtmlFragmentToSegments(html: string): CoverPdfTextSegment[] {
     const segments: CoverPdfTextSegment[] = [];
-    const re = /<(p|h1|h2|h3)\b([^>]*)>([\s\S]*?)<\/\1>/gi;
+    const re = /<(p|div|h1|h2|h3)\b([^>]*)>([\s\S]*?)<\/\1>/gi;
     let m: RegExpExecArray | null;
     while ((m = re.exec(html)) !== null) {
         const tag = m[1].toLowerCase();
@@ -28,11 +59,11 @@ export function splitCoverHtmlFragmentToSegments(html: string): CoverPdfTextSegm
         const inner = m[3];
         const text = sanitizeTextForPdf(stripHtmlToText(inner));
         if (!text.trim()) continue;
-        if (tag === "p") {
+        if (tag === "p" || tag === "div") {
             segments.push({ kind: "paragraph", text, textAlign: parseTextAlignFromAttrs(attrs) });
         } else {
             const level = (tag === "h1" ? 1 : tag === "h2" ? 2 : 3) as 1 | 2 | 3;
-            segments.push({ kind: "heading", level, text });
+            segments.push({ kind: "heading", level, text, textAlign: parseTextAlignFromAttrs(attrs) });
         }
     }
     if (segments.length === 0) {
@@ -62,7 +93,12 @@ export function splitCoverHtmlIntoPdfBlocks(html: string): CoverPdfBlock[] {
         const unquoted = quoted ?? tag.match(/\bsrc\s*=\s*([^\s>]+)/i)?.[1];
         const src = unquoted?.trim();
         if (src) {
-            blocks.push({ type: "img", src });
+            blocks.push({
+                type: "img",
+                src,
+                widthPt: parseImgDimensionPt(tag, "width"),
+                heightPt: parseImgDimensionPt(tag, "height"),
+            });
         }
         last = m.index + tag.length;
     }

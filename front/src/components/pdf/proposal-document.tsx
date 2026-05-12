@@ -15,7 +15,9 @@ import {
 } from '@/types/budget-compositor-types';
 import { mergeCoverDocumentProps, resolveInnerPagesWatermark } from '@/lib/budgets/cover-document';
 import { type PdfEmbeddedImages, proxyPdfImageSrc } from '@/lib/pdf/pdf-image-src';
+import { splitCoverHtmlFragmentToSegments, splitCoverHtmlIntoPdfBlocks } from '@/lib/pdf/cover-pdf-blocks';
 import { stripHtmlToText } from '@/lib/pdf/html-to-plain-text';
+import { sanitizeCoverHtmlForPdf } from '@/lib/pdf/sanitize-inline-styles-for-pdf';
 import { sanitizeTextForPdf } from '@/lib/pdf/sanitize-pdf-text';
 import { pdfInnerRunningHeaderShouldShow } from '@/lib/pdf/pdf-proposal-header';
 import { PdfProposalHeaderBand } from '@/components/pdf/pdf-proposal-header-band';
@@ -241,6 +243,28 @@ const styles = StyleSheet.create({
         color: theme.colors.text,
         lineHeight: 1.35,
     },
+    sessionRichHeading: {
+        fontSize: 10,
+        fontFamily: theme.fonts.bold,
+        color: theme.colors.text,
+        marginBottom: 2,
+    },
+    sessionRichParagraph: {
+        fontSize: 9,
+        color: theme.colors.text,
+        lineHeight: 1.35,
+        marginBottom: 2,
+    },
+    sessionRichImageBase: {
+        marginTop: 4,
+        marginBottom: 6,
+        objectFit: 'contain',
+    },
+    sessionGalleryImageBase: {
+        marginTop: 4,
+        marginBottom: 6,
+        objectFit: 'contain',
+    },
     quoteHeaderBar: {
         borderBottomWidth: 1,
         borderBottomColor: '#d1d5db',
@@ -320,40 +344,48 @@ function safeLayoutIndentDepth(raw: unknown, maxDepth: number): number {
 
 function collectSessionPrintRows(
     sessionRoot: BudgetBlock,
-    itemsByBlock: Record<string, BudgetItem[]>
-): Array<{ depth: number; title: string; text: string }> {
-    const rows: Array<{ depth: number; title: string; text: string }> = [];
+    itemsByBlock: Record<string, BudgetItem[]>,
+    imagesByBlock: Record<string, Array<{ url?: string; composed_url?: string }>>
+): Array<{ depth: number; title: string; html: string; extraText?: string; blockImageUrls: string[] }> {
+    const rows: Array<{ depth: number; title: string; html: string; extraText?: string; blockImageUrls: string[] }> = [];
+    const resolveBlockImageUrls = (blockId: string): string[] =>
+        (imagesByBlock[blockId] ?? [])
+            .map((img) => (img.composed_url || img.url || "").trim())
+            .filter(Boolean);
     const visit = (node: BudgetBlock, depth: number) => {
         if (node.type === 'session') {
-            const desc = stripHtmlToText((node.props?.description as string) || '');
+            const html = String((node.props?.description as string) || '');
             rows.push({
                 depth,
                 title: `${node.number ? `${node.number} ` : ''}${(node.label || 'Sessão').trim()}`,
-                text: desc,
+                html,
+                blockImageUrls: resolveBlockImageUrls(node.id),
             });
         } else if (node.type === 'text') {
-            const txt = stripHtmlToText((node.props?.content as string) || '');
+            const html = String((node.props?.content as string) || '');
             rows.push({
                 depth,
                 title: 'Texto',
-                text: txt,
+                html,
+                blockImageUrls: resolveBlockImageUrls(node.id),
             });
         } else if (node.type === 'location') {
-            const desc = stripHtmlToText((node.props?.description as string) || '');
+            const html = String((node.props?.description as string) || '');
             rows.push({
                 depth,
                 title: `Local: ${(node.label || 'Local').trim()}`,
-                text: desc,
+                html,
+                blockImageUrls: resolveBlockImageUrls(node.id),
             });
         } else if (node.type === 'section') {
-            const desc = stripHtmlToText((node.props?.description as string) || '');
+            const html = String((node.props?.description as string) || '');
             const count = itemsByBlock[node.id]?.length ?? 0;
             rows.push({
                 depth,
                 title: `Trecho: ${(node.label || 'Trecho').trim()}`,
-                text: [desc, count > 0 ? `${count} item(ns) vinculados.` : '']
-                    .filter(Boolean)
-                    .join('\n'),
+                html,
+                extraText: count > 0 ? `${count} item(ns) vinculados.` : undefined,
+                blockImageUrls: resolveBlockImageUrls(node.id),
             });
         }
         node.children.forEach((child) => visit(child, depth + 1));
@@ -664,6 +696,8 @@ function InnerPdfPage({
     paginationCollector,
     innerHeaderText,
     innerFooterText,
+    showInnerHeaderBand = true,
+    showInnerFooterBand = true,
     innerHeaderHeight,
     innerFooterHeight,
     innerWatermarkScalePct,
@@ -688,6 +722,8 @@ function InnerPdfPage({
     paginationCollector?: ProposalPaginationCollector;
     innerHeaderText?: string;
     innerFooterText?: string;
+    showInnerHeaderBand?: boolean;
+    showInnerFooterBand?: boolean;
     innerHeaderHeight?: number;
     innerFooterHeight?: number;
     innerWatermarkScalePct?: number;
@@ -704,10 +740,10 @@ function InnerPdfPage({
     const logoSrc = logoUrl
         ? proxyPdfImageSrc(logoUrl, settings.app_public_url, pdfEmbeddedImages)
         : undefined;
-    const showRunningHeader = pdfInnerRunningHeaderShouldShow(settings);
+    const showRunningHeader = showInnerHeaderBand && pdfInnerRunningHeaderShouldShow(settings);
     const code = sanitizeTextForPdf((budget.code || "").trim() || "—");
-    const customHeader = (innerHeaderText ?? "").trim();
-    const customFooter = (innerFooterText ?? "").trim();
+    const customHeader = showInnerHeaderBand ? (innerHeaderText ?? "").trim() : "";
+    const customFooter = showInnerFooterBand ? (innerFooterText ?? "").trim() : "";
     const customHeaderReserve = Math.max(
         44,
         Math.min(220, Number.isFinite(innerHeaderHeight) ? Number(innerHeaderHeight) : INNER_HEADER_RESERVE)
@@ -717,7 +753,7 @@ function InnerPdfPage({
         Math.min(220, Number.isFinite(innerFooterHeight) ? Number(innerFooterHeight) : INNER_FOOTER_RESERVE)
     );
     const headerReserve = customHeader ? customHeaderReserve : (showRunningHeader ? INNER_HEADER_RESERVE : 0);
-    const footerReserve = customFooter ? customFooterReserve : INNER_FOOTER_RESERVE;
+    const footerReserve = showInnerFooterBand ? (customFooter ? customFooterReserve : INNER_FOOTER_RESERVE) : 0;
 
     const wmTop = headerReserve > 0 ? INNER_PAD + headerReserve : INNER_PAD;
     const wmHeight = Math.max(40, INNER_PAGE_H - wmTop - (INNER_PAD + footerReserve));
@@ -803,27 +839,29 @@ function InnerPdfPage({
                     <PdfProposalHeaderBand settings={settings} logoSrc={logoSrc} companyName={company} />
                 </View>
             ) : null}
-            <View
-                style={[
-                    styles.runningFooterBand,
-                    ...(customFooter ? [{ minHeight: customFooterReserve }] : []),
-                ]}
-                fixed
-            >
-                <Text style={styles.runningFooterMuted}>{customFooter || `Cód. ${code}`}</Text>
-                <Text
-                    style={styles.runningFooterPage}
-                    render={({ pageNumber, totalPages }) => {
-                        if (paginationCollector && paginationProbeKey) {
-                            const prev = paginationCollector.segmentStartPages[paginationProbeKey];
-                            if (!Number.isFinite(prev) || pageNumber < prev) {
-                                paginationCollector.segmentStartPages[paginationProbeKey] = pageNumber;
+            {showInnerFooterBand ? (
+                <View
+                    style={[
+                        styles.runningFooterBand,
+                        ...(customFooter ? [{ minHeight: customFooterReserve }] : []),
+                    ]}
+                    fixed
+                >
+                    <Text style={styles.runningFooterMuted}>{customFooter || `Cód. ${code}`}</Text>
+                    <Text
+                        style={styles.runningFooterPage}
+                        render={({ pageNumber, totalPages }) => {
+                            if (paginationCollector && paginationProbeKey) {
+                                const prev = paginationCollector.segmentStartPages[paginationProbeKey];
+                                if (!Number.isFinite(prev) || pageNumber < prev) {
+                                    paginationCollector.segmentStartPages[paginationProbeKey] = pageNumber;
+                                }
                             }
-                        }
-                        return `${pageNumber} / ${totalPages}`;
-                    }}
-                />
-            </View>
+                            return `${pageNumber} / ${totalPages}`;
+                        }}
+                    />
+                </View>
+            ) : null}
         </Page>
     );
 }
@@ -837,6 +875,90 @@ export const ProposalDocument = ({
     resolvedPagination,
     paginationCollector,
 }: ProposalDocumentProps) => {
+    const extractImageUrlsFromHtml = (html: string): string[] => {
+        const urls = new Set<string>();
+        if (!html.trim()) return [];
+        const add = (u: string | undefined) => {
+            const t = (u || "").trim().replace(/^['"]|['"]$/g, "");
+            if (!t || t.startsWith("blob:")) return;
+            urls.add(t);
+        };
+        const imgRe = /<img\b[^>]*>/gi;
+        let m: RegExpExecArray | null;
+        while ((m = imgRe.exec(html)) !== null) {
+            const tag = m[0];
+            const src =
+                tag.match(/\bsrc\s*=\s*"([^"]*)"/i)?.[1] ??
+                tag.match(/\bsrc\s*=\s*'([^']*)'/i)?.[1] ??
+                tag.match(/\bsrc\s*=\s*([^\s>]+)/i)?.[1];
+            add(src);
+        }
+        const dataAttrRe = /\bdata-(?:src|image|url)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
+        while ((m = dataAttrRe.exec(html)) !== null) {
+            add((m[1] || m[2] || m[3] || "").trim());
+        }
+        const bgRe = /background-image\s*:\s*url\(([^)]+)\)/gi;
+        while ((m = bgRe.exec(html)) !== null) {
+            add(m[1]);
+        }
+        return [...urls];
+    };
+    const rewriteImgSrcInHtml = (html: string): string => {
+        if (!html.trim()) return html;
+        return html.replace(/<img\b[^>]*>/gi, (tag) => {
+            const m = tag.match(/\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
+            if (!m) return tag;
+            const src = (m[1] || m[2] || m[3] || "").trim();
+            const proxied = proxyPdfImageSrc(src, settings.app_public_url, pdfEmbeddedImages) ?? src;
+            return tag.replace(/\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i, `src="${proxied}"`);
+        });
+    };
+    const renderSessionHtml = (htmlRaw: string, rowKey: string) => {
+        const html = sanitizeCoverHtmlForPdf(rewriteImgSrcInHtml(htmlRaw));
+        const blocks = splitCoverHtmlIntoPdfBlocks(html);
+        const renderedImageKeys = new Set<string>();
+        const nodes = blocks.map((b, i) => {
+            if (b.type === 'img') {
+                const src = proxyPdfImageSrc(b.src, settings.app_public_url, pdfEmbeddedImages) ?? b.src;
+                if (b.src?.trim()) renderedImageKeys.add(b.src.trim());
+                if (src?.trim()) renderedImageKeys.add(src.trim());
+                return (
+                    // eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image
+                    <Image
+                        key={`${rowKey}-img-${i}`}
+                        src={src}
+                        style={[
+                            styles.sessionRichImageBase,
+                            { width: Math.min(520, Math.max(110, b.widthPt ?? 520)) },
+                            ...(Number.isFinite(b.heightPt) ? [{ height: Math.min(520, Math.max(80, Number(b.heightPt))) }] : []),
+                        ]}
+                    />
+                );
+            }
+            const segs = splitCoverHtmlFragmentToSegments(b.content);
+            return segs.map((seg, j) => {
+                if (seg.kind === 'heading') {
+                    return (
+                        <Text
+                            key={`${rowKey}-h-${i}-${j}`}
+                            style={seg.textAlign ? [styles.sessionRichHeading, { textAlign: seg.textAlign }] : styles.sessionRichHeading}
+                        >
+                            {seg.text}
+                        </Text>
+                    );
+                }
+                return (
+                    <Text
+                        key={`${rowKey}-p-${i}-${j}`}
+                        style={seg.textAlign ? [styles.sessionRichParagraph, { textAlign: seg.textAlign }] : styles.sessionRichParagraph}
+                    >
+                        {seg.text}
+                    </Text>
+                );
+            });
+        });
+        return { nodes, renderedImageKeys };
+    };
     const rawValidity = Number(budget.validity_days ?? 15);
     const validityDays =
         Number.isFinite(rawValidity) && rawValidity >= 0 ? Math.min(Math.trunc(rawValidity), 3650) : 15;
@@ -1051,6 +1173,8 @@ export const ProposalDocument = ({
             paginationCollector,
             innerHeaderText,
             innerFooterText,
+            showInnerHeaderBand: headerFooterProps.inner_show_header_band !== false,
+            showInnerFooterBand: headerFooterProps.inner_show_footer_band !== false,
             innerHeaderHeight: headerFooterProps.inner_header_height,
             innerFooterHeight: headerFooterProps.inner_footer_height,
             innerWatermarkScalePct,
@@ -1291,7 +1415,11 @@ export const ProposalDocument = ({
                 );
             case "session": {
                 const sessionRoot = seg.block;
-                const rows = collectSessionPrintRows(sessionRoot, compositorPdf?.items || {});
+                const rows = collectSessionPrintRows(
+                    sessionRoot,
+                    compositorPdf?.items || {},
+                    (compositorPdf?.imagesByBlock as Record<string, Array<{ url?: string; composed_url?: string }>>) || {}
+                );
                 return (
                     <InnerPdfPage
                         pageKey={`session-page-${sessionRoot.id}`}
@@ -1313,8 +1441,47 @@ export const ProposalDocument = ({
                                     style={[styles.sessionRow, { marginLeft: safeLayoutIndentDepth(row.depth, 5) * 10 }]}
                                 >
                                     <Text style={styles.sessionRowTitle}>{sanitizeTextForPdf(row.title)}</Text>
-                                    {row.text ? (
-                                        <Text style={styles.sessionRowText}>{sanitizeTextForPdf(row.text)}</Text>
+                                    {(() => {
+                                        const rendered = row.html?.trim()
+                                            ? renderSessionHtml(row.html, `session-${sessionRoot.id}-${idx}`)
+                                            : { nodes: null, renderedImageKeys: new Set<string>() };
+                                        const fallbackUrls = Array.from(
+                                            new Set([
+                                                ...extractImageUrlsFromHtml(row.html || ""),
+                                                ...(row.blockImageUrls || []),
+                                            ])
+                                        );
+                                        const fallbackMissing = fallbackUrls.filter((raw) => {
+                                            const proxied =
+                                                proxyPdfImageSrc(raw, settings.app_public_url, pdfEmbeddedImages) ?? raw;
+                                            return (
+                                                !rendered.renderedImageKeys.has(raw.trim()) &&
+                                                !rendered.renderedImageKeys.has(proxied.trim())
+                                            );
+                                        });
+                                        return (
+                                            <>
+                                                {rendered.nodes}
+                                                {fallbackMissing.length
+                                                    ? fallbackMissing.map((raw, imgIdx) => {
+                                                          const src =
+                                                              proxyPdfImageSrc(raw, settings.app_public_url, pdfEmbeddedImages) ??
+                                                              raw;
+                                                          return (
+                                                              // eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image
+                                                              <Image
+                                                                  key={`session-gallery-${sessionRoot.id}-${idx}-${imgIdx}`}
+                                                                  src={src}
+                                                                  style={[styles.sessionGalleryImageBase, { width: 520 }]}
+                                                              />
+                                                          );
+                                                      })
+                                                    : null}
+                                            </>
+                                        );
+                                    })()}
+                                    {row.extraText ? (
+                                        <Text style={styles.sessionRowText}>{sanitizeTextForPdf(row.extraText)}</Text>
                                     ) : null}
                                 </View>
                             ))
