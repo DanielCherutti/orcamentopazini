@@ -1,8 +1,8 @@
 "use client";
 
 import type { ComponentType, RefObject } from "react";
-import { useEffect, useMemo, useState } from "react";
-import { FileText, Map as MapIcon, ArrowRight, Plus, Table2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { FileText, Map as MapIcon, ArrowRight, Plus, Table2, Upload } from "lucide-react";
 import {
     DndContext,
     PointerSensor,
@@ -16,6 +16,10 @@ import {
     arrayMove,
 } from "@dnd-kit/sortable";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EditableTitle } from "@/components/budgets/editor/editable-title";
 import {
     CompositorRichTextEditor,
@@ -32,11 +36,16 @@ import {
     deleteItemFromBlockAction,
     reorderItemsInBlockAction,
 } from "@/actions/budget-compositor-block-items-actions";
+import { updateBlockAction } from "@/actions/budget-compositor-block-actions";
 import { listProductGroupsAction, type ProductGroup } from "@/actions/product-group-actions";
 import { deleteBudgetImage } from "@/actions/budget-annotations";
 import { getScopeStatsAction } from "@/actions/budget-scope-actions";
 import { useWorkspaceTab } from "@/components/budgets/workspace-context";
-import type { BudgetBlock } from "@/types/budget-compositor-types";
+import type {
+    BudgetBlock,
+    HeaderFooterBlockProps,
+} from "@/types/budget-compositor-types";
+import { DEFAULT_HEADER_FOOTER_PROPS } from "@/types/budget-compositor-types";
 import type { BudgetItem, BudgetImage } from "@/types/budget-types";
 import { toAbsoluteImageUrl } from "@/lib/utils";
 import {
@@ -49,6 +58,7 @@ import { useBlockDescription, useBlockLabel } from "./compositor-content-hooks";
 import { CompositorItemRow } from "./compositor-item-row";
 import { CompositorDocumentContext } from "./compositor-document-context";
 import { CompositorCoverBlock } from "./compositor-cover-block";
+import { CompositorCoverPdfBandsMenuEntry } from "./compositor-cover-pdf-bands-menu-entry";
 import { CompositorTocBlock } from "./compositor-toc-block";
 import { CompositorFiguresBlock } from "./compositor-figures-block";
 import type { ScopeFigureEntry } from "./compositor-figures-utils";
@@ -656,8 +666,409 @@ function QuoteRenderer({ block, budgetId }: CompositorRendererProps) {
     );
 }
 
+function mergeHeaderFooterProps(raw: Record<string, unknown> | undefined): HeaderFooterBlockProps {
+    return {
+        ...DEFAULT_HEADER_FOOTER_PROPS,
+        ...(raw ?? {}),
+    };
+}
+
+function HeaderFooterRenderer({
+    block,
+    budgetId,
+    onRefresh,
+    isReadOnly,
+}: CompositorRendererProps) {
+    const props = mergeHeaderFooterProps(block.props as Record<string, unknown> | undefined);
+    const coverWatermarkInputRef = useRef<HTMLInputElement | null>(null);
+    const innerWatermarkInputRef = useRef<HTMLInputElement | null>(null);
+    const [uploadingField, setUploadingField] = useState<"cover" | "inner" | null>(null);
+    const [activeBandByPane, setActiveBandByPane] = useState<{
+        cover: "header" | "footer";
+        inner: "header" | "footer";
+    }>({
+        cover: "header",
+        inner: "header",
+    });
+
+    const handlePatch = async (patch: Partial<HeaderFooterBlockProps>) => {
+        if (isReadOnly) return;
+        const res = await updateBlockAction(block.id, budgetId, {
+            props: { ...(block.props as Record<string, unknown>), ...patch },
+        });
+        if (!res.success) {
+            toast.error(res.error || "Erro ao salvar cabeçalho e rodapé");
+        }
+    };
+
+    const uploadWatermark = async (
+        field: "cover_watermark_url" | "inner_watermark_url",
+        file: File
+    ) => {
+        if (isReadOnly) return;
+        setUploadingField(field === "cover_watermark_url" ? "cover" : "inner");
+        try {
+            const fd = new FormData();
+            fd.append("file", file);
+            const res = await fetch("/api/upload/library", { method: "POST", body: fd });
+            const json = (await res.json()) as { url?: string; error?: string };
+            if (!res.ok || !json.url) {
+                toast.error(json.error || "Falha ao enviar marca d'água");
+                return;
+            }
+            await handlePatch({ [field]: json.url });
+            toast.success("Marca d'água atualizada.");
+        } catch {
+            toast.error("Erro ao enviar marca d'água");
+        } finally {
+            setUploadingField(null);
+        }
+    };
+
+    const renderPane = (key: "cover" | "inner") => {
+        const activeBand = activeBandByPane[key];
+        const headerHtml = key === "cover" ? props.cover_header_html ?? "" : props.inner_header_html ?? "";
+        const footerHtml = key === "cover" ? props.cover_footer_html ?? "" : props.inner_footer_html ?? "";
+        const headerHeight = key === "cover" ? props.cover_header_height ?? 96 : props.inner_header_height ?? 96;
+        const footerHeight = key === "cover" ? props.cover_footer_height ?? 48 : props.inner_footer_height ?? 40;
+        const isHeaderActive = activeBand === "header";
+        const activeHeight = isHeaderActive ? headerHeight : footerHeight;
+        const activeHtml = isHeaderActive ? headerHtml : footerHtml;
+        const watermarkUrl =
+            key === "cover"
+                ? props.cover_watermark_url ?? ""
+                : props.inner_use_cover_watermark
+                  ? props.cover_watermark_url ?? ""
+                  : props.inner_watermark_url ?? "";
+        const watermarkOpacity =
+            key === "cover"
+                ? props.cover_watermark_opacity ?? 0.12
+                : props.inner_use_cover_watermark
+                  ? props.cover_watermark_opacity ?? 0.12
+                  : props.inner_watermark_opacity ?? 0.06;
+        const watermarkScale =
+            key === "cover"
+                ? props.cover_watermark_scale_pct ?? 100
+                : props.inner_use_cover_watermark
+                  ? props.cover_watermark_scale_pct ?? 100
+                  : props.inner_watermark_scale_pct ?? 100;
+        const watermarkX =
+            key === "cover"
+                ? props.cover_watermark_x_pct ?? 11
+                : props.inner_use_cover_watermark
+                  ? props.cover_watermark_x_pct ?? 11
+                  : props.inner_watermark_x_pct ?? 11;
+        const watermarkY =
+            key === "cover"
+                ? props.cover_watermark_y_pct ?? 11
+                : props.inner_use_cover_watermark
+                  ? props.cover_watermark_y_pct ?? 11
+                  : props.inner_watermark_y_pct ?? 11;
+        const watermarkWidth =
+            key === "cover"
+                ? props.cover_watermark_width_pct ?? 78
+                : props.inner_use_cover_watermark
+                  ? props.cover_watermark_width_pct ?? 78
+                  : props.inner_watermark_width_pct ?? 78;
+        const watermarkAspect =
+            key === "cover"
+                ? props.cover_watermark_aspect ?? 1
+                : props.inner_use_cover_watermark
+                  ? props.cover_watermark_aspect ?? 1
+                  : props.inner_watermark_aspect ?? 1;
+        return (
+            <div className="space-y-4">
+                {key === "cover" ? (
+                    <CompositorCoverPdfBandsMenuEntry
+                        budgetId={budgetId}
+                        isReadOnly={isReadOnly}
+                        onRefresh={onRefresh}
+                    />
+                ) : null}
+                <div className="rounded-lg border bg-card p-3 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Marca d'água da {key === "cover" ? "capa" : "página interna"}
+                        </Label>
+                        {key === "inner" && (
+                            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Checkbox
+                                    checked={props.inner_use_cover_watermark !== false}
+                                    disabled={isReadOnly}
+                                    onCheckedChange={(v) => {
+                                        void handlePatch({ inner_use_cover_watermark: v === true });
+                                    }}
+                                />
+                                Usar a mesma da capa
+                            </label>
+                        )}
+                    </div>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <Input
+                            placeholder="URL da marca d'água"
+                            value={watermarkUrl}
+                            disabled={isReadOnly || (key === "inner" && props.inner_use_cover_watermark !== false)}
+                            className="h-8 min-w-0 flex-1 text-xs"
+                            onChange={(e) => {
+                                void handlePatch(
+                                    key === "cover"
+                                        ? { cover_watermark_url: e.target.value }
+                                        : { inner_watermark_url: e.target.value }
+                                );
+                            }}
+                        />
+                        <input
+                            ref={key === "cover" ? coverWatermarkInputRef : innerWatermarkInputRef}
+                            type="file"
+                            accept="image/jpeg,image/png,image/gif,image/webp"
+                            className="sr-only"
+                            disabled={isReadOnly || (key === "inner" && props.inner_use_cover_watermark !== false)}
+                            onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                e.target.value = "";
+                                if (!f) return;
+                                void uploadWatermark(
+                                    key === "cover" ? "cover_watermark_url" : "inner_watermark_url",
+                                    f
+                                );
+                            }}
+                        />
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 shrink-0 text-xs"
+                            disabled={
+                                isReadOnly ||
+                                uploadingField === key ||
+                                (key === "inner" && props.inner_use_cover_watermark !== false)
+                            }
+                            onClick={() =>
+                                (key === "cover" ? coverWatermarkInputRef : innerWatermarkInputRef).current?.click()
+                            }
+                        >
+                            <Upload className="mr-1.5 h-3.5 w-3.5" />
+                            {uploadingField === key ? "Enviando..." : "Importar"}
+                        </Button>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <Label className="text-[11px] text-muted-foreground">Opacidade</Label>
+                        <input
+                            type="range"
+                            min={0}
+                            max={0.35}
+                            step={0.01}
+                            disabled={isReadOnly || (key === "inner" && props.inner_use_cover_watermark !== false)}
+                            value={watermarkOpacity}
+                            onChange={(e) => {
+                                const v = Number(e.target.value);
+                                void handlePatch(
+                                    key === "cover"
+                                        ? { cover_watermark_opacity: v }
+                                        : { inner_watermark_opacity: v }
+                                );
+                            }}
+                            className="h-2 flex-1 accent-primary"
+                        />
+                        <span className="w-12 text-right text-xs tabular-nums text-muted-foreground">
+                            {Math.round(watermarkOpacity * 100)}%
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <Label className="text-[11px] text-muted-foreground">Tamanho</Label>
+                        <input
+                            type="range"
+                            min={40}
+                            max={220}
+                            step={1}
+                            disabled={isReadOnly || (key === "inner" && props.inner_use_cover_watermark !== false)}
+                            value={Math.max(40, Math.min(220, Number(watermarkScale) || 100))}
+                            onChange={(e) => {
+                                const v = Math.max(40, Math.min(220, Number(e.target.value) || 100));
+                                void handlePatch(
+                                    key === "cover"
+                                        ? { cover_watermark_scale_pct: v }
+                                        : { inner_watermark_scale_pct: v }
+                                );
+                            }}
+                            className="h-2 flex-1 accent-primary"
+                        />
+                        <span className="w-14 text-right text-xs tabular-nums text-muted-foreground">
+                            {Math.round(Math.max(40, Math.min(220, Number(watermarkScale) || 100)))}%
+                        </span>
+                    </div>
+                </div>
+                <div className="rounded-lg border bg-card p-3">
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                        <div className="inline-flex rounded-md border bg-background p-1">
+                            <button
+                                type="button"
+                                className={`h-7 rounded px-2 text-xs font-medium transition ${
+                                    isHeaderActive ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+                                }`}
+                                onClick={() =>
+                                    setActiveBandByPane((prev) => ({ ...prev, [key]: "header" }))
+                                }
+                            >
+                                {key === "cover" ? "Cabeçalho - Capa" : "Cabeçalho - Todas as páginas"}
+                            </button>
+                            <button
+                                type="button"
+                                className={`h-7 rounded px-2 text-xs font-medium transition ${
+                                    !isHeaderActive ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+                                }`}
+                                onClick={() =>
+                                    setActiveBandByPane((prev) => ({ ...prev, [key]: "footer" }))
+                                }
+                            >
+                                {key === "cover" ? "Rodapé - Capa" : "Rodapé - Todas as páginas"}
+                            </button>
+                        </div>
+                        <div className="ml-auto flex items-center gap-2">
+                            <Label className="text-[11px] text-muted-foreground">
+                                Altura do {isHeaderActive ? "cabeçalho" : "rodapé"}
+                            </Label>
+                            <Input
+                                type="number"
+                                min={24}
+                                max={240}
+                                step={1}
+                                disabled={isReadOnly}
+                                className="h-8 w-24 text-xs"
+                                value={activeHeight}
+                                onChange={(e) => {
+                                    const next = Math.max(24, Math.min(240, Number(e.target.value) || 24));
+                                    if (isHeaderActive) {
+                                        void handlePatch(
+                                            key === "cover"
+                                                ? { cover_header_height: next }
+                                                : { inner_header_height: next }
+                                        );
+                                    } else {
+                                        void handlePatch(
+                                            key === "cover"
+                                                ? { cover_footer_height: next }
+                                                : { inner_footer_height: next }
+                                        );
+                                    }
+                                }}
+                            />
+                        </div>
+                    </div>
+                    <div className="mb-2 rounded-md border border-dashed bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
+                        Modo de edição estilo documento: selecione a área e edite diretamente como no editor de página.
+                    </div>
+                    <CompositorRichTextEditor
+                        variant="word"
+                        readOnly={Boolean(isReadOnly)}
+                        value={activeHtml}
+                        wordPageBands={{
+                            headerHeight,
+                            footerHeight,
+                            activeBand,
+                            onSelectBand: (band) =>
+                                setActiveBandByPane((prev) => ({ ...prev, [key]: band })),
+                            onHeaderHeightChange: (next) => {
+                                void handlePatch(
+                                    key === "cover"
+                                        ? { cover_header_height: next }
+                                        : { inner_header_height: next }
+                                );
+                            },
+                            onFooterHeightChange: (next) => {
+                                void handlePatch(
+                                    key === "cover"
+                                        ? { cover_footer_height: next }
+                                        : { inner_footer_height: next }
+                                );
+                            },
+                        }}
+                        wordPageWatermarkUrl={watermarkUrl || undefined}
+                        wordPageWatermarkOpacity={watermarkOpacity}
+                        wordPageWatermarkScalePct={watermarkScale}
+                        wordPageWatermarkLayout={
+                            watermarkUrl
+                                ? {
+                                      readOnly: Boolean(
+                                          isReadOnly || (key === "inner" && props.inner_use_cover_watermark !== false)
+                                      ),
+                                      xPct: watermarkX,
+                                      yPct: watermarkY,
+                                      widthPct: watermarkWidth,
+                                      aspect: watermarkAspect,
+                                      onLayoutChange: (layout) => {
+                                          void handlePatch(
+                                              key === "cover"
+                                                  ? {
+                                                        cover_watermark_x_pct: layout.xPct,
+                                                        cover_watermark_y_pct: layout.yPct,
+                                                        cover_watermark_width_pct: layout.widthPct,
+                                                    }
+                                                  : {
+                                                        inner_watermark_x_pct: layout.xPct,
+                                                        inner_watermark_y_pct: layout.yPct,
+                                                        inner_watermark_width_pct: layout.widthPct,
+                                                    }
+                                          );
+                                      },
+                                      onAspectChange: (aspect) => {
+                                          void handlePatch(
+                                              key === "cover"
+                                                  ? { cover_watermark_aspect: aspect }
+                                                  : { inner_watermark_aspect: aspect }
+                                          );
+                                      },
+                                  }
+                                : undefined
+                        }
+                        onChange={(html) => {
+                            if (isHeaderActive) {
+                                void handlePatch(
+                                    key === "cover"
+                                        ? { cover_header_html: html }
+                                        : { inner_header_html: html }
+                                );
+                            } else {
+                                void handlePatch(
+                                    key === "cover"
+                                        ? { cover_footer_html: html }
+                                        : { inner_footer_html: html }
+                                );
+                            }
+                        }}
+                        placeholder={
+                            isHeaderActive
+                                ? `Edite o ${key === "cover" ? "cabeçalho da capa" : "cabeçalho das páginas internas"}...`
+                                : `Edite o ${key === "cover" ? "rodapé da capa" : "rodapé das páginas internas"}...`
+                        }
+                    />
+                </div>
+            </div>
+        );
+    };
+
+    return (
+        <div className="space-y-4 rounded-lg border-2 border-dashed border-primary/30 bg-primary/5 p-5">
+            <h3 className="text-sm font-bold uppercase tracking-wide text-primary">Cabeçalho e Rodapé</h3>
+            <Tabs defaultValue="cover">
+                <TabsList>
+                    <TabsTrigger value="cover">Capa</TabsTrigger>
+                    <TabsTrigger value="inner">Páginas internas</TabsTrigger>
+                </TabsList>
+                <TabsContent value="cover">
+                    {renderPane("cover")}
+                </TabsContent>
+                <TabsContent value="inner">
+                    {renderPane("inner")}
+                </TabsContent>
+            </Tabs>
+        </div>
+    );
+}
+
 const RENDERERS: Record<string, ComponentType<CompositorRendererProps>> = {
     cover: CoverRenderer,
+    header_footer: HeaderFooterRenderer,
     toc: TocRenderer,
     figures: FiguresRenderer,
     session: SessionRenderer,
@@ -808,6 +1219,7 @@ export function CompositorContent({
     const useFocusedSubtree =
         focused &&
         (focused.type === "cover" ||
+            focused.type === "header_footer" ||
             focused.type === "toc" ||
             focused.type === "figures" ||
             focused.type === "quote" ||

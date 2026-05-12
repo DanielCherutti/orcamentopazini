@@ -7,7 +7,12 @@ import { theme } from './theme';
 import { BudgetTable } from './sections/budget-table';
 import { CompositorCoverPdfPage } from './sections/compositor-cover-pdf';
 import type { CompositorPdfPayload } from './compositor-pdf-types';
-import { type BudgetBlock, flattenTree } from '@/types/budget-compositor-types';
+import {
+    type BudgetBlock,
+    flattenTree,
+    type HeaderFooterBlockProps,
+    DEFAULT_HEADER_FOOTER_PROPS,
+} from '@/types/budget-compositor-types';
 import { mergeCoverDocumentProps, resolveInnerPagesWatermark } from '@/lib/budgets/cover-document';
 import { type PdfEmbeddedImages, proxyPdfImageSrc } from '@/lib/pdf/pdf-image-src';
 import { stripHtmlToText } from '@/lib/pdf/html-to-plain-text';
@@ -34,6 +39,38 @@ interface ProposalDocumentProps {
     resolvedPagination?: ProposalResolvedPagination;
     /** Primeira passada do PDF: coletor mutável de páginas iniciais por segmento. */
     paginationCollector?: ProposalPaginationCollector;
+}
+
+function mergeHeaderFooterProps(raw: Record<string, unknown> | undefined): HeaderFooterBlockProps {
+    return {
+        ...DEFAULT_HEADER_FOOTER_PROPS,
+        ...(raw ?? {}),
+    };
+}
+
+function htmlBandToPlainText(html: string | undefined): string {
+    return sanitizeTextForPdf(stripHtmlToText(String(html ?? ""))).trim();
+}
+
+function resolvePdfWatermarkBox(
+    xPct: number,
+    yPct: number,
+    widthPct: number,
+    aspect: number
+): { left: number; top: number; width: number; height: number } {
+    const safeAspect = aspect > 0 ? aspect : 1;
+    const wPct = Math.max(8, Math.min(95, widthPct));
+    const x = Math.max(0, Math.min(100 - wPct, xPct));
+    const w = (wPct / 100) * PDF_PAGE_W;
+    const h = w / safeAspect;
+    const maxYPct = Math.max(0, 100 - (h / PDF_PAGE_H) * 100);
+    const y = Math.max(0, Math.min(maxYPct, yPct));
+    return {
+        left: (x / 100) * PDF_PAGE_W,
+        top: (y / 100) * PDF_PAGE_H,
+        width: w,
+        height: h,
+    };
 }
 
 export type ProposalResolvedPagination = {
@@ -625,6 +662,15 @@ function InnerPdfPage({
     pageStyleExtra,
     paginationProbeKey,
     paginationCollector,
+    innerHeaderText,
+    innerFooterText,
+    innerHeaderHeight,
+    innerFooterHeight,
+    innerWatermarkScalePct,
+    innerWatermarkXPct,
+    innerWatermarkYPct,
+    innerWatermarkWidthPct,
+    innerWatermarkAspect,
 }: {
     pageKey: string;
     title: string;
@@ -640,6 +686,15 @@ function InnerPdfPage({
     /** Chave estável do segmento para coletar a página inicial real na 1ª passada. */
     paginationProbeKey?: string;
     paginationCollector?: ProposalPaginationCollector;
+    innerHeaderText?: string;
+    innerFooterText?: string;
+    innerHeaderHeight?: number;
+    innerFooterHeight?: number;
+    innerWatermarkScalePct?: number;
+    innerWatermarkXPct?: number;
+    innerWatermarkYPct?: number;
+    innerWatermarkWidthPct?: number;
+    innerWatermarkAspect?: number;
 }) {
     const fill = settings.pdf_header_fill_from_settings === true;
     const company = fill
@@ -651,10 +706,32 @@ function InnerPdfPage({
         : undefined;
     const showRunningHeader = pdfInnerRunningHeaderShouldShow(settings);
     const code = sanitizeTextForPdf((budget.code || "").trim() || "—");
+    const customHeader = (innerHeaderText ?? "").trim();
+    const customFooter = (innerFooterText ?? "").trim();
+    const customHeaderReserve = Math.max(
+        44,
+        Math.min(220, Number.isFinite(innerHeaderHeight) ? Number(innerHeaderHeight) : INNER_HEADER_RESERVE)
+    );
+    const customFooterReserve = Math.max(
+        34,
+        Math.min(220, Number.isFinite(innerFooterHeight) ? Number(innerFooterHeight) : INNER_FOOTER_RESERVE)
+    );
+    const headerReserve = customHeader ? customHeaderReserve : (showRunningHeader ? INNER_HEADER_RESERVE : 0);
+    const footerReserve = customFooter ? customFooterReserve : INNER_FOOTER_RESERVE;
 
-    const wmTop = showRunningHeader ? INNER_PAD + INNER_HEADER_RESERVE : INNER_PAD;
-    const wmHeight = Math.max(40, INNER_PAGE_H - wmTop - (INNER_PAD + INNER_FOOTER_RESERVE));
+    const wmTop = headerReserve > 0 ? INNER_PAD + headerReserve : INNER_PAD;
+    const wmHeight = Math.max(40, INNER_PAGE_H - wmTop - (INNER_PAD + footerReserve));
     const wmOpacity = Math.min(0.22, Math.max(docWatermarkOpacity, 0.08));
+    const wmScale = Math.max(
+        40,
+        Math.min(220, Number.isFinite(innerWatermarkScalePct) ? Number(innerWatermarkScalePct) : 100)
+    );
+    const wmBox = resolvePdfWatermarkBox(
+        Number(innerWatermarkXPct ?? 11),
+        Number(innerWatermarkYPct ?? 11),
+        Number(innerWatermarkWidthPct ?? 78),
+        Number(innerWatermarkAspect ?? 1)
+    );
 
     return (
         <Page
@@ -664,8 +741,8 @@ function InnerPdfPage({
                 styles.innerPageRoot,
                 styles.pageWithWatermark,
                 {
-                    paddingTop: INNER_PAD + (showRunningHeader ? INNER_HEADER_RESERVE : 0),
-                    paddingBottom: INNER_PAD + INNER_FOOTER_RESERVE,
+                    paddingTop: INNER_PAD + headerReserve,
+                    paddingBottom: INNER_PAD + footerReserve,
                     paddingHorizontal: INNER_PAD,
                 },
             ]}
@@ -689,7 +766,18 @@ function InnerPdfPage({
                     {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
                     <Image
                         src={docWatermarkSrc}
-                        style={[styles.documentWatermarkImage, { opacity: wmOpacity }]}
+                        style={[
+                            styles.documentWatermarkImage,
+                            {
+                                opacity: wmOpacity,
+                                position: "absolute",
+                                left: wmBox.left,
+                                top: wmBox.top,
+                                width: wmBox.width,
+                                height: wmBox.height,
+                                transform: `scale(${wmScale / 100})`,
+                            },
+                        ]}
                     />
                 </View>
             ) : null}
@@ -706,13 +794,23 @@ function InnerPdfPage({
                     {children}
                 </View>
             </View>
-            {showRunningHeader ? (
+            {customHeader ? (
+                <View style={[styles.runningHeaderBand, { minHeight: customHeaderReserve }]} fixed>
+                    <Text style={{ fontSize: 9, color: theme.colors.text, lineHeight: 1.3 }}>{customHeader}</Text>
+                </View>
+            ) : showRunningHeader ? (
                 <View style={styles.runningHeaderBand} fixed>
                     <PdfProposalHeaderBand settings={settings} logoSrc={logoSrc} companyName={company} />
                 </View>
             ) : null}
-            <View style={styles.runningFooterBand} fixed>
-                <Text style={styles.runningFooterMuted}>Cód. {code}</Text>
+            <View
+                style={[
+                    styles.runningFooterBand,
+                    ...(customFooter ? [{ minHeight: customFooterReserve }] : []),
+                ]}
+                fixed
+            >
+                <Text style={styles.runningFooterMuted}>{customFooter || `Cód. ${code}`}</Text>
                 <Text
                     style={styles.runningFooterPage}
                     render={({ pageNumber, totalPages }) => {
@@ -804,7 +902,13 @@ export const ProposalDocument = ({
     const coverBlock = compositorPdf
         ? flattenTree(compositorPdf.roots).find((b) => b.type === 'cover')
         : undefined;
+    const headerFooterBlock = compositorPdf
+        ? flattenTree(compositorPdf.roots).find((b) => b.type === "header_footer")
+        : undefined;
     const compositorCoverMerged = mergeCoverDocumentProps(coverBlock?.props as Record<string, unknown> | undefined);
+    const headerFooterProps = mergeHeaderFooterProps(
+        headerFooterBlock?.props as Record<string, unknown> | undefined
+    );
 
     const renderedFigureEntries = collectRenderedPdfFigureEntries(locations);
     const figureEntries =
@@ -877,10 +981,41 @@ export const ProposalDocument = ({
                   })(),
               }))
             : [];
-    const { url: docWatermarkSource, opacity: docWatermarkOpacity } =
+    const useCoverWatermarkOnInner = headerFooterProps.inner_use_cover_watermark !== false;
+    const innerWatermarkSource = (
+        useCoverWatermarkOnInner
+            ? headerFooterProps.cover_watermark_url
+            : headerFooterProps.inner_watermark_url
+    )?.trim();
+    const innerWatermarkOpacity = useCoverWatermarkOnInner
+        ? headerFooterProps.cover_watermark_opacity
+        : headerFooterProps.inner_watermark_opacity;
+    const innerWatermarkScalePct = useCoverWatermarkOnInner
+        ? headerFooterProps.cover_watermark_scale_pct
+        : headerFooterProps.inner_watermark_scale_pct;
+    const innerWatermarkXPct = useCoverWatermarkOnInner
+        ? headerFooterProps.cover_watermark_x_pct
+        : headerFooterProps.inner_watermark_x_pct;
+    const innerWatermarkYPct = useCoverWatermarkOnInner
+        ? headerFooterProps.cover_watermark_y_pct
+        : headerFooterProps.inner_watermark_y_pct;
+    const innerWatermarkWidthPct = useCoverWatermarkOnInner
+        ? headerFooterProps.cover_watermark_width_pct
+        : headerFooterProps.inner_watermark_width_pct;
+    const innerWatermarkAspect = useCoverWatermarkOnInner
+        ? headerFooterProps.cover_watermark_aspect
+        : headerFooterProps.inner_watermark_aspect;
+    const { url: legacyDocWatermarkSource, opacity: legacyDocWatermarkOpacity } =
         resolveInnerPagesWatermark(compositorCoverMerged);
-    let docWatermarkSrc = proxyPdfImageSrc(docWatermarkSource, settings.app_public_url, pdfEmbeddedImages);
-    let effectiveInnerWatermarkOpacity = docWatermarkOpacity;
+    let docWatermarkSrc = proxyPdfImageSrc(
+        innerWatermarkSource || legacyDocWatermarkSource,
+        settings.app_public_url,
+        pdfEmbeddedImages
+    );
+    let effectiveInnerWatermarkOpacity =
+        typeof innerWatermarkOpacity === "number" && Number.isFinite(innerWatermarkOpacity)
+            ? innerWatermarkOpacity
+            : legacyDocWatermarkOpacity;
     /**
      * Se `document_watermark_url` existir mas falhar no embed/proxy, a capa ainda pode mostrar só
      * `cover_watermark_url` — usa a mesma fonte da capa para o miolo.
@@ -901,6 +1036,8 @@ export const ProposalDocument = ({
     const pdfCompanyName = sanitizeTextForPdf(settings.company_name);
     const pdfIntroduction = sanitizeTextForPdf(settings.introduction_text);
     const pdfClosing = sanitizeTextForPdf(settings.closing_text);
+    const innerHeaderText = htmlBandToPlainText(headerFooterProps.inner_header_html);
+    const innerFooterText = htmlBandToPlainText(headerFooterProps.inner_footer_html);
 
     const renderPdfSegment = (seg: PdfSegment, i: number): React.ReactNode => {
         const keyBase = `pdf-${i}-${seg.kind}`;
@@ -912,6 +1049,15 @@ export const ProposalDocument = ({
             docWatermarkOpacity: effectiveInnerWatermarkOpacity,
             omitDocumentWatermark,
             paginationCollector,
+            innerHeaderText,
+            innerFooterText,
+            innerHeaderHeight: headerFooterProps.inner_header_height,
+            innerFooterHeight: headerFooterProps.inner_footer_height,
+            innerWatermarkScalePct,
+            innerWatermarkXPct,
+            innerWatermarkYPct,
+            innerWatermarkWidthPct,
+            innerWatermarkAspect,
         };
         switch (seg.kind) {
             case "cover":
@@ -921,6 +1067,7 @@ export const ProposalDocument = ({
                         budget={budget}
                         settings={settings}
                         coverProps={compositorCoverMerged}
+                        headerFooterProps={headerFooterProps}
                         pdfEmbeddedImages={pdfEmbeddedImages}
                     />
                 );

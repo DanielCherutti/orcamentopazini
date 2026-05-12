@@ -50,13 +50,19 @@ export async function createBudgetAction(title: string, code: string) {
             id: String(createdRecord.id),
         } as Budget;
 
-        await addBlockAction({ budgetId: createdBudget.id!, parentId: null, type: "scope", label: "ADEQUAÇÕES" });
         await addBlockAction({
             budgetId: createdBudget.id!,
             parentId: null,
             type: "cover",
             label: "CAPA",
             props: mergeCoverDocumentProps({}) as Record<string, unknown>,
+        });
+        await addBlockAction({
+            budgetId: createdBudget.id!,
+            parentId: null,
+            type: "header_footer",
+            label: "CABEÇALHO E RODAPÉ",
+            props: {},
         });
         await addBlockAction({
             budgetId: createdBudget.id!,
@@ -72,6 +78,7 @@ export async function createBudgetAction(title: string, code: string) {
             label: "LISTA DE FIGURAS",
             props: {},
         });
+        await addBlockAction({ budgetId: createdBudget.id!, parentId: null, type: "scope", label: "ADEQUAÇÕES" });
 
         revalidatePath("/budgets");
 

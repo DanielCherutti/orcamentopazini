@@ -9,6 +9,7 @@ import { getBudgetImagesByBlocks } from "@/actions/budget-annotations";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
 import {
     ensureCompositorCoverBlockAction,
+    ensureCompositorHeaderFooterBlockAction,
     ensureCompositorQuoteBlockAction,
     ensureCompositorTocBlockAction,
 } from "@/actions/budget-compositor-block-actions";
@@ -32,6 +33,7 @@ async function loadCompositorTreeData(
 
         if (options.ensureBlocks) {
             await ensureCompositorCoverBlockAction(budgetId);
+            await ensureCompositorHeaderFooterBlockAction(budgetId);
             await ensureCompositorTocBlockAction(budgetId);
             await ensureCompositorQuoteBlockAction(budgetId);
         }

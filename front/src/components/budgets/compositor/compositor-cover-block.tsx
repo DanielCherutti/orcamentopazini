@@ -1,11 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
 import Link from "next/link";
 import {
   ImageIcon,
-  LayoutTemplate,
   Loader2,
   Maximize2,
   Minimize2,
@@ -37,7 +36,6 @@ import { cn } from "@/lib/utils";
 import { mergeCoverDocumentProps } from "@/lib/budgets/cover-document";
 import { CompositorRichTextEditor } from "@/components/budgets/compositor/compositor-rich-text-editor";
 import { DEFAULT_CLIENT_LOGO_LAYOUT } from "@/lib/budgets/cover-client-logo-layout";
-import { CompositorCoverPdfBandsDialog } from "@/components/budgets/compositor/compositor-cover-pdf-bands-dialog";
 
 export function CompositorCoverBlock({
   block,
@@ -54,7 +52,6 @@ export function CompositorCoverBlock({
   const [budget, setBudget] = useState<Budget | null>(null);
   const [loadingClient, setLoadingClient] = useState(false);
   const [coverSettingsOpen, setCoverSettingsOpen] = useState(false);
-  const [coverPdfBandsOpen, setCoverPdfBandsOpen] = useState(false);
   const [coverExpanded, setCoverExpanded] = useState(false);
   const [coverMediaUploading, setCoverMediaUploading] = useState<
     null | "client_logo_url" | "cover_watermark_url" | "document_watermark_url"
@@ -63,9 +60,12 @@ export function CompositorCoverBlock({
   const coverWatermarkFileRef = useRef<HTMLInputElement>(null);
   const documentWatermarkFileRef = useRef<HTMLInputElement>(null);
 
+  /** Evita reset do estado local quando o pai recria `block.props` com o mesmo conteúdo (nova referência). */
+  const blockPropsStableKey = useMemo(() => JSON.stringify(block.props ?? {}), [block.props]);
+
   useEffect(() => {
     setProps(mergeCoverDocumentProps(block.props as Record<string, unknown>));
-  }, [block.props]);
+  }, [block.id, blockPropsStableKey]);
 
   useEffect(() => {
     if (!coverExpanded) return;
@@ -363,7 +363,7 @@ export function CompositorCoverBlock({
             <p className="hidden text-[10px] text-neutral-500 sm:block dark:text-neutral-400">
               {coverExpanded
                 ? "Modo expandido — Esc para sair"
-                : "Edite o texto na folha como em um documento; mídia e marcas d’água em Ajustes da capa"}
+                : "Edite o texto na folha; mídia e marcas d’água em Ajustes da capa. Faixas do PDF da capa: bloco Cabeçalho e Rodapé → Capa."}
             </p>
           </div>
         </div>
@@ -416,17 +416,6 @@ export function CompositorCoverBlock({
             variant="outline"
             size="sm"
             className="h-8 border-neutral-300 bg-white text-xs shadow-sm dark:border-neutral-600 dark:bg-neutral-800"
-            onClick={() => setCoverPdfBandsOpen(true)}
-            title="Cabeçalho e rodapé fixos da capa no PDF"
-          >
-            <LayoutTemplate className="mr-1.5 h-3.5 w-3.5" />
-            Cabeçalho / rodapé (PDF)
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-8 border-neutral-300 bg-white text-xs shadow-sm dark:border-neutral-600 dark:bg-neutral-800"
             asChild
           >
             <Link href="/settings">
@@ -441,15 +430,6 @@ export function CompositorCoverBlock({
           </span>
         ) : null}
       </header>
-
-      <CompositorCoverPdfBandsDialog
-        open={coverPdfBandsOpen}
-        onOpenChange={setCoverPdfBandsOpen}
-        coverProps={props}
-        patch={patch}
-        budget={budget}
-        isReadOnly={isReadOnly}
-      />
 
       <Dialog open={coverSettingsOpen} onOpenChange={setCoverSettingsOpen}>
         <DialogContent

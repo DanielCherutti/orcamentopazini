@@ -90,6 +90,16 @@ interface CompositorRichTextEditorProps {
   /** Pré-visualização na folha A4 (capa): marca d’água e logomarca do cliente. */
   wordPageWatermarkUrl?: string;
   wordPageWatermarkOpacity?: number;
+  wordPageWatermarkScalePct?: number;
+  wordPageWatermarkLayout?: {
+    readOnly: boolean;
+    xPct: number;
+    yPct: number;
+    widthPct: number;
+    aspect?: number;
+    onLayoutChange: (layout: { xPct: number; yPct: number; widthPct: number }) => void;
+    onAspectChange: (aspect: number) => void;
+  };
   wordPageClientLogo?: {
     url: string;
     readOnly: boolean;
@@ -99,6 +109,14 @@ interface CompositorRichTextEditorProps {
     aspect?: number;
     onLayoutChange: (layout: { xPct: number; yPct: number; widthPct: number }) => void;
     onAspectChange: (aspect: number) => void;
+  };
+  wordPageBands?: {
+    headerHeight: number;
+    footerHeight: number;
+    activeBand?: "header" | "footer";
+    onSelectBand?: (band: "header" | "footer") => void;
+    onHeaderHeightChange?: (height: number) => void;
+    onFooterHeightChange?: (height: number) => void;
   };
 }
 
@@ -111,7 +129,10 @@ export const CompositorRichTextEditor = memo(function CompositorRichTextEditor({
   readOnly,
   wordPageWatermarkUrl,
   wordPageWatermarkOpacity,
+  wordPageWatermarkScalePct,
+  wordPageWatermarkLayout,
   wordPageClientLogo,
+  wordPageBands,
 }: CompositorRichTextEditorProps) {
   const [insertImage, setInsertImage] = useState<((url: string) => void) | null>(null);
   const [galleryOpen, setGalleryOpen] = useState(false);
@@ -260,7 +281,10 @@ export const CompositorRichTextEditor = memo(function CompositorRichTextEditor({
       onEditorReady={(fn) => setInsertImage(() => fn)}
       wordPageWatermarkUrl={wordPageWatermarkUrl}
       wordPageWatermarkOpacity={wordPageWatermarkOpacity}
+      wordPageWatermarkScalePct={wordPageWatermarkScalePct}
+      wordPageWatermarkLayout={wordPageWatermarkLayout}
       wordPageClientLogo={wordPageClientLogo}
+      wordPageBands={wordPageBands}
     />
   );
 });

@@ -8,6 +8,81 @@ import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
 import { mergeCoverDocumentProps } from "@/lib/budgets/cover-document";
 import { sanitizeCompositorBlockPropsForPersistence } from "@/lib/pdf/sanitize-inline-styles-for-pdf";
+import { DEFAULT_HEADER_FOOTER_PROPS } from "@/types/budget-compositor-types";
+
+type RootBlockRow = { id: unknown; order_index: number; type: string; props?: Record<string, unknown> };
+
+async function listRootBlocks(
+    db: Awaited<ReturnType<typeof getDb>>,
+    budgetRecordId: ReturnType<typeof requireRecordId>
+): Promise<RootBlockRow[]> {
+    const rootsRes = await db.query<[RootBlockRow[]]>(
+        "SELECT id, order_index, type, props FROM budget_block WHERE budget_id = $budgetId AND parent_id IS NONE AND deleted_at IS NONE ORDER BY order_index ASC",
+        { budgetId: budgetRecordId }
+    );
+    return rootsRes[0] || [];
+}
+
+async function normalizeFixedRootOrder(
+    db: Awaited<ReturnType<typeof getDb>>,
+    budgetRecordId: ReturnType<typeof requireRecordId>
+) {
+    const roots = await listRootBlocks(db, budgetRecordId);
+    const cover = roots.find((r) => r.type === "cover");
+    const headerFooter = roots.find((r) => r.type === "header_footer");
+    const toc = roots.find((r) => r.type === "toc");
+    const figures = roots.find((r) => r.type === "figures");
+    if (!cover || !headerFooter || !toc || !figures) return;
+    const scope = roots.find((r) => r.type === "scope");
+    const othersSorted = roots
+        .filter(
+            (r) =>
+                r.type !== "cover" &&
+                r.type !== "header_footer" &&
+                r.type !== "toc" &&
+                r.type !== "figures" &&
+                r.type !== "scope"
+        )
+        .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+    const ordered = scope
+        ? [cover, headerFooter, toc, figures, scope, ...othersSorted]
+        : [cover, headerFooter, toc, figures, ...othersSorted];
+    for (let i = 0; i < ordered.length; i++) {
+        await db.update(requireRecordId("budget_block", String(ordered[i].id))).merge({
+            order_index: i,
+        });
+    }
+}
+
+function headerFooterLegacyPropsFromCover(coverProps: Record<string, unknown> | undefined) {
+    const c = (coverProps ?? {}) as Record<string, unknown>;
+    const coverWm = String(c.cover_watermark_url ?? "");
+    const innerWm = String(c.document_watermark_url ?? "");
+    return {
+        ...DEFAULT_HEADER_FOOTER_PROPS,
+        cover_watermark_url: coverWm,
+        cover_watermark_opacity: Number(c.cover_watermark_opacity ?? 0.12),
+        cover_watermark_scale_pct: 100,
+        cover_watermark_x_pct: 11,
+        cover_watermark_y_pct: 11,
+        cover_watermark_width_pct: 78,
+        cover_watermark_aspect: 1,
+        inner_use_cover_watermark: innerWm.trim().length === 0,
+        inner_watermark_url: innerWm,
+        inner_watermark_opacity: Number(c.document_watermark_opacity ?? 0.06),
+        inner_watermark_scale_pct: 100,
+        inner_watermark_x_pct: 11,
+        inner_watermark_y_pct: 11,
+        inner_watermark_width_pct: 78,
+        inner_watermark_aspect: 1,
+        legacy_cover_pdf_show_header_band: c.cover_pdf_show_header_band !== false,
+        legacy_cover_pdf_show_footer_band: c.cover_pdf_show_footer_band !== false,
+        legacy_cover_pdf_header_company_override: String(c.cover_pdf_header_company_override ?? ""),
+        legacy_cover_pdf_header_logo_url_override: String(c.cover_pdf_header_logo_url_override ?? ""),
+        legacy_cover_pdf_footer_left_template: String(c.cover_pdf_footer_left_template ?? ""),
+        legacy_cover_pdf_footer_right_template: String(c.cover_pdf_footer_right_template ?? ""),
+    };
+}
 
 /**
  * Garante um bloco `cover` na raiz (order_index 0) para orçamentos compositor.
@@ -58,10 +133,60 @@ export async function ensureCompositorCoverBlockAction(
 }
 
 /**
- * Garante blocos fixos na raiz (capa, sumário, lista de figuras).
- * A ordem padrão (capa → sumário → lista de figuras → escopo → demais) só é aplicada
- * quando um bloco sumário ou lista de figuras é criado nesta execução — não sobrescreve
- * reordenações feitas pelo usuário nas cargas seguintes.
+ * Garante um bloco fixo `header_footer` na raiz entre CAPA e SUMÁRIO.
+ * Migra configurações antigas de faixa da capa para props legadas de fallback.
+ */
+export async function ensureCompositorHeaderFooterBlockAction(
+    budgetId: string,
+    options?: { skipRevalidate?: boolean }
+): Promise<{ success: boolean; error?: string }> {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const db = await getDb();
+    try {
+        const budgetRecordId = requireRecordId("budget", budgetId);
+        let roots = await listRootBlocks(db, budgetRecordId);
+
+        const dupes = roots.filter((r) => r.type === "header_footer");
+        if (dupes.length > 1) {
+            const sorted = [...dupes].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+            for (let i = 1; i < sorted.length; i++) {
+                await deleteBlockCascade(db, String(sorted[i].id));
+            }
+            roots = await listRootBlocks(db, budgetRecordId);
+        }
+
+        if (!roots.some((r) => r.type === "header_footer")) {
+            const coverRow = roots.find((r) => r.type === "cover");
+            const legacyProps = headerFooterLegacyPropsFromCover(coverRow?.props);
+            await db.create(new Table("budget_block")).content({
+                budget_id: budgetRecordId,
+                type: "header_footer",
+                label: "CABEÇALHO E RODAPÉ",
+                order_index: 99998,
+                props: legacyProps,
+            });
+            await normalizeFixedRootOrder(db, budgetRecordId);
+        }
+
+        if (!options?.skipRevalidate) {
+            revalidatePath(budgetRevalidatePath(budgetId));
+        }
+        return { success: true };
+    } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
+        console.error("ensureCompositorHeaderFooterBlockAction error:", error);
+        if (isTokenExpiredError(error)) resetDb();
+        return { success: false, error: "Erro ao garantir bloco de cabeçalho e rodapé" };
+    }
+}
+
+/**
+ * Garante blocos fixos na raiz (capa, cabeçalho/rodapé, sumário, lista de figuras).
+ * A ordem padrão só é normalizada quando toc/figures é criado nesta execução.
  */
 export async function ensureCompositorTocBlockAction(
     budgetId: string
@@ -72,14 +197,7 @@ export async function ensureCompositorTocBlockAction(
     const db = await getDb();
     try {
         const budgetRecordId = requireRecordId("budget", budgetId);
-
-        const rootsRes = await db.query<
-            [Array<{ id: unknown; order_index: number; type: string }>]
-        >(
-            "SELECT id, order_index, type FROM budget_block WHERE budget_id = $budgetId AND parent_id IS NONE AND deleted_at IS NONE ORDER BY order_index ASC",
-            { budgetId: budgetRecordId }
-        );
-        let roots = rootsRes[0] || [];
+        let roots = await listRootBlocks(db, budgetRecordId);
         let createdTocOrFigures = false;
 
         const tocDupes = roots.filter((r) => r.type === "toc");
@@ -88,13 +206,7 @@ export async function ensureCompositorTocBlockAction(
             for (let i = 1; i < sorted.length; i++) {
                 await deleteBlockCascade(db, String(sorted[i].id));
             }
-            const rootsDeduped = await db.query<
-                [Array<{ id: unknown; order_index: number; type: string }>]
-            >(
-                "SELECT id, order_index, type FROM budget_block WHERE budget_id = $budgetId AND parent_id IS NONE AND deleted_at IS NONE ORDER BY order_index ASC",
-                { budgetId: budgetRecordId }
-            );
-            roots = rootsDeduped[0] || [];
+            roots = await listRootBlocks(db, budgetRecordId);
         }
 
         const figDupes = roots.filter((r) => r.type === "figures");
@@ -103,13 +215,7 @@ export async function ensureCompositorTocBlockAction(
             for (let i = 1; i < sortedFig.length; i++) {
                 await deleteBlockCascade(db, String(sortedFig[i].id));
             }
-            const rootsDedupedFig = await db.query<
-                [Array<{ id: unknown; order_index: number; type: string }>]
-            >(
-                "SELECT id, order_index, type FROM budget_block WHERE budget_id = $budgetId AND parent_id IS NONE AND deleted_at IS NONE ORDER BY order_index ASC",
-                { budgetId: budgetRecordId }
-            );
-            roots = rootsDedupedFig[0] || [];
+            roots = await listRootBlocks(db, budgetRecordId);
         }
 
         const hasCover = roots.some((r) => r.type === "cover");
@@ -126,13 +232,7 @@ export async function ensureCompositorTocBlockAction(
                 order_index: 99999,
                 props: {},
             });
-            const rootsRes2 = await db.query<
-                [Array<{ id: unknown; order_index: number; type: string }>]
-            >(
-                "SELECT id, order_index, type FROM budget_block WHERE budget_id = $budgetId AND parent_id IS NONE AND deleted_at IS NONE ORDER BY order_index ASC",
-                { budgetId: budgetRecordId }
-            );
-            roots = rootsRes2[0] || [];
+            roots = await listRootBlocks(db, budgetRecordId);
         }
 
         if (!roots.some((r) => r.type === "figures")) {
@@ -144,61 +244,22 @@ export async function ensureCompositorTocBlockAction(
                 order_index: 99997,
                 props: {},
             });
-            const rootsResFig = await db.query<
-                [Array<{ id: unknown; order_index: number; type: string }>]
-            >(
-                "SELECT id, order_index, type FROM budget_block WHERE budget_id = $budgetId AND parent_id IS NONE AND deleted_at IS NONE ORDER BY order_index ASC",
-                { budgetId: budgetRecordId }
-            );
-            roots = rootsResFig[0] || [];
+            roots = await listRootBlocks(db, budgetRecordId);
         }
 
         const cover = roots.find((r) => r.type === "cover");
+        const headerFooter = roots.find((r) => r.type === "header_footer");
         const toc = roots.find((r) => r.type === "toc");
         const figures = roots.find((r) => r.type === "figures");
-        if (!cover || !toc || !figures) {
+        if (!cover || !headerFooter || !toc || !figures) {
             return {
                 success: false,
-                error: "Não foi possível garantir capa, sumário e lista de figuras na raiz.",
+                error: "Não foi possível garantir capa, cabeçalho/rodapé, sumário e lista de figuras na raiz.",
             };
         }
 
         if (createdTocOrFigures) {
-            const rootsResNorm = await db.query<
-                [Array<{ id: unknown; order_index: number; type: string }>]
-            >(
-                "SELECT id, order_index, type FROM budget_block WHERE budget_id = $budgetId AND parent_id IS NONE AND deleted_at IS NONE ORDER BY order_index ASC",
-                { budgetId: budgetRecordId }
-            );
-            roots = rootsResNorm[0] || [];
-            const scopeRow = roots.find((r) => r.type === "scope");
-            const coverRow = roots.find((r) => r.type === "cover");
-            const tocRow = roots.find((r) => r.type === "toc");
-            const figuresRow = roots.find((r) => r.type === "figures");
-            if (!coverRow || !tocRow || !figuresRow) {
-                return {
-                    success: false,
-                    error: "Não foi possível normalizar ordem após criar sumário ou lista de figuras.",
-                };
-            }
-            const othersSorted = roots
-                .filter(
-                    (r) =>
-                        r.type !== "cover" &&
-                        r.type !== "toc" &&
-                        r.type !== "scope" &&
-                        r.type !== "figures"
-                )
-                .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
-            const ordered =
-                scopeRow && coverRow && tocRow && figuresRow
-                    ? [coverRow, tocRow, figuresRow, scopeRow, ...othersSorted]
-                    : [coverRow, tocRow, figuresRow, ...othersSorted];
-            for (let i = 0; i < ordered.length; i++) {
-                await db.update(requireRecordId("budget_block", String(ordered[i].id))).merge({
-                    order_index: i,
-                });
-            }
+            await normalizeFixedRootOrder(db, budgetRecordId);
         }
 
         revalidatePath(budgetRevalidatePath(budgetId));
@@ -410,6 +471,12 @@ export async function deleteBlockAction(
                 error: "A lista de figuras não pode ser removida — ela é gerada automaticamente após o sumário.",
             };
         }
+        if (row?.type === "header_footer") {
+            return {
+                success: false,
+                error: "O bloco Cabeçalho e Rodapé não pode ser removido — ele configura a paginação da proposta.",
+            };
+        }
         if (row?.type === "quote") {
             return {
                 success: false,
@@ -467,6 +534,14 @@ export async function moveBlockToParentAction(
                 };
             }
         }
+        if (row?.type === "header_footer") {
+            if (newParentId !== null) {
+                return {
+                    success: false,
+                    error: "O bloco Cabeçalho e Rodapé deve permanecer na raiz do documento.",
+                };
+            }
+        }
         if (row?.type === "quote") {
             if (newParentId !== null) {
                 return {
@@ -507,6 +582,25 @@ export async function reorderBlocksAction(
 
     const db = await getDb();
     try {
+        const fixedOrder = ["cover", "header_footer", "toc", "figures"];
+        const fixedPosByType = new Map<string, number>();
+        for (let i = 0; i < blockIds.length; i++) {
+            const row = await db.select(requireRecordId("budget_block", blockIds[i]));
+            const block = (Array.isArray(row) ? row[0] : row) as { type?: string } | undefined;
+            const t = String(block?.type ?? "");
+            if (fixedOrder.includes(t)) fixedPosByType.set(t, i);
+        }
+        const fixedPositions = fixedOrder
+            .map((t) => fixedPosByType.get(t))
+            .filter((n): n is number => typeof n === "number");
+        for (let i = 1; i < fixedPositions.length; i++) {
+            if (fixedPositions[i] < fixedPositions[i - 1]) {
+                return {
+                    success: false,
+                    error: "A ordem fixa CAPA → CABEÇALHO E RODAPÉ → SUMÁRIO → LISTA DE FIGURAS deve ser mantida.",
+                };
+            }
+        }
         for (let i = 0; i < blockIds.length; i++) {
             await db.update(requireRecordId("budget_block", blockIds[i])).merge({ order_index: i });
         }

@@ -253,6 +253,45 @@
   margin: 0.5rem 0;
 }
 
+.tiptap table,
+.tiptap-content table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  margin: 0.25rem 0;
+}
+
+.tiptap td,
+.tiptap-content td,
+.tiptap th,
+.tiptap-content th {
+  border: 1px solid rgb(203 213 225);
+  padding: 0.25rem 0.35rem;
+  vertical-align: top;
+}
+
+/* Modo de edição de cabeçalho/rodapé: reduzir espaçamentos para aproveitar área útil. */
+.tiptap-content.word-band-mode p {
+  margin: 0.125rem 0;
+}
+
+.tiptap-content.word-band-mode h1,
+.tiptap-content.word-band-mode h2,
+.tiptap-content.word-band-mode h3 {
+  margin-top: 0.25rem !important;
+  margin-bottom: 0.125rem !important;
+}
+
+.tiptap-content.word-band-mode img {
+  margin: 0.125rem 0;
+  border-radius: 0.25rem;
+  max-height: var(--word-band-image-max-height, 72px) !important;
+  width: auto !important;
+  max-width: 100%;
+  object-fit: contain;
+  vertical-align: top;
+}
+
 /* Barra indeterminada — geração de PDF no cliente */
 @keyframes pdf-indeterminate-slide {
   0% {

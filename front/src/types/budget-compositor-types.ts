@@ -8,6 +8,7 @@ import type { BudgetItem } from "@/types/budget-types";
 // Catálogo inicial — extensível adicionando novas strings sem migração de banco
 export type BlockType =
   | "cover"     // Capa do documento (PDF / proposta) — uma por orçamento, criada automaticamente
+  | "header_footer" // Configuração visual de cabeçalho/rodapé (capa + páginas internas)
   | "toc"       // Sumário automático (sempre após a capa) — conteúdo derivado da árvore
   | "figures"   // Lista de figuras (após sumário) — imagens do Escopo, automático
   | "quote"     // Orçamento (tabela/valores) — bloco raiz que referencia a aba Orçamento
@@ -65,7 +66,76 @@ export interface CoverBlockProps {
   cover_pdf_footer_left_template?: string;
   /** Rodapé direito. Placeholders: {{date}} {{code}} {{title}}. Vazio = texto automático. */
   cover_pdf_footer_right_template?: string;
+  /** Altura da faixa superior da capa no PDF (pontos ~1/72"); arrastável no modal da capa. */
+  cover_pdf_header_band_height_pt?: number;
+  /** Altura da faixa inferior da capa no PDF (pontos). */
+  cover_pdf_footer_band_height_pt?: number;
 }
+
+export interface HeaderFooterBlockProps {
+  cover_watermark_url?: string;
+  cover_watermark_opacity?: number;
+  cover_watermark_scale_pct?: number;
+  cover_watermark_x_pct?: number;
+  cover_watermark_y_pct?: number;
+  cover_watermark_width_pct?: number;
+  cover_watermark_aspect?: number;
+  inner_use_cover_watermark?: boolean;
+  inner_watermark_url?: string;
+  inner_watermark_opacity?: number;
+  inner_watermark_scale_pct?: number;
+  inner_watermark_x_pct?: number;
+  inner_watermark_y_pct?: number;
+  inner_watermark_width_pct?: number;
+  inner_watermark_aspect?: number;
+  cover_header_html?: string;
+  cover_footer_html?: string;
+  cover_header_height?: number;
+  cover_footer_height?: number;
+  inner_header_html?: string;
+  inner_footer_html?: string;
+  inner_header_height?: number;
+  inner_footer_height?: number;
+  /** Compatibilidade com configuração antiga da capa. */
+  legacy_cover_pdf_show_header_band?: boolean;
+  legacy_cover_pdf_show_footer_band?: boolean;
+  legacy_cover_pdf_header_company_override?: string;
+  legacy_cover_pdf_header_logo_url_override?: string;
+  legacy_cover_pdf_footer_left_template?: string;
+  legacy_cover_pdf_footer_right_template?: string;
+}
+
+export const DEFAULT_HEADER_FOOTER_PROPS: HeaderFooterBlockProps = {
+  cover_watermark_url: "",
+  cover_watermark_opacity: 0.12,
+  cover_watermark_scale_pct: 100,
+  cover_watermark_x_pct: 11,
+  cover_watermark_y_pct: 11,
+  cover_watermark_width_pct: 78,
+  cover_watermark_aspect: 1,
+  inner_use_cover_watermark: true,
+  inner_watermark_url: "",
+  inner_watermark_opacity: 0.06,
+  inner_watermark_scale_pct: 100,
+  inner_watermark_x_pct: 11,
+  inner_watermark_y_pct: 11,
+  inner_watermark_width_pct: 78,
+  inner_watermark_aspect: 1,
+  cover_header_html: "",
+  cover_footer_html: "",
+  cover_header_height: 108,
+  cover_footer_height: 44,
+  inner_header_html: "",
+  inner_footer_html: "",
+  inner_header_height: 96,
+  inner_footer_height: 40,
+  legacy_cover_pdf_show_header_band: true,
+  legacy_cover_pdf_show_footer_band: true,
+  legacy_cover_pdf_header_company_override: "",
+  legacy_cover_pdf_header_logo_url_override: "",
+  legacy_cover_pdf_footer_left_template: "",
+  legacy_cover_pdf_footer_right_template: "",
+};
 
 export const DEFAULT_COVER_PROPS: CoverBlockProps = {
   cover_document_html:

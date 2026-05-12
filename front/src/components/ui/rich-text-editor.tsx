@@ -6,14 +6,19 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { ResizableImage } from '@/components/ui/resizable-image-extension';
 import TextAlign from '@tiptap/extension-text-align';
+import { Table } from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableHeader from '@tiptap/extension-table-header';
+import TableCell from '@tiptap/extension-table-cell';
 import {
   Bold, Italic, Underline as UnderlineIcon, List, ListOrdered,
   Heading1, Heading2, AlignLeft, AlignCenter, AlignRight, AlignJustify,
-  ImagePlus,
+  ImagePlus, Table2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { WordPageClientLogo } from '@/components/budgets/compositor/word-page-client-logo';
+import { WordPageWatermark } from '@/components/budgets/compositor/word-page-watermark';
 
 interface RichTextEditorProps {
   value: string;
@@ -30,6 +35,18 @@ interface RichTextEditorProps {
    */
   wordPageWatermarkUrl?: string;
   wordPageWatermarkOpacity?: number;
+  /** Escala visual da marca d'água na folha (%). */
+  wordPageWatermarkScalePct?: number;
+  /** Modo livre: arrastar e redimensionar marca d'água na página. */
+  wordPageWatermarkLayout?: {
+    readOnly: boolean;
+    xPct: number;
+    yPct: number;
+    widthPct: number;
+    aspect?: number;
+    onLayoutChange: (layout: { xPct: number; yPct: number; widthPct: number }) => void;
+    onAspectChange: (aspect: number) => void;
+  };
   /** Logomarca do cliente na folha (arrastar/redimensionar). */
   wordPageClientLogo?: {
     url: string;
@@ -40,6 +57,15 @@ interface RichTextEditorProps {
     aspect?: number;
     onLayoutChange: (layout: { xPct: number; yPct: number; widthPct: number }) => void;
     onAspectChange: (aspect: number) => void;
+  };
+  /** Guias visuais de cabeçalho/corpo/rodapé no modo Word. */
+  wordPageBands?: {
+    headerHeight: number;
+    footerHeight: number;
+    activeBand?: "header" | "footer";
+    onSelectBand?: (band: "header" | "footer") => void;
+    onHeaderHeightChange?: (height: number) => void;
+    onFooterHeightChange?: (height: number) => void;
   };
 }
 
@@ -57,6 +83,21 @@ const WORD_RIBBON_TABS = [
 ];
 
 type WordRibbonTabId = (typeof WORD_RIBBON_TABS)[number]["id"];
+
+function getWordBandPercents(headerHeight: number, footerHeight: number) {
+  const PAGE_BASELINE_PX = 1122;
+  const headerPct = Math.min(
+    40,
+    Math.max(4, (Math.max(24, Number(headerHeight) || 24) / PAGE_BASELINE_PX) * 100),
+  );
+  const footerPct = Math.min(
+    45,
+    Math.max(4, (Math.max(24, Number(footerHeight) || 24) / PAGE_BASELINE_PX) * 100),
+  );
+  const bodyStart = headerPct;
+  const bodyEnd = Math.max(bodyStart + 8, 100 - footerPct);
+  return { headerPct, footerPct, bodyStart, bodyEnd };
+}
 
 function RulerCorner() {
   return <div className="h-6 w-6 shrink-0 border border-neutral-500/45 bg-[#d8d8d8]" />;
@@ -96,13 +137,39 @@ export function RichTextEditor({
   readOnly = false,
   wordPageWatermarkUrl,
   wordPageWatermarkOpacity = 0.12,
+  wordPageWatermarkScalePct = 100,
+  wordPageWatermarkLayout,
   wordPageClientLogo,
+  wordPageBands,
 }: RichTextEditorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wordPaperRef = useRef<HTMLDivElement>(null);
   const [wordRibbonTab, setWordRibbonTab] = useState<WordRibbonTabId>("home");
+  const bandDragRef = useRef<{
+    kind: "header" | "footer";
+    startY: number;
+    startHeight: number;
+    paperHeight: number;
+  } | null>(null);
+  const [previewBandHeights, setPreviewBandHeights] = useState({
+    headerHeight: wordPageBands?.headerHeight ?? 96,
+    footerHeight: wordPageBands?.footerHeight ?? 40,
+  });
+  const previewBandHeightsRef = useRef(previewBandHeights);
 
   const isWord = variant === 'word';
+
+  useEffect(() => {
+    if (bandDragRef.current) return;
+    setPreviewBandHeights({
+      headerHeight: wordPageBands?.headerHeight ?? 96,
+      footerHeight: wordPageBands?.footerHeight ?? 40,
+    });
+  }, [wordPageBands?.headerHeight, wordPageBands?.footerHeight]);
+
+  useEffect(() => {
+    previewBandHeightsRef.current = previewBandHeights;
+  }, [previewBandHeights]);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -113,6 +180,12 @@ export function RichTextEditor({
       }),
       ResizableImage.configure({ inline: true }),
       TextAlign.configure({ types: ['heading', 'paragraph'], defaultAlignment: isWord ? 'left' : 'justify' }),
+      Table.configure({
+        resizable: true,
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
     ],
     content: value,
     onUpdate: ({ editor }) => {
@@ -163,7 +236,9 @@ export function RichTextEditor({
         class: cn(
           'tiptap-content focus:outline-none w-full text-neutral-900',
           isWord
-            ? "min-h-full px-[22mm] py-[18mm] text-[11pt] leading-relaxed"
+            ? wordPageBands
+              ? "word-band-mode min-h-full px-[8mm] py-[4mm] text-[11pt] leading-snug"
+              : "min-h-full px-[22mm] py-[18mm] text-[11pt] leading-relaxed"
             : "min-h-[300px] p-4 border rounded-md text-justify",
         ),
       },
@@ -175,6 +250,15 @@ export function RichTextEditor({
   }, [editor, readOnly]);
 
   if (!editor) return null;
+
+  const focusWordEditorSelectAll = () => {
+    if (readOnly) return;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        editor.chain().focus().selectAll().run();
+      });
+    });
+  };
 
   const wc = isWord ? 'h-7 w-7 p-0' : undefined;
 
@@ -347,6 +431,72 @@ export function RichTextEditor({
       ? "Não há Novo/Abrir/Salvar aqui: o texto é guardado com o orçamento. Use a visualização em PDF para imprimir."
       : "Esta faixa imita o Word, mas ainda não há comandos neste editor.";
 
+  const insertHeaderThreeColumns = () => {
+    editor
+      .chain()
+      .focus()
+      .insertTable({ rows: 1, cols: 3, withHeaderRow: false })
+      .run();
+  };
+
+  const startBandResize = (kind: "header" | "footer") => (e: React.PointerEvent) => {
+    if (!wordPageBands) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const paper = wordPaperRef.current;
+    if (!paper) return;
+    const rect = paper.getBoundingClientRect();
+    if (rect.height <= 0) return;
+    const pid = e.pointerId;
+    bandDragRef.current = {
+      kind,
+      startY: e.clientY,
+      startHeight: kind === "header" ? previewBandHeights.headerHeight : previewBandHeights.footerHeight,
+      paperHeight: rect.height,
+    };
+    const onMove = (ev: PointerEvent) => {
+      if (ev.pointerId !== pid) return;
+      const d = bandDragRef.current;
+      if (!d) return;
+      ev.preventDefault();
+      const dyPx = ev.clientY - d.startY;
+      const deltaBasePx = (dyPx / d.paperHeight) * 1122;
+      if (d.kind === "header") {
+        const next = Math.max(24, Math.min(320, Math.round(d.startHeight + deltaBasePx)));
+        setPreviewBandHeights((prev) => ({ ...prev, headerHeight: next }));
+      } else {
+        const next = Math.max(24, Math.min(320, Math.round(d.startHeight - deltaBasePx)));
+        setPreviewBandHeights((prev) => ({ ...prev, footerHeight: next }));
+      }
+    };
+    const onUp = (ev: PointerEvent) => {
+      if (ev.pointerId !== pid) return;
+      ev.preventDefault();
+      window.removeEventListener("pointermove", onMove, true);
+      window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("pointercancel", onUp, true);
+      const d = bandDragRef.current;
+      bandDragRef.current = null;
+      if (!d || !wordPageBands) return;
+      if (d.kind === "header") {
+        wordPageBands.onHeaderHeightChange?.(previewBandHeightsRef.current.headerHeight);
+      } else {
+        wordPageBands.onFooterHeightChange?.(previewBandHeightsRef.current.footerHeight);
+      }
+    };
+    window.addEventListener("pointermove", onMove, { capture: true, passive: false });
+    window.addEventListener("pointerup", onUp, { capture: true, passive: false });
+    window.addEventListener("pointercancel", onUp, { capture: true, passive: false });
+  };
+
+  const activeBandHeightPx = wordPageBands
+    ? (wordPageBands.activeBand === "footer" ? previewBandHeights.footerHeight : previewBandHeights.headerHeight)
+    : 96;
+  const bandImageMaxHeightPx = Math.max(20, Math.round((Number(activeBandHeightPx) || 96) * 0.72));
+  const wordBandEditorVars = (isWord && wordPageBands
+    ? ({ "--word-band-image-max-height": `${bandImageMaxHeightPx}px` } as React.CSSProperties)
+    : undefined);
+
   if (isWord) {
     return (
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-white">
@@ -437,6 +587,22 @@ export function RichTextEditor({
                       </div>
                     </div>
                   ) : null}
+                  <div className="flex min-w-0 flex-col gap-1 border-r border-neutral-200 pr-4">
+                    <span className="text-[10px] font-medium text-neutral-500">Layout</span>
+                    <div className="flex h-7 min-h-7 items-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        type="button"
+                        title="Inserir tabela 3 colunas para cabeçalho"
+                        onClick={insertHeaderThreeColumns}
+                        className="h-7 w-auto max-w-none gap-1.5 px-2"
+                      >
+                        <Table2 className="h-4 w-4 shrink-0" />
+                        <span className="text-[11px]">3 colunas</span>
+                      </Button>
+                    </div>
+                  </div>
                   {extraToolbarItems ? (
                     <div className="flex min-w-0 flex-col gap-1">
                       <span className="text-[10px] font-medium text-neutral-500">Outros</span>
@@ -481,24 +647,79 @@ export function RichTextEditor({
                 className={cn(
                   "relative col-start-2 row-start-2 box-border min-w-0 self-start overflow-x-hidden border border-l-0 border-t-0 border-neutral-500/45 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.12)]",
                 )}
+                onClickCapture={(e) => {
+                  if (!wordPageBands?.onSelectBand) return;
+                  const paper = wordPaperRef.current;
+                  if (!paper) return;
+                  const rect = paper.getBoundingClientRect();
+                  if (rect.height <= 0) return;
+                  const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+                  const { headerPct, footerPct } = getWordBandPercents(
+                    previewBandHeights.headerHeight,
+                    previewBandHeights.footerHeight,
+                  );
+                  if (yPct <= headerPct) {
+                    wordPageBands.onSelectBand("header");
+                  } else if (yPct >= 100 - footerPct) {
+                    wordPageBands.onSelectBand("footer");
+                  }
+                }}
+                onDoubleClickCapture={(e) => {
+                  if (!wordPageBands?.onSelectBand) return;
+                  const paper = wordPaperRef.current;
+                  if (!paper) return;
+                  const rect = paper.getBoundingClientRect();
+                  if (rect.height <= 0) return;
+                  const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+                  const { headerPct, footerPct } = getWordBandPercents(
+                    previewBandHeights.headerHeight,
+                    previewBandHeights.footerHeight,
+                  );
+                  if (yPct <= headerPct) {
+                    wordPageBands.onSelectBand("header");
+                    focusWordEditorSelectAll();
+                  } else if (yPct >= 100 - footerPct) {
+                    wordPageBands.onSelectBand("footer");
+                    focusWordEditorSelectAll();
+                  }
+                }}
                 style={{
                   width: "100%",
                   aspectRatio: "210 / 297",
                 }}
               >
                 {wordPageWatermarkUrl?.trim() ? (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
-                    src={wordPageWatermarkUrl.trim()}
-                    alt=""
-                    className="pointer-events-none absolute inset-0 z-0 m-auto max-h-[78%] max-w-[78%] object-contain"
-                    style={{
-                      opacity: Math.min(
-                        0.32,
+                  wordPageWatermarkLayout ? (
+                    <WordPageWatermark
+                      url={wordPageWatermarkUrl.trim()}
+                      opacity={Math.min(
+                        0.35,
                         Math.max(0, Number.isFinite(wordPageWatermarkOpacity) ? wordPageWatermarkOpacity : 0.12),
-                      ),
-                    }}
-                  />
+                      )}
+                      readOnly={wordPageWatermarkLayout.readOnly}
+                      paperRef={wordPaperRef}
+                      xPct={wordPageWatermarkLayout.xPct}
+                      yPct={wordPageWatermarkLayout.yPct}
+                      widthPct={wordPageWatermarkLayout.widthPct}
+                      aspect={wordPageWatermarkLayout.aspect}
+                      onLayoutChange={wordPageWatermarkLayout.onLayoutChange}
+                      onAspectChange={wordPageWatermarkLayout.onAspectChange}
+                    />
+                  ) : (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={wordPageWatermarkUrl.trim()}
+                      alt=""
+                      className="pointer-events-none absolute inset-0 z-0 m-auto max-h-[78%] max-w-[78%] object-contain"
+                      style={{
+                        opacity: Math.min(
+                          0.32,
+                          Math.max(0, Number.isFinite(wordPageWatermarkOpacity) ? wordPageWatermarkOpacity : 0.12),
+                        ),
+                        transform: `scale(${Math.max(20, Math.min(240, Number(wordPageWatermarkScalePct) || 100)) / 100})`,
+                      }}
+                    />
+                  )
                 ) : null}
                 {wordPageClientLogo?.url?.trim() ? (
                   <WordPageClientLogo
@@ -513,9 +734,88 @@ export function RichTextEditor({
                     onAspectChange={wordPageClientLogo.onAspectChange}
                   />
                 ) : null}
-                <div className="relative z-[2] min-h-full [&_.tiptap]:!bg-transparent [&_.tiptap]:min-h-full">
+                <div
+                  className="relative z-0 min-h-full [&_.tiptap]:!bg-transparent [&_.tiptap]:min-h-full"
+                  style={wordBandEditorVars}
+                >
                   <EditorContent editor={editor} />
                 </div>
+                {wordPageBands ? (
+                  <div className="pointer-events-none absolute inset-0 z-[15]" aria-hidden>
+                    {(() => {
+                      const { headerPct, footerPct, bodyStart, bodyEnd } = getWordBandPercents(
+                        previewBandHeights.headerHeight,
+                        previewBandHeights.footerHeight,
+                      );
+                      const activeHeader = wordPageBands.activeBand === "header";
+                      const activeFooter = wordPageBands.activeBand === "footer";
+                      return (
+                        <>
+                          <div
+                            className={cn(
+                              "absolute left-0 right-0 top-0 border-b border-dashed transition-colors",
+                              activeHeader
+                                ? "border-primary/80 bg-primary/10"
+                                : "border-primary/40 bg-primary/[0.03]",
+                            )}
+                            style={{ height: `${headerPct}%` }}
+                          />
+                          <div
+                            className="absolute left-0 right-0 border-t border-dashed border-primary/35"
+                            style={{ top: `${bodyStart}%` }}
+                          />
+                          {wordPageBands.onHeaderHeightChange ? (
+                            <button
+                              type="button"
+                              aria-label="Redimensionar cabeçalho"
+                              className="pointer-events-auto absolute left-1/2 z-[20] flex min-h-7 min-w-14 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize touch-none items-center justify-center rounded-full border border-primary/50 bg-white/95 text-[10px] text-primary shadow"
+                              style={{ top: `${bodyStart}%` }}
+                              onPointerDownCapture={startBandResize("header")}
+                            >
+                              arraste
+                            </button>
+                          ) : null}
+                          <div
+                            className="absolute left-0 right-0 border-t border-dashed border-primary/35"
+                            style={{ top: `${bodyEnd}%` }}
+                          />
+                          {wordPageBands.onFooterHeightChange ? (
+                            <button
+                              type="button"
+                              aria-label="Redimensionar rodapé"
+                              className="pointer-events-auto absolute left-1/2 z-[20] flex min-h-7 min-w-14 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize touch-none items-center justify-center rounded-full border border-primary/50 bg-white/95 text-[10px] text-primary shadow"
+                              style={{ top: `${bodyEnd}%` }}
+                              onPointerDownCapture={startBandResize("footer")}
+                            >
+                              arraste
+                            </button>
+                          ) : null}
+                          <div
+                            className={cn(
+                              "absolute left-0 right-0 bottom-0 border-t border-dashed transition-colors",
+                              activeFooter
+                                ? "border-primary/80 bg-primary/10"
+                                : "border-primary/40 bg-primary/[0.03]",
+                            )}
+                            style={{ height: `${footerPct}%` }}
+                          />
+                          <div className="absolute left-2 top-1 rounded-sm bg-white/80 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            Cabeçalho
+                          </div>
+                          <div
+                            className="absolute left-2 rounded-sm bg-white/80 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                            style={{ top: `calc(${bodyStart}% + 2px)` }}
+                          >
+                            Corpo
+                          </div>
+                          <div className="absolute left-2 bottom-1 rounded-sm bg-white/80 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            Rodapé
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>

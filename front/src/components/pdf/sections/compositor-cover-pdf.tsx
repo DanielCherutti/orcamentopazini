@@ -2,7 +2,7 @@ import React from "react";
 import { Page, View, Image, Text, StyleSheet } from "@react-pdf/renderer";
 import type { Budget } from "@/types/budget-types";
 import type { ProposalSettings } from "@/actions/settings-actions";
-import type { CoverBlockProps } from "@/types/budget-compositor-types";
+import type { CoverBlockProps, HeaderFooterBlockProps } from "@/types/budget-compositor-types";
 import { mergeCoverDocumentProps } from "@/lib/budgets/cover-document";
 import { type PdfEmbeddedImages, proxyPdfImageSrc, proxyPdfImageUrlCore } from "@/lib/pdf/pdf-image-src";
 import { sanitizeCoverHtmlForPdf } from "@/lib/pdf/sanitize-inline-styles-for-pdf";
@@ -20,6 +20,13 @@ import {
 } from "@/lib/pdf/cover-pdf-band-resolve";
 import { PdfProposalHeaderBand } from "@/components/pdf/pdf-proposal-header-band";
 import { DEFAULT_CLIENT_LOGO_LAYOUT } from "@/lib/budgets/cover-client-logo-layout";
+import {
+  clampCoverFooterBandPt,
+  clampCoverHeaderBandPt,
+  DEFAULT_COVER_FOOTER_BAND_PT,
+  DEFAULT_COVER_HEADER_BAND_PT,
+} from "@/lib/pdf/cover-pdf-band-layout";
+import { stripHtmlToText } from "@/lib/pdf/html-to-plain-text";
 
 /** Só URL HTTP(S) no HTML — nunca data URI (strings enormes quebram sanitize/split e o layout). */
 function rewriteImgSrcInHtml(html: string, publicBase?: string): string {
@@ -38,9 +45,6 @@ const PAGE_W = 595.28;
 const PAGE_H = 841.89;
 const BODY_PAD_H = Math.round((22 / 210) * PAGE_W);
 const BODY_PAD_V = Math.round((18 / 297) * PAGE_H);
-/** Espaço reservado para cabeçalho (duas colunas: marca + contatos). */
-const COVER_HEADER_RESERVE = 108;
-const COVER_FOOTER_RESERVE = 44;
 
 const styles = StyleSheet.create({
   page: {
@@ -50,13 +54,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: BODY_PAD_H,
   },
   pagePadTopWithHeader: {
-    paddingTop: BODY_PAD_V + COVER_HEADER_RESERVE,
+    paddingTop: BODY_PAD_V + DEFAULT_COVER_HEADER_BAND_PT,
   },
   pagePadTopNoHeader: {
     paddingTop: BODY_PAD_V,
   },
   pagePadBottomWithFooter: {
-    paddingBottom: BODY_PAD_V + COVER_FOOTER_RESERVE,
+    paddingBottom: BODY_PAD_V + DEFAULT_COVER_FOOTER_BAND_PT,
   },
   pagePadBottomNoFooter: {
     paddingBottom: BODY_PAD_V,
@@ -118,7 +122,7 @@ const styles = StyleSheet.create({
     top: BODY_PAD_V,
     left: BODY_PAD_H,
     right: BODY_PAD_H,
-    minHeight: COVER_HEADER_RESERVE - 10,
+    minHeight: DEFAULT_COVER_HEADER_BAND_PT - 10,
     paddingBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: "#e5e7eb",
@@ -129,7 +133,7 @@ const styles = StyleSheet.create({
     bottom: BODY_PAD_V,
     left: BODY_PAD_H,
     right: BODY_PAD_H,
-    minHeight: COVER_FOOTER_RESERVE - 8,
+    minHeight: DEFAULT_COVER_FOOTER_BAND_PT - 8,
     paddingTop: 6,
     borderTopWidth: 1,
     borderTopColor: "#e5e7eb",
@@ -146,6 +150,8 @@ const styles = StyleSheet.create({
 
 function resolveClientLogoPdfBox(
   coverProps: CoverBlockProps,
+  headerReservePt: number,
+  footerReservePt: number,
   showCoverHeader: boolean,
   showCoverFooter: boolean,
 ): { left: number; top: number; width: number; height: number } | null {
@@ -158,8 +164,8 @@ function resolveClientLogoPdfBox(
       ? coverProps.client_logo_aspect
       : 1;
 
-  const padTop = showCoverHeader ? BODY_PAD_V + COVER_HEADER_RESERVE : BODY_PAD_V;
-  const padBottom = showCoverFooter ? BODY_PAD_V + COVER_FOOTER_RESERVE : BODY_PAD_V;
+  const padTop = showCoverHeader ? BODY_PAD_V + headerReservePt : BODY_PAD_V;
+  const padBottom = showCoverFooter ? BODY_PAD_V + footerReservePt : BODY_PAD_V;
   const innerW = PAGE_W - 2 * BODY_PAD_H;
   const innerH = PAGE_H - padTop - padBottom;
 
@@ -169,6 +175,27 @@ function resolveClientLogoPdfBox(
   const top = padTop + (yPct / 100) * innerH;
 
   return { left, top, width: w, height: h };
+}
+
+function resolveWatermarkPdfBox(
+  xPct: number,
+  yPct: number,
+  widthPct: number,
+  aspect: number,
+): { left: number; top: number; width: number; height: number } {
+  const safeAspect = aspect > 0 ? aspect : 1;
+  const wPct = Math.max(8, Math.min(95, widthPct));
+  const x = Math.max(0, Math.min(100 - wPct, xPct));
+  const w = (wPct / 100) * PAGE_W;
+  const h = w / safeAspect;
+  const maxYPct = Math.max(0, 100 - (h / PAGE_H) * 100);
+  const y = Math.max(0, Math.min(maxYPct, yPct));
+  return {
+    left: (x / 100) * PAGE_W,
+    top: (y / 100) * PAGE_H,
+    width: w,
+    height: h,
+  };
 }
 
 function clampOpacity(value: number | undefined, fallback: number): number {
@@ -183,20 +210,35 @@ export function CompositorCoverPdfPage({
   budget,
   settings,
   coverProps: raw,
+  headerFooterProps,
   pdfEmbeddedImages,
 }: {
   budget: Budget;
   settings: ProposalSettings;
   coverProps: CoverBlockProps;
+  headerFooterProps?: HeaderFooterBlockProps;
   pdfEmbeddedImages?: PdfEmbeddedImages;
 }) {
   const coverProps = mergeCoverDocumentProps(raw as unknown as Record<string, unknown>);
+  const coverWatermarkSource = (headerFooterProps?.cover_watermark_url ?? coverProps.cover_watermark_url)?.trim();
+  const coverWatermarkOpacity =
+    headerFooterProps?.cover_watermark_opacity ?? coverProps.cover_watermark_opacity;
+  const coverWatermarkScalePct = Math.max(
+    40,
+    Math.min(220, Number(headerFooterProps?.cover_watermark_scale_pct ?? 100) || 100),
+  );
+  const coverWatermarkBox = resolveWatermarkPdfBox(
+    Number(headerFooterProps?.cover_watermark_x_pct ?? 11),
+    Number(headerFooterProps?.cover_watermark_y_pct ?? 11),
+    Number(headerFooterProps?.cover_watermark_width_pct ?? 78),
+    Number(headerFooterProps?.cover_watermark_aspect ?? 1),
+  );
   const wmResolved = proxyPdfImageSrc(
-    coverProps.cover_watermark_url,
+    coverWatermarkSource,
     settings.app_public_url,
     pdfEmbeddedImages,
   );
-  const wmOpacity = clampOpacity(coverProps.cover_watermark_opacity, 0.12);
+  const wmOpacity = clampOpacity(coverWatermarkOpacity, 0.12);
   const html = sanitizeCoverHtmlForPdf(
     rewriteImgSrcInHtml(coverProps.cover_document_html ?? "", settings.app_public_url),
   );
@@ -214,44 +256,95 @@ export function CompositorCoverPdfPage({
   const clientLogoSrc = clientLogoUrlRaw
     ? proxyPdfImageSrc(clientLogoUrlRaw, settings.app_public_url, pdfEmbeddedImages)
     : undefined;
-  const showCoverHeader = shouldShowCoverPdfHeaderBand(coverProps, settings);
-  const showCoverFooter = resolveCoverPdfShowFooterBand(coverProps);
+  const customCoverHeaderText = sanitizeTextForPdf(
+    stripHtmlToText(String(headerFooterProps?.cover_header_html ?? ""))
+  ).trim();
+  const customCoverFooterText = sanitizeTextForPdf(
+    stripHtmlToText(String(headerFooterProps?.cover_footer_html ?? ""))
+  ).trim();
+  const showCoverHeader = customCoverHeaderText
+    ? true
+    : (headerFooterProps?.legacy_cover_pdf_show_header_band ?? shouldShowCoverPdfHeaderBand(coverProps, settings));
+  const showCoverFooter = customCoverFooterText
+    ? true
+    : (headerFooterProps?.legacy_cover_pdf_show_footer_band ?? resolveCoverPdfShowFooterBand(coverProps));
+  const headerReserveFromCover = coverProps.cover_pdf_header_band_height_pt;
+  const footerReserveFromCover = coverProps.cover_pdf_footer_band_height_pt;
+  const headerReserve = customCoverHeaderText
+    ? clampCoverHeaderBandPt(headerFooterProps?.cover_header_height, DEFAULT_COVER_HEADER_BAND_PT)
+    : clampCoverHeaderBandPt(
+        headerReserveFromCover ?? headerFooterProps?.cover_header_height,
+        DEFAULT_COVER_HEADER_BAND_PT,
+      );
+  const footerReserve = customCoverFooterText
+    ? clampCoverFooterBandPt(headerFooterProps?.cover_footer_height, DEFAULT_COVER_FOOTER_BAND_PT)
+    : clampCoverFooterBandPt(
+        footerReserveFromCover ?? headerFooterProps?.cover_footer_height,
+        DEFAULT_COVER_FOOTER_BAND_PT,
+      );
   const footerLeft = sanitizeTextForPdf(formatCoverPdfFooterLeftText(coverProps, bandCtx));
   const footerRight = sanitizeTextForPdf(formatCoverPdfFooterRightText(coverProps, bandCtx));
 
   /** Marca d’água não pode ocupar a página inteira: cobria cabeçalho/rodapé no PDF (ordem de pintura). */
-  const wmTopInset = showCoverHeader ? BODY_PAD_V + COVER_HEADER_RESERVE : 0;
-  const wmBottomInset = showCoverFooter ? BODY_PAD_V + COVER_FOOTER_RESERVE : 0;
-  const wmHeight = Math.max(40, PAGE_H - wmTopInset - wmBottomInset);
-  const clientLogoBox = resolveClientLogoPdfBox(coverProps, showCoverHeader, showCoverFooter);
+  const clientLogoBox = resolveClientLogoPdfBox(
+    coverProps,
+    headerReserve,
+    footerReserve,
+    showCoverHeader,
+    showCoverFooter,
+  );
 
   return (
     <Page
       size="A4"
       style={[
         styles.page,
-        showCoverHeader ? styles.pagePadTopWithHeader : styles.pagePadTopNoHeader,
-        showCoverFooter ? styles.pagePadBottomWithFooter : styles.pagePadBottomNoFooter,
+        showCoverHeader ? { paddingTop: BODY_PAD_V + headerReserve } : styles.pagePadTopNoHeader,
+        showCoverFooter ? { paddingBottom: BODY_PAD_V + footerReserve } : styles.pagePadBottomNoFooter,
       ]}
     >
       {/* Marca d’água primeiro; cabeçalho/rodapé com zIndex maior para não ficarem ocultos. */}
       {wmResolved ? (
-        <View
-          style={[styles.watermarkLayer, { top: wmTopInset, height: wmHeight }]}
-        >
+        <View style={[styles.watermarkLayer, { top: 0, height: PAGE_H }]}>
           {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
-          <Image src={wmResolved} style={[styles.watermarkImg, { opacity: wmOpacity }]} />
+          <Image
+            src={wmResolved}
+            style={[
+              styles.watermarkImg,
+              {
+                opacity: wmOpacity,
+                position: "absolute",
+                left: coverWatermarkBox.left,
+                top: coverWatermarkBox.top,
+                width: coverWatermarkBox.width,
+                height: coverWatermarkBox.height,
+                transform: `scale(${coverWatermarkScalePct / 100})`,
+              },
+            ]}
+          />
         </View>
       ) : null}
       {showCoverHeader ? (
-        <View style={styles.coverHeaderBand} fixed>
-          <PdfProposalHeaderBand settings={settings} logoSrc={logoSrc} companyName={companyName} />
+        <View style={[styles.coverHeaderBand, { minHeight: Math.max(30, headerReserve - 10) }]} fixed>
+          {customCoverHeaderText ? (
+            <Text style={{ fontSize: 9, color: theme.colors.text, lineHeight: 1.3 }}>
+              {customCoverHeaderText}
+            </Text>
+          ) : (
+            <PdfProposalHeaderBand settings={settings} logoSrc={logoSrc} companyName={companyName} />
+          )}
         </View>
       ) : null}
       {showCoverFooter ? (
-        <View style={styles.coverFooterBand} fixed>
-          <Text style={styles.coverFooterMuted}>{footerLeft}</Text>
-          <Text style={styles.coverFooterMuted}>{footerRight}</Text>
+        <View style={[styles.coverFooterBand, { minHeight: Math.max(26, footerReserve - 8) }]} fixed>
+          {customCoverFooterText ? (
+            <Text style={styles.coverFooterMuted}>{customCoverFooterText}</Text>
+          ) : (
+            <>
+              <Text style={styles.coverFooterMuted}>{footerLeft}</Text>
+              <Text style={styles.coverFooterMuted}>{footerRight}</Text>
+            </>
+          )}
         </View>
       ) : null}
       {clientLogoSrc && clientLogoBox ? (

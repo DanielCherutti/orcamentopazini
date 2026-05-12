@@ -4,7 +4,10 @@ import { getBudgetPdfScopeAction } from "@/actions/budget-actions";
 import { getProposalSettingsAction } from "@/actions/settings-actions";
 import type { ProposalSettings } from "@/actions/settings-actions";
 import { getCompositorTreeSnapshotAction } from "@/actions/budget-compositor-tree-actions";
-import { ensureCompositorQuoteBlockAction } from "@/actions/budget-compositor-block-actions";
+import {
+    ensureCompositorHeaderFooterBlockAction,
+    ensureCompositorQuoteBlockAction,
+} from "@/actions/budget-compositor-block-actions";
 import { getScopeFiguresListAction } from "@/actions/budget-scope-actions";
 import { buildTree } from "@/types/budget-compositor-types";
 import type { CompositorPdfPayload } from "@/components/pdf/compositor-pdf-types";
@@ -82,6 +85,7 @@ export async function loadBudgetPdfPayload(
     let compositorPdf: CompositorPdfPayload | undefined;
     if (budget.use_compositor && budget.id) {
         const budgetId = String(budget.id);
+        await ensureCompositorHeaderFooterBlockAction(budgetId, { skipRevalidate: true });
         // Garante bloco ORÇAMENTO também na leitura de PDF (orçamentos antigos sem quote raiz).
         await ensureCompositorQuoteBlockAction(budgetId, { skipRevalidate: true });
         const [snap, figRes] = await Promise.all([

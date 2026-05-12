@@ -53,6 +53,10 @@ function addUrl(set: Set<string>, u?: string | null) {
     set.add(t);
 }
 
+function asOptionalString(value: unknown): string | undefined {
+    return typeof value === "string" ? value : undefined;
+}
+
 /** Todas as URLs brutas que o PDF pode pedir (capa + cenas do orçamento + logo do cabeçalho). */
 export function collectRawPdfImageUrlsForPdf(
     budget: Budget,
@@ -60,12 +64,15 @@ export function collectRawPdfImageUrlsForPdf(
     settings?: ProposalSettings | null,
 ): string[] {
     const set = new Set<string>();
-    const coverBlock = compositorPdf?.roots?.length
-        ? flattenTree(compositorPdf.roots).find((b) => b.type === "cover")
-        : undefined;
+    const flat = compositorPdf?.roots?.length ? flattenTree(compositorPdf.roots) : [];
+    const coverBlock = flat.find((b) => b.type === "cover");
+    const headerFooterBlock = flat.find((b) => b.type === "header_footer");
     const cover = mergeCoverDocumentProps(coverBlock?.props as Record<string, unknown> | undefined);
+    const headerFooter = (headerFooterBlock?.props ?? {}) as Record<string, unknown>;
     addUrl(set, cover.cover_watermark_url);
     addUrl(set, cover.document_watermark_url);
+    addUrl(set, asOptionalString(headerFooter.cover_watermark_url));
+    addUrl(set, asOptionalString(headerFooter.inner_watermark_url));
     addUrl(set, cover.client_logo_url);
     addUrl(set, cover.cover_pdf_header_logo_url_override);
     if (settings?.company_logo_url?.trim()) {

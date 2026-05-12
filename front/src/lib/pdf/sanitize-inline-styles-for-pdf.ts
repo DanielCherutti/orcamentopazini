@@ -168,6 +168,12 @@ export function sanitizeCoverHtmlForPdf(html: string): string {
 /** Campos HTML por tipo de bloco do compositor — alinhado a `budget-compositor-types`. */
 const COMPOSITOR_BLOCK_HTML_FIELDS: Record<string, readonly string[]> = {
     cover: ["cover_document_html"],
+    header_footer: [
+        "cover_header_html",
+        "cover_footer_html",
+        "inner_header_html",
+        "inner_footer_html",
+    ],
     session: ["description"],
     text: ["content"],
     location: ["description"],

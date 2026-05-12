@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, createContext, useContext, useMemo, type CSSProperties } from "react";
-import { ChevronRight, ChevronDown, MapPin, Layers, FileText, Plus, Trash2, FolderOpen, GripVertical, Map as MapIcon, BookOpen, ListOrdered, ImageIcon, Table2 } from "lucide-react";
+import { ChevronRight, ChevronDown, MapPin, Layers, FileText, Plus, Trash2, FolderOpen, GripVertical, Map as MapIcon, BookOpen, ListOrdered, ImageIcon, Table2, LayoutTemplate } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -163,6 +163,7 @@ const BLOCK_ICONS: Record<string, React.ReactNode> = {
   section:  <Layers className="h-3.5 w-3.5 shrink-0" />,
   text:     <FileText className="h-3.5 w-3.5 shrink-0" />,
   scope:    <MapIcon className="h-3.5 w-3.5 shrink-0 text-primary" />,
+  header_footer: <LayoutTemplate className="h-3.5 w-3.5 shrink-0 text-primary" />,
 };
 
 // Opções disponíveis por tipo de pai
@@ -203,9 +204,10 @@ function SidebarDragPreview({
   const depth = block.depth;
   const indentPx = depth * 12 + 8;
   const isScope = block.type === "scope";
+  const isHeaderFooter = block.type === "header_footer";
   const isQuote = block.type === "quote";
   const isSelected = selectedId === block.id;
-  const isExpandable = (block.type === "session" || block.type === "location") && !isScope;
+  const isExpandable = (block.type === "session" || block.type === "location") && !isScope && !isHeaderFooter;
 
   return (
     <div
@@ -235,10 +237,10 @@ function SidebarDragPreview({
       <span
         className={cn(
           "min-w-0 flex-1 truncate text-xs font-medium leading-none",
-          (block.type === "session" || isScope || isQuote || block.type === "toc" || block.type === "figures") && "uppercase"
+          (block.type === "session" || isScope || isHeaderFooter || isQuote || block.type === "toc" || block.type === "figures") && "uppercase"
         )}
       >
-        {isScope ? "ADEQUAÇÕES" : isQuote ? "ORÇAMENTO" : block.type === "toc" ? "SUMÁRIO" : block.type === "figures" ? "LISTA DE FIGURAS" : (block.label || `(${block.type})`)}
+        {isScope ? "ADEQUAÇÕES" : isHeaderFooter ? "CABEÇALHO E RODAPÉ" : isQuote ? "ORÇAMENTO" : block.type === "toc" ? "SUMÁRIO" : block.type === "figures" ? "LISTA DE FIGURAS" : (block.label || `(${block.type})`)}
       </span>
     </div>
   );
@@ -283,6 +285,7 @@ function InlineAdder({ budgetId, parentId, parentType, depth, hasScopeBlock = fa
   const handleTypeSelect = (type: BlockType) => {
     const directCreate: Partial<Record<BlockType, string>> = {
       scope: "ADEQUAÇÕES",
+      header_footer: "CABEÇALHO E RODAPÉ",
       quote: "ORÇAMENTO",
       session: "Sessão",
     };
@@ -441,13 +444,14 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
   const isDragActive = !!(ctx?.activeDragId && ctx.activeDragId !== block.id);
 
   const isScope = block.type === "scope";
+  const isHeaderFooter = block.type === "header_footer";
   const isQuote = block.type === "quote";
   const isCover = block.type === "cover";
   const isToc = block.type === "toc";
   const isFigures = block.type === "figures";
   const isSelected = selectedId === block.id;
-  const isExpandable = (block.type === "session" || block.type === "location") && !isScope && !isQuote;
-  const canAdd = (block.type === "session" || block.type === "location") && !isScope && !isQuote;
+  const isExpandable = (block.type === "session" || block.type === "location") && !isScope && !isHeaderFooter && !isQuote;
+  const canAdd = (block.type === "session" || block.type === "location") && !isScope && !isHeaderFooter && !isQuote;
   const localChildren = ctx?.childrenReg[block.id] ?? block.children;
   const hasChildren = localChildren.length > 0;
   const indentPx = depth * 12 + 8;
@@ -506,7 +510,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
             <GripVertical className="h-3 w-3" />
           </div>
         ) : (
-          (isCover || isToc || isFigures || isQuote || (isScope && depth === 0)) && (
+          (isCover || isToc || isFigures || isHeaderFooter || isQuote || (isScope && depth === 0)) && (
             <span className="w-5 shrink-0" aria-hidden />
           )
         )}
@@ -535,7 +539,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
         )}
 
         {/* Label — duplo-clique para editar (exceto scope) */}
-        {editingLabel && !isReadOnly && !isScope && !isQuote && !isCover && !isToc && !isFigures ? (
+        {editingLabel && !isReadOnly && !isScope && !isHeaderFooter && !isQuote && !isCover && !isToc && !isFigures ? (
           <input
             ref={labelInputRef}
             value={labelDraft}
@@ -552,11 +556,11 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
           <span
             className={cn(
               "min-w-0 flex-1 truncate text-xs font-medium leading-none [text-size-adjust:100%]",
-              (block.type === "session" || isScope || isQuote || isCover || isToc || isFigures) && "uppercase"
+              (block.type === "session" || isScope || isHeaderFooter || isQuote || isCover || isToc || isFigures) && "uppercase"
             )}
-            onDoubleClick={(e) => { if (!isReadOnly && !isScope && !isQuote && !isCover && !isToc && !isFigures) { e.stopPropagation(); setLabelDraft(block.label || ""); setEditingLabel(true); } }}
+            onDoubleClick={(e) => { if (!isReadOnly && !isScope && !isHeaderFooter && !isQuote && !isCover && !isToc && !isFigures) { e.stopPropagation(); setLabelDraft(block.label || ""); setEditingLabel(true); } }}
           >
-            {isScope ? "ADEQUAÇÕES" : isQuote ? "ORÇAMENTO" : isCover ? "CAPA" : isToc ? "SUMÁRIO" : isFigures ? "LISTA DE FIGURAS" : (block.label || `(${block.type})`)}
+            {isScope ? "ADEQUAÇÕES" : isHeaderFooter ? "CABEÇALHO E RODAPÉ" : isQuote ? "ORÇAMENTO" : isCover ? "CAPA" : isToc ? "SUMÁRIO" : isFigures ? "LISTA DE FIGURAS" : (block.label || `(${block.type})`)}
           </span>
         )}
 
@@ -596,7 +600,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
         )}
 
         {/* Botão excluir — oculto em isReadOnly e scope */}
-        {!isReadOnly && !isScope && !isQuote && !isCover && !isToc && !isFigures && (
+        {!isReadOnly && !isScope && !isHeaderFooter && !isQuote && !isCover && !isToc && !isFigures && (
           <button
             disabled={deleting}
             onClick={handleDelete}
@@ -696,10 +700,11 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
         activeBlock?.type === "cover" ||
         activeBlock?.type === "toc" ||
         activeBlock?.type === "figures" ||
+        activeBlock?.type === "header_footer" ||
         activeBlock?.type === "quote" ||
         activeBlock?.type === "scope"
       ) {
-        toast.error("Adequações, orçamento, capa, sumário e lista de figuras só podem ficar na raiz do documento.");
+        toast.error("Adequações, cabeçalho/rodapé, orçamento, capa, sumário e lista de figuras só podem ficar na raiz do documento.");
         return;
       }
       const targetParentId = overId.slice(5);
@@ -721,13 +726,14 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
 
     if (
       (activeBlock?.type === "scope" ||
+        activeBlock?.type === "header_footer" ||
         activeBlock?.type === "quote" ||
         activeBlock?.type === "cover" ||
         activeBlock?.type === "toc" ||
         activeBlock?.type === "figures") &&
       overParentId !== null
     ) {
-      toast.error("Adequações, orçamento, capa, sumário e lista de figuras só podem ser reordenados na raiz.");
+      toast.error("Adequações, cabeçalho/rodapé, orçamento, capa, sumário e lista de figuras só podem ser reordenados na raiz.");
       return;
     }
 
