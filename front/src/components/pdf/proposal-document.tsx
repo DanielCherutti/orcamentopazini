@@ -966,7 +966,7 @@ export const ProposalDocument = ({
                 return (
                     <InnerPdfPage pageKey={keyBase} title="Lista de Figuras" paginationProbeKey="figures" {...innerCommon}>
                         <Text style={{ fontSize: 9, color: theme.colors.textLight, marginBottom: 14 }}>
-                            Figuras do Escopo. A página indicada referencia o início do detalhamento impresso.
+                            Figuras de Adequações. A página indicada referencia o início do detalhamento impresso.
                         </Text>
                         {figureRows.map((row) => (
                             <View key={`fig-${row.n}`} style={styles.tocRow}>

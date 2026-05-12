@@ -546,8 +546,8 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
                                                 colSpan={4}
                                                 className="px-4 py-14 text-center text-sm text-muted-foreground"
                                             >
-                                                Nenhum local no escopo. Configure locais na aba{" "}
-                                                <span className="font-medium text-foreground">Escopo</span>.
+                                                Nenhum local em adequações. Configure locais na aba{" "}
+                                                <span className="font-medium text-foreground">Adequações</span>.
                                             </td>
                                         </tr>
                                     ) : (

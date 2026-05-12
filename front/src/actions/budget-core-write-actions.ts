@@ -50,7 +50,7 @@ export async function createBudgetAction(title: string, code: string) {
             id: String(createdRecord.id),
         } as Budget;
 
-        await addBlockAction({ budgetId: createdBudget.id!, parentId: null, type: "scope", label: "ESCOPO" });
+        await addBlockAction({ budgetId: createdBudget.id!, parentId: null, type: "scope", label: "ADEQUAÇÕES" });
         await addBlockAction({
             budgetId: createdBudget.id!,
             parentId: null,

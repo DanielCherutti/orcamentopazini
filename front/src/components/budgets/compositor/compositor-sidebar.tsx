@@ -174,7 +174,7 @@ const ALL_OPTIONS: { type: BlockType; label: string; short: string }[] = [
   { type: "location", label: "Local (ambiente)", short: "Local"   },
   { type: "section",  label: "Trecho",           short: "Trecho"  },
   { type: "text",     label: "Texto livre",      short: "Texto"   },
-  { type: "scope",    label: "Bloco Escopo",     short: "ESCOPO"  },
+  { type: "scope",    label: "Bloco Adequações",     short: "ADEQUAÇÕES"  },
   { type: "quote",    label: "Bloco Orçamento",  short: "ORÇAMENTO"  },
 ];
 
@@ -238,7 +238,7 @@ function SidebarDragPreview({
           (block.type === "session" || isScope || isQuote || block.type === "toc" || block.type === "figures") && "uppercase"
         )}
       >
-        {isScope ? "ESCOPO" : isQuote ? "ORÇAMENTO" : block.type === "toc" ? "SUMÁRIO" : block.type === "figures" ? "LISTA DE FIGURAS" : (block.label || `(${block.type})`)}
+        {isScope ? "ADEQUAÇÕES" : isQuote ? "ORÇAMENTO" : block.type === "toc" ? "SUMÁRIO" : block.type === "figures" ? "LISTA DE FIGURAS" : (block.label || `(${block.type})`)}
       </span>
     </div>
   );
@@ -282,7 +282,7 @@ function InlineAdder({ budgetId, parentId, parentType, depth, hasScopeBlock = fa
 
   const handleTypeSelect = (type: BlockType) => {
     const directCreate: Partial<Record<BlockType, string>> = {
-      scope: "ESCOPO",
+      scope: "ADEQUAÇÕES",
       quote: "ORÇAMENTO",
       session: "Sessão",
     };
@@ -556,7 +556,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
             )}
             onDoubleClick={(e) => { if (!isReadOnly && !isScope && !isQuote && !isCover && !isToc && !isFigures) { e.stopPropagation(); setLabelDraft(block.label || ""); setEditingLabel(true); } }}
           >
-            {isScope ? "ESCOPO" : isQuote ? "ORÇAMENTO" : isCover ? "CAPA" : isToc ? "SUMÁRIO" : isFigures ? "LISTA DE FIGURAS" : (block.label || `(${block.type})`)}
+            {isScope ? "ADEQUAÇÕES" : isQuote ? "ORÇAMENTO" : isCover ? "CAPA" : isToc ? "SUMÁRIO" : isFigures ? "LISTA DE FIGURAS" : (block.label || `(${block.type})`)}
           </span>
         )}
 
@@ -699,7 +699,7 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
         activeBlock?.type === "quote" ||
         activeBlock?.type === "scope"
       ) {
-        toast.error("Escopo, orçamento, capa, sumário e lista de figuras só podem ficar na raiz do documento.");
+        toast.error("Adequações, orçamento, capa, sumário e lista de figuras só podem ficar na raiz do documento.");
         return;
       }
       const targetParentId = overId.slice(5);
@@ -727,7 +727,7 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
         activeBlock?.type === "figures") &&
       overParentId !== null
     ) {
-      toast.error("Escopo, orçamento, capa, sumário e lista de figuras só podem ser reordenados na raiz.");
+      toast.error("Adequações, orçamento, capa, sumário e lista de figuras só podem ser reordenados na raiz.");
       return;
     }
 

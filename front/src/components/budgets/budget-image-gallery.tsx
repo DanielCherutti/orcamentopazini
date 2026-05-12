@@ -85,12 +85,12 @@ export function BudgetImageGallery({
                   frameOrient === "portrait" ? "aspect-[210/297]" : "aspect-[297/210]",
                   "max-h-[min(240px,42vh)] sm:max-h-[min(280px,38vh)]",
               )}
-              title="Quadro de exibição no escopo (proporção A4). Edite a foto para mudar retrato/paisagem."
+              title="Quadro de exibição em adequações (proporção A4). Edite a foto para mudar retrato/paisagem."
             >
             {/* eslint-disable-next-line @next/next/no-img-element -- dynamic uploaded images without known dimensions */}
             <img
               src={displaySrc}
-              alt={cap || "Foto do escopo (com anotações, se houver)"}
+              alt={cap || "Foto de adequações (com anotações, se houver)"}
               width={w}
               height={h}
               className="max-h-full max-w-full object-contain"

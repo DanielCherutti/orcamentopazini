@@ -421,7 +421,7 @@ export function BudgetPhotoAnnotatorDialog({
                             autoComplete="off"
                         />
                         <p className="text-[10px] text-muted-foreground">
-                            Aparece na Lista de figuras do compositor (obrigatório no Escopo).
+                            Aparece na Lista de figuras do compositor (obrigatório em Adequações).
                         </p>
                     </div>
                 ) : null}
@@ -429,7 +429,7 @@ export function BudgetPhotoAnnotatorDialog({
                 {activeImageUrl ? (
                     <div className="shrink-0 flex flex-col gap-1.5 border-b bg-muted/25 px-4 py-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
                         <span className="text-xs font-medium text-muted-foreground shrink-0">
-                            Quadro de exibição (escopo)
+                            Quadro de exibição (adequações)
                         </span>
                         <div className="flex flex-wrap gap-1.5">
                             <Button

@@ -15,7 +15,7 @@ export const loginHighlights: LoginHighlight[] = [
   {
     kind: "improvement",
     date: "2026-04-01",
-    title: "Escopo e orçamento: quantidade com entrada mais confiável",
+    title: "Adequações e orçamento: quantidade com entrada mais confiável",
     description:
       "Os campos de quantidade passaram a usar o componente dedicado QuantityTextInput, com melhor controle do que é digitado e validação mais previsível.",
   },
@@ -24,7 +24,7 @@ export const loginHighlights: LoginHighlight[] = [
     date: "2026-04-01",
     title: "Listas de itens mais leves no navegador",
     description:
-      "Virtualização nas listas de itens do escopo e fluxos relacionados para melhor desempenho quando há muitos produtos; dependências do front atualizadas.",
+      "Virtualização nas listas de itens de adequações e fluxos relacionados para melhor desempenho quando há muitos produtos; dependências do front atualizadas.",
   },
   {
     kind: "feature",
@@ -71,21 +71,21 @@ export const loginHighlights: LoginHighlight[] = [
   {
     kind: "feature",
     date: "2026-03-27",
-    title: "Escopo: botão Adicionar descrição",
+    title: "Adequações: botão Adicionar descrição",
     description:
       "Ao lado de Adicionar produto e Adicionar grupo, um atalho abre a descrição do trecho (por padrão recolhida quando está vazia) e leva o foco até o editor.",
   },
   {
     kind: "improvement",
     date: "2026-03-27",
-    title: "Escopo: botões de ação na cor primária",
+    title: "Adequações: botões de ação na cor primária",
     description:
       "Adicionar produto, Adicionar grupo de produtos e Adicionar descrição usam o azul da marca para ficarem consistentes com o restante do sistema.",
   },
   {
     kind: "improvement",
     date: "2026-03-27",
-    title: "Grupos no escopo mais fáceis de ler",
+    title: "Grupos em adequações mais fáceis de ler",
     description:
       "Cada bloco de grupo ganhou moldura leve, trilho à esquerda e um rodapé “Fim do grupo” espelhando o título, para ver claramente onde o kit termina.",
   },
@@ -120,9 +120,9 @@ export const loginHighlights: LoginHighlight[] = [
   {
     kind: "fix",
     date: "2026-03-21",
-    title: "Grupo no escopo na ordem certa",
+    title: "Grupo em adequações na ordem certa",
     description:
-      "Ao adicionar um grupo de produtos em um trecho do escopo, os itens do grupo passam a entrar depois dos que já estavam naquele trecho — não mais no topo da lista.",
+      "Ao adicionar um grupo de produtos em um trecho de adequações, os itens do grupo passam a entrar depois dos que já estavam naquele trecho — não mais no topo da lista.",
   },
   {
     kind: "feature",
@@ -148,9 +148,9 @@ export const loginHighlights: LoginHighlight[] = [
   {
     kind: "improvement",
     date: "2026-03-24",
-    title: "Escopo e compositor: mesma lógica de pai e filho na tela",
+    title: "Adequações e compositor: mesma lógica de pai e filho na tela",
     description:
-      "Escopo e Ambientes: o índice mantém todos os trechos visíveis; o ambiente abre todos no painel (como antes no escopo) e o trecho abre só ele. Na aba Compositor: sessão “pai” mostra tudo abaixo (subsessões, locais…); subsessão, local ou trecho mostra só aquele ramo. Para ver todas as raízes no compositor, selecione o bloco ESCOPO ou um tipo fora sessão/local/trecho.",
+      "Adequações e Ambientes: o índice mantém todos os trechos visíveis; o ambiente abre todos no painel (como antes em adequações) e o trecho abre só ele. Na aba Compositor: sessão “pai” mostra tudo abaixo (subsessões, locais…); subsessão, local ou trecho mostra só aquele ramo. Para ver todas as raízes no compositor, selecione o bloco ADEQUAÇÕES ou um tipo fora sessão/local/trecho.",
   },
   {
     kind: "improvement",
@@ -164,7 +164,7 @@ export const loginHighlights: LoginHighlight[] = [
     date: "2026-03-22",
     title: "Seleção de produto no orçamento mais estável",
     description:
-      "Ao adicionar produto no escopo do orçamento, a busca não fecha o modal ao clicar na lista; o painel de resultados fica compacto, com rolagem e dentro da tela.",
+      "Ao adicionar produto em adequações do orçamento, a busca não fecha o modal ao clicar na lista; o painel de resultados fica compacto, com rolagem e dentro da tela.",
   },
   {
     kind: "feature",

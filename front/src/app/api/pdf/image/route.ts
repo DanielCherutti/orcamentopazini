@@ -7,6 +7,13 @@ const PASSTHROUGH_TYPES = new Set(["image/png", "image/jpeg", "image/jpg"]);
 const MAX_PDF_IMAGE_SIDE = 2048;
 /** Evita decompressão de imagens gigantes (pixel bombs). */
 const LIMIT_INPUT_PIXELS = 50_000_000;
+/** Só aplica auto-trim quando a borda vazia é relevante (evita cortar fotos normais). */
+const TRIM_MIN_AREA_REDUCTION = 0.22;
+/** Quadro usado no BudgetTable PDF para cenas. */
+const PDF_SCENE_FRAME_W = 525;
+const PDF_SCENE_FRAME_H = 300;
+/** Abaixo disso, a imagem tende a parecer "miniatura" visualmente no PDF. */
+const MIN_RENDER_FILL_RATIO_WARN = 0.45;
 
 function getRequestOrigin(request: NextRequest): string | undefined {
   const forwardedHost = request.headers.get("x-forwarded-host");
@@ -77,20 +84,68 @@ export async function GET(request: NextRequest) {
       .split(";")[0]
       .toLowerCase();
 
-    let pipeline = sharp(inputBuffer, {
-      animated: true,
-      limitInputPixels: LIMIT_INPUT_PIXELS,
-    });
-
+    let workingBuffer: Uint8Array = inputBuffer;
     let meta: sharp.Metadata;
     try {
-      meta = await pipeline.metadata();
+      meta = await sharp(workingBuffer, {
+        animated: true,
+        limitInputPixels: LIMIT_INPUT_PIXELS,
+      }).metadata();
     } catch {
       return NextResponse.json({ error: "Invalid image data" }, { status: 422 });
     }
 
+    const originalW = meta.width ?? 0;
+    const originalH = meta.height ?? 0;
+    // Algumas imagens chegam com "moldura" grande (transparente/branca) e parecem miniatura no PDF.
+    // Faz trim conservador e só aceita quando remove área significativa.
+    if (originalW > 0 && originalH > 0) {
+      try {
+        const trimmed = await sharp(workingBuffer, {
+          animated: true,
+          limitInputPixels: LIMIT_INPUT_PIXELS,
+        })
+          .trim()
+          .toBuffer({ resolveWithObject: true });
+        const tw = trimmed.info.width ?? 0;
+        const th = trimmed.info.height ?? 0;
+        if (tw > 0 && th > 0) {
+          const originalArea = originalW * originalH;
+          const trimmedArea = tw * th;
+          const reduced = 1 - trimmedArea / originalArea;
+          if (reduced >= TRIM_MIN_AREA_REDUCTION) {
+            workingBuffer = trimmed.data;
+            meta = { ...meta, width: tw, height: th };
+          }
+        }
+      } catch {
+        // Se trim falhar, segue com buffer original.
+      }
+    }
+
+    let pipeline = sharp(workingBuffer, {
+      animated: true,
+      limitInputPixels: LIMIT_INPUT_PIXELS,
+    });
+
     const w = meta.width ?? 0;
     const h = meta.height ?? 0;
+    if (w > 0 && h > 0) {
+      const scale = Math.min(PDF_SCENE_FRAME_W / w, PDF_SCENE_FRAME_H / h);
+      const renderedW = w * scale;
+      const renderedH = h * scale;
+      const fillRatio = (renderedW * renderedH) / (PDF_SCENE_FRAME_W * PDF_SCENE_FRAME_H);
+      if (fillRatio < MIN_RENDER_FILL_RATIO_WARN) {
+        console.warn("[pdf-image][small-render]", {
+          src: sourceUrl,
+          width: w,
+          height: h,
+          renderedW: Number(renderedW.toFixed(2)),
+          renderedH: Number(renderedH.toFixed(2)),
+          fillRatio: Number(fillRatio.toFixed(3)),
+        });
+      }
+    }
     if (w > MAX_PDF_IMAGE_SIDE || h > MAX_PDF_IMAGE_SIDE) {
       pipeline = pipeline.resize(MAX_PDF_IMAGE_SIDE, MAX_PDF_IMAGE_SIDE, {
         fit: "inside",

@@ -247,7 +247,7 @@ export function BudgetDataSection({
                         <Textarea
                             id="description"
                             className="min-h-[120px]"
-                            placeholder="Descreva o escopo geral do serviço ou detalhes importantes que devem aparecer na capa da proposta..."
+                            placeholder="Descreva as adequações gerais do serviço ou detalhes importantes que devem aparecer na capa da proposta..."
                             value={budget.description || ""}
                             onChange={(e) => onUpdate({ description: e.target.value })}
                             disabled={!isEditable}

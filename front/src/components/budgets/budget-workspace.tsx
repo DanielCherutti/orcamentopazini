@@ -48,7 +48,7 @@ const BudgetQuoteTab = dynamic(
 
 const TABS: { id: ActiveTab; label: string; icon: React.ReactNode }[] = [
     { id: 'budget',  label: 'Compositor', icon: <FileText className="h-3.5 w-3.5" /> },
-    { id: 'scope',   label: 'Escopo',    icon: <MapIcon className="h-3.5 w-3.5" /> },
+    { id: 'scope',   label: 'Adequações',    icon: <MapIcon className="h-3.5 w-3.5" /> },
     { id: 'quote',   label: 'Orçamento', icon: <Table2 className="h-3.5 w-3.5" /> },
     { id: 'print',   label: 'Impressão', icon: <Printer className="h-3.5 w-3.5" /> },
 ];

@@ -75,7 +75,7 @@ export function BudgetScope({
     const [scopeDataVersion, setScopeDataVersion] = useState(0);
     const [loading, setLoading] = useState(true);
     const [loadingProgress, setLoadingProgress] = useState(0);
-    const [loadingStatusText, setLoadingStatusText] = useState("A carregar estrutura do escopo…");
+    const [loadingStatusText, setLoadingStatusText] = useState("A carregar estrutura de adequações…");
     const [selected, setSelected] = useState<Selection | null>(null);
     const [scopeNumber, setScopeNumber] = useState<string>("");
     const [locationTotalsById, setLocationTotalsById] = useState<Record<string, number>>({});
@@ -142,7 +142,7 @@ export function BudgetScope({
         void (async () => {
             setLoading(true);
             setLoadingProgress(0);
-            setLoadingStatusText("A carregar estrutura do escopo…");
+            setLoadingStatusText("A carregar estrutura de adequações…");
 
             // Etapa 1: estrutura base + cabeçalho do escopo + grupos para cards de produtos.
             const [locPack] = await Promise.all([
@@ -173,7 +173,7 @@ export function BudgetScope({
                             const nextIdx = Math.min(completed + 1, total);
                             setLoadingStatusText(
                                 completed >= total
-                                    ? "Finalizando carregamento do escopo…"
+                                    ? "Finalizando carregamento de adequações…"
                                     : `Carregando trecho ${nextIdx} de ${total}…`
                             );
                         }
@@ -184,7 +184,7 @@ export function BudgetScope({
                 setLoadingStatusText("Nenhum trecho encontrado. Finalizando…");
             }
             if (cancelled) return;
-            setLoadingStatusText("Escopo pronto.");
+            setLoadingStatusText("Adequações prontas.");
             setLoading(false);
         })();
         return () => {
@@ -415,7 +415,7 @@ export function BudgetScope({
                         aria-valuenow={loadingProgress}
                         aria-valuemin={0}
                         aria-valuemax={100}
-                        aria-label="Progresso estimado de carregamento do escopo"
+                        aria-label="Progresso estimado de carregamento de adequações"
                     >
                         <div
                             className="h-full rounded-full bg-primary transition-[width] duration-200 ease-out"

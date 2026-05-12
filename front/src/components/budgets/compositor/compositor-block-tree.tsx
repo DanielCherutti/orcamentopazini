@@ -574,11 +574,11 @@ function ScopeRenderer({ block, budgetId }: CompositorRendererProps) {
             <div className="flex items-center gap-2">
                 <MapIcon className="h-5 w-5 text-primary" />
                 <span className="font-bold text-sm text-primary uppercase tracking-wide">
-                    ESCOPO
+                    ADEQUAÇÕES
                 </span>
             </div>
             <p className="text-sm text-muted-foreground">
-                Este bloco expande o conteúdo configurado na aba Escopo
+                Este bloco expande o conteúdo configurado na aba Adequações
                 {stats ? (
                     <span>
                         : <strong>{stats.locations}</strong>{" "}
@@ -598,7 +598,7 @@ function ScopeRenderer({ block, budgetId }: CompositorRendererProps) {
                 className="flex items-center gap-1.5 text-xs text-primary hover:underline font-medium"
             >
                 <ArrowRight className="h-3.5 w-3.5" />
-                Ir para aba Escopo
+                Ir para aba Adequações
             </button>
         </div>
     );

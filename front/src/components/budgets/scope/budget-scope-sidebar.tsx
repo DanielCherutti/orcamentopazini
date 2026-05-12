@@ -581,7 +581,7 @@ export function ScopeSidebar({
             <div
                 role="separator"
                 aria-orientation="vertical"
-                aria-label="Redimensionar índice do escopo"
+                aria-label="Redimensionar índice de adequações"
                 aria-valuenow={sidebarWidthPx}
                 aria-valuemin={SCOPE_SIDEBAR_WIDTH_MIN}
                 aria-valuemax={SCOPE_SIDEBAR_WIDTH_MAX}
@@ -606,7 +606,7 @@ export function ScopeSidebar({
                         <MapIcon className="h-4 w-4" />
                     </div>
                     <div className="min-w-0 flex-1 pt-0.5">
-                        <h3 className="text-sm font-semibold tracking-tight text-foreground">Índice do escopo</h3>
+                        <h3 className="text-sm font-semibold tracking-tight text-foreground">Índice de adequações</h3>
                         <p className="text-[11px] leading-snug text-muted-foreground mt-0.5">
                             Locais e trechos do compositor
                         </p>
@@ -636,7 +636,7 @@ export function ScopeSidebar({
                                 <Layers className="mx-auto h-8 w-8 text-primary/25 mb-2" />
                                 <p className="text-xs font-medium text-foreground/80">Nenhum local ainda</p>
                                 <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
-                                    Use o botão abaixo para criar o primeiro local do escopo.
+                                    Use o botão abaixo para criar o primeiro local de adequações.
                                 </p>
                             </div>
                         )}

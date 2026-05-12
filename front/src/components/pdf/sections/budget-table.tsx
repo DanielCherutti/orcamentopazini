@@ -2,7 +2,7 @@
 import React from 'react';
 import { Text, View, Image, StyleSheet } from '@react-pdf/renderer';
 import { theme } from '../theme';
-import { BudgetItem, BudgetLocation } from '@/types/budget-types';
+import { BudgetImage, BudgetItem, BudgetLocation } from '@/types/budget-types';
 import {
     computeItemAdjustmentValue,
     computeItemSubtotal,
@@ -19,14 +19,20 @@ const styles = StyleSheet.create({
         marginBottom: 20
     },
     locationHeader: {
+        marginTop: 20,
+        marginBottom: 10,
+        paddingBottom: 5,
+    },
+    locationHeaderText: {
         fontSize: 16,
         fontFamily: theme.fonts.bold,
         color: theme.colors.primary,
-        paddingBottom: 5,
-        marginBottom: 10,
-        borderBottomWidth: 1.5,
-        borderBottomColor: theme.colors.primary,
-        marginTop: 20
+        lineHeight: 20,
+    },
+    locationHeaderDivider: {
+        marginTop: 2,
+        height: 1.5,
+        backgroundColor: theme.colors.primary,
     },
     sectionBlock: {
         marginBottom: 15,
@@ -44,10 +50,11 @@ const styles = StyleSheet.create({
     sectionLead: {
         marginBottom: 6,
     },
-    /** Largura fixa (A4 − margens ~525pt) + contain para a imagem aparecer inteira no PDF. */
+    /** Quadro visual fixo: evita imagem virar "faixa" para caber no fim da página. */
     sceneImage: {
         width: 525,
-        height: 250,
+        height: 300,
+        alignSelf: 'center',
         marginBottom: 10,
         objectFit: 'contain',
     },
@@ -142,6 +149,124 @@ function sectionWantsLaborSplitOnPrint(sec: { items?: BudgetItem[] }): boolean {
     });
 }
 
+function SectionTableHeader({
+    showCosts,
+    laborCols,
+}: {
+    showCosts: boolean;
+    laborCols: boolean;
+}) {
+    return (
+        <View style={styles.tableHeader}>
+            <Text style={[styles.textSmall, styles.textBold, styles.colDesc]}>DESCRIÇÃO</Text>
+            <Text style={[styles.textSmall, styles.textBold, styles.colQty]}>QTD</Text>
+            {showCosts && laborCols ? (
+                <>
+                    <Text style={[styles.textSmall, styles.textBold, styles.colMoney]}>EQUIP. (R$)</Text>
+                    <Text style={[styles.textSmall, styles.textBold, styles.colMoney]}>M.O. (R$)</Text>
+                    <Text style={[styles.textSmall, styles.textBold, styles.colTotal]}>TOTAL (R$)</Text>
+                </>
+            ) : showCosts ? (
+                <Text style={[styles.textSmall, styles.textBold, styles.colTotal]}>VALOR (R$)</Text>
+            ) : null}
+        </View>
+    );
+}
+
+function SectionSceneImages({
+    images,
+    mode,
+    pdfImagePublicBase,
+    pdfEmbeddedImages,
+    figurePageCollector,
+}: {
+    images: NonNullable<BudgetLocation["sections"]>[number]["images"];
+    mode: 'first' | 'rest' | 'all';
+    pdfImagePublicBase?: string;
+    pdfEmbeddedImages?: PdfEmbeddedImages;
+    figurePageCollector?: { segmentStartPages: Record<string, number> };
+}) {
+    const fullList = (images ?? []).filter((img) => !!(img?.composed_url || img?.url));
+    const list =
+        mode === 'first'
+            ? fullList.slice(0, 1)
+            : mode === 'rest'
+                ? fullList.slice(1)
+                : fullList;
+    if (!list.length) return null;
+
+    return (
+        <>
+            {list.map((sceneImg, imgIdx) => (
+                <View key={sceneImg?.id ?? `img-${imgIdx}`} wrap={false}>
+                    <SectionSceneImage
+                        sceneImg={sceneImg}
+                        imageKey={sceneImg?.id ?? `img-${imgIdx}`}
+                        pdfImagePublicBase={pdfImagePublicBase}
+                        pdfEmbeddedImages={pdfEmbeddedImages}
+                        figurePageCollector={figurePageCollector}
+                    />
+                </View>
+            ))}
+        </>
+    );
+}
+
+function SectionSceneImage({
+    sceneImg,
+    imageKey,
+    pdfImagePublicBase,
+    pdfEmbeddedImages,
+    figurePageCollector,
+}: {
+    sceneImg: BudgetImage;
+    imageKey: string;
+    pdfImagePublicBase?: string;
+    pdfEmbeddedImages?: PdfEmbeddedImages;
+    figurePageCollector?: { segmentStartPages: Record<string, number> };
+}) {
+    const raw = sceneImg?.url || sceneImg?.composed_url;
+    if (!raw) return null;
+    const src = proxyPdfImageSrc(raw, pdfImagePublicBase, pdfEmbeddedImages) ?? raw;
+    const figureId = sceneImg?.id ? String(sceneImg.id) : undefined;
+
+    return (
+        <View key={imageKey}>
+            {figurePageCollector && figureId ? (
+                <View
+                    /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- `render` não tipado no react-pdf */
+                    render={({ pageNumber }: { pageNumber: number }) => {
+                        const key = `figure:${figureId}`;
+                        const prev = figurePageCollector.segmentStartPages[key];
+                        if (!Number.isFinite(prev) || pageNumber < prev) {
+                            figurePageCollector.segmentStartPages[key] = pageNumber;
+                        }
+                        return null;
+                    }}
+                    /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-pdf */
+                    style={{ width: 0, height: 0, opacity: 0 } as any}
+                />
+            ) : null}
+            {figurePageCollector && figureId ? (
+                <Text
+                    /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- fallback extra em texto invisível */
+                    style={{ fontSize: 0.1, lineHeight: 0.1, color: "#ffffff", opacity: 0 } as any}
+                    render={({ pageNumber }) => {
+                        const key = `figure:${figureId}`;
+                        const prev = figurePageCollector.segmentStartPages[key];
+                        if (!Number.isFinite(prev) || pageNumber < prev) {
+                            figurePageCollector.segmentStartPages[key] = pageNumber;
+                        }
+                        return "";
+                    }}
+                />
+            ) : null}
+            {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt prop */}
+            <Image src={src} style={styles.sceneImage} />
+        </View>
+    );
+}
+
 function adjustmentMoneyForPdfItem(item: BudgetItem): number {
     const r = item as unknown as Record<string, unknown>;
     const modeRaw = r.price_adjustment_mode;
@@ -219,8 +344,9 @@ export const BudgetTable = ({
     <View>
         {locations.map((loc, locIdx) => {
             const locNum = `${sectionNumber}.${locIdx + 1}`;
+            const sections = loc.sections ?? [];
             const { itemFinalValue } = computeLocationItemValues(loc);
-            const locationTotal = (loc.sections ?? []).reduce((sum, sec) => {
+            const locationTotal = sections.reduce((sum, sec) => {
                 const sectionTotal = (sec.items ?? []).reduce((acc, item) => {
                     if (!item.id) return acc;
                     return acc + Number(itemFinalValue.get(String(item.id)) ?? 0);
@@ -229,81 +355,63 @@ export const BudgetTable = ({
             }, 0);
             return (
             <View key={loc.id} style={styles.locationBlock}>
-                <Text style={styles.locationHeader}>
-                    {sanitizeTextForPdf(`${locNum} — ${loc.name ?? ''}`)}
-                </Text>
+                {sections.length === 0 ? (
+                    <View style={styles.locationHeader}>
+                        <Text style={styles.locationHeaderText}>
+                            {sanitizeTextForPdf(`${locNum} — ${loc.name ?? ''}`)}
+                        </Text>
+                        <View style={styles.locationHeaderDivider} />
+                    </View>
+                ) : null}
 
-                {(loc.sections || []).map((sec, secIdx) => {
+                {sections.map((sec, secIdx) => {
                     const secNum = `${locNum}.${secIdx + 1}`;
                     const laborCols = showCosts && sectionWantsLaborSplitOnPrint(sec);
+                    const hasSceneImages = (sec.images ?? []).some(
+                        (img) => !!(img?.composed_url || img?.url)
+                    );
                     return (
                     <View key={sec.id} style={styles.sectionBlock}>
                         <View style={styles.sectionLead} wrap={false}>
+                            {secIdx === 0 ? (
+                                <View style={styles.locationHeader}>
+                                    <Text style={styles.locationHeaderText}>
+                                        {sanitizeTextForPdf(`${locNum} — ${loc.name ?? ''}`)}
+                                    </Text>
+                                    <View style={styles.locationHeaderDivider} />
+                                </View>
+                            ) : null}
                             <Text style={styles.sectionTitle}>
                                 {sanitizeTextForPdf(`${secNum} — ${(sec.name ?? '').toUpperCase()}`)}
                             </Text>
-
-                            {/* Cena Composta — proxy limita dimensões (evita Yoga "unsupported number"). */}
-                            {(() => {
-                                const firstImg = (sec.images || [])[0];
-                                const raw = firstImg?.composed_url || firstImg?.url;
-                                if (!raw) return null;
-                                const src = proxyPdfImageSrc(raw, pdfImagePublicBase, pdfEmbeddedImages) ?? raw;
-                                const figureId = firstImg?.id ? String(firstImg.id) : undefined;
-                                return (
-                                    <View>
-                                        {figurePageCollector && figureId ? (
-                                            <View
-                                                /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- `render` não tipado no react-pdf */
-                                                render={({ pageNumber }: { pageNumber: number }) => {
-                                                    const key = `figure:${figureId}`;
-                                                    const prev = figurePageCollector.segmentStartPages[key];
-                                                    if (!Number.isFinite(prev) || pageNumber < prev) {
-                                                        figurePageCollector.segmentStartPages[key] = pageNumber;
-                                                    }
-                                                    return null;
-                                                }}
-                                                /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-pdf */
-                                                style={{ width: 0, height: 0, opacity: 0 } as any}
-                                            />
-                                        ) : null}
-                                        {figurePageCollector && figureId ? (
-                                            <Text
-                                                /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- fallback extra em texto invisível */
-                                                style={{ fontSize: 0.1, lineHeight: 0.1, color: '#ffffff', opacity: 0 } as any}
-                                                render={({ pageNumber }) => {
-                                                    const key = `figure:${figureId}`;
-                                                    const prev = figurePageCollector.segmentStartPages[key];
-                                                    if (!Number.isFinite(prev) || pageNumber < prev) {
-                                                        figurePageCollector.segmentStartPages[key] = pageNumber;
-                                                    }
-                                                    return '';
-                                                }}
-                                            />
-                                        ) : null}
-                                        {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt prop */}
-                                        <Image src={src} style={styles.sceneImage} />
-                                    </View>
-                                );
-                            })()}
+                            {/* Título + primeira cena no mesmo bloco (evita título órfão). */}
+                            <SectionSceneImages
+                                images={sec.images}
+                                mode="first"
+                                pdfImagePublicBase={pdfImagePublicBase}
+                                pdfEmbeddedImages={pdfEmbeddedImages}
+                                figurePageCollector={figurePageCollector}
+                            />
+                            {/* Sem cenas: mantém cabeçalho da tabela com o título (evita título só na virada). */}
+                            {!hasSceneImages ? (
+                                <SectionTableHeader showCosts={showCosts} laborCols={laborCols} />
+                            ) : null}
                         </View>
+                        {hasSceneImages ? (
+                            <SectionSceneImages
+                                images={sec.images}
+                                mode="rest"
+                                pdfImagePublicBase={pdfImagePublicBase}
+                                pdfEmbeddedImages={pdfEmbeddedImages}
+                                figurePageCollector={figurePageCollector}
+                            />
+                        ) : null}
 
                         {/* Lista de Itens */}
                         <View style={styles.table}>
-                            {/* Header */}
-                            <View style={styles.tableHeader}>
-                                <Text style={[styles.textSmall, styles.textBold, styles.colDesc]}>DESCRIÇÃO</Text>
-                                <Text style={[styles.textSmall, styles.textBold, styles.colQty]}>QTD</Text>
-                                {showCosts && laborCols ? (
-                                    <>
-                                        <Text style={[styles.textSmall, styles.textBold, styles.colMoney]}>EQUIP. (R$)</Text>
-                                        <Text style={[styles.textSmall, styles.textBold, styles.colMoney]}>M.O. (R$)</Text>
-                                        <Text style={[styles.textSmall, styles.textBold, styles.colTotal]}>TOTAL (R$)</Text>
-                                    </>
-                                ) : showCosts ? (
-                                    <Text style={[styles.textSmall, styles.textBold, styles.colTotal]}>VALOR (R$)</Text>
-                                ) : null}
-                            </View>
+                            {hasSceneImages ? (
+                                <SectionTableHeader showCosts={showCosts} laborCols={laborCols} />
+                            ) : null}
 
                             {/* Rows */}
                             {(sec.items || []).map((item, idx) => {

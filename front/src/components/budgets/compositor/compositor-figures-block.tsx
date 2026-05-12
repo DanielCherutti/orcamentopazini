@@ -82,14 +82,14 @@ export function CompositorFiguresBlock({ block }: { block: BudgetBlock; isReadOn
               Lista de Figuras
             </h2>
             <p className="mt-1 text-[10px] text-neutral-500 dark:text-neutral-400">
-              Lista automática das fotos do Escopo (locais e trechos). A descrição é obrigatória ao adicionar cada
+              Lista automática das fotos de Adequações (locais e trechos). A descrição é obrigatória ao adicionar cada
               figura. Números de página são estimativas.
             </p>
           </div>
 
           {rows.length === 0 ? (
             <p className="text-sm italic text-neutral-500 dark:text-neutral-400">
-              Nenhuma figura no Escopo. Adicione fotos nos locais e trechos (aba Escopo ou galeria de cada bloco no
+              Nenhuma figura em Adequações. Adicione fotos nos locais e trechos (aba Adequações ou galeria de cada bloco no
               Compositor).
             </p>
           ) : (

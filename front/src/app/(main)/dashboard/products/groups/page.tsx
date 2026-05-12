@@ -26,7 +26,7 @@ export default async function ProductGroupsPage() {
   return (
     <DashboardPageShell
       title="Grupos de produtos"
-      description="Agrupe itens do catálogo para inserção rápida em orçamentos e escopo."
+      description="Agrupe itens do catálogo para inserção rápida em orçamentos e adequações."
       action={
         <Button asChild className="rounded-lg shadow-sm">
           <Link href="/dashboard/products/groups/new">
