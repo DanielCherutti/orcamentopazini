@@ -39,6 +39,26 @@ const styles = StyleSheet.create({
         backgroundColor: '#ffffff',
         padding: 8,
     },
+    locationPhotosBlock: {
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+        borderRadius: 8,
+        backgroundColor: '#ffffff',
+        padding: 8,
+    },
+    locationPhotosTitle: {
+        fontSize: 11,
+        fontFamily: theme.fonts.bold,
+        color: '#1f2937',
+        marginBottom: 6,
+        backgroundColor: '#f3f4f6',
+        borderColor: '#d1d5db',
+        borderWidth: 1,
+        borderRadius: 6,
+        paddingHorizontal: 6,
+        paddingVertical: 4,
+    },
     sectionTitle: {
         fontSize: 12,
         fontFamily: theme.fonts.bold,
@@ -257,7 +277,7 @@ function SectionSceneImages({
     pdfEmbeddedImages,
     figurePageCollector,
 }: {
-    images: NonNullable<BudgetLocation["sections"]>[number]["images"];
+    images: BudgetImage[] | undefined;
     mode: 'first' | 'rest' | 'all';
     pdfImagePublicBase?: string;
     pdfEmbeddedImages?: PdfEmbeddedImages;
@@ -442,6 +462,19 @@ export const BudgetTable = ({
                         {sanitizeTextForPdf(`${locNum} — ${locLabel}`)}
                     </Text>
                 </View>
+
+                {(loc.images ?? []).some((img) => !!(img?.composed_url || img?.url)) ? (
+                    <View style={styles.locationPhotosBlock}>
+                        <Text style={styles.locationPhotosTitle}>FOTOS DO LOCAL</Text>
+                        <SectionSceneImages
+                            images={loc.images}
+                            mode="all"
+                            pdfImagePublicBase={pdfImagePublicBase}
+                            pdfEmbeddedImages={pdfEmbeddedImages}
+                            figurePageCollector={figurePageCollector}
+                        />
+                    </View>
+                ) : null}
 
                 {sections.length === 0 ? (
                     <View style={{ marginTop: 2, marginBottom: 6 }}>

@@ -119,6 +119,10 @@ export function collectRawPdfImageUrlsForPdf(
         }
     }
     for (const loc of budget.locations ?? []) {
+        for (const img of loc.images ?? []) {
+            addUrl(set, img.composed_url);
+            addUrl(set, img.url);
+        }
         for (const sec of loc.sections ?? []) {
             for (const img of sec.images ?? []) {
                 addUrl(set, img.composed_url);

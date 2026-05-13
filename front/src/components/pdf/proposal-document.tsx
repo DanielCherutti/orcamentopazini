@@ -550,6 +550,13 @@ function estimateRenderedFigurePagesFromScope(
 
     for (const loc of locations ?? []) {
         addHeight(38); // locationHeader aprox.
+        const locationImgs = (loc.images ?? []).filter((img) => !!img?.id);
+        for (const img of locationImgs) {
+            const imgBlockH = 252; // sceneImage(240) + margem + respiro
+            ensureSpace(imgBlockH);
+            out[String(img.id)] = page;
+            y += imgBlockH;
+        }
         for (const sec of loc.sections ?? []) {
             addHeight(22); // sectionTitle aprox.
             const firstImg = (sec.images ?? [])[0];
@@ -623,6 +630,10 @@ function estimateDetailTocRowsFromScope(
             page,
         });
         addHeight(38);
+        const locationImageCount = (loc.images ?? []).filter((img) => !!img?.id).length;
+        for (let i = 0; i < locationImageCount; i++) {
+            addHeight(252); // sceneImage(240) + margem + respiro
+        }
 
         for (const [secIdx, sec] of (loc.sections ?? []).entries()) {
             const secNum = `${locNum}.${secIdx + 1}`;
