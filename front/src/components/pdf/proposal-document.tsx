@@ -574,6 +574,91 @@ function estimateRenderedFigurePagesFromScope(
     return out;
 }
 
+function estimateDetailTocRowsFromScope(
+    locations: BudgetLocation[] | undefined,
+    params: {
+        sectionNumber: number;
+        detailStartPage: number;
+        showRunningHeader: boolean;
+        showCosts: boolean;
+        costsDisplayMode: "location" | "section" | "general";
+        detailTitle: string;
+    }
+): Array<{ number: string; title: string; depth: number; page: number }> {
+    const out: Array<{ number: string; title: string; depth: number; page: number }> = [];
+    const pageContentMax =
+        PDF_PAGE_H -
+        (INNER_PAD + (params.showRunningHeader ? INNER_HEADER_RESERVE : 0)) -
+        (INNER_PAD + INNER_FOOTER_RESERVE) -
+        28; // faixa do título da seção
+    let page = Math.max(1, Math.trunc(params.detailStartPage || 1));
+    let y = 0;
+
+    const ensureSpace = (h: number) => {
+        if (y > 0 && y + h > pageContentMax) {
+            page += 1;
+            y = 0;
+        }
+    };
+    const addHeight = (h: number) => {
+        ensureSpace(h);
+        y += h;
+    };
+
+    // Capítulo raiz de Adequações no sumário
+    out.push({
+        number: String(params.sectionNumber),
+        title: params.detailTitle,
+        depth: 0,
+        page,
+    });
+
+    for (const [locIdx, loc] of (locations ?? []).entries()) {
+        const locNum = `${params.sectionNumber}.${locIdx + 1}`;
+        ensureSpace(38); // locationHeader aprox.
+        out.push({
+            number: locNum,
+            title: (loc.name || "Local").trim() || "Local",
+            depth: 1,
+            page,
+        });
+        addHeight(38);
+
+        for (const [secIdx, sec] of (loc.sections ?? []).entries()) {
+            const secNum = `${locNum}.${secIdx + 1}`;
+            ensureSpace(22); // sectionTitle aprox.
+            out.push({
+                number: secNum,
+                title: (sec.name || "Trecho").trim() || "Trecho",
+                depth: 2,
+                page,
+            });
+            addHeight(22);
+
+            // Todas as cenas influenciam a paginação das próximas linhas do sumário.
+            const imageCount = (sec.images ?? []).filter((img) => !!img?.id).length;
+            for (let i = 0; i < imageCount; i++) {
+                addHeight(252); // sceneImage(240) + margem + respiro
+            }
+
+            const rows = (sec.items ?? []).length;
+            const tableH =
+                16 + rows * 17 + (params.showCosts && params.costsDisplayMode === "section" ? 14 : 0);
+            addHeight(Math.max(24, tableH));
+        }
+
+        if (params.showCosts && params.costsDisplayMode === "location") {
+            addHeight(14);
+        }
+        addHeight(10);
+    }
+
+    if (params.showCosts && params.costsDisplayMode === "general") {
+        addHeight(16);
+    }
+    return out;
+}
+
 type PdfSegment =
     | { kind: "cover" }
     | { kind: "intro" }
@@ -1171,7 +1256,7 @@ export const ProposalDocument = ({
     );
     const quotePercents = readQuoteSplitPercents(budget);
 
-    const tocRows = hasCompositorStructure
+    const sessionTocRows = hasCompositorStructure
         ? collectSessionTocRowsForPrintedLayout(
               compositorPdf!.roots,
               sessionPages,
@@ -1179,6 +1264,15 @@ export const ProposalDocument = ({
               compositorImagesByBlock
           )
         : [];
+    const adequacoesTocRows = estimateDetailTocRowsFromScope(locations, {
+        sectionNumber: sectionNumberPdf,
+        detailStartPage: detailPage,
+        showRunningHeader: pdfInnerRunningHeaderShouldShow(settings),
+        showCosts: detailShowCosts,
+        costsDisplayMode: detailCostsMode,
+        detailTitle: detailSectionTitle,
+    });
+    const tocRows = [...sessionTocRows, ...adequacoesTocRows];
 
     const figureRows =
         hasCompositorStructure && includeFiguresPage
