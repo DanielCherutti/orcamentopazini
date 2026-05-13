@@ -222,7 +222,7 @@ export interface CompositorTree {
 // ─── buildTree ─────────────────────────────────────────────────────────────────
 // Converte lista plana de blocos em árvore aninhada com:
 //   - children ordenados por order_index
-//   - number só em blocos `session` (capa, sumário, escopo, etc. ficam sem número)
+//   - number em blocos `session` e `scope` (capítulos de documento)
 //   - depth a partir da raiz
 
 export function buildTree(
@@ -254,7 +254,7 @@ export function buildTree(
   };
   sortChildren(roots);
 
-  // 4. Numeração hierárquica apenas para sessões (1., 1.1., 2., …).
+  // 4. Numeração hierárquica para capítulos (session/scope): 1, 1.1, 2, …
   const assignNumbers = (
     nodes: BudgetBlock[],
     sessionParentNumber: string,
@@ -263,7 +263,7 @@ export function buildTree(
     let sessionIndex = 0;
     for (const node of nodes) {
       node.depth = depth;
-      if (node.type === "session") {
+      if (node.type === "session" || node.type === "scope") {
         sessionIndex++;
         node.number = sessionParentNumber
           ? `${sessionParentNumber}.${sessionIndex}`

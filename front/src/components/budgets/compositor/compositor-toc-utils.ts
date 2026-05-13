@@ -59,11 +59,14 @@ export function buildTocModel(
   let cumulative = 1;
 
   for (const b of ordered) {
-    if (b.type === "session" && b.number) {
+    if ((b.type === "session" || b.type === "scope") && b.number) {
       const page = Math.max(1, Math.floor(cumulative));
       entries.push({
         number: b.number,
-        title: (b.label || "Sessão").trim() || "Sessão",
+        title:
+          b.type === "scope"
+            ? "Adequações"
+            : (b.label || "Sessão").trim() || "Sessão",
         depth: b.depth,
         page,
       });

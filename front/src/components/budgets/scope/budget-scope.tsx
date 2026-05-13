@@ -129,8 +129,7 @@ export function BudgetScope({
             };
             const scopeBlock = flattenLocal(tree.blocks).find((b) => b.type === "scope");
             if (scopeBlock) {
-                const rootIndex = tree.blocks.findIndex((b) => b.id === scopeBlock.id);
-                setScopeNumber(rootIndex >= 0 ? String(rootIndex + 1) : "");
+                setScopeNumber(scopeBlock.number ? String(scopeBlock.number) : "");
             }
         } else {
             setScopeNumber("");

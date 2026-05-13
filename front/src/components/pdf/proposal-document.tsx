@@ -584,9 +584,62 @@ type PdfSegment =
     | { kind: "session"; block: BudgetBlock }
     | { kind: "terms" };
 
+function htmlHasVisibleText(raw: unknown): boolean {
+    const html = String(raw ?? "");
+    if (!html.trim()) return false;
+    const plain = html
+        .replace(/<style[\s\S]*?<\/style>/gi, " ")
+        .replace(/<script[\s\S]*?<\/script>/gi, " ")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&nbsp;/gi, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    return plain.length > 0;
+}
+
+function hasPrintableBlockContent(
+    node: BudgetBlock,
+    itemsByBlock: Record<string, BudgetItem[]>,
+    imagesByBlock: Record<string, Array<{ url?: string; composed_url?: string }>>
+): boolean {
+    const blockImages = imagesByBlock[node.id] ?? [];
+    const hasImages = blockImages.some((img) => {
+        const raw = (img.composed_url || img.url || "").trim();
+        return raw.length > 0;
+    });
+    if (hasImages) return true;
+
+    if (node.type === "session" || node.type === "location") {
+        return htmlHasVisibleText(node.props?.description);
+    }
+    if (node.type === "text") {
+        return htmlHasVisibleText(node.props?.content);
+    }
+    if (node.type === "section") {
+        if (htmlHasVisibleText(node.props?.description)) return true;
+        const count = itemsByBlock[node.id]?.length ?? 0;
+        return count > 0;
+    }
+    return false;
+}
+
+function hasPrintableSessionSubtree(
+    sessionRoot: BudgetBlock,
+    itemsByBlock: Record<string, BudgetItem[]>,
+    imagesByBlock: Record<string, Array<{ url?: string; composed_url?: string }>>
+): boolean {
+    if (hasPrintableBlockContent(sessionRoot, itemsByBlock, imagesByBlock)) return true;
+    for (const child of sessionRoot.children) {
+        if (hasPrintableSessionSubtree(child, itemsByBlock, imagesByBlock)) return true;
+    }
+    return false;
+}
+
 function buildPdfSegmentsFromCompositorRoots(
     roots: BudgetBlock[],
-    includeFiguresPage: boolean
+    includeFiguresPage: boolean,
+    itemsByBlock: Record<string, BudgetItem[]>,
+    imagesByBlock: Record<string, Array<{ url?: string; composed_url?: string }>>
 ): PdfSegment[] {
     const segments: PdfSegment[] = [];
     let placedIntro = false;
@@ -609,7 +662,10 @@ function buildPdfSegmentsFromCompositorRoots(
         } else if (b.type === "scope" && !placedDetail) {
             segments.push({ kind: "detail" });
             placedDetail = true;
-        } else if (b.type === "session") {
+        } else if (
+            b.type === "session" &&
+            hasPrintableSessionSubtree(b, itemsByBlock, imagesByBlock)
+        ) {
             segments.push({ kind: "session", block: b });
         }
     }
@@ -655,13 +711,18 @@ function assignPdfSegmentPages(segments: PdfSegment[]): {
 
 function collectSessionTocRowsForPrintedLayout(
     roots: BudgetBlock[],
-    sessionPages: Map<string, number>
+    sessionPages: Map<string, number>,
+    itemsByBlock: Record<string, BudgetItem[]>,
+    imagesByBlock: Record<string, Array<{ url?: string; composed_url?: string }>>
 ): Array<{ number: string; title: string; depth: number; page: number }> {
     const out: Array<{ number: string; title: string; depth: number; page: number }> = [];
     const sessionRoots = roots.filter((b) => b.type === "session");
 
     const collectSessionsDfs = (node: BudgetBlock, page: number) => {
         if (node.type === "session") {
+            if (!hasPrintableSessionSubtree(node, itemsByBlock, imagesByBlock)) {
+                return;
+            }
             out.push({
                 number: node.number || "",
                 title: (node.label || "Sessão").trim() || "Sessão",
@@ -968,11 +1029,6 @@ export const ProposalDocument = ({
     const rawValidity = Number(budget.validity_days ?? 15);
     const validityDays =
         Number.isFinite(rawValidity) && rawValidity >= 0 ? Math.min(Math.trunc(rawValidity), 3650) : 15;
-    const rawSectionNumber = Number(budget.section_number ?? 1);
-    const sectionNumberPdf =
-        Number.isFinite(rawSectionNumber) && rawSectionNumber >= 0 && rawSectionNumber <= 999
-            ? Math.trunc(rawSectionNumber)
-            : 1;
     const formatMoney = (val: number) => {
         const n = Number(val);
         const safe = Number.isFinite(n) ? Math.min(Math.max(n, -1e15), 1e15) : 0;
@@ -1030,6 +1086,9 @@ export const ProposalDocument = ({
     const coverBlock = compositorPdf
         ? flattenTree(compositorPdf.roots).find((b) => b.type === 'cover')
         : undefined;
+    const scopeBlock = compositorPdf
+        ? flattenTree(compositorPdf.roots).find((b) => b.type === "scope")
+        : undefined;
     const headerFooterBlock = compositorPdf
         ? flattenTree(compositorPdf.roots).find((b) => b.type === "header_footer")
         : undefined;
@@ -1047,8 +1106,16 @@ export const ProposalDocument = ({
               : [];
     const includeFiguresPage = figureEntries.length > 0;
 
+    const compositorImagesByBlock =
+        ((compositorPdf?.imagesByBlock as Record<string, Array<{ url?: string; composed_url?: string }>>) || {});
+    const compositorItemsByBlock = compositorPdf?.items || {};
     let segments: PdfSegment[] = hasCompositorStructure
-        ? buildPdfSegmentsFromCompositorRoots(compositorPdf!.roots, includeFiguresPage)
+        ? buildPdfSegmentsFromCompositorRoots(
+              compositorPdf!.roots,
+              includeFiguresPage,
+              compositorItemsByBlock,
+              compositorImagesByBlock
+          )
         : defaultPdfSegmentsNoCompositor();
 
     if (hasCompositorStructure && !segments.some((s) => s.kind === "cover")) {
@@ -1083,13 +1150,34 @@ export const ProposalDocument = ({
         sessionPages.set(key.slice("session:".length), Math.trunc(value));
     }
     const detailSectionTitle = "Detalhamento do Projeto";
+    /**
+     * Numeração do detalhamento no PDF:
+     * - compositor: usa o número real do bloco `scope` (ex.: "2")
+     * - legado: fallback para `budget.section_number`.
+     */
+    const rawScopeNumber = scopeBlock?.number ? String(scopeBlock.number).trim() : "";
+    const legacySectionNumber = Number(budget.section_number ?? 1);
+    const parsedScopeRootNumber = rawScopeNumber
+        ? Number.parseInt(rawScopeNumber.split(".")[0] || rawScopeNumber, 10)
+        : Number.NaN;
+    const sectionNumberPdf =
+        Number.isFinite(parsedScopeRootNumber) && parsedScopeRootNumber >= 0 && parsedScopeRootNumber <= 999
+            ? Math.trunc(parsedScopeRootNumber)
+            : Number.isFinite(legacySectionNumber) && legacySectionNumber >= 0 && legacySectionNumber <= 999
+              ? Math.trunc(legacySectionNumber)
+              : 1;
     const quoteShowSections = Boolean(
         (budget as unknown as Record<string, unknown>).quote_show_sections ?? false
     );
     const quotePercents = readQuoteSplitPercents(budget);
 
     const tocRows = hasCompositorStructure
-        ? collectSessionTocRowsForPrintedLayout(compositorPdf!.roots, sessionPages)
+        ? collectSessionTocRowsForPrintedLayout(
+              compositorPdf!.roots,
+              sessionPages,
+              compositorItemsByBlock,
+              compositorImagesByBlock
+          )
         : [];
 
     const figureRows =
