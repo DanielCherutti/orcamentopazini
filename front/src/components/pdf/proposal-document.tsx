@@ -554,7 +554,7 @@ function estimateRenderedFigurePagesFromScope(
             addHeight(22); // sectionTitle aprox.
             const firstImg = (sec.images ?? [])[0];
             if (firstImg?.id) {
-                const imgBlockH = 262; // sceneImage(250) + margem + respiro
+                const imgBlockH = 252; // sceneImage(240) + margem + respiro (alinhado a budget-table.tsx)
                 ensureSpace(imgBlockH);
                 out[String(firstImg.id)] = page;
                 y += imgBlockH;

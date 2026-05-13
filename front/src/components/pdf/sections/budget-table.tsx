@@ -18,72 +18,95 @@ const styles = StyleSheet.create({
     locationBlock: {
         marginBottom: 20
     },
-    locationHeader: {
-        marginTop: 20,
-        marginBottom: 10,
+    locationHeaderWrap: {
+        marginTop: 4,
         paddingBottom: 5,
+        marginBottom: 6,
+        borderBottomWidth: 1.5,
+        borderBottomColor: theme.colors.primary,
     },
     locationHeaderText: {
         fontSize: 16,
         fontFamily: theme.fonts.bold,
         color: theme.colors.primary,
-        lineHeight: 20,
-    },
-    locationHeaderDivider: {
-        marginTop: 2,
-        height: 1.5,
-        backgroundColor: theme.colors.primary,
     },
     sectionBlock: {
-        marginBottom: 15,
-        paddingLeft: 0
+        marginBottom: 16,
+        paddingLeft: 0,
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+        borderRadius: 8,
+        backgroundColor: '#ffffff',
+        padding: 8,
     },
     sectionTitle: {
         fontSize: 12,
         fontFamily: theme.fonts.bold,
         color: theme.colors.secondary,
-        marginBottom: 5,
-        backgroundColor: theme.colors.bgHeader,
-        padding: 4
+        marginBottom: 6,
+        backgroundColor: '#eef2ff',
+        borderColor: '#c7d2fe',
+        borderWidth: 1,
+        borderRadius: 6,
+        paddingHorizontal: 6,
+        paddingVertical: 4,
     },
-    /** Bloco não fracionável para manter título + imagem juntos na troca de página. */
+    /** Bloco de abertura do trecho (título + primeira cena). */
     sectionLead: {
         marginBottom: 6,
     },
-    /** Quadro visual fixo: evita imagem virar "faixa" para caber no fim da página. */
+    /**
+     * Altura moderada: caixa muito alta + `wrap={false}` no trecho força o bloco inteiro
+     * para a página seguinte e deixa um vazio grande no fim da página anterior.
+     */
     sceneImage: {
         width: 525,
-        height: 300,
+        height: 240,
         alignSelf: 'center',
         marginBottom: 10,
         objectFit: 'contain',
     },
     table: {
         marginTop: 5,
-        width: '100%'
+        width: '100%',
+        backgroundColor: '#ffffff',
+    },
+    tableFrame: {
+        borderWidth: 1,
+        borderColor: '#d1d5db',
+        borderRadius: 6,
+        overflow: 'hidden',
     },
     tableHeader: {
         flexDirection: 'row',
         borderBottomWidth: 1,
         borderBottomColor: theme.colors.border,
-        paddingVertical: 4,
-        backgroundColor: theme.colors.bgLight
+        paddingVertical: 6,
+        paddingHorizontal: 6,
+        backgroundColor: '#f3f4f6',
     },
     tableRow: {
         flexDirection: 'row',
         borderBottomWidth: 0.5,
         borderBottomColor: theme.colors.border,
-        paddingVertical: 6,
+        paddingVertical: 7,
+        paddingHorizontal: 6,
         alignItems: 'center'
     },
     colDesc: { flex: 25, paddingRight: 5 },
-    colQty: { flex: 5, textAlign: 'center' },
+    colQty: { flex: 7, textAlign: 'center' },
     colMoney: { flex: 7, textAlign: 'right' },
     colTotal: { flex: 10, textAlign: 'right' },
     subtotalRow: {
         flexDirection: 'row',
         justifyContent: 'flex-end',
-        paddingTop: 5,
+        marginTop: 6,
+        backgroundColor: '#f8fafc',
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+        borderRadius: 6,
+        paddingVertical: 5,
+        paddingHorizontal: 8,
     },
 
     textSmall: { fontSize: 9, color: theme.colors.text },
@@ -96,6 +119,12 @@ const formatMoney = (val: number) => {
     const safe = Math.min(Math.max(n, -1e15), 1e15);
     return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(safe);
 };
+
+function singleLinePdfLabel(input: unknown): string {
+    return String(input ?? '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
 
 function getLocationAssemblyMode(location: BudgetLocation): LocationAssemblyMode {
     const raw = String((location as unknown as Record<string, unknown>).assembly_mode ?? 'percent');
@@ -169,6 +198,26 @@ function itemLabel(item: BudgetItem): string {
     return best || clean(item.product_name) || 'Produto';
 }
 
+function itemUnit(item: BudgetItem): string {
+    const clean = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+    const row = item as unknown as Record<string, unknown>;
+    const pidObj =
+        typeof item.product_id === 'object' && item.product_id
+            ? (item.product_id as Record<string, unknown>)
+            : undefined;
+    const pd =
+        row.product_data && typeof row.product_data === 'object'
+            ? (row.product_data as Record<string, unknown>)
+            : undefined;
+    return (
+        clean(item.product_unit) ||
+        clean(row.product_unit) ||
+        clean(pd?.unit) ||
+        clean(pidObj?.unit) ||
+        'UN'
+    );
+}
+
 function sectionWantsLaborSplitOnPrint(sec: { items?: BudgetItem[] }): boolean {
     const items = sec.items ?? [];
     return items.some((item) => {
@@ -187,7 +236,7 @@ function SectionTableHeader({
     return (
         <View style={styles.tableHeader}>
             <Text style={[styles.textSmall, styles.textBold, styles.colDesc]}>DESCRIÇÃO</Text>
-            <Text style={[styles.textSmall, styles.textBold, styles.colQty]}>QTD</Text>
+            <Text style={[styles.textSmall, styles.textBold, styles.colQty]}>QTD / UN</Text>
             {showCosts && laborCols ? (
                 <>
                     <Text style={[styles.textSmall, styles.textBold, styles.colMoney]}>EQUIP. (R$)</Text>
@@ -214,7 +263,10 @@ function SectionSceneImages({
     pdfEmbeddedImages?: PdfEmbeddedImages;
     figurePageCollector?: { segmentStartPages: Record<string, number> };
 }) {
-    const fullList = (images ?? []).filter((img) => !!(img?.composed_url || img?.url));
+    const fullList = (images ?? []).filter((img) => {
+        const raw = img?.url || img?.composed_url;
+        return typeof raw === 'string' && raw.trim().length > 0;
+    });
     const list =
         mode === 'first'
             ? fullList.slice(0, 1)
@@ -226,7 +278,7 @@ function SectionSceneImages({
     return (
         <>
             {list.map((sceneImg, imgIdx) => (
-                <View key={sceneImg?.id ?? `img-${imgIdx}`} wrap={false}>
+                <View key={sceneImg?.id ?? `img-${imgIdx}`}>
                     <SectionSceneImage
                         sceneImg={sceneImg}
                         imageKey={sceneImg?.id ?? `img-${imgIdx}`}
@@ -372,6 +424,7 @@ export const BudgetTable = ({
     <View>
         {locations.map((loc, locIdx) => {
             const locNum = `${sectionNumber}.${locIdx + 1}`;
+            const locLabel = singleLinePdfLabel(loc.name);
             const sections = loc.sections ?? [];
             const { itemFinalValue } = computeLocationItemValues(loc);
             const locationTotal = sections.reduce((sum, sec) => {
@@ -383,36 +436,36 @@ export const BudgetTable = ({
             }, 0);
             return (
             <View key={loc.id} style={styles.locationBlock}>
+                <View style={styles.locationHeaderWrap}>
+                    <Text style={styles.locationHeaderText}>
+                        {sanitizeTextForPdf(`${locNum} — ${locLabel}`)}
+                    </Text>
+                </View>
+
                 {sections.length === 0 ? (
-                    <View style={styles.locationHeader}>
-                        <Text style={styles.locationHeaderText}>
-                            {sanitizeTextForPdf(`${locNum} — ${loc.name ?? ''}`)}
-                        </Text>
-                        <View style={styles.locationHeaderDivider} />
+                    <View style={{ marginTop: 2, marginBottom: 6 }}>
+                        <Text style={[styles.textSmall, { color: '#6b7280' }]}>Sem trechos neste local</Text>
                     </View>
                 ) : null}
 
                 {sections.map((sec, secIdx) => {
                     const secNum = `${locNum}.${secIdx + 1}`;
+                    const secLabel = singleLinePdfLabel(sec.name).toUpperCase();
                     const laborCols = showCosts && sectionWantsLaborSplitOnPrint(sec);
                     const hasSceneImages = (sec.images ?? []).some(
                         (img) => !!(img?.composed_url || img?.url)
                     );
                     return (
                     <View key={sec.id} style={styles.sectionBlock}>
-                        <View style={styles.sectionLead} wrap={false}>
-                            {secIdx === 0 ? (
-                                <View style={styles.locationHeader}>
-                                    <Text style={styles.locationHeaderText}>
-                                        {sanitizeTextForPdf(`${locNum} — ${loc.name ?? ''}`)}
-                                    </Text>
-                                    <View style={styles.locationHeaderDivider} />
-                                </View>
-                            ) : null}
+                        {/*
+                          Mantém o fluxo quebrável entre páginas para evitar grandes áreas em branco.
+                          Se faltar espaço no fim da página, a imagem pode ir para a próxima sem "puxar"
+                          todo o bloco de abertura do trecho junto.
+                        */}
+                        <View style={styles.sectionLead}>
                             <Text style={styles.sectionTitle}>
-                                {sanitizeTextForPdf(`${secNum} — ${(sec.name ?? '').toUpperCase()}`)}
+                                {sanitizeTextForPdf(`${secNum} — ${secLabel}`)}
                             </Text>
-                            {/* Título + primeira cena no mesmo bloco (evita título órfão). */}
                             <SectionSceneImages
                                 images={sec.images}
                                 mode="first"
@@ -420,7 +473,6 @@ export const BudgetTable = ({
                                 pdfEmbeddedImages={pdfEmbeddedImages}
                                 figurePageCollector={figurePageCollector}
                             />
-                            {/* Sem cenas: mantém cabeçalho da tabela com o título (evita título só na virada). */}
                             {!hasSceneImages ? (
                                 <SectionTableHeader showCosts={showCosts} laborCols={laborCols} />
                             ) : null}
@@ -437,56 +489,57 @@ export const BudgetTable = ({
 
                         {/* Lista de Itens */}
                         <View style={styles.table}>
-                            {hasSceneImages ? (
-                                <SectionTableHeader showCosts={showCosts} laborCols={laborCols} />
-                            ) : null}
+                            <View style={styles.tableFrame}>
+                                {hasSceneImages ? (
+                                    <SectionTableHeader showCosts={showCosts} laborCols={laborCols} />
+                                ) : null}
 
-                            {/* Rows */}
-                            {(sec.items || []).map((item, idx) => {
-                                const finalVal = Number(itemFinalValue.get(String(item.id)) ?? 0);
-                                const cells = pdfItemValueCells(item, finalVal, laborCols);
-                                return (
-                                <View key={item.id} style={[styles.tableRow, { backgroundColor: idx % 2 === 0 ? 'white' : theme.colors.bgLight }]}>
-                                    <Text style={[styles.textSmall, styles.colDesc]}>
-                                        {sanitizeTextForPdf(
-                                            [
-                                                itemLabel(item),
-                                                Boolean(
-                                                    (item as unknown as Record<string, unknown>)
-                                                        .observation_show_on_print
-                                                ) &&
-                                                    String(
+                                {/* Rows */}
+                                {(sec.items || []).map((item, idx) => {
+                                    const finalVal = Number(itemFinalValue.get(String(item.id)) ?? 0);
+                                    const cells = pdfItemValueCells(item, finalVal, laborCols);
+                                    return (
+                                    <View key={item.id} style={[styles.tableRow, { backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }]}>
+                                        <Text style={[styles.textSmall, styles.colDesc]}>
+                                            {sanitizeTextForPdf(
+                                                [
+                                                    itemLabel(item),
+                                                    Boolean(
                                                         (item as unknown as Record<string, unknown>)
-                                                            .observation_text ?? ''
-                                                    ).trim()
-                                                    ? ` - Obs: ${String(
-                                                          (item as unknown as Record<string, unknown>)
-                                                              .observation_text ?? ''
-                                                      ).trim()}`
-                                                    : '',
-                                            ]
-                                                .filter(Boolean)
-                                                .join('')
-                                        )}
-                                    </Text>
-                                    <Text style={[styles.textSmall, styles.colQty]}>
-                                        {sanitizeTextForPdf(String(item.quantity ?? ''))}
-                                    </Text>
-                                    {showCosts && laborCols ? (
-                                        <>
-                                            <Text style={[styles.textSmall, styles.colMoney]}>{cells.equip}</Text>
-                                            <Text style={[styles.textSmall, styles.colMoney]}>{cells.mo}</Text>
-                                            <Text style={[styles.textSmall, styles.colTotal]}>{cells.total}</Text>
-                                        </>
-                                    ) : showCosts ? (
-                                        <Text style={[styles.textSmall, styles.colTotal]}>
-                                            {formatMoney(finalVal)}
+                                                            .observation_show_on_print
+                                                    ) &&
+                                                        String(
+                                                            (item as unknown as Record<string, unknown>)
+                                                                .observation_text ?? ''
+                                                        ).trim()
+                                                        ? ` - Obs: ${String(
+                                                              (item as unknown as Record<string, unknown>)
+                                                                  .observation_text ?? ''
+                                                          ).trim()}`
+                                                        : '',
+                                                ]
+                                                    .filter(Boolean)
+                                                    .join('')
+                                            )}
                                         </Text>
-                                    ) : null}
-                                </View>
-                            );
-                            })}
-
+                                        <Text style={[styles.textSmall, styles.colQty]}>
+                                            {sanitizeTextForPdf(`${String(item.quantity ?? '')} ${itemUnit(item)}`.trim())}
+                                        </Text>
+                                        {showCosts && laborCols ? (
+                                            <>
+                                                <Text style={[styles.textSmall, styles.colMoney]}>{cells.equip}</Text>
+                                                <Text style={[styles.textSmall, styles.colMoney]}>{cells.mo}</Text>
+                                                <Text style={[styles.textSmall, styles.colTotal]}>{cells.total}</Text>
+                                            </>
+                                        ) : showCosts ? (
+                                            <Text style={[styles.textSmall, styles.colTotal]}>
+                                                {formatMoney(finalVal)}
+                                            </Text>
+                                        ) : null}
+                                    </View>
+                                );
+                                })}
+                            </View>
                             {showCosts && costsDisplayMode === 'section' ? (
                                 <View style={styles.subtotalRow}>
                                     <Text style={[styles.textSmall, styles.textBold]}>
