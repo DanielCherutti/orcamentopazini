@@ -5,6 +5,7 @@ import {
     useEffect,
     useRef,
     useCallback,
+    useMemo,
     type KeyboardEvent,
     type MouseEvent,
     type PointerEvent as ReactPointerEvent,
@@ -19,6 +20,8 @@ import {
     Map as MapIcon,
     Layers,
     GripVertical,
+    Search,
+    X,
 } from "lucide-react";
 import {
     DndContext,
@@ -242,13 +245,31 @@ export function ScopeSidebar({
     useEffect(() => {
         setLocalLocations(locations);
     }, [locations]);
+    const [indexSearch, setIndexSearch] = useState("");
+    const searchTerm = indexSearch.trim().toLowerCase();
+    const filteredLocations = useMemo(() => {
+        if (!searchTerm) return localLocations;
+        return localLocations
+            .map((loc) => {
+                const locName = String(loc.name ?? "").toLowerCase();
+                const locationMatches = locName.includes(searchTerm);
+                if (locationMatches) return loc;
+                const matchedSections = (loc.sections ?? []).filter((sec) =>
+                    String(sec.name ?? "").toLowerCase().includes(searchTerm)
+                );
+                if (matchedSections.length === 0) return null;
+                return { ...loc, sections: matchedSections };
+            })
+            .filter((loc): loc is ScopeLocation => loc != null);
+    }, [localLocations, searchTerm]);
     const [visibleLocationsCount, setVisibleLocationsCount] = useState(24);
 
     useEffect(() => {
         let frame = 0;
-        const total = localLocations.length;
-        setVisibleLocationsCount(Math.min(24, total));
-        if (total <= 24) return;
+        const total = filteredLocations.length;
+        const initialVisible = searchTerm ? total : Math.min(24, total);
+        setVisibleLocationsCount(initialVisible);
+        if (searchTerm || total <= 24) return;
 
         const step = () => {
             setVisibleLocationsCount((prev) => {
@@ -263,7 +284,7 @@ export function ScopeSidebar({
         return () => {
             if (frame) window.cancelAnimationFrame(frame);
         };
-    }, [localLocations.length]);
+    }, [filteredLocations.length, searchTerm]);
 
     const dndSensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -502,12 +523,18 @@ export function ScopeSidebar({
     /** Local (pai): só ele expandido e todos os trechos visíveis. Trecho: só o pai expandido e só aquele trecho na lista. */
     useEffect(() => {
         if (!selected) return;
+        if (searchTerm) return;
         if (selected.type === "location") {
             setExpandedLocations(new Set([selected.id]));
         } else if (selected.type === "section") {
             setExpandedLocations(new Set([selected.locationId]));
         }
-    }, [selected]);
+    }, [selected, searchTerm]);
+
+    useEffect(() => {
+        if (!searchTerm) return;
+        setExpandedLocations(new Set(filteredLocations.map((loc) => loc.id)));
+    }, [searchTerm, filteredLocations]);
 
     const toggleExpanded = (locationId: string) => {
         setExpandedLocations((prev) => {
@@ -571,7 +598,9 @@ export function ScopeSidebar({
 
     const locationCount = localLocations.length;
     const sectionCount = localLocations.reduce((n, l) => n + l.sections.length, 0);
-    const visibleLocations = localLocations.slice(0, visibleLocationsCount);
+    const filteredLocationCount = filteredLocations.length;
+    const filteredSectionCount = filteredLocations.reduce((n, l) => n + l.sections.length, 0);
+    const visibleLocations = filteredLocations.slice(0, visibleLocationsCount);
 
     return (
         <aside
@@ -620,6 +649,31 @@ export function ScopeSidebar({
                                 </span>
                             </div>
                         )}
+                        <div className="mt-2.5 relative">
+                            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                                value={indexSearch}
+                                onChange={(e) => setIndexSearch(e.target.value)}
+                                placeholder="Buscar local/trecho..."
+                                className="h-8 pl-7 pr-7 text-xs bg-background/90"
+                            />
+                            {indexSearch ? (
+                                <button
+                                    type="button"
+                                    aria-label="Limpar busca"
+                                    className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                                    onClick={() => setIndexSearch("")}
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                </button>
+                            ) : null}
+                        </div>
+                        {searchTerm ? (
+                            <p className="mt-1 text-[10px] text-muted-foreground">
+                                {filteredLocationCount} {filteredLocationCount === 1 ? "local" : "locais"} ·{" "}
+                                {filteredSectionCount} {filteredSectionCount === 1 ? "trecho" : "trechos"} encontrados
+                            </p>
+                        ) : null}
                     </div>
                 </div>
             </div>
@@ -637,6 +691,14 @@ export function ScopeSidebar({
                                 <p className="text-xs font-medium text-foreground/80">Nenhum local ainda</p>
                                 <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
                                     Use o botão abaixo para criar o primeiro local de adequações.
+                                </p>
+                            </div>
+                        )}
+                        {searchTerm && filteredLocations.length === 0 && (
+                            <div className="mx-1 rounded-lg border border-dashed border-border bg-background/80 px-3 py-4 text-center">
+                                <p className="text-xs font-medium text-foreground/80">Nenhum resultado</p>
+                                <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                                    Tenta outro termo para encontrar locais e trechos.
                                 </p>
                             </div>
                         )}
@@ -667,7 +729,7 @@ export function ScopeSidebar({
                                 />
                             ))}
                         </SortableContext>
-                        {visibleLocationsCount < localLocations.length && (
+                        {!searchTerm && visibleLocationsCount < filteredLocations.length && (
                             <div className="px-2 pb-1 text-center text-[11px] text-muted-foreground">
                                 Carregando mais locais...
                             </div>
