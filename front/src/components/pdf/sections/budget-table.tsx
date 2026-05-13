@@ -264,7 +264,7 @@ function SectionSceneImages({
     figurePageCollector?: { segmentStartPages: Record<string, number> };
 }) {
     const fullList = (images ?? []).filter((img) => {
-        const raw = img?.url || img?.composed_url;
+        const raw = img?.composed_url || img?.url;
         return typeof raw === 'string' && raw.trim().length > 0;
     });
     const list =
@@ -305,7 +305,8 @@ function SectionSceneImage({
     pdfEmbeddedImages?: PdfEmbeddedImages;
     figurePageCollector?: { segmentStartPages: Record<string, number> };
 }) {
-    const raw = sceneImg?.url || sceneImg?.composed_url;
+    // Prioriza imagem composta (com anotações), com fallback para a original.
+    const raw = sceneImg?.composed_url || sceneImg?.url;
     if (!raw) return null;
     const src = proxyPdfImageSrc(raw, pdfImagePublicBase, pdfEmbeddedImages) ?? raw;
     const figureId = sceneImg?.id ? String(sceneImg.id) : undefined;

@@ -44,6 +44,8 @@ export interface AnnotatorKonvaWorkspaceProps {
     polylineTempEnd: Point | null;
     /** Guia visual do quadro de exibição (pixels do stage, alinhado à imagem). */
     displayFrameGuide?: { x: number; y: number; width: number; height: number } | null;
+    /** Oculta overlays visuais durante exportação para não "queimar" no composed_url. */
+    hideVisualGuides?: boolean;
 }
 
 export function AnnotatorKonvaWorkspace({
@@ -82,6 +84,7 @@ export function AnnotatorKonvaWorkspace({
     polylinePoints,
     polylineTempEnd,
     displayFrameGuide = null,
+    hideVisualGuides = false,
 }: AnnotatorKonvaWorkspaceProps) {
     return (
         <div
@@ -216,7 +219,8 @@ export function AnnotatorKonvaWorkspace({
                             ))}
                         </Layer>
                     )}
-                    {displayFrameGuide &&
+                    {!hideVisualGuides &&
+                        displayFrameGuide &&
                         displayFrameGuide.width > 0 &&
                         displayFrameGuide.height > 0 && (
                             <Layer listening={false}>

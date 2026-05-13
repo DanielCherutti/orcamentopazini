@@ -98,6 +98,7 @@ export function AdvancedImageAnnotator({
     const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
     const [stepCounter, setStepCounter] = useState(1);
     const [isSaving, setIsSaving] = useState(false);
+    const [isExportingComposedImage, setIsExportingComposedImage] = useState(false);
     const [catalogDockOpen, setCatalogDockOpen] = useState(true);
     /** Incrementado pelo botão da toolbar: aba Grupo + expandir (lista filtrada ou catálogo completo). */
     const [expandAllGroupsSignal, setExpandAllGroupsSignal] = useState(0);
@@ -916,6 +917,7 @@ export function AdvancedImageAnnotator({
             const savedPos = { x: stage.x(), y: stage.y() };
 
             // Fazer reset, export e restore no mesmo frame de animação para evitar "pulinho" visual
+            setIsExportingComposedImage(true);
             const blob = await new Promise<Blob>((resolve, reject) => {
                 requestAnimationFrame(() => {
                     stage.scale({ x: 1, y: 1 });
@@ -953,6 +955,7 @@ export function AdvancedImageAnnotator({
             console.error('Erro ao salvar:', error);
             toast.error("Erro ao salvar anotações");
         } finally {
+            setIsExportingComposedImage(false);
             setIsSaving(false);
         }
     };
@@ -1080,6 +1083,7 @@ export function AdvancedImageAnnotator({
                     polylinePoints={polylinePoints}
                     polylineTempEnd={polylineTempEnd}
                     displayFrameGuide={displayFrameGuide}
+                        hideVisualGuides={isExportingComposedImage}
                 />
             </div>
 
