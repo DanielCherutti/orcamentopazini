@@ -275,6 +275,10 @@
   margin: 0.125rem 0;
 }
 
+.tiptap-content.word-band-mode {
+  position: relative;
+}
+
 .tiptap-content.word-band-mode h1,
 .tiptap-content.word-band-mode h2,
 .tiptap-content.word-band-mode h3 {
@@ -282,7 +286,7 @@
   margin-bottom: 0.125rem !important;
 }
 
-.tiptap-content.word-band-mode img {
+.tiptap-content.word-band-mode img:not([data-floating="true"]) {
   margin: 0.125rem 0;
   border-radius: 0.25rem;
   max-height: var(--word-band-image-max-height, 72px) !important;

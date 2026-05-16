@@ -1029,6 +1029,25 @@ function HeaderFooterRenderer({
                             activeBand,
                             onSelectBand: (band) =>
                                 setActiveBandByPane((prev) => ({ ...prev, [key]: band })),
+                            onApplyTemplate: ({ band, template }) => {
+                                const blankHtml = "<p></p>";
+                                const threeColumnsHtml =
+                                    "<table><tbody><tr><td></td><td></td><td></td></tr></tbody></table><p></p>";
+                                const nextHtml = template === "blank_three_columns" ? threeColumnsHtml : blankHtml;
+                                if (band === "header") {
+                                    void handlePatch(
+                                        key === "cover"
+                                            ? { cover_header_html: nextHtml }
+                                            : { inner_header_html: nextHtml }
+                                    );
+                                    return;
+                                }
+                                void handlePatch(
+                                    key === "cover"
+                                        ? { cover_footer_html: nextHtml }
+                                        : { inner_footer_html: nextHtml }
+                                );
+                            },
                             onHeaderHeightChange: (next) => {
                                 void handlePatch(
                                     key === "cover"

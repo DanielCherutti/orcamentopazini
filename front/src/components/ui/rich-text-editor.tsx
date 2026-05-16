@@ -10,12 +10,14 @@ import { Table } from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
+import { goToNextCell } from 'prosemirror-tables';
 import {
   Bold, Italic, Underline as UnderlineIcon, List, ListOrdered,
   Heading1, Heading2, AlignLeft, AlignCenter, AlignRight, AlignJustify,
-  ImagePlus, Table2,
+  ImagePlus, Table2, PanelTop, PanelBottom, Hash, ChevronDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { WordPageClientLogo } from '@/components/budgets/compositor/word-page-client-logo';
 import { WordPageWatermark } from '@/components/budgets/compositor/word-page-watermark';
@@ -64,6 +66,7 @@ interface RichTextEditorProps {
     footerHeight: number;
     activeBand?: "header" | "footer";
     onSelectBand?: (band: "header" | "footer") => void;
+    onApplyTemplate?: (payload: { band: "header" | "footer"; template: WordBandTemplateId }) => void;
     onHeaderHeightChange?: (height: number) => void;
     onFooterHeightChange?: (height: number) => void;
   };
@@ -83,6 +86,7 @@ const WORD_RIBBON_TABS = [
 ];
 
 type WordRibbonTabId = (typeof WORD_RIBBON_TABS)[number]["id"];
+type WordBandTemplateId = "blank" | "blank_three_columns";
 
 function getWordBandPercents(headerHeight: number, footerHeight: number) {
   const PAGE_BASELINE_PX = 1122;
@@ -142,6 +146,7 @@ export function RichTextEditor({
   wordPageClientLogo,
   wordPageBands,
 }: RichTextEditorProps) {
+  const shouldUseFloatingHeaderImages = variant === "word" && !!wordPageBands;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wordPaperRef = useRef<HTMLDivElement>(null);
   const [wordRibbonTab, setWordRibbonTab] = useState<WordRibbonTabId>("home");
@@ -155,6 +160,8 @@ export function RichTextEditor({
     headerHeight: wordPageBands?.headerHeight ?? 96,
     footerHeight: wordPageBands?.footerHeight ?? 40,
   });
+  const [headerTemplateOpen, setHeaderTemplateOpen] = useState(false);
+  const [footerTemplateOpen, setFooterTemplateOpen] = useState(false);
   const previewBandHeightsRef = useRef(previewBandHeights);
 
   const isWord = variant === 'word';
@@ -194,13 +201,35 @@ export function RichTextEditor({
     onCreate: ({ editor }) => {
       if (onEditorReady) {
         onEditorReady((url: string) => {
-          editor.chain().focus().setImage({ src: url }).run();
+          editor
+            .chain()
+            .focus()
+            .setImage(
+              shouldUseFloatingHeaderImages
+                ? { src: url, floating: true, x: 8, y: 8, width: 96 }
+                : { src: url }
+            )
+            .run();
         });
       }
     },
     editorProps: {
       handleKeyDown: (_view, event) => {
         if (event.key === 'Tab') {
+          const { $from } = _view.state.selection;
+          let isInsideTableCell = false;
+          for (let depth = $from.depth; depth > 0; depth -= 1) {
+            const nodeName = $from.node(depth)?.type?.name;
+            if (nodeName === 'tableCell' || nodeName === 'tableHeader') {
+              isInsideTableCell = true;
+              break;
+            }
+          }
+          if (isInsideTableCell) {
+            event.preventDefault();
+            const moved = goToNextCell(event.shiftKey ? -1 : 1)(_view.state, _view.dispatch);
+            return moved || true;
+          }
           event.preventDefault();
           _view.dispatch(_view.state.tr.insertText('\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0'));
           return true;
@@ -217,13 +246,31 @@ export function RichTextEditor({
             event.preventDefault();
             if (onUploadImage) {
               onUploadImage(file).then((url) => {
-                editor?.chain().focus().setImage({ src: url }).run();
+                editor
+                  ?.chain()
+                  .focus()
+                  .setImage(
+                    shouldUseFloatingHeaderImages
+                      ? { src: url, floating: true, x: 8, y: 8, width: 96 }
+                      : { src: url }
+                  )
+                  .run();
               }).catch(() => {});
             } else {
               const reader = new FileReader();
               reader.onload = (e) => {
                 const dataUrl = e.target?.result as string;
-                if (dataUrl) editor?.chain().focus().setImage({ src: dataUrl }).run();
+                if (dataUrl) {
+                  editor
+                    ?.chain()
+                    .focus()
+                    .setImage(
+                      shouldUseFloatingHeaderImages
+                        ? { src: dataUrl, floating: true, x: 8, y: 8, width: 96 }
+                        : { src: dataUrl }
+                    )
+                    .run();
+                }
               };
               reader.readAsDataURL(file);
             }
@@ -273,7 +320,15 @@ export function RichTextEditor({
         const file = e.target.files?.[0];
         if (!file || !onUploadImage) return;
         const url = await onUploadImage(file);
-        editor.chain().focus().setImage({ src: url }).run();
+        editor
+          .chain()
+          .focus()
+          .setImage(
+            shouldUseFloatingHeaderImages
+              ? { src: url, floating: true, x: 8, y: 8, width: 96 }
+              : { src: url }
+          )
+          .run();
         e.target.value = "";
       }}
     />
@@ -439,6 +494,20 @@ export function RichTextEditor({
       .run();
   };
 
+  const focusWordBand = (band: "header" | "footer") => {
+    if (wordPageBands?.onSelectBand) {
+      wordPageBands.onSelectBand(band);
+    }
+    if (!readOnly) {
+      editor.chain().focus().run();
+    }
+  };
+
+  const applyWordBandTemplate = (band: "header" | "footer", template: WordBandTemplateId) => {
+    focusWordBand(band);
+    wordPageBands?.onApplyTemplate?.({ band, template });
+  };
+
   const startBandResize = (kind: "header" | "footer") => (e: React.PointerEvent) => {
     if (!wordPageBands) return;
     e.preventDefault();
@@ -569,6 +638,106 @@ export function RichTextEditor({
                 </div>
               ) : wordRibbonTab === "insert" ? (
                 <div className="flex flex-wrap items-end gap-x-6 gap-y-2 bg-white px-2 py-2">
+                  {wordPageBands ? (
+                    <div className="flex min-w-0 flex-col gap-1 border-r border-neutral-200 pr-4">
+                      <span className="text-[10px] font-medium text-neutral-500">Cabeçalho e Rodapé</span>
+                      <div className="flex h-7 min-h-7 items-center gap-1">
+                        <Popover open={headerTemplateOpen} onOpenChange={setHeaderTemplateOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              type="button"
+                              title="Modelos de cabeçalho"
+                              className="h-7 w-auto max-w-none gap-1.5 px-2"
+                            >
+                              <PanelTop className="h-4 w-4 shrink-0" />
+                              <span className="text-[11px]">Cabeçalho</span>
+                              <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent align="start" className="w-72 p-2">
+                            <p className="px-1 pb-1 text-[11px] font-medium text-muted-foreground">Inserido</p>
+                            <button
+                              type="button"
+                              className="w-full rounded-md border border-border bg-background p-2 text-left text-[11px] hover:bg-muted/50"
+                              onClick={() => {
+                                applyWordBandTemplate("header", "blank");
+                                setHeaderTemplateOpen(false);
+                              }}
+                            >
+                              <div className="mb-1 font-medium">Em Branco</div>
+                              <div className="h-10 rounded border bg-white px-2 py-1 text-[10px] text-muted-foreground">
+                                [Digite aqui]
+                              </div>
+                            </button>
+                            <button
+                              type="button"
+                              className="mt-2 w-full rounded-md border border-border bg-background p-2 text-left text-[11px] hover:bg-muted/50"
+                              onClick={() => {
+                                applyWordBandTemplate("header", "blank_three_columns");
+                                setHeaderTemplateOpen(false);
+                              }}
+                            >
+                              <div className="font-medium">Em Branco (Três Colunas)</div>
+                            </button>
+                          </PopoverContent>
+                        </Popover>
+                        <Popover open={footerTemplateOpen} onOpenChange={setFooterTemplateOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              type="button"
+                              title="Modelos de rodapé"
+                              className="h-7 w-auto max-w-none gap-1.5 px-2"
+                            >
+                              <PanelBottom className="h-4 w-4 shrink-0" />
+                              <span className="text-[11px]">Rodapé</span>
+                              <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent align="start" className="w-72 p-2">
+                            <p className="px-1 pb-1 text-[11px] font-medium text-muted-foreground">Inserido</p>
+                            <button
+                              type="button"
+                              className="w-full rounded-md border border-border bg-background p-2 text-left text-[11px] hover:bg-muted/50"
+                              onClick={() => {
+                                applyWordBandTemplate("footer", "blank");
+                                setFooterTemplateOpen(false);
+                              }}
+                            >
+                              <div className="mb-1 font-medium">Em Branco</div>
+                              <div className="h-10 rounded border bg-white px-2 py-1 text-[10px] text-muted-foreground">
+                                [Digite aqui]
+                              </div>
+                            </button>
+                            <button
+                              type="button"
+                              className="mt-2 w-full rounded-md border border-border bg-background p-2 text-left text-[11px] hover:bg-muted/50"
+                              onClick={() => {
+                                applyWordBandTemplate("footer", "blank_three_columns");
+                                setFooterTemplateOpen(false);
+                              }}
+                            >
+                              <div className="font-medium">Em Branco (Três Colunas)</div>
+                            </button>
+                          </PopoverContent>
+                        </Popover>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          type="button"
+                          title="Números de página são exibidos no rodapé"
+                          onClick={() => focusWordBand("footer")}
+                          className="h-7 w-auto max-w-none gap-1.5 px-2"
+                        >
+                          <Hash className="h-4 w-4 shrink-0" />
+                          <span className="text-[11px]">Número de Página</span>
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
                   {onUploadImage ? (
                     <div className="flex min-w-0 flex-col gap-1 border-r border-neutral-200 pr-4">
                       <span className="text-[10px] font-medium text-neutral-500">Ilustrações</span>

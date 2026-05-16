@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import Image from "@tiptap/extension-image";
 import type { NodeViewProps } from "@tiptap/react";
+import { NodeSelection } from "@tiptap/pm/state";
 
 type HandleDir = "nw" | "ne" | "se" | "sw";
 
@@ -14,11 +15,52 @@ const HANDLE_STYLE: Record<HandleDir, React.CSSProperties> = {
   sw: { bottom: -5, left: -5, cursor: "sw-resize" },
 };
 
-function ResizableImageComponent({ node, selected, updateAttributes }: NodeViewProps) {
+function ResizableImageComponent({ node, selected, updateAttributes, editor, getPos }: NodeViewProps) {
   const imgRef = useRef<HTMLImageElement>(null);
 
   const width: number | null = node.attrs.width ?? null;
   const height: number | null = node.attrs.height ?? null;
+  const floating = Boolean(node.attrs.floating);
+  const showHandles = selected || floating;
+  const x = Number(node.attrs.x ?? 8);
+  const y = Number(node.attrs.y ?? 8);
+
+  function startMove(e: React.MouseEvent) {
+    if (!floating) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startLeft = x;
+    const startTop = y;
+
+    function onMouseMove(ev: MouseEvent) {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      updateAttributes({
+        x: Math.max(0, Math.round(startLeft + dx)),
+        y: Math.max(0, Math.round(startTop + dy)),
+      });
+    }
+
+    function onMouseUp() {
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    }
+
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  }
+
+  function selectNodeOnClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    const pos = typeof getPos === "function" ? getPos() : null;
+    if (!editor || typeof pos !== "number") return;
+    const { state, view } = editor;
+    view.dispatch(state.tr.setSelection(NodeSelection.create(state.doc, pos)));
+    view.focus();
+  }
 
   function startResize(dir: HandleDir) {
     return (e: React.MouseEvent) => {
@@ -56,12 +98,16 @@ function ResizableImageComponent({ node, selected, updateAttributes }: NodeViewP
   return (
     <NodeViewWrapper
       as="span"
+      contentEditable={false}
       style={{
-        display: "inline-block",
-        position: "relative",
+        display: floating ? "inline-flex" : "inline-block",
+        position: floating ? "absolute" : "relative",
+        left: floating ? `${x}px` : undefined,
+        top: floating ? `${y}px` : undefined,
+        zIndex: floating ? 30 : undefined,
         width:  width  ? `${width}px`  : "auto",
         height: height ? `${height}px` : "auto",
-        maxWidth: "100%",
+        maxWidth: floating ? undefined : "100%",
         boxShadow: selected ? "0 0 0 2px #06b6d4" : undefined,
       }}
     >
@@ -69,19 +115,23 @@ function ResizableImageComponent({ node, selected, updateAttributes }: NodeViewP
       <img
         ref={imgRef}
         data-drag-handle=""
+        data-floating={floating ? "true" : undefined}
         src={node.attrs.src}
         alt={node.attrs.alt ?? ""}
         title={node.attrs.title ?? undefined}
         draggable={false}
+        onClick={selectNodeOnClick}
+        onMouseDown={startMove}
         style={{
           display: "block",
           width: "100%",
           height: height ? "100%" : "auto",
           objectFit: "fill",
-          cursor: "grab",
+          cursor: floating ? "move" : "grab",
+          userSelect: "none",
         }}
       />
-      {selected &&
+      {showHandles &&
         (Object.keys(HANDLE_STYLE) as HandleDir[]).map((dir) => (
           <span
             key={dir}
@@ -131,6 +181,40 @@ export const ResizableImage = Image.extend({
         renderHTML() {
           // Serialization handled by width's renderHTML to avoid style conflicts
           return {};
+        },
+      },
+      floating: {
+        default: false,
+        parseHTML(el) {
+          const flag = el.getAttribute("data-floating");
+          return flag === "true";
+        },
+        renderHTML(attrs) {
+          return attrs.floating ? { "data-floating": "true" } : {};
+        },
+      },
+      x: {
+        default: null,
+        parseHTML(el) {
+          const v = el.getAttribute("data-x");
+          return v ? Number(v) || null : null;
+        },
+        renderHTML(attrs) {
+          return attrs.floating && Number.isFinite(attrs.x)
+            ? { "data-x": String(Math.round(Number(attrs.x))) }
+            : {};
+        },
+      },
+      y: {
+        default: null,
+        parseHTML(el) {
+          const v = el.getAttribute("data-y");
+          return v ? Number(v) || null : null;
+        },
+        renderHTML(attrs) {
+          return attrs.floating && Number.isFinite(attrs.y)
+            ? { "data-y": String(Math.round(Number(attrs.y))) }
+            : {};
         },
       },
     };

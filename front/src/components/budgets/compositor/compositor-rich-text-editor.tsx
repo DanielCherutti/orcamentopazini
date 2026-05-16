@@ -115,6 +115,7 @@ interface CompositorRichTextEditorProps {
     footerHeight: number;
     activeBand?: "header" | "footer";
     onSelectBand?: (band: "header" | "footer") => void;
+    onApplyTemplate?: (payload: { band: "header" | "footer"; template: "blank" | "blank_three_columns" }) => void;
     onHeaderHeightChange?: (height: number) => void;
     onFooterHeightChange?: (height: number) => void;
   };
