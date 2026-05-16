@@ -96,11 +96,10 @@ const styles = StyleSheet.create({
     table: {
         marginTop: 5,
         width: '100%',
-        backgroundColor: '#ffffff',
     },
     tableFrame: {
         borderWidth: 1,
-        borderColor: '#d1d5db',
+        borderColor: 'transparent',
         borderRadius: 6,
         overflow: 'hidden',
     },

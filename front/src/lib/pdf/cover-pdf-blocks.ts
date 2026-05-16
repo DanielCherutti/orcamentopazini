@@ -6,15 +6,15 @@ export type CoverPdfBlock =
     | { type: "img"; src: string; widthPt?: number; heightPt?: number };
 
 export type CoverPdfTextSegment =
-    | { kind: "paragraph"; text: string; textAlign?: "left" | "center" | "right"; isEmpty?: boolean }
-    | { kind: "heading"; level: 1 | 2 | 3; text: string; textAlign?: "left" | "center" | "right" };
+    | { kind: "paragraph"; text: string; textAlign?: "left" | "center" | "right" | "justify"; isEmpty?: boolean }
+    | { kind: "heading"; level: 1 | 2 | 3; text: string; textAlign?: "left" | "center" | "right" | "justify" };
 
-function parseTextAlignFromAttrs(attrs: string): "left" | "center" | "right" | undefined {
+function parseTextAlignFromAttrs(attrs: string): "left" | "center" | "right" | "justify" | undefined {
     const m =
-        attrs.match(/text-align\s*:\s*(left|center|right)/i) ??
-        attrs.match(/\balign\s*=\s*["']?(left|center|right)/i);
+        attrs.match(/text-align\s*:\s*(left|center|right|justify)/i) ??
+        attrs.match(/\balign\s*=\s*["']?(left|center|right|justify)/i);
     if (!m) return undefined;
-    return m[1].toLowerCase() as "left" | "center" | "right";
+    return m[1].toLowerCase() as "left" | "center" | "right" | "justify";
 }
 
 function parseCssLengthToPt(raw: string | undefined): number | undefined {

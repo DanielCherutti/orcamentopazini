@@ -104,6 +104,7 @@ type PdfFigureEntry = {
 const PDF_PAGE_W = 595.28;
 const PDF_PAGE_H = 841.89;
 const INNER_PAD = 35;
+const ABNT_PARAGRAPH_INDENT = "\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0";
 
 const styles = StyleSheet.create({
     pageWithWatermark: {
@@ -1107,7 +1108,9 @@ export const ProposalDocument = ({
                         key={`${rowKey}-p-${i}-${j}`}
                         style={seg.textAlign ? [styles.sessionRichParagraph, { textAlign: seg.textAlign }] : styles.sessionRichParagraph}
                     >
-                        {seg.text}
+                        {(seg.textAlign === 'center' || seg.textAlign === 'right')
+                            ? seg.text
+                            : `${ABNT_PARAGRAPH_INDENT}${seg.text}`}
                     </Text>
                 );
             });
