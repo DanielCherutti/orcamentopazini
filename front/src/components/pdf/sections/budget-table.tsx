@@ -67,16 +67,16 @@ const styles = StyleSheet.create({
         paddingVertical: 4,
     },
     sectionTitle: {
-        fontSize: 12,
+        fontSize: 16,
         fontFamily: theme.fonts.bold,
-        color: theme.colors.secondary,
+        color: theme.colors.primary,
+    },
+    sectionHeaderWrap: {
+        marginTop: 2,
+        paddingBottom: 5,
         marginBottom: 6,
-        backgroundColor: '#eef2ff',
-        borderColor: '#c7d2fe',
-        borderWidth: 1,
-        borderRadius: 6,
-        paddingHorizontal: 6,
-        paddingVertical: 4,
+        borderBottomWidth: 1.5,
+        borderBottomColor: theme.colors.primary,
     },
     /** Bloco de abertura do trecho (título + primeira cena). */
     sectionLead: {
@@ -513,9 +513,11 @@ export const BudgetTable = ({
                           todo o bloco de abertura do trecho junto.
                         */}
                         <View style={styles.sectionLead}>
-                            <Text style={styles.sectionTitle}>
-                                {sanitizeTextForPdf(`${secNum} — ${secLabel}`)}
-                            </Text>
+                            <View style={styles.sectionHeaderWrap}>
+                                <Text style={styles.sectionTitle}>
+                                    {sanitizeTextForPdf(`${secNum} — ${secLabel}`)}
+                                </Text>
+                            </View>
                             <SectionSceneImages
                                 images={sec.images}
                                 mode="first"
