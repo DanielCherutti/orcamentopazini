@@ -23,6 +23,7 @@ export const theme = {
     fonts: {
         body: 'Helvetica',
         bold: 'Helvetica-Bold',
-        oblique: 'Helvetica-Oblique'
+        oblique: 'Helvetica-Oblique',
+        boldOblique: 'Helvetica-BoldOblique'
     }
 };

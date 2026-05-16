@@ -12,6 +12,7 @@ import {
     type LocationAssemblyMode,
 } from '@/lib/budgets/scope-pricing';
 import { type PdfEmbeddedImages, proxyPdfImageSrc } from '@/lib/pdf/pdf-image-src';
+import { stripHtmlToText } from '@/lib/pdf/html-to-plain-text';
 import { sanitizeTextForPdf } from '@/lib/pdf/sanitize-pdf-text';
 
 const styles = StyleSheet.create({
@@ -29,6 +30,12 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontFamily: theme.fonts.bold,
         color: theme.colors.primary,
+    },
+    locationHeaderDescription: {
+        marginTop: 3,
+        fontSize: 9,
+        color: theme.colors.text,
+        fontFamily: theme.fonts.boldOblique,
     },
     sectionBlock: {
         marginBottom: 16,
@@ -114,7 +121,8 @@ const styles = StyleSheet.create({
         alignItems: 'center'
     },
     colDesc: { flex: 25, paddingRight: 5 },
-    colQty: { flex: 7, textAlign: 'center' },
+    colQty: { flex: 4, textAlign: 'center' },
+    colUnit: { flex: 3, textAlign: 'center' },
     colMoney: { flex: 7, textAlign: 'right' },
     colTotal: { flex: 10, textAlign: 'right' },
     subtotalRow: {
@@ -130,7 +138,8 @@ const styles = StyleSheet.create({
     },
 
     textSmall: { fontSize: 9, color: theme.colors.text },
-    textBold: { fontFamily: theme.fonts.bold, color: theme.colors.text }
+    textBold: { fontFamily: theme.fonts.bold, color: theme.colors.text },
+    itemObservationText: { fontFamily: theme.fonts.boldOblique }
 });
 
 const formatMoney = (val: number) => {
@@ -256,7 +265,8 @@ function SectionTableHeader({
     return (
         <View style={styles.tableHeader}>
             <Text style={[styles.textSmall, styles.textBold, styles.colDesc]}>DESCRIÇÃO</Text>
-            <Text style={[styles.textSmall, styles.textBold, styles.colQty]}>QTD / UN</Text>
+            <Text style={[styles.textSmall, styles.textBold, styles.colQty]}>QTD</Text>
+            <Text style={[styles.textSmall, styles.textBold, styles.colUnit]}>UN</Text>
             {showCosts && laborCols ? (
                 <>
                     <Text style={[styles.textSmall, styles.textBold, styles.colMoney]}>EQUIP. (R$)</Text>
@@ -446,6 +456,7 @@ export const BudgetTable = ({
         {locations.map((loc, locIdx) => {
             const locNum = `${sectionNumber}.${locIdx + 1}`;
             const locLabel = singleLinePdfLabel(loc.name);
+            const locDescription = singleLinePdfLabel(stripHtmlToText(String(loc.description ?? '')));
             const sections = loc.sections ?? [];
             const { itemFinalValue } = computeLocationItemValues(loc);
             const locationTotal = sections.reduce((sum, sec) => {
@@ -461,6 +472,11 @@ export const BudgetTable = ({
                     <Text style={styles.locationHeaderText}>
                         {sanitizeTextForPdf(`${locNum} — ${locLabel}`)}
                     </Text>
+                    {locDescription ? (
+                        <Text style={styles.locationHeaderDescription}>
+                            {sanitizeTextForPdf(`Obs: ${locDescription}`)}
+                        </Text>
+                    ) : null}
                 </View>
 
                 {(loc.images ?? []).some((img) => !!(img?.composed_url || img?.url)) ? (
@@ -532,32 +548,27 @@ export const BudgetTable = ({
                                 {(sec.items || []).map((item, idx) => {
                                     const finalVal = Number(itemFinalValue.get(String(item.id)) ?? 0);
                                     const cells = pdfItemValueCells(item, finalVal, laborCols);
+                                    const showObservation = Boolean(
+                                        (item as unknown as Record<string, unknown>).observation_show_on_print
+                                    );
+                                    const observationText = stripHtmlToText(
+                                        String((item as unknown as Record<string, unknown>).observation_text ?? '')
+                                    ).trim();
                                     return (
                                     <View key={item.id} style={[styles.tableRow, { backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }]}>
                                         <Text style={[styles.textSmall, styles.colDesc]}>
-                                            {sanitizeTextForPdf(
-                                                [
-                                                    itemLabel(item),
-                                                    Boolean(
-                                                        (item as unknown as Record<string, unknown>)
-                                                            .observation_show_on_print
-                                                    ) &&
-                                                        String(
-                                                            (item as unknown as Record<string, unknown>)
-                                                                .observation_text ?? ''
-                                                        ).trim()
-                                                        ? ` - Obs: ${String(
-                                                              (item as unknown as Record<string, unknown>)
-                                                                  .observation_text ?? ''
-                                                          ).trim()}`
-                                                        : '',
-                                                ]
-                                                    .filter(Boolean)
-                                                    .join('')
-                                            )}
+                                            {sanitizeTextForPdf(itemLabel(item))}
+                                            {showObservation && observationText ? (
+                                                <Text style={styles.itemObservationText}>
+                                                    {sanitizeTextForPdf(` - Obs: ${observationText}`)}
+                                                </Text>
+                                            ) : null}
                                         </Text>
                                         <Text style={[styles.textSmall, styles.colQty]}>
-                                            {sanitizeTextForPdf(`${String(item.quantity ?? '')} ${itemUnit(item)}`.trim())}
+                                            {sanitizeTextForPdf(String(item.quantity ?? '').trim())}
+                                        </Text>
+                                        <Text style={[styles.textSmall, styles.colUnit]}>
+                                            {sanitizeTextForPdf(itemUnit(item))}
                                         </Text>
                                         {showCosts && laborCols ? (
                                             <>
@@ -595,27 +606,5 @@ export const BudgetTable = ({
             </View>
             );
         })}
-        {showCosts && costsDisplayMode === 'general' ? (
-            <View style={[styles.subtotalRow, { marginTop: 8 }]}>
-                <Text style={[styles.textSmall, styles.textBold]}>
-                    Total geral: {formatMoney(
-                        locations.reduce((sum, loc) => {
-                            const { itemFinalValue } = computeLocationItemValues(loc);
-                            const locationTotal = (loc.sections ?? []).reduce((secSum, sec) => {
-                                return (
-                                    secSum +
-                                    (sec.items ?? []).reduce(
-                                        (itemSum, item) =>
-                                            itemSum + Number(itemFinalValue.get(String(item.id)) ?? 0),
-                                        0
-                                    )
-                                );
-                            }, 0);
-                            return sum + locationTotal;
-                        }, 0)
-                    )}
-                </Text>
-            </View>
-        ) : null}
     </View>
 );

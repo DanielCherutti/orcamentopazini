@@ -189,14 +189,6 @@ const styles = StyleSheet.create({
         fontSize: 14,
         textTransform: 'uppercase'
     },
-    totalBlock: {
-        marginTop: 30,
-        backgroundColor: theme.colors.bgHeader,
-        padding: 15,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-    },
     tocRow: {
         flexDirection: 'row',
         alignItems: 'flex-end',
@@ -1601,15 +1593,6 @@ export const ProposalDocument = ({
                             pdfEmbeddedImages={pdfEmbeddedImages}
                             figurePageCollector={paginationCollector}
                         />
-                        <View style={styles.totalBlock}>
-                            <View>
-                                <Text style={{ fontSize: 12, fontFamily: theme.fonts.bold }}>INVESTIMENTO TOTAL</Text>
-                                <Text style={{ fontSize: 10 }}>Validade: {validityDays} dias</Text>
-                            </View>
-                            <Text style={{ fontFamily: theme.fonts.bold, fontSize: 18, color: theme.colors.primary }}>
-                                {formatMoney(budget.total_value || 0)}
-                            </Text>
-                        </View>
                     </InnerPdfPage>
                 );
             case "session": {
