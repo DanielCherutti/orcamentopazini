@@ -104,6 +104,8 @@ export const budgetSchema = z.object({
 
     // Compositor: true = usa árvore de blocos dinâmicos; false = aba Ambientes legada
     use_compositor: z.boolean().default(false),
+    /** Nome do painel Compositor e título das páginas de sessão no PDF. */
+    compositor_label: z.string().optional(),
     show_costs_on_print: z.boolean().optional().default(false),
     costs_display_mode: z.custom<CostDisplayMode>().optional().default("section"),
 

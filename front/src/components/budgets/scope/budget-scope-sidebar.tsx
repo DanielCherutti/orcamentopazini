@@ -635,7 +635,9 @@ export function ScopeSidebar({
                         <MapIcon className="h-4 w-4" />
                     </div>
                     <div className="min-w-0 flex-1 pt-0.5">
-                        <h3 className="text-sm font-semibold tracking-tight text-foreground">Índice de adequações</h3>
+                        <h3 className="text-sm font-semibold tracking-tight text-foreground">
+                            Índice de adequações
+                        </h3>
                         <p className="text-[11px] leading-snug text-muted-foreground mt-0.5">
                             Locais e trechos do compositor
                         </p>

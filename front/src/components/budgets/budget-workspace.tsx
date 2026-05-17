@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, createContext, useContext } from "react";
+import { useState, useEffect, useCallback, createContext, useContext } from "react";
 import dynamic from "next/dynamic";
 import { Info, FileText, Loader2, Map as MapIcon, Printer, Table2 } from "lucide-react";
 import { Budget } from "@/types/budget-types";
@@ -9,6 +9,8 @@ import { BudgetWorkspaceHeader } from "./workspace/budget-workspace-header";
 import { toast } from "@/lib/toast";
 import { useBudgetsRepository } from "@/lib/budgets/use-budgets-repository";
 import { getBudgetAction, getBudgetShellAction } from "@/actions/budget-actions";
+import { updateBudgetAction } from "@/actions/budget-core-write-actions";
+import { getCompositorPanelLabel } from "@/components/budgets/compositor/compositor-content-utils";
 import { budgetPdfUrl } from "@/lib/budgets/budget-path";
 import { getBudgetStatusLabel, isBudgetEditableStatus } from "@/lib/budgets/budget-status";
 import { cn } from "@/lib/utils";
@@ -119,6 +121,18 @@ export function BudgetWorkspace({
     const budgetId = budget.id as string;
     const pdfUrl = budgetPdfUrl(budgetId);
 
+    const handleCompositorLabelChange = useCallback(
+        async (label: string) => {
+            const res = await updateBudgetAction(budgetId, { compositor_label: label });
+            if (res.success) {
+                setBudget((prev) => ({ ...prev, compositor_label: label }));
+            } else {
+                toast.error(res.error || "Erro ao renomear Compositor");
+            }
+        },
+        [budgetId],
+    );
+
     return (
         <WorkspaceContext.Provider value={{ activeTab, setActiveTab }}>
             <EnvironmentsContext.Provider value={{ environmentsExpanded, toggleEnvironmentsExpanded }}>
@@ -157,7 +171,14 @@ export function BudgetWorkspace({
                             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                                 {/* Aba Compositor */}
                                 <div className={cn("flex-1 flex min-h-0 overflow-hidden bg-white", activeTab !== 'budget' && "hidden")}>
-                                    <BudgetCompositor budgetId={budgetId} isReadOnly={isReadOnly} />
+                                    <BudgetCompositor
+                                        budgetId={budgetId}
+                                        compositorLabel={getCompositorPanelLabel(budget.compositor_label)}
+                                        onCompositorLabelChange={
+                                            isReadOnly ? undefined : handleCompositorLabelChange
+                                        }
+                                        isReadOnly={isReadOnly}
+                                    />
                                 </div>
 
                                 {/* Aba Escopo */}

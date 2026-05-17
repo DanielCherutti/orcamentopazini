@@ -17,6 +17,7 @@ import type { BudgetBlock, BlockType } from "@/types/budget-compositor-types";
 import { flattenTree } from "@/types/budget-compositor-types";
 import {
   COMPOSITOR_SCOPE_BLOCK_DEFAULT_LABEL,
+  getCompositorPanelLabel,
   getScopeBlockLabel,
 } from "./compositor-content-utils";
 import { normalizeLabel } from "./compositor-content-hooks";
@@ -673,18 +674,50 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
 interface CompositorSidebarProps {
   roots: BudgetBlock[];
   budgetId: string;
+  compositorLabel: string;
+  onCompositorLabelChange?: (label: string) => void | Promise<void>;
   selectedId: string | null;
   onSelect: (block: BudgetBlock) => void;
   onRefresh: () => void;
   isReadOnly?: boolean;
 }
 
-export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRefresh, isReadOnly = false }: CompositorSidebarProps) {
+export function CompositorSidebar({
+  roots,
+  budgetId,
+  compositorLabel,
+  onCompositorLabelChange,
+  selectedId,
+  onSelect,
+  onRefresh,
+  isReadOnly = false,
+}: CompositorSidebarProps) {
   const [addingRootSession, setAddingRootSession] = useState(false);
   const [autoEditId, setAutoEditId] = useState<string | null>(null);
   const [childrenReg, setChildrenReg] = useState<ChildrenReg>(() => buildChildrenReg(roots));
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [editingCompositorTitle, setEditingCompositorTitle] = useState(false);
+  const [compositorTitleDraft, setCompositorTitleDraft] = useState(compositorLabel);
+  const compositorTitleInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { setChildrenReg(buildChildrenReg(roots)); }, [roots]);
+
+  useEffect(() => {
+    if (!editingCompositorTitle) setCompositorTitleDraft(compositorLabel);
+  }, [compositorLabel, editingCompositorTitle]);
+
+  useEffect(() => {
+    if (editingCompositorTitle) compositorTitleInputRef.current?.select();
+  }, [editingCompositorTitle]);
+
+  const commitCompositorTitle = async () => {
+    setEditingCompositorTitle(false);
+    const trimmed = compositorTitleDraft.trim();
+    if (!trimmed || trimmed === compositorLabel) {
+      setCompositorTitleDraft(compositorLabel);
+      return;
+    }
+    await onCompositorLabelChange?.(trimmed);
+  };
 
   const localRoots = childrenReg[ROOT_KEY] ?? [];
 
@@ -789,7 +822,44 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
       <div className="w-64 shrink-0 flex flex-col border-r bg-card">
         {/* Cabeçalho */}
         <div className="p-3 border-b border-primary/20 shrink-0 bg-primary/[0.04]">
-          <h3 className="text-sm font-semibold text-primary">Compositor</h3>
+          {editingCompositorTitle && !isReadOnly && onCompositorLabelChange ? (
+            <Input
+              ref={compositorTitleInputRef}
+              value={compositorTitleDraft}
+              onChange={(e) => setCompositorTitleDraft(e.target.value)}
+              onBlur={() => void commitCompositorTitle()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void commitCompositorTitle();
+                }
+                if (e.key === "Escape") {
+                  setEditingCompositorTitle(false);
+                  setCompositorTitleDraft(compositorLabel);
+                }
+              }}
+              className="h-7 text-sm font-semibold"
+            />
+          ) : (
+            <h3
+              className={cn(
+                "text-sm font-semibold text-primary truncate",
+                !isReadOnly && onCompositorLabelChange && "cursor-pointer hover:opacity-80"
+              )}
+              title={
+                !isReadOnly && onCompositorLabelChange
+                  ? "Duplo clique para editar o nome do Compositor"
+                  : undefined
+              }
+              onDoubleClick={() => {
+                if (isReadOnly || !onCompositorLabelChange) return;
+                setCompositorTitleDraft(compositorLabel);
+                setEditingCompositorTitle(true);
+              }}
+            >
+              {compositorLabel}
+            </h3>
+          )}
           <p className="text-xs text-muted-foreground mt-0.5">Estrutura do compositor</p>
         </div>
 

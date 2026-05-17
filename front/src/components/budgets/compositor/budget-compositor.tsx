@@ -14,10 +14,17 @@ import { useLiveCompositor } from "@/hooks/use-live-compositor";
 
 interface BudgetCompositorProps {
   budgetId: string;
+  compositorLabel: string;
+  onCompositorLabelChange?: (label: string) => void | Promise<void>;
   isReadOnly?: boolean;
 }
 
-export function BudgetCompositor({ budgetId, isReadOnly = false }: BudgetCompositorProps) {
+export function BudgetCompositor({
+  budgetId,
+  compositorLabel,
+  onCompositorLabelChange,
+  isReadOnly = false,
+}: BudgetCompositorProps) {
   const [tree, setTree] = useState<CompositorTree | null>(null);
   const [imagesByBlock, setImagesByBlock] = useState<Record<string, BudgetImage[]>>({});
   const [scopeFigures, setScopeFigures] = useState<ScopeFigureEntry[]>([]);
@@ -91,6 +98,8 @@ export function BudgetCompositor({ budgetId, isReadOnly = false }: BudgetComposi
         <CompositorSidebar
           roots={roots}
           budgetId={budgetId}
+          compositorLabel={compositorLabel}
+          onCompositorLabelChange={onCompositorLabelChange}
           selectedId={selectedId}
           onSelect={handleSelectBlock}
           onRefresh={handleRefresh}

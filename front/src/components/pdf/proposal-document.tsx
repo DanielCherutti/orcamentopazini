@@ -24,7 +24,10 @@ import { PdfProposalHeaderBand } from '@/components/pdf/pdf-proposal-header-band
 import type { BudgetItem } from '@/types/budget-types';
 import type { BudgetLocation } from '@/types/budget-types';
 import { applyQuoteRowAdjustments } from '@/lib/budgets/scope-pricing';
-import { getScopeBlockLabel } from '@/components/budgets/compositor/compositor-content-utils';
+import {
+    getCompositorPanelLabel,
+    getScopeBlockLabel,
+} from '@/components/budgets/compositor/compositor-content-utils';
 
 interface ProposalDocumentProps {
     budget: Budget;
@@ -1242,6 +1245,9 @@ export const ProposalDocument = ({
         sessionPages.set(key.slice("session:".length), Math.trunc(value));
     }
     const detailSectionTitle = sanitizeTextForPdf(getScopeBlockLabel(scopeBlock?.label));
+    const compositorSessionPageTitle = sanitizeTextForPdf(
+        getCompositorPanelLabel(budget.compositor_label)
+    );
     /**
      * Numeração do detalhamento no PDF:
      * - compositor: usa o número real do bloco `scope` (ex.: "2")
@@ -1609,7 +1615,7 @@ export const ProposalDocument = ({
                 return (
                     <InnerPdfPage
                         pageKey={`session-page-${sessionRoot.id}`}
-                        title="Sessão do Compositor"
+                        title={compositorSessionPageTitle}
                         paginationProbeKey={`session:${sessionRoot.id}`}
                         {...innerCommon}
                     >

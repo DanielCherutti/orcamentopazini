@@ -8,7 +8,10 @@ import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
 import type { Budget } from "@/types/budget-types";
 import { addBlockAction } from "@/actions/budget-compositor-block-actions";
-import { COMPOSITOR_SCOPE_BLOCK_DEFAULT_LABEL } from "@/components/budgets/compositor/compositor-content-utils";
+import {
+    COMPOSITOR_SCOPE_BLOCK_DEFAULT_LABEL,
+    DEFAULT_COMPOSITOR_PANEL_LABEL,
+} from "@/components/budgets/compositor/compositor-content-utils";
 import { mergeCoverDocumentProps } from "@/lib/budgets/cover-document";
 import {
     InvalidRecordIdError,
@@ -38,6 +41,7 @@ export async function createBudgetAction(title: string, code: string) {
             total_value: 0,
             client_id: "",
             use_compositor: true,
+            compositor_label: DEFAULT_COMPOSITOR_PANEL_LABEL,
             show_costs_on_print: false,
             costs_display_mode: "section",
             created_at: new Date().toISOString(),
@@ -103,6 +107,7 @@ export async function updateBudgetAction(budgetId: string, updates: Partial<Budg
             "description",
             "status",
             "section_number",
+            "compositor_label",
             "payment_terms",
             "delivery_time",
             "validity_days",
