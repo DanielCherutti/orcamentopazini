@@ -84,6 +84,7 @@ interface CompositorRichTextEditorProps {
   value: string;
   onChange: (html: string) => void;
   placeholder?: string;
+  persistenceKey?: string;
   galleryImages?: BudgetImage[];
   variant?: "default" | "word";
   readOnly?: boolean;
@@ -125,6 +126,7 @@ export const CompositorRichTextEditor = memo(function CompositorRichTextEditor({
   value,
   onChange,
   placeholder,
+  persistenceKey,
   galleryImages,
   variant = "default",
   readOnly,
@@ -275,6 +277,7 @@ export const CompositorRichTextEditor = memo(function CompositorRichTextEditor({
       value={value}
       onChange={(html) => onChange(sanitizeRichHtmlForStorage(html))}
       placeholder={placeholder}
+      persistenceKey={persistenceKey}
       variant={variant}
       readOnly={readOnly}
       onUploadImage={handleUploadImage}

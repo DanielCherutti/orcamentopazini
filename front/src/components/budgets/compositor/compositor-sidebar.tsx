@@ -16,6 +16,11 @@ import { toast } from "@/lib/toast";
 import type { BudgetBlock, BlockType } from "@/types/budget-compositor-types";
 import { flattenTree } from "@/types/budget-compositor-types";
 import {
+  COMPOSITOR_SCOPE_BLOCK_DEFAULT_LABEL,
+  getScopeBlockLabel,
+} from "./compositor-content-utils";
+import { normalizeLabel } from "./compositor-content-hooks";
+import {
   DndContext,
   DragOverlay,
   closestCenter,
@@ -175,7 +180,7 @@ const ALL_OPTIONS: { type: BlockType; label: string; short: string }[] = [
   { type: "location", label: "Local (ambiente)", short: "Local"   },
   { type: "section",  label: "Trecho",           short: "Trecho"  },
   { type: "text",     label: "Texto livre",      short: "Texto"   },
-  { type: "scope",    label: "Bloco Adequações",     short: "ADEQUAÇÕES"  },
+  { type: "scope",    label: "Bloco Detalhamento do projeto", short: COMPOSITOR_SCOPE_BLOCK_DEFAULT_LABEL },
   { type: "quote",    label: "Bloco Orçamento",  short: "ORÇAMENTO"  },
 ];
 
@@ -240,7 +245,7 @@ function SidebarDragPreview({
           (block.type === "session" || isScope || isHeaderFooter || isQuote || block.type === "toc" || block.type === "figures") && "uppercase"
         )}
       >
-        {isScope ? "ADEQUAÇÕES" : isHeaderFooter ? "CABEÇALHO E RODAPÉ" : isQuote ? "ORÇAMENTO" : block.type === "toc" ? "SUMÁRIO" : block.type === "figures" ? "LISTA DE FIGURAS" : (block.label || `(${block.type})`)}
+        {isScope ? getScopeBlockLabel(block.label) : isHeaderFooter ? "CABEÇALHO E RODAPÉ" : isQuote ? "ORÇAMENTO" : block.type === "toc" ? "SUMÁRIO" : block.type === "figures" ? "LISTA DE FIGURAS" : (block.label || `(${block.type})`)}
       </span>
     </div>
   );
@@ -284,7 +289,7 @@ function InlineAdder({ budgetId, parentId, parentType, depth, hasScopeBlock = fa
 
   const handleTypeSelect = (type: BlockType) => {
     const directCreate: Partial<Record<BlockType, string>> = {
-      scope: "ADEQUAÇÕES",
+      scope: COMPOSITOR_SCOPE_BLOCK_DEFAULT_LABEL,
       header_footer: "CABEÇALHO E RODAPÉ",
       quote: "ORÇAMENTO",
       session: "Sessão",
@@ -435,7 +440,9 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
     setEditingLabel(false);
     const trimmed = labelDraft.trim();
     if (!trimmed || trimmed === block.label) { setLabelDraft(block.label || ""); return; }
-    const result = await updateBlockAction(block.id, budgetId, { label: trimmed });
+    const result = await updateBlockAction(block.id, budgetId, {
+      label: normalizeLabel(trimmed, block),
+    });
     if (!result.success) { toast.error(result.error || "Erro ao renomear"); setLabelDraft(block.label || ""); }
     else onRefresh();
   };
@@ -538,8 +545,8 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
           </span>
         )}
 
-        {/* Label — duplo-clique para editar (exceto scope) */}
-        {editingLabel && !isReadOnly && !isScope && !isHeaderFooter && !isQuote && !isCover && !isToc && !isFigures ? (
+        {/* Label — duplo-clique para editar */}
+        {editingLabel && !isReadOnly && !isHeaderFooter && !isQuote && !isCover && !isToc && !isFigures ? (
           <input
             ref={labelInputRef}
             value={labelDraft}
@@ -558,9 +565,17 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
               "min-w-0 flex-1 truncate text-xs font-medium leading-none [text-size-adjust:100%]",
               (block.type === "session" || isScope || isHeaderFooter || isQuote || isCover || isToc || isFigures) && "uppercase"
             )}
-            onDoubleClick={(e) => { if (!isReadOnly && !isScope && !isHeaderFooter && !isQuote && !isCover && !isToc && !isFigures) { e.stopPropagation(); setLabelDraft(block.label || ""); setEditingLabel(true); } }}
+            onDoubleClick={(e) => {
+              if (!isReadOnly && !isHeaderFooter && !isQuote && !isCover && !isToc && !isFigures) {
+                e.stopPropagation();
+                setLabelDraft(
+                  isScope ? getScopeBlockLabel(block.label) : (block.label || ""),
+                );
+                setEditingLabel(true);
+              }
+            }}
           >
-            {isScope ? "ADEQUAÇÕES" : isHeaderFooter ? "CABEÇALHO E RODAPÉ" : isQuote ? "ORÇAMENTO" : isCover ? "CAPA" : isToc ? "SUMÁRIO" : isFigures ? "LISTA DE FIGURAS" : (block.label || `(${block.type})`)}
+            {isScope ? getScopeBlockLabel(block.label) : isHeaderFooter ? "CABEÇALHO E RODAPÉ" : isQuote ? "ORÇAMENTO" : isCover ? "CAPA" : isToc ? "SUMÁRIO" : isFigures ? "LISTA DE FIGURAS" : (block.label || `(${block.type})`)}
           </span>
         )}
 
@@ -704,7 +719,7 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
         activeBlock?.type === "quote" ||
         activeBlock?.type === "scope"
       ) {
-        toast.error("Adequações, cabeçalho/rodapé, orçamento, capa, sumário e lista de figuras só podem ficar na raiz do documento.");
+        toast.error("Detalhamento do projeto, cabeçalho/rodapé, orçamento, capa, sumário e lista de figuras só podem ficar na raiz do documento.");
         return;
       }
       const targetParentId = overId.slice(5);
@@ -733,7 +748,7 @@ export function CompositorSidebar({ roots, budgetId, selectedId, onSelect, onRef
         activeBlock?.type === "figures") &&
       overParentId !== null
     ) {
-      toast.error("Adequações, cabeçalho/rodapé, orçamento, capa, sumário e lista de figuras só podem ser reordenados na raiz.");
+      toast.error("Detalhamento do projeto, cabeçalho/rodapé, orçamento, capa, sumário e lista de figuras só podem ser reordenados na raiz.");
       return;
     }
 

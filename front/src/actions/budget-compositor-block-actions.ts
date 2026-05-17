@@ -556,7 +556,7 @@ export async function moveBlockToParentAction(
             if (row?.type === "scope") {
                 return {
                     success: false,
-                    error: "O bloco Adequações deve permanecer na raiz do documento.",
+                    error: "O bloco Detalhamento do projeto deve permanecer na raiz do documento.",
                 };
             }
             await db.update(blockRecordId).merge({ parent_id: requireRecordId("budget_block", newParentId) });

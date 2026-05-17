@@ -7,6 +7,7 @@ import { toast } from "@/lib/toast";
 
 /** Normaliza casing: sessão raiz → UPPERCASE, subsessões/locais → Title Case */
 export function normalizeLabel(label: string, block: BudgetBlock): string {
+    if (block.type === "scope") return label.toUpperCase();
     const isRootSession = block.type === "session" && block.depth === 0;
     if (isRootSession) return label.toUpperCase();
     if (block.type === "session" || block.type === "location") {

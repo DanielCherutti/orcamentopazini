@@ -1,4 +1,5 @@
 import type { BudgetBlock } from "@/types/budget-compositor-types";
+import { getScopeBlockLabel } from "./compositor-content-utils";
 import type { BudgetItem } from "@/types/budget-types";
 
 /** Ordem de renderização do documento (DFS, igual a BlockDocument). */
@@ -65,7 +66,7 @@ export function buildTocModel(
         number: b.number,
         title:
           b.type === "scope"
-            ? "Adequações"
+            ? getScopeBlockLabel(b.label)
             : (b.label || "Sessão").trim() || "Sessão",
         depth: b.depth,
         page,

@@ -2,7 +2,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, type Editor } from '@tiptap/react';
+import { Mark, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { ResizableImage } from '@/components/ui/resizable-image-extension';
 import TextAlign from '@tiptap/extension-text-align';
@@ -21,6 +22,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { WordPageClientLogo } from '@/components/budgets/compositor/word-page-client-logo';
 import { WordPageWatermark } from '@/components/budgets/compositor/word-page-watermark';
+import { WORD_BAND_THREE_COLUMNS_HTML } from '@/lib/compositor/word-header-templates';
 
 interface RichTextEditorProps {
   value: string;
@@ -29,6 +31,7 @@ interface RichTextEditorProps {
   onUploadImage?: (file: File) => Promise<string>;
   extraToolbarItems?: React.ReactNode;
   onEditorReady?: (insertImage: (url: string) => void) => void;
+  persistenceKey?: string;
   /** Faixa tipo Microsoft Word (abas + grupos Fonte / Parágrafo / Estilos). */
   variant?: 'default' | 'word';
   readOnly?: boolean;
@@ -88,6 +91,87 @@ const WORD_RIBBON_TABS = [
 type WordRibbonTabId = (typeof WORD_RIBBON_TABS)[number]["id"];
 type WordBandTemplateId = "blank" | "blank_three_columns";
 
+function hoistFloatingImages(html: string): string {
+  if (!html || !/data-floating\s*=\s*["']true["']|position\s*:\s*absolute/i.test(html)) {
+    return html;
+  }
+  const floatingImages: string[] = [];
+  const withoutFloatingImages = html.replace(/<img\b[^>]*>/gi, (tag) => {
+    const isFloating =
+      /\bdata-floating\s*=\s*["']true["']/i.test(tag) ||
+      /\bstyle\s*=\s*["'][^"']*position\s*:\s*absolute/i.test(tag);
+    if (!isFloating) return tag;
+    floatingImages.push(tag);
+    return "";
+  });
+  if (!floatingImages.length) return html;
+  const body = withoutFloatingImages
+    .replace(/<p>\s*(?:<br\s*\/?>)?\s*<\/p>/gi, "")
+    .trim();
+  return `${body}<p class="word-floating-anchor">${floatingImages.join("")}</p>`;
+}
+
+function needsFloatingHoist(html: string): boolean {
+  if (!html || !/data-floating\s*=\s*["']true["']/i.test(html)) return false;
+  if (typeof document === "undefined") return false;
+  const root = document.createElement("div");
+  root.innerHTML = html;
+  const imgs = root.querySelectorAll('img[data-floating="true"]');
+  if (!imgs.length) return false;
+  for (const img of imgs) {
+    if (!img.closest("p.word-floating-anchor")) return true;
+  }
+  const table = root.querySelector("table");
+  const anchor = root.querySelector("p.word-floating-anchor");
+  if (table && anchor && anchor.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING) {
+    return true;
+  }
+  return false;
+}
+
+function getHoistedHtmlIfNeeded(html: string): string | null {
+  if (!needsFloatingHoist(html)) return null;
+  const hoisted = hoistFloatingImages(html);
+  return hoisted !== html ? hoisted : null;
+}
+
+function scheduleSetContent(editor: Editor, html: string, onApplied?: (next: string) => void) {
+  queueMicrotask(() => {
+    if (editor.isDestroyed) return;
+    if (editor.getHTML() === html) {
+      onApplied?.(html);
+      return;
+    }
+    editor.commands.setContent(html, { emitUpdate: false });
+    onApplied?.(html);
+  });
+}
+
+const FontSizeMark = Mark.create({
+  name: 'fontSize',
+  addAttributes() {
+    return {
+      size: {
+        default: null,
+        parseHTML: (element) => {
+          const inline = (element as HTMLElement).style.fontSize;
+          return inline || null;
+        },
+        renderHTML: (attributes) => {
+          if (!attributes.size) return {};
+          return { style: `font-size: ${String(attributes.size)}` };
+        },
+      },
+    };
+  },
+  parseHTML() {
+    return [{ style: 'font-size' }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['span', mergeAttributes(HTMLAttributes), 0];
+  },
+});
+
 function getWordBandPercents(headerHeight: number, footerHeight: number) {
   const PAGE_BASELINE_PX = 1122;
   const headerPct = Math.min(
@@ -137,6 +221,7 @@ export function RichTextEditor({
   onUploadImage,
   extraToolbarItems,
   onEditorReady,
+  persistenceKey,
   variant = 'default',
   readOnly = false,
   wordPageWatermarkUrl,
@@ -147,8 +232,10 @@ export function RichTextEditor({
   wordPageBands,
 }: RichTextEditorProps) {
   const shouldUseFloatingHeaderImages = variant === "word" && !!wordPageBands;
+  const initialEditorValue = shouldUseFloatingHeaderImages ? hoistFloatingImages(value) : value;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wordPaperRef = useRef<HTMLDivElement>(null);
+  const bandScrollRef = useRef<HTMLDivElement>(null);
   const [wordRibbonTab, setWordRibbonTab] = useState<WordRibbonTabId>("home");
   const bandDragRef = useRef<{
     kind: "header" | "footer";
@@ -160,9 +247,11 @@ export function RichTextEditor({
     headerHeight: wordPageBands?.headerHeight ?? 96,
     footerHeight: wordPageBands?.footerHeight ?? 40,
   });
+  const [fontSizePx, setFontSizePx] = useState<number>(11);
   const [headerTemplateOpen, setHeaderTemplateOpen] = useState(false);
   const [footerTemplateOpen, setFooterTemplateOpen] = useState(false);
   const previewBandHeightsRef = useRef(previewBandHeights);
+  const lastEmittedHtmlRef = useRef(initialEditorValue);
 
   const isWord = variant === 'word';
 
@@ -185,6 +274,7 @@ export function RichTextEditor({
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
       }),
+      FontSizeMark,
       ResizableImage.configure({ inline: true }),
       TextAlign.configure({ types: ['heading', 'paragraph'], defaultAlignment: isWord ? 'left' : 'justify' }),
       Table.configure({
@@ -194,11 +284,26 @@ export function RichTextEditor({
       TableHeader,
       TableCell,
     ],
-    content: value,
+    content: shouldUseFloatingHeaderImages ? hoistFloatingImages(initialEditorValue) : initialEditorValue,
     onUpdate: ({ editor }) => {
-      onChange(editor.getHTML());
+      const html = editor.getHTML();
+      lastEmittedHtmlRef.current = html;
+      onChange(html);
+      if (!shouldUseFloatingHeaderImages) return;
+      const hoisted = getHoistedHtmlIfNeeded(html);
+      if (!hoisted) return;
+      scheduleSetContent(editor, hoisted, (next) => {
+        lastEmittedHtmlRef.current = next;
+        onChange(next);
+      });
     },
     onCreate: ({ editor }) => {
+      if (shouldUseFloatingHeaderImages) {
+        requestAnimationFrame(() => {
+          const hoisted = getHoistedHtmlIfNeeded(editor.getHTML());
+          if (hoisted) scheduleSetContent(editor, hoisted);
+        });
+      }
       if (onEditorReady) {
         onEditorReady((url: string) => {
           editor
@@ -284,7 +389,7 @@ export function RichTextEditor({
           'tiptap-content focus:outline-none w-full text-neutral-900',
           isWord
             ? wordPageBands
-              ? "word-band-mode min-h-full px-[8mm] py-[4mm] text-[11pt] leading-snug"
+              ? "word-band-mode py-[1mm] text-[11pt] leading-snug"
               : "min-h-full px-[22mm] py-[18mm] text-[11pt] leading-relaxed"
             : "min-h-[300px] p-4 border rounded-md text-justify",
         ),
@@ -296,6 +401,52 @@ export function RichTextEditor({
     editor?.setEditable(!readOnly);
   }, [editor, readOnly]);
 
+  useEffect(() => {
+    if (!editor) return;
+    const syncFontSize = () => {
+      const raw = String(editor.getAttributes('fontSize')?.size ?? '').trim();
+      const parsed = parseInt(raw.replace(/[^\d.-]/g, ''), 10);
+      if (Number.isFinite(parsed) && parsed >= 8 && parsed <= 96) {
+        setFontSizePx(parsed);
+      }
+    };
+    syncFontSize();
+    editor.on('selectionUpdate', syncFontSize);
+    editor.on('update', syncFontSize);
+    return () => {
+      editor.off('selectionUpdate', syncFontSize);
+      editor.off('update', syncFontSize);
+    };
+  }, [editor]);
+
+  useEffect(() => {
+    if (!bandScrollRef.current) return;
+    bandScrollRef.current.scrollTop = 0;
+  }, [wordPageBands?.activeBand, previewBandHeights.headerHeight, previewBandHeights.footerHeight]);
+
+  useEffect(() => {
+    if (!editor) return;
+    let cancelled = false;
+    const normalized = shouldUseFloatingHeaderImages ? hoistFloatingImages(value || "") : value || "";
+    if (normalized === lastEmittedHtmlRef.current) return;
+    if (editor.getHTML() === normalized) {
+      lastEmittedHtmlRef.current = normalized;
+      return;
+    }
+    queueMicrotask(() => {
+      if (cancelled || editor.isDestroyed) return;
+      if (editor.getHTML() === normalized) {
+        lastEmittedHtmlRef.current = normalized;
+        return;
+      }
+      editor.commands.setContent(normalized, { emitUpdate: false });
+      lastEmittedHtmlRef.current = normalized;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [value, editor, shouldUseFloatingHeaderImages]);
+
   if (!editor) return null;
 
   const focusWordEditorSelectAll = () => {
@@ -305,6 +456,13 @@ export function RichTextEditor({
         editor.chain().focus().selectAll().run();
       });
     });
+  };
+
+  const clampFontSize = (n: number) => Math.max(8, Math.min(96, Math.round(n)));
+  const applyFontSize = (n: number) => {
+    const px = clampFontSize(n);
+    setFontSizePx(px);
+    editor.chain().focus().setMark('fontSize', { size: `${px}px` }).run();
   };
 
   const wc = isWord ? 'h-7 w-7 p-0' : undefined;
@@ -487,11 +645,7 @@ export function RichTextEditor({
       : "Esta faixa imita o Word, mas ainda não há comandos neste editor.";
 
   const insertHeaderThreeColumns = () => {
-    editor
-      .chain()
-      .focus()
-      .insertTable({ rows: 1, cols: 3, withHeaderRow: false })
-      .run();
+    editor.chain().focus().insertContent(WORD_BAND_THREE_COLUMNS_HTML).run();
   };
 
   const focusWordBand = (band: "header" | "footer") => {
@@ -562,9 +716,45 @@ export function RichTextEditor({
     ? (wordPageBands.activeBand === "footer" ? previewBandHeights.footerHeight : previewBandHeights.headerHeight)
     : 96;
   const bandImageMaxHeightPx = Math.max(20, Math.round((Number(activeBandHeightPx) || 96) * 0.72));
-  const wordBandEditorVars = (isWord && wordPageBands
-    ? ({ "--word-band-image-max-height": `${bandImageMaxHeightPx}px` } as React.CSSProperties)
-    : undefined);
+  const wordBandLayout = isWord && wordPageBands
+    ? (() => {
+        const { headerPct, footerPct } = getWordBandPercents(
+          previewBandHeights.headerHeight,
+          previewBandHeights.footerHeight,
+        );
+        const activeHeader = wordPageBands.activeBand !== "footer";
+        return {
+          headerPct,
+          footerPct,
+          activeHeader,
+          bandPct: activeHeader ? headerPct : footerPct,
+        };
+      })()
+    : null;
+
+  const wordBandPercents = wordPageBands
+    ? getWordBandPercents(previewBandHeights.headerHeight, previewBandHeights.footerHeight)
+    : null;
+  const bodyBandPct =
+    wordBandPercents != null
+      ? Math.max(8, 100 - wordBandPercents.headerPct - wordBandPercents.footerPct)
+      : 0;
+
+  const wordBandEditorVars = wordBandLayout
+    ? ({
+        "--word-band-image-max-height": `${bandImageMaxHeightPx}px`,
+      } as React.CSSProperties)
+    : undefined;
+
+  const renderWordBandEditor = () => (
+    <div
+      ref={bandScrollRef}
+      className="word-band-editor-scroll h-full overflow-visible [&_.tiptap]:!bg-transparent"
+      style={wordBandEditorVars}
+    >
+      <EditorContent editor={editor} />
+    </div>
+  );
 
   if (isWord) {
     return (
@@ -597,7 +787,49 @@ export function RichTextEditor({
                 <div className="flex flex-wrap items-start gap-3 bg-white px-2 py-2">
                   <div className="flex min-w-0 flex-col gap-1 border-r border-neutral-200 pr-3">
                     <span className="text-[10px] font-medium text-neutral-500">Fonte</span>
-                    <div className="flex flex-wrap gap-0.5">{fontToolsBasic}</div>
+                    <div className="flex flex-wrap items-center gap-0.5">
+                      {fontToolsBasic}
+                      <div className="ml-1 flex items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-[11px]"
+                          onClick={() => applyFontSize(fontSizePx - 1)}
+                          title="Diminuir fonte"
+                        >
+                          A-
+                        </Button>
+                        <input
+                          type="number"
+                          min={8}
+                          max={96}
+                          value={fontSizePx}
+                          onChange={(e) => {
+                            const n = Number(e.target.value);
+                            if (!Number.isFinite(n)) return;
+                            setFontSizePx(clampFontSize(n));
+                          }}
+                          onBlur={(e) => {
+                            const n = Number(e.target.value);
+                            if (!Number.isFinite(n)) return;
+                            applyFontSize(n);
+                          }}
+                          className="h-7 w-14 rounded border border-input bg-background px-2 text-[11px]"
+                          aria-label="Tamanho da fonte (px)"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-[11px]"
+                          onClick={() => applyFontSize(fontSizePx + 1)}
+                          title="Aumentar fonte"
+                        >
+                          A+
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                   <div className="flex min-w-0 flex-col gap-1 border-r border-neutral-200 pr-3">
                     <span className="text-[10px] font-medium text-neutral-500">Parágrafo</span>
@@ -814,7 +1046,7 @@ export function RichTextEditor({
               <div
                 ref={wordPaperRef}
                 className={cn(
-                  "relative col-start-2 row-start-2 box-border min-w-0 self-start overflow-x-hidden border border-l-0 border-t-0 border-neutral-500/45 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.12)]",
+                  "relative col-start-2 row-start-2 box-border flex min-w-0 flex-col self-start overflow-x-hidden border border-l-0 border-t-0 border-neutral-500/45 bg-white shadow-[0_2px_12px_rgba(0,0,0,0.12)]",
                 )}
                 onClickCapture={(e) => {
                   if (!wordPageBands?.onSelectBand) return;
@@ -903,34 +1135,55 @@ export function RichTextEditor({
                     onAspectChange={wordPageClientLogo.onAspectChange}
                   />
                 ) : null}
-                <div
-                  className="relative z-0 min-h-full [&_.tiptap]:!bg-transparent [&_.tiptap]:min-h-full"
-                  style={wordBandEditorVars}
-                >
-                  <EditorContent editor={editor} />
-                </div>
-                {wordPageBands ? (
-                  <div className="pointer-events-none absolute inset-0 z-[15]" aria-hidden>
+                {wordPageBands && wordBandPercents ? (
+                  <>
+                    <div
+                      className={cn(
+                        "relative z-[20] shrink-0 overflow-visible bg-white",
+                        wordPageBands.activeBand === "header" &&
+                          "ring-1 ring-inset ring-primary/50",
+                      )}
+                      style={{ height: `${wordBandPercents.headerPct}%` }}
+                      onPointerDown={(e) => {
+                        if (e.target === e.currentTarget) focusWordBand("header");
+                      }}
+                    >
+                      {wordPageBands.activeBand === "header" ? renderWordBandEditor() : null}
+                    </div>
+                    <div
+                      className="relative z-0 shrink-0 bg-white"
+                      style={{ height: `${bodyBandPct}%` }}
+                      aria-hidden
+                    />
+                    <div
+                      className={cn(
+                        "relative z-[20] shrink-0 overflow-visible bg-white",
+                        wordPageBands.activeBand === "footer" &&
+                          "ring-1 ring-inset ring-primary/50",
+                      )}
+                      style={{ height: `${wordBandPercents.footerPct}%` }}
+                      onPointerDown={(e) => {
+                        if (e.target === e.currentTarget) focusWordBand("footer");
+                      }}
+                    >
+                      {wordPageBands.activeBand === "footer" ? renderWordBandEditor() : null}
+                    </div>
+                    <div className="pointer-events-none absolute inset-0 z-[15]" aria-hidden>
                     {(() => {
-                      const { headerPct, footerPct, bodyStart, bodyEnd } = getWordBandPercents(
-                        previewBandHeights.headerHeight,
-                        previewBandHeights.footerHeight,
-                      );
+                      const { headerPct, footerPct, bodyStart, bodyEnd } = wordBandPercents;
                       const activeHeader = wordPageBands.activeBand === "header";
                       const activeFooter = wordPageBands.activeBand === "footer";
                       return (
                         <>
                           <div
                             className={cn(
-                              "absolute left-0 right-0 top-0 border-b border-dashed transition-colors",
-                              activeHeader
-                                ? "border-primary/80 bg-primary/10"
-                                : "border-primary/40 bg-primary/[0.03]",
+                              "pointer-events-none absolute left-0 right-0 top-0 border-b border-dashed transition-colors",
+                              activeHeader ? "border-primary/70" : "border-neutral-300/80",
                             )}
                             style={{ height: `${headerPct}%` }}
                           />
                           <div
-                            className="absolute left-0 right-0 border-t border-dashed border-primary/35"
+                            className="pointer-events-none absolute left-0 right-0 border-t border-dashed border-neutral-300/70"
                             style={{ top: `${bodyStart}%` }}
                           />
                           {wordPageBands.onHeaderHeightChange ? (
@@ -945,7 +1198,7 @@ export function RichTextEditor({
                             </button>
                           ) : null}
                           <div
-                            className="absolute left-0 right-0 border-t border-dashed border-primary/35"
+                            className="pointer-events-none absolute left-0 right-0 border-t border-dashed border-neutral-300/70"
                             style={{ top: `${bodyEnd}%` }}
                           />
                           {wordPageBands.onFooterHeightChange ? (
@@ -961,30 +1214,33 @@ export function RichTextEditor({
                           ) : null}
                           <div
                             className={cn(
-                              "absolute left-0 right-0 bottom-0 border-t border-dashed transition-colors",
-                              activeFooter
-                                ? "border-primary/80 bg-primary/10"
-                                : "border-primary/40 bg-primary/[0.03]",
+                              "pointer-events-none absolute left-0 right-0 bottom-0 border-t border-dashed transition-colors",
+                              activeFooter ? "border-primary/70" : "border-neutral-300/80",
                             )}
                             style={{ height: `${footerPct}%` }}
                           />
-                          <div className="absolute left-2 top-1 rounded-sm bg-white/80 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          <div className="pointer-events-none absolute left-2 top-1 rounded-sm bg-white/90 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm">
                             Cabeçalho
                           </div>
                           <div
-                            className="absolute left-2 rounded-sm bg-white/80 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                            className="pointer-events-none absolute left-2 rounded-sm bg-white/90 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm"
                             style={{ top: `calc(${bodyStart}% + 2px)` }}
                           >
                             Corpo
                           </div>
-                          <div className="absolute left-2 bottom-1 rounded-sm bg-white/80 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          <div className="pointer-events-none absolute left-2 bottom-1 rounded-sm bg-white/90 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm">
                             Rodapé
                           </div>
                         </>
                       );
                     })()}
+                    </div>
+                  </>
+                ) : (
+                  <div className="relative z-0 min-h-full flex-1 [&_.tiptap]:!bg-transparent [&_.tiptap]:min-h-full">
+                    <EditorContent editor={editor} />
                   </div>
-                ) : null}
+                )}
               </div>
             </div>
           </div>

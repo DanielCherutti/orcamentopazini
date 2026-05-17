@@ -26,11 +26,16 @@ import {
     CollapsibleEditorSection,
 } from "@/components/budgets/compositor/compositor-rich-text-editor";
 import { CompositorItemCreator } from "@/components/budgets/compositor/compositor-item-creator";
+import { getScopeBlockLabel } from "@/components/budgets/compositor/compositor-content-utils";
 import { AddGroupDialog } from "@/components/budgets/editor/add-group-dialog";
 import { BudgetImageGallery } from "@/components/budgets/budget-image-gallery";
 import { BudgetPhotoAnnotatorDialog } from "@/components/budgets/budget-photo-annotator-dialog";
 import { parseAnnotatorViewport } from "@/components/annotator/annotator-viewport-types";
 import { toast } from "@/lib/toast";
+import {
+    WORD_BAND_BLANK_HTML,
+    WORD_BAND_THREE_COLUMNS_HTML,
+} from "@/lib/compositor/word-header-templates";
 import {
     addGroupToBlockAction,
     deleteItemFromBlockAction,
@@ -562,13 +567,19 @@ function TextRenderer({ block, budgetId, onRefresh }: CompositorRendererProps) {
     );
 }
 
-function ScopeRenderer({ block, budgetId }: CompositorRendererProps) {
+function ScopeRenderer({
+    block,
+    budgetId,
+    onRefresh,
+    isReadOnly,
+}: CompositorRendererProps) {
     const [stats, setStats] = useState<{
         locations: number;
         sections: number;
         items: number;
     } | null>(null);
     const { setActiveTab } = useWorkspaceTab();
+    const handleSaveLabel = useBlockLabel(block, budgetId, onRefresh);
 
     useEffect(() => {
         void getScopeStatsAction(budgetId).then((r) => {
@@ -582,10 +593,13 @@ function ScopeRenderer({ block, budgetId }: CompositorRendererProps) {
             className="rounded-lg border-2 border-dashed border-primary/30 bg-primary/5 p-5 space-y-3"
         >
             <div className="flex items-center gap-2">
-                <MapIcon className="h-5 w-5 text-primary" />
-                <span className="font-bold text-sm text-primary uppercase tracking-wide">
-                    ADEQUAÇÕES
-                </span>
+                <MapIcon className="h-5 w-5 text-primary shrink-0" />
+                <EditableTitle
+                    value={getScopeBlockLabel(block.label)}
+                    onSave={handleSaveLabel}
+                    disabled={isReadOnly}
+                    className="font-bold text-sm text-primary uppercase tracking-wide"
+                />
             </div>
             <p className="text-sm text-muted-foreground">
                 Este bloco expande o conteúdo configurado na aba Adequações
@@ -690,15 +704,21 @@ function HeaderFooterRenderer({
         cover: "header",
         inner: "header",
     });
+    const patchQueueRef = useRef<Promise<void>>(Promise.resolve());
 
-    const handlePatch = async (patch: Partial<HeaderFooterBlockProps>) => {
+    const handlePatch = (patch: Partial<HeaderFooterBlockProps>) => {
         if (isReadOnly) return;
-        const res = await updateBlockAction(block.id, budgetId, {
-            props: { ...(block.props as Record<string, unknown>), ...patch },
-        });
-        if (!res.success) {
-            toast.error(res.error || "Erro ao salvar cabeçalho e rodapé");
-        }
+        patchQueueRef.current = patchQueueRef.current
+            .catch(() => undefined)
+            .then(async () => {
+                const res = await updateBlockAction(block.id, budgetId, {
+                    props: patch as Record<string, unknown>,
+                });
+                if (!res.success) {
+                    toast.error(res.error || "Erro ao salvar cabeçalho e rodapé");
+                }
+            });
+        return patchQueueRef.current;
     };
 
     const uploadWatermark = async (
@@ -734,6 +754,14 @@ function HeaderFooterRenderer({
         const isHeaderActive = activeBand === "header";
         const activeHeight = isHeaderActive ? headerHeight : footerHeight;
         const activeHtml = isHeaderActive ? headerHtml : footerHtml;
+        const activeHtmlField =
+            key === "cover"
+                ? isHeaderActive
+                    ? "cover_header_html"
+                    : "cover_footer_html"
+                : isHeaderActive
+                  ? "inner_header_html"
+                  : "inner_footer_html";
         const watermarkUrl =
             key === "cover"
                 ? props.cover_watermark_url ?? ""
@@ -1020,6 +1048,7 @@ function HeaderFooterRenderer({
                         Modo de edição estilo documento: selecione a área e edite diretamente como no editor de página.
                     </div>
                     <CompositorRichTextEditor
+                        key={`${block.id}-${key}-${activeBand}`}
                         variant="word"
                         readOnly={Boolean(isReadOnly)}
                         value={activeHtml}
@@ -1030,9 +1059,8 @@ function HeaderFooterRenderer({
                             onSelectBand: (band) =>
                                 setActiveBandByPane((prev) => ({ ...prev, [key]: band })),
                             onApplyTemplate: ({ band, template }) => {
-                                const blankHtml = "<p></p>";
-                                const threeColumnsHtml =
-                                    "<table><tbody><tr><td></td><td></td><td></td></tr></tbody></table><p></p>";
+                                const blankHtml = WORD_BAND_BLANK_HTML;
+                                const threeColumnsHtml = WORD_BAND_THREE_COLUMNS_HTML;
                                 const nextHtml = template === "blank_three_columns" ? threeColumnsHtml : blankHtml;
                                 if (band === "header") {
                                     void handlePatch(

@@ -24,6 +24,7 @@ import { PdfProposalHeaderBand } from '@/components/pdf/pdf-proposal-header-band
 import type { BudgetItem } from '@/types/budget-types';
 import type { BudgetLocation } from '@/types/budget-types';
 import { applyQuoteRowAdjustments } from '@/lib/budgets/scope-pricing';
+import { getScopeBlockLabel } from '@/components/budgets/compositor/compositor-content-utils';
 
 interface ProposalDocumentProps {
     budget: Budget;
@@ -1240,7 +1241,7 @@ export const ProposalDocument = ({
         if (!Number.isFinite(value) || value <= 0) continue;
         sessionPages.set(key.slice("session:".length), Math.trunc(value));
     }
-    const detailSectionTitle = "Detalhamento do Projeto";
+    const detailSectionTitle = sanitizeTextForPdf(getScopeBlockLabel(scopeBlock?.label));
     /**
      * Numeração do detalhamento no PDF:
      * - compositor: usa o número real do bloco `scope` (ex.: "2")

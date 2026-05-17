@@ -28,3 +28,11 @@ export { buildItemSegments, type ItemSegment } from "@/lib/budgets/item-group-se
 
 /** Referência estável para listas vazias (evita loop setState no SectionRenderer). */
 export const EMPTY_ITEMS: BudgetItem[] = [];
+
+/** Rótulo padrão do bloco `scope` ao criar (editável depois). */
+export const COMPOSITOR_SCOPE_BLOCK_DEFAULT_LABEL = "Detalhamento do projeto";
+
+export function getScopeBlockLabel(label: string | null | undefined): string {
+    const trimmed = (label ?? "").trim();
+    return trimmed || COMPOSITOR_SCOPE_BLOCK_DEFAULT_LABEL;
+}

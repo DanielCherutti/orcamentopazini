@@ -8,6 +8,7 @@ import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
 import type { Budget } from "@/types/budget-types";
 import { addBlockAction } from "@/actions/budget-compositor-block-actions";
+import { COMPOSITOR_SCOPE_BLOCK_DEFAULT_LABEL } from "@/components/budgets/compositor/compositor-content-utils";
 import { mergeCoverDocumentProps } from "@/lib/budgets/cover-document";
 import {
     InvalidRecordIdError,
@@ -78,7 +79,7 @@ export async function createBudgetAction(title: string, code: string) {
             label: "LISTA DE FIGURAS",
             props: {},
         });
-        await addBlockAction({ budgetId: createdBudget.id!, parentId: null, type: "scope", label: "ADEQUAÇÕES" });
+        await addBlockAction({ budgetId: createdBudget.id!, parentId: null, type: "scope", label: COMPOSITOR_SCOPE_BLOCK_DEFAULT_LABEL });
 
         revalidatePath("/budgets");
 
