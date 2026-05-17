@@ -265,71 +265,139 @@ const styles = StyleSheet.create({
         marginBottom: 6,
         objectFit: 'contain',
     },
+    quoteCard: {
+        borderWidth: 1,
+        borderColor: '#e5e7eb',
+        borderRadius: 8,
+        overflow: 'hidden',
+    },
     quoteHeaderBar: {
         borderBottomWidth: 1,
-        borderBottomColor: '#d1d5db',
-        backgroundColor: '#f3f4f6',
-        paddingVertical: 6,
-        paddingHorizontal: 10,
-        marginBottom: 6,
+        borderBottomColor: '#e5e7eb',
+        backgroundColor: '#eff6ff',
+        paddingVertical: 10,
+        paddingHorizontal: 12,
     },
     quoteHeaderTitle: {
-        fontSize: 10,
+        fontSize: 9,
         fontFamily: theme.fonts.bold,
-        color: theme.colors.text,
+        color: '#0f172a',
         textTransform: 'uppercase',
         textAlign: 'center',
+        letterSpacing: 1.1,
     },
     quoteTableHeader: {
-        flexDirection: "row",
+        flexDirection: 'row',
         borderBottomWidth: 1,
-        borderBottomColor: theme.colors.border,
-        backgroundColor: theme.colors.bgHeader,
-        paddingVertical: 5,
+        borderBottomColor: '#e5e7eb',
+        backgroundColor: '#f9fafb',
+        paddingVertical: 8,
+        paddingHorizontal: 4,
+    },
+    quoteHeaderCell: {
+        fontSize: 8,
+        fontFamily: theme.fonts.bold,
+        color: '#6b7280',
+        textTransform: 'uppercase',
+        letterSpacing: 0.4,
+        paddingHorizontal: 10,
     },
     quoteRow: {
-        flexDirection: "row",
+        flexDirection: 'row',
         borderBottomWidth: 0.5,
-        borderBottomColor: theme.colors.border,
-        paddingVertical: 4,
+        borderBottomColor: '#f1f5f9',
+        paddingVertical: 7,
+        paddingHorizontal: 4,
+        alignItems: 'center',
     },
-    quoteColIndex: { flex: 3, fontSize: 9 },
-    quoteColDesc: { flex: 14, fontSize: 9 },
-    quoteColEquip: { flex: 6, textAlign: "right", fontSize: 9 },
-    quoteColAsm: { flex: 6, textAlign: "right", fontSize: 9 },
+    quoteColIndex: {
+        width: 32,
+        fontSize: 9,
+        paddingHorizontal: 10,
+        color: theme.colors.text,
+    },
+    quoteColDescWrap: {
+        flex: 1,
+        paddingRight: 8,
+    },
+    quoteColDescLoc: {
+        fontSize: 9,
+        fontFamily: theme.fonts.bold,
+        color: '#0f172a',
+        borderLeftWidth: 3,
+        borderLeftColor: theme.colors.primary,
+        paddingLeft: 8,
+    },
+    quoteColDescSec: {
+        fontSize: 8.5,
+        color: theme.colors.textLight,
+        paddingLeft: 14,
+    },
+    quoteColMoney: {
+        width: 72,
+        fontSize: 9,
+        textAlign: 'right',
+        paddingHorizontal: 10,
+        color: theme.colors.text,
+    },
+    quoteColMoneyBold: {
+        width: 72,
+        fontSize: 9,
+        fontFamily: theme.fonts.bold,
+        textAlign: 'right',
+        paddingHorizontal: 10,
+        color: '#0f172a',
+    },
     quoteLocRow: {
-        backgroundColor: '#f7fafc',
+        backgroundColor: '#f5f7ff',
     },
     quoteSecRow: {
         backgroundColor: '#ffffff',
     },
     quoteTotalRow: {
-        flexDirection: "row",
-        borderTopWidth: 1,
-        borderTopColor: '#f59e0b',
+        flexDirection: 'row',
+        borderTopWidth: 2,
+        borderTopColor: '#fcd34d',
         backgroundColor: '#fef3c7',
-        paddingVertical: 6,
-        marginTop: 4,
+        paddingVertical: 10,
+        paddingHorizontal: 4,
+        alignItems: 'center',
     },
     quoteTotalLabel: {
-        flex: 17,
-        fontSize: 9,
+        flex: 1,
+        fontSize: 8,
         fontFamily: theme.fonts.bold,
         textTransform: 'uppercase',
         textAlign: 'right',
+        color: '#78350f',
+        letterSpacing: 0.6,
+        paddingRight: 8,
     },
     quoteTotalValue: {
-        flex: 6,
+        width: 72,
         fontSize: 9,
         fontFamily: theme.fonts.bold,
         textAlign: 'right',
+        paddingHorizontal: 10,
+        color: '#78350f',
     },
-    quoteGrandRow: {
-        flexDirection: "row",
-        borderTopWidth: 1,
-        borderTopColor: '#f59e0b',
+    quoteFooterLabelsRow: {
+        flexDirection: 'row',
         backgroundColor: '#fffbeb',
-        paddingVertical: 4,
+        borderTopWidth: 1,
+        borderTopColor: '#fde68a',
+        paddingVertical: 6,
+        paddingHorizontal: 4,
+    },
+    quoteFooterLabel: {
+        width: 72,
+        fontSize: 7,
+        fontFamily: theme.fonts.bold,
+        textTransform: 'uppercase',
+        textAlign: 'right',
+        paddingHorizontal: 10,
+        color: '#92400e',
+        letterSpacing: 0.5,
     },
 });
 
@@ -1457,18 +1525,23 @@ export const ProposalDocument = ({
                 return (
                     <InnerPdfPage pageKey={keyBase} title="Orçamento" paginationProbeKey="quote" {...innerCommon}>
                         {quoteLocationsForPdf.length > 0 ? (
-                            <View>
+                            <View style={styles.quoteCard}>
                                 <View style={styles.quoteHeaderBar}>
-                                    <Text style={styles.quoteHeaderTitle}>Custos de equipamentos - Pazini</Text>
+                                    <Text style={styles.quoteHeaderTitle}>
+                                        Custos de equipamentos — Pazini
+                                    </Text>
                                 </View>
                                 <View style={styles.quoteTableHeader}>
-                                    <Text style={styles.quoteColIndex}>Nº</Text>
-                                    <Text style={styles.quoteColDesc}>Local / trecho</Text>
-                                    <Text style={styles.quoteColEquip}>Equipamentos</Text>
-                                    <Text style={styles.quoteColAsm}>Montagem</Text>
+                                    <Text style={[styles.quoteHeaderCell, { width: 32 }]}>Nº</Text>
+                                    <Text style={[styles.quoteHeaderCell, { flex: 1 }]}>Local / trecho</Text>
+                                    <Text style={[styles.quoteHeaderCell, { width: 72, textAlign: 'right' }]}>
+                                        Equipamentos
+                                    </Text>
+                                    <Text style={[styles.quoteHeaderCell, { width: 72, textAlign: 'right' }]}>
+                                        Montagem
+                                    </Text>
                                 </View>
                                 {quoteLocationsForPdf.map((loc, locIdx) => {
-                                    const locNumber = `${sectionNumberPdf}.${locIdx + 1}`;
                                     const locationBase = loc.sections.reduce(
                                         (sum, sec) => {
                                             const calc = computeSectionEquipAssembly(sec.items);
@@ -1493,18 +1566,19 @@ export const ProposalDocument = ({
                                                 <Text style={[styles.quoteColIndex, { fontFamily: theme.fonts.bold }]}>
                                                     {sanitizeTextForPdf(String(locIdx + 1))}
                                                 </Text>
-                                                <Text style={[styles.quoteColDesc, { fontFamily: theme.fonts.bold }]}>
-                                                    {sanitizeTextForPdf(loc.title)}
-                                                </Text>
-                                                <Text style={[styles.quoteColEquip, { fontFamily: theme.fonts.bold }]}>
+                                                <View style={styles.quoteColDescWrap}>
+                                                    <Text style={styles.quoteColDescLoc}>
+                                                        {sanitizeTextForPdf(loc.title)}
+                                                    </Text>
+                                                </View>
+                                                <Text style={styles.quoteColMoneyBold}>
                                                     {formatMoney(locationAdjusted.equipment)}
                                                 </Text>
-                                                <Text style={[styles.quoteColAsm, { fontFamily: theme.fonts.bold }]}>
+                                                <Text style={styles.quoteColMoneyBold}>
                                                     {formatMoney(locationAdjusted.assembly)}
                                                 </Text>
                                             </View>
-                                            {quoteShowSections && loc.sections.map((sec, secIdx) => {
-                                                const secNumber = `${locNumber}.${secIdx + 1}`;
+                                            {quoteShowSections && loc.sections.map((sec) => {
                                                 const sectionBase = computeSectionEquipAssembly(sec.items);
                                                 const sectionAdjusted = applyQuoteRowAdjustments(
                                                     sectionBase.equipment,
@@ -1517,14 +1591,18 @@ export const ProposalDocument = ({
                                                 return (
                                                     <View key={`q-sec-${loc.id}-${sec.id}`}>
                                                         <View style={[styles.quoteRow, styles.quoteSecRow]}>
-                                                            <Text style={styles.quoteColIndex}>—</Text>
-                                                            <Text style={[styles.quoteColDesc, { color: theme.colors.textLight }]}>
-                                                                {sanitizeTextForPdf(`${secNumber} — ${sec.title}`)}
+                                                            <Text style={[styles.quoteColIndex, { color: theme.colors.textLight }]}>
+                                                                —
                                                             </Text>
-                                                            <Text style={styles.quoteColEquip}>
+                                                            <View style={styles.quoteColDescWrap}>
+                                                                <Text style={styles.quoteColDescSec}>
+                                                                    {sanitizeTextForPdf(sec.title)}
+                                                                </Text>
+                                                            </View>
+                                                            <Text style={styles.quoteColMoney}>
                                                                 {formatMoney(sectionAdjusted.equipment)}
                                                             </Text>
-                                                            <Text style={styles.quoteColAsm}>
+                                                            <Text style={styles.quoteColMoney}>
                                                                 {formatMoney(sectionAdjusted.assembly)}
                                                             </Text>
                                                         </View>
@@ -1565,6 +1643,7 @@ export const ProposalDocument = ({
                                     return (
                                         <>
                                             <View style={styles.quoteTotalRow}>
+                                                <Text style={{ width: 32 }} />
                                                 <Text style={styles.quoteTotalLabel}>Totais</Text>
                                                 <Text style={styles.quoteTotalValue}>
                                                     {formatMoney(totals.equipment)}
@@ -1573,12 +1652,11 @@ export const ProposalDocument = ({
                                                     {formatMoney(totals.assembly)}
                                                 </Text>
                                             </View>
-                                            <View style={styles.quoteGrandRow}>
-                                                <Text style={styles.quoteTotalLabel}>Total geral</Text>
-                                                <Text style={styles.quoteTotalValue}>
-                                                    {formatMoney(totals.equipment + totals.assembly)}
-                                                </Text>
-                                                <Text style={styles.quoteTotalValue}>—</Text>
+                                            <View style={styles.quoteFooterLabelsRow}>
+                                                <Text style={{ width: 32 }} />
+                                                <View style={{ flex: 1 }} />
+                                                <Text style={styles.quoteFooterLabel}>Equipamentos</Text>
+                                                <Text style={styles.quoteFooterLabel}>Montagem</Text>
                                             </View>
                                         </>
                                     );
