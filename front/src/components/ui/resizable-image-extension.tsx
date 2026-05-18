@@ -7,6 +7,14 @@ import Image from "@tiptap/extension-image";
 import type { NodeViewProps } from "@tiptap/react";
 import { NodeSelection } from "@tiptap/pm/state";
 
+declare module "@tiptap/extension-image" {
+  interface SetImageOptions {
+    floating?: boolean;
+    x?: number;
+    y?: number;
+  }
+}
+
 type HandleDir = "nw" | "ne" | "se" | "sw";
 
 const HANDLE_STYLE: Record<HandleDir, React.CSSProperties> = {

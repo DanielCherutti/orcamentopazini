@@ -1,13 +1,24 @@
+# App isolada (build local). Stack completo (Surreal + app): use o docker-compose.yml na raiz do repo.
+#
+# Pre-requisito: na raiz do repo, `docker compose up surrealdb -d`
+# Copie front/.env.example para front/.env e use a mesma SURREALDB_PASS do .env da raiz.
 services:
   app:
     container_name: pazini-app
     build:
       context: .
       dockerfile: Dockerfile
-    restart: always
+    restart: unless-stopped
     ports:
       - "3000:3000"
     env_file:
-      - .env.production
+      - .env
     environment:
-      - PORT=3000
+      PORT: "3000"
+      SURREALDB_HOST: host.docker.internal
+      SURREALDB_PORT: "8000"
+      PAZINI_UPLOADS_DIR: /app/uploads
+    volumes:
+      - ./pazini-uploads:/app/uploads
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

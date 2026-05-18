@@ -27,6 +27,11 @@ import {
   DEFAULT_COVER_HEADER_BAND_PT,
 } from "@/lib/pdf/cover-pdf-band-layout";
 import { stripHtmlToText } from "@/lib/pdf/html-to-plain-text";
+import {
+  HeaderFooterPdfLayer,
+  hasAnyHeaderFooterPdfLayout,
+  renderTextWithPageNumbers,
+} from "@/components/pdf/header-footer-layout-pdf";
 
 /** Só URL HTTP(S) no HTML — nunca data URI (strings enormes quebram sanitize/split e o layout). */
 function rewriteImgSrcInHtml(html: string, publicBase?: string): string {
@@ -278,26 +283,30 @@ export function CompositorCoverPdfPage({
   const customCoverFooterText = sanitizeTextForPdf(
     stripHtmlToText(String(headerFooterProps?.cover_footer_html ?? ""))
   ).trim();
+  const coverHeaderLayouts = [headerFooterProps?.all_header_layout, headerFooterProps?.cover_header_layout];
+  const coverFooterLayouts = [headerFooterProps?.all_footer_layout, headerFooterProps?.cover_footer_layout];
+  const hasCoverHeaderLayout = hasAnyHeaderFooterPdfLayout(coverHeaderLayouts);
+  const hasCoverFooterLayout = hasAnyHeaderFooterPdfLayout(coverFooterLayouts);
   const showCoverHeader = resolveCoverPageShowHeaderBand(
     coverProps,
     settings,
     headerFooterProps,
-    Boolean(customCoverHeaderText),
+    Boolean(customCoverHeaderText || hasCoverHeaderLayout),
   );
   const showCoverFooter = resolveCoverPageShowFooterBand(
     coverProps,
     headerFooterProps,
-    Boolean(customCoverFooterText),
+    Boolean(customCoverFooterText || hasCoverFooterLayout),
   );
   const headerReserveFromCover = coverProps.cover_pdf_header_band_height_pt;
   const footerReserveFromCover = coverProps.cover_pdf_footer_band_height_pt;
-  const headerReserve = customCoverHeaderText
+  const headerReserve = customCoverHeaderText || hasCoverHeaderLayout
     ? clampCoverHeaderBandPt(headerFooterProps?.cover_header_height, DEFAULT_COVER_HEADER_BAND_PT)
     : clampCoverHeaderBandPt(
         headerReserveFromCover ?? headerFooterProps?.cover_header_height,
         DEFAULT_COVER_HEADER_BAND_PT,
       );
-  const footerReserve = customCoverFooterText
+  const footerReserve = customCoverFooterText || hasCoverFooterLayout
     ? clampCoverFooterBandPt(headerFooterProps?.cover_footer_height, DEFAULT_COVER_FOOTER_BAND_PT)
     : clampCoverFooterBandPt(
         footerReserveFromCover ?? headerFooterProps?.cover_footer_height,
@@ -346,20 +355,70 @@ export function CompositorCoverPdfPage({
         </View>
       ) : null}
       {showCoverHeader ? (
-        <View style={[styles.coverHeaderBand, { minHeight: Math.max(30, headerReserve - 10) }]} fixed>
-          {customCoverHeaderText ? (
-            <Text style={{ fontSize: 9, color: theme.colors.text, lineHeight: 1.3 }}>
-              {customCoverHeaderText}
-            </Text>
+        <View
+          style={[
+            styles.coverHeaderBand,
+            {
+              minHeight: Math.max(30, headerReserve - 10),
+              height: headerReserve,
+              paddingBottom: hasCoverHeaderLayout ? 0 : 8,
+            },
+          ]}
+          fixed
+        >
+          {hasCoverHeaderLayout ? (
+            <HeaderFooterPdfLayer
+              layouts={coverHeaderLayouts}
+              pageScope="cover"
+              region="header"
+              width={PAGE_W - 2 * BODY_PAD_H}
+              height={headerReserve}
+              appPublicUrl={settings.app_public_url}
+              pdfEmbeddedImages={pdfEmbeddedImages}
+              pageNumbering={headerFooterProps?.page_numbering}
+            />
+          ) : customCoverHeaderText ? (
+            renderTextWithPageNumbers(
+              customCoverHeaderText,
+              { fontSize: 9, color: theme.colors.text, lineHeight: 1.3 },
+              headerFooterProps?.page_numbering,
+              "cover"
+            )
           ) : (
             <PdfProposalHeaderBand settings={settings} logoSrc={logoSrc} companyName={companyName} />
           )}
         </View>
       ) : null}
       {showCoverFooter ? (
-        <View style={[styles.coverFooterBand, { minHeight: Math.max(26, footerReserve - 8) }]} fixed>
-          {customCoverFooterText ? (
-            <Text style={styles.coverFooterMuted}>{customCoverFooterText}</Text>
+        <View
+          style={[
+            styles.coverFooterBand,
+            {
+              minHeight: Math.max(26, footerReserve - 8),
+              height: footerReserve,
+              paddingTop: hasCoverFooterLayout ? 0 : 6,
+            },
+          ]}
+          fixed
+        >
+          {hasCoverFooterLayout ? (
+            <HeaderFooterPdfLayer
+              layouts={coverFooterLayouts}
+              pageScope="cover"
+              region="footer"
+              width={PAGE_W - 2 * BODY_PAD_H}
+              height={footerReserve}
+              appPublicUrl={settings.app_public_url}
+              pdfEmbeddedImages={pdfEmbeddedImages}
+              pageNumbering={headerFooterProps?.page_numbering}
+            />
+          ) : customCoverFooterText ? (
+            renderTextWithPageNumbers(
+              customCoverFooterText,
+              styles.coverFooterMuted,
+              headerFooterProps?.page_numbering,
+              "cover"
+            )
           ) : (
             <>
               <Text style={styles.coverFooterMuted}>{footerLeft}</Text>

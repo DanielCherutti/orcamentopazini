@@ -33,10 +33,6 @@ import { BudgetPhotoAnnotatorDialog } from "@/components/budgets/budget-photo-an
 import { parseAnnotatorViewport } from "@/components/annotator/annotator-viewport-types";
 import { toast } from "@/lib/toast";
 import {
-    WORD_BAND_BLANK_HTML,
-    WORD_BAND_THREE_COLUMNS_HTML,
-} from "@/lib/compositor/word-header-templates";
-import {
     addGroupToBlockAction,
     deleteItemFromBlockAction,
     reorderItemsInBlockAction,
@@ -64,6 +60,7 @@ import { CompositorItemRow } from "./compositor-item-row";
 import { CompositorDocumentContext } from "./compositor-document-context";
 import { CompositorCoverBlock } from "./compositor-cover-block";
 import { CompositorCoverPdfBandsMenuEntry } from "./compositor-cover-pdf-bands-menu-entry";
+import { HeaderFooterLayoutEditor } from "./header-footer-layout-editor";
 import { CompositorTocBlock } from "./compositor-toc-block";
 import { CompositorFiguresBlock } from "./compositor-figures-block";
 import type { ScopeFigureEntry } from "./compositor-figures-utils";
@@ -693,21 +690,30 @@ function HeaderFooterRenderer({
     onRefresh,
     isReadOnly,
 }: CompositorRendererProps) {
-    const props = mergeHeaderFooterProps(block.props as Record<string, unknown> | undefined);
+    const persistedProps = mergeHeaderFooterProps(block.props as Record<string, unknown> | undefined);
+    const [optimisticProps, setOptimisticProps] = useState<Partial<HeaderFooterBlockProps>>({});
+    const props = { ...persistedProps, ...optimisticProps };
     const coverWatermarkInputRef = useRef<HTMLInputElement | null>(null);
     const innerWatermarkInputRef = useRef<HTMLInputElement | null>(null);
     const [uploadingField, setUploadingField] = useState<"cover" | "inner" | null>(null);
     const [activeBandByPane, setActiveBandByPane] = useState<{
+        all: "header" | "footer";
         cover: "header" | "footer";
         inner: "header" | "footer";
     }>({
+        all: "header",
         cover: "header",
         inner: "header",
     });
     const patchQueueRef = useRef<Promise<void>>(Promise.resolve());
 
+    useEffect(() => {
+        setOptimisticProps({});
+    }, [block.id]);
+
     const handlePatch = (patch: Partial<HeaderFooterBlockProps>) => {
         if (isReadOnly) return;
+        setOptimisticProps((prev) => ({ ...prev, ...patch }));
         patchQueueRef.current = patchQueueRef.current
             .catch(() => undefined)
             .then(async () => {
@@ -745,23 +751,22 @@ function HeaderFooterRenderer({
         }
     };
 
-    const renderPane = (key: "cover" | "inner") => {
+    const renderPane = (key: "all" | "cover" | "inner") => {
         const activeBand = activeBandByPane[key];
-        const headerHtml = key === "cover" ? props.cover_header_html ?? "" : props.inner_header_html ?? "";
-        const footerHtml = key === "cover" ? props.cover_footer_html ?? "" : props.inner_footer_html ?? "";
-        const headerHeight = key === "cover" ? props.cover_header_height ?? 96 : props.inner_header_height ?? 96;
-        const footerHeight = key === "cover" ? props.cover_footer_height ?? 48 : props.inner_footer_height ?? 40;
+        const headerHeight =
+            key === "cover"
+                ? props.cover_header_height ?? 96
+                : key === "inner"
+                  ? props.inner_header_height ?? 96
+                  : Math.max(props.cover_header_height ?? 96, props.inner_header_height ?? 96);
+        const footerHeight =
+            key === "cover"
+                ? props.cover_footer_height ?? 48
+                : key === "inner"
+                  ? props.inner_footer_height ?? 40
+                  : Math.max(props.cover_footer_height ?? 48, props.inner_footer_height ?? 40);
         const isHeaderActive = activeBand === "header";
         const activeHeight = isHeaderActive ? headerHeight : footerHeight;
-        const activeHtml = isHeaderActive ? headerHtml : footerHtml;
-        const activeHtmlField =
-            key === "cover"
-                ? isHeaderActive
-                    ? "cover_header_html"
-                    : "cover_footer_html"
-                : isHeaderActive
-                  ? "inner_header_html"
-                  : "inner_footer_html";
         const watermarkUrl =
             key === "cover"
                 ? props.cover_watermark_url ?? ""
@@ -780,30 +785,6 @@ function HeaderFooterRenderer({
                 : props.inner_use_cover_watermark
                   ? props.cover_watermark_scale_pct ?? 100
                   : props.inner_watermark_scale_pct ?? 100;
-        const watermarkX =
-            key === "cover"
-                ? props.cover_watermark_x_pct ?? 11
-                : props.inner_use_cover_watermark
-                  ? props.cover_watermark_x_pct ?? 11
-                  : props.inner_watermark_x_pct ?? 11;
-        const watermarkY =
-            key === "cover"
-                ? props.cover_watermark_y_pct ?? 11
-                : props.inner_use_cover_watermark
-                  ? props.cover_watermark_y_pct ?? 11
-                  : props.inner_watermark_y_pct ?? 11;
-        const watermarkWidth =
-            key === "cover"
-                ? props.cover_watermark_width_pct ?? 78
-                : props.inner_use_cover_watermark
-                  ? props.cover_watermark_width_pct ?? 78
-                  : props.inner_watermark_width_pct ?? 78;
-        const watermarkAspect =
-            key === "cover"
-                ? props.cover_watermark_aspect ?? 1
-                : props.inner_use_cover_watermark
-                  ? props.cover_watermark_aspect ?? 1
-                  : props.inner_watermark_aspect ?? 1;
         return (
             <div className="space-y-4">
                 {key === "cover" ? (
@@ -874,10 +855,11 @@ function HeaderFooterRenderer({
                         </div>
                     </div>
                 ) : null}
+                {key !== "all" ? (
                 <div className="rounded-lg border bg-card p-3 space-y-3">
                     <div className="flex items-center justify-between gap-3">
                         <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Marca d'água da {key === "cover" ? "capa" : "página interna"}
+                            Marca d&apos;água da {key === "cover" ? "capa" : "página interna"}
                         </Label>
                         {key === "inner" && (
                             <label className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -987,6 +969,7 @@ function HeaderFooterRenderer({
                         </span>
                     </div>
                 </div>
+                ) : null}
                 <div className="rounded-lg border bg-card p-3">
                     <div className="mb-3 flex flex-wrap items-center gap-2">
                         <div className="inline-flex rounded-md border bg-background p-1">
@@ -999,7 +982,11 @@ function HeaderFooterRenderer({
                                     setActiveBandByPane((prev) => ({ ...prev, [key]: "header" }))
                                 }
                             >
-                                {key === "cover" ? "Cabeçalho - Capa" : "Cabeçalho - Todas as páginas"}
+                                {key === "cover"
+                                    ? "Cabeçalho - Capa"
+                                    : key === "inner"
+                                      ? "Cabeçalho - Páginas internas"
+                                      : "Cabeçalho - Todas as páginas"}
                             </button>
                             <button
                                 type="button"
@@ -1010,7 +997,11 @@ function HeaderFooterRenderer({
                                     setActiveBandByPane((prev) => ({ ...prev, [key]: "footer" }))
                                 }
                             >
-                                {key === "cover" ? "Rodapé - Capa" : "Rodapé - Todas as páginas"}
+                                {key === "cover"
+                                    ? "Rodapé - Capa"
+                                    : key === "inner"
+                                      ? "Rodapé - Páginas internas"
+                                      : "Rodapé - Todas as páginas"}
                             </button>
                         </div>
                         <div className="ml-auto flex items-center gap-2">
@@ -1031,12 +1022,16 @@ function HeaderFooterRenderer({
                                         void handlePatch(
                                             key === "cover"
                                                 ? { cover_header_height: next }
+                                                : key === "all"
+                                                  ? { cover_header_height: next, inner_header_height: next }
                                                 : { inner_header_height: next }
                                         );
                                     } else {
                                         void handlePatch(
                                             key === "cover"
                                                 ? { cover_footer_height: next }
+                                                : key === "all"
+                                                  ? { cover_footer_height: next, inner_footer_height: next }
                                                 : { inner_footer_height: next }
                                         );
                                     }
@@ -1044,111 +1039,14 @@ function HeaderFooterRenderer({
                             />
                         </div>
                     </div>
-                    <div className="mb-2 rounded-md border border-dashed bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
-                        Modo de edição estilo documento: selecione a área e edite diretamente como no editor de página.
-                    </div>
-                    <CompositorRichTextEditor
+                    <HeaderFooterLayoutEditor
                         key={`${block.id}-${key}-${activeBand}`}
-                        variant="word"
+                        scope={key}
+                        region={activeBand}
+                        props={props}
+                        height={activeHeight}
                         readOnly={Boolean(isReadOnly)}
-                        value={activeHtml}
-                        wordPageBands={{
-                            headerHeight,
-                            footerHeight,
-                            activeBand,
-                            onSelectBand: (band) =>
-                                setActiveBandByPane((prev) => ({ ...prev, [key]: band })),
-                            onApplyTemplate: ({ band, template }) => {
-                                const blankHtml = WORD_BAND_BLANK_HTML;
-                                const threeColumnsHtml = WORD_BAND_THREE_COLUMNS_HTML;
-                                const nextHtml = template === "blank_three_columns" ? threeColumnsHtml : blankHtml;
-                                if (band === "header") {
-                                    void handlePatch(
-                                        key === "cover"
-                                            ? { cover_header_html: nextHtml }
-                                            : { inner_header_html: nextHtml }
-                                    );
-                                    return;
-                                }
-                                void handlePatch(
-                                    key === "cover"
-                                        ? { cover_footer_html: nextHtml }
-                                        : { inner_footer_html: nextHtml }
-                                );
-                            },
-                            onHeaderHeightChange: (next) => {
-                                void handlePatch(
-                                    key === "cover"
-                                        ? { cover_header_height: next }
-                                        : { inner_header_height: next }
-                                );
-                            },
-                            onFooterHeightChange: (next) => {
-                                void handlePatch(
-                                    key === "cover"
-                                        ? { cover_footer_height: next }
-                                        : { inner_footer_height: next }
-                                );
-                            },
-                        }}
-                        wordPageWatermarkUrl={watermarkUrl || undefined}
-                        wordPageWatermarkOpacity={watermarkOpacity}
-                        wordPageWatermarkScalePct={watermarkScale}
-                        wordPageWatermarkLayout={
-                            watermarkUrl
-                                ? {
-                                      readOnly: Boolean(
-                                          isReadOnly || (key === "inner" && props.inner_use_cover_watermark !== false)
-                                      ),
-                                      xPct: watermarkX,
-                                      yPct: watermarkY,
-                                      widthPct: watermarkWidth,
-                                      aspect: watermarkAspect,
-                                      onLayoutChange: (layout) => {
-                                          void handlePatch(
-                                              key === "cover"
-                                                  ? {
-                                                        cover_watermark_x_pct: layout.xPct,
-                                                        cover_watermark_y_pct: layout.yPct,
-                                                        cover_watermark_width_pct: layout.widthPct,
-                                                    }
-                                                  : {
-                                                        inner_watermark_x_pct: layout.xPct,
-                                                        inner_watermark_y_pct: layout.yPct,
-                                                        inner_watermark_width_pct: layout.widthPct,
-                                                    }
-                                          );
-                                      },
-                                      onAspectChange: (aspect) => {
-                                          void handlePatch(
-                                              key === "cover"
-                                                  ? { cover_watermark_aspect: aspect }
-                                                  : { inner_watermark_aspect: aspect }
-                                          );
-                                      },
-                                  }
-                                : undefined
-                        }
-                        onChange={(html) => {
-                            if (isHeaderActive) {
-                                void handlePatch(
-                                    key === "cover"
-                                        ? { cover_header_html: html }
-                                        : { inner_header_html: html }
-                                );
-                            } else {
-                                void handlePatch(
-                                    key === "cover"
-                                        ? { cover_footer_html: html }
-                                        : { inner_footer_html: html }
-                                );
-                            }
-                        }}
-                        placeholder={
-                            isHeaderActive
-                                ? `Edite o ${key === "cover" ? "cabeçalho da capa" : "cabeçalho das páginas internas"}...`
-                                : `Edite o ${key === "cover" ? "rodapé da capa" : "rodapé das páginas internas"}...`
-                        }
+                        onPatch={handlePatch}
                     />
                 </div>
             </div>
@@ -1158,11 +1056,15 @@ function HeaderFooterRenderer({
     return (
         <div className="space-y-4 rounded-lg border-2 border-dashed border-primary/30 bg-primary/5 p-5">
             <h3 className="text-sm font-bold uppercase tracking-wide text-primary">Cabeçalho e Rodapé</h3>
-            <Tabs defaultValue="cover">
+            <Tabs defaultValue="all">
                 <TabsList>
+                    <TabsTrigger value="all">Todas as páginas</TabsTrigger>
                     <TabsTrigger value="cover">Capa</TabsTrigger>
                     <TabsTrigger value="inner">Páginas internas</TabsTrigger>
                 </TabsList>
+                <TabsContent value="all">
+                    {renderPane("all")}
+                </TabsContent>
                 <TabsContent value="cover">
                     {renderPane("cover")}
                 </TabsContent>

@@ -104,6 +104,17 @@ export interface HeaderFooterBlockProps {
   inner_footer_html?: string;
   inner_header_height?: number;
   inner_footer_height?: number;
+  /** Layout visual compartilhado entre capa e páginas internas. */
+  all_header_layout?: HeaderFooterCanvasLayout;
+  all_footer_layout?: HeaderFooterCanvasLayout;
+  /** Layout visual exclusivo da capa. */
+  cover_header_layout?: HeaderFooterCanvasLayout;
+  cover_footer_layout?: HeaderFooterCanvasLayout;
+  /** Layout visual exclusivo das páginas internas. */
+  inner_header_layout?: HeaderFooterCanvasLayout;
+  inner_footer_layout?: HeaderFooterCanvasLayout;
+  /** Numeração automática de páginas, renderizada no editor e no PDF. */
+  page_numbering?: HeaderFooterPageNumberingConfig;
   /** Compatibilidade com configuração antiga da capa. */
   legacy_cover_pdf_show_header_band?: boolean;
   legacy_cover_pdf_show_footer_band?: boolean;
@@ -113,9 +124,57 @@ export interface HeaderFooterBlockProps {
   legacy_cover_pdf_footer_right_template?: string;
 }
 
+export type HeaderFooterElementType =
+  | "text"
+  | "image"
+  | "columns"
+  | "block"
+  | "page_number";
+
+export type HeaderFooterTextAlign = "left" | "center" | "right" | "justify";
+
+export interface HeaderFooterCanvasElement {
+  id: string;
+  type: HeaderFooterElementType;
+  x_pct: number;
+  y_pct: number;
+  width_pct: number;
+  height_pct: number;
+  z_index: number;
+  opacity?: number;
+  rotate_deg?: number;
+  text?: string;
+  src?: string;
+  columns?: string[];
+  font_size?: number;
+  font_weight?: "normal" | "bold";
+  font_style?: "normal" | "italic";
+  text_align?: HeaderFooterTextAlign;
+  color?: string;
+  background_color?: string;
+  border_color?: string;
+  padding?: number;
+}
+
+export interface HeaderFooterCanvasLayout {
+  version: 1;
+  elements: HeaderFooterCanvasElement[];
+}
+
+export interface HeaderFooterPageNumberingConfig {
+  enabled?: boolean;
+  placement?: "header" | "footer";
+  align?: "left" | "center" | "right";
+  start_at_page?: number;
+  first_page_number?: number;
+  hide_on_cover?: boolean;
+  inner_only?: boolean;
+  format?: "current" | "current_total" | "page_current" | "page_current_total";
+}
+
 export const DEFAULT_HEADER_FOOTER_PROPS: HeaderFooterBlockProps = {
-  cover_show_header_band: false,
-  cover_show_footer_band: false,
+  cover_show_header_band: undefined,
+  cover_show_footer_band: undefined,
   cover_watermark_url: "",
   cover_watermark_opacity: 0.12,
   cover_watermark_scale_pct: 100,
@@ -135,12 +194,28 @@ export const DEFAULT_HEADER_FOOTER_PROPS: HeaderFooterBlockProps = {
   cover_footer_html: "",
   cover_header_height: 108,
   cover_footer_height: 44,
-  inner_show_header_band: false,
-  inner_show_footer_band: false,
+  inner_show_header_band: undefined,
+  inner_show_footer_band: undefined,
   inner_header_html: "",
   inner_footer_html: "",
   inner_header_height: 96,
   inner_footer_height: 40,
+  all_header_layout: { version: 1, elements: [] },
+  all_footer_layout: { version: 1, elements: [] },
+  cover_header_layout: { version: 1, elements: [] },
+  cover_footer_layout: { version: 1, elements: [] },
+  inner_header_layout: { version: 1, elements: [] },
+  inner_footer_layout: { version: 1, elements: [] },
+  page_numbering: {
+    enabled: true,
+    placement: "footer",
+    align: "right",
+    start_at_page: 1,
+    first_page_number: 1,
+    hide_on_cover: false,
+    inner_only: false,
+    format: "current_total",
+  },
   legacy_cover_pdf_show_header_band: true,
   legacy_cover_pdf_show_footer_band: true,
   legacy_cover_pdf_header_company_override: "",

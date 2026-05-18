@@ -1,12 +1,66 @@
-# SurrealDB local (dev). A senha em --pass deve ser copiada para SURREALDB_PASS em front/.env
-# (a aplicação não usa senha padrão no código). Em produção, use credenciais fortes e segredos gerenciados.
+# Stack local: SurrealDB + app Next.js
+#
+# Primeira vez (na raiz do repo):
+#   cp .env.docker.example .env
+#   docker compose up -d --build
+#
+# Só o banco (ex.: front com `bun dev` no host):
+#   docker compose up surrealdb -d
+#
+# A senha em SURREALDB_PASS deve coincidir com a do serviço surrealdb.
+# Em produção use credenciais fortes e o fluxo em front/deploy.sh.
+
 services:
   surrealdb:
     image: surrealdb/surrealdb:v3.0.4
     container_name: surrealdb
     ports:
       - "8000:8000"
-    # SurrealDB 3.x: surrealkv é o backend nativo
-    command: start --user admin --pass q1w2e3r4 --log info --bind 0.0.0.0:8000 surrealkv:/data/db
+    command:
+      - start
+      - --user
+      - ${SURREALDB_USER:-admin}
+      - --pass
+      - ${SURREALDB_PASS:?Defina SURREALDB_PASS no arquivo .env na raiz}
+      - --log
+      - info
+      - --bind
+      - 0.0.0.0:8000
+      - surrealkv:/data/db
     volumes:
       - ./surreal-data:/data
+    restart: unless-stopped
+    networks:
+      - pazini
+
+  app:
+    container_name: pazini-app
+    build:
+      context: ./front
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      NODE_ENV: production
+      SURREALDB_HOST: surrealdb
+      SURREALDB_PORT: "8000"
+      SURREALDB_USER: ${SURREALDB_USER:-admin}
+      SURREALDB_PASS: ${SURREALDB_PASS:?Defina SURREALDB_PASS no arquivo .env na raiz}
+      SURREALDB_NS: ${SURREALDB_NS:-pazini}
+      SURREALDB_DB: ${SURREALDB_DB:-core}
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET no arquivo .env na raiz}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      PAZINI_UPLOADS_DIR: /app/uploads
+    volumes:
+      - ./front/pazini-uploads:/app/uploads
+    depends_on:
+      - surrealdb
+    restart: unless-stopped
+    networks:
+      - pazini
+
+networks:
+  pazini:
+    driver: bridge

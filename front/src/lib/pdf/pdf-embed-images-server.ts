@@ -59,6 +59,17 @@ function collectCompositorHtmlImageUrls(compositorPdf?: CompositorPdfPayload): s
             }
             continue;
         }
+        if (block.type === "header_footer") {
+            for (const key of ["cover_header_html", "cover_footer_html", "inner_header_html", "inner_footer_html"]) {
+                for (const src of collectImgSrcFromHtml(String(props[key] ?? ""))) {
+                    out.add(src);
+                }
+            }
+            for (const src of collectHeaderFooterLayoutImageUrls(props)) {
+                out.add(src);
+            }
+            continue;
+        }
         if (block.type === "session" || block.type === "location" || block.type === "section") {
             for (const src of collectImgSrcFromHtml(String(props.description ?? ""))) {
                 out.add(src);
@@ -72,6 +83,30 @@ function collectCompositorHtmlImageUrls(compositorPdf?: CompositorPdfPayload): s
         }
     }
     return [...out];
+}
+
+function collectHeaderFooterLayoutImageUrls(props: Record<string, unknown>): string[] {
+    const out: string[] = [];
+    const fields = [
+        "all_header_layout",
+        "all_footer_layout",
+        "cover_header_layout",
+        "cover_footer_layout",
+        "inner_header_layout",
+        "inner_footer_layout",
+    ];
+    for (const field of fields) {
+        const layout = props[field];
+        if (!layout || typeof layout !== "object") continue;
+        const elements = (layout as { elements?: unknown }).elements;
+        if (!Array.isArray(elements)) continue;
+        for (const element of elements) {
+            if (!element || typeof element !== "object") continue;
+            const src = (element as { src?: unknown }).src;
+            if (typeof src === "string" && src.trim()) out.push(src);
+        }
+    }
+    return out;
 }
 
 function addUrl(set: Set<string>, u?: string | null) {

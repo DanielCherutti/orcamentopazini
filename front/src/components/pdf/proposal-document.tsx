@@ -21,6 +21,12 @@ import { sanitizeCoverHtmlForPdf } from '@/lib/pdf/sanitize-inline-styles-for-pd
 import { sanitizeTextForPdf } from '@/lib/pdf/sanitize-pdf-text';
 import { pdfInnerRunningHeaderShouldShow } from '@/lib/pdf/pdf-proposal-header';
 import { PdfProposalHeaderBand } from '@/components/pdf/pdf-proposal-header-band';
+import {
+    HeaderFooterPdfLayer,
+    PaginationProbeText,
+    hasAnyHeaderFooterPdfLayout,
+    renderTextWithPageNumbers,
+} from '@/components/pdf/header-footer-layout-pdf';
 import type { BudgetItem } from '@/types/budget-types';
 import type { BudgetLocation } from '@/types/budget-types';
 import { applyQuoteRowAdjustments } from '@/lib/budgets/scope-pricing';
@@ -930,6 +936,7 @@ function InnerPdfPage({
     innerWatermarkYPct,
     innerWatermarkWidthPct,
     innerWatermarkAspect,
+    headerFooterProps,
 }: {
     pageKey: string;
     title: string;
@@ -956,6 +963,7 @@ function InnerPdfPage({
     innerWatermarkYPct?: number;
     innerWatermarkWidthPct?: number;
     innerWatermarkAspect?: number;
+    headerFooterProps?: HeaderFooterBlockProps;
 }) {
     const fill = settings.pdf_header_fill_from_settings === true;
     const company = fill
@@ -969,6 +977,10 @@ function InnerPdfPage({
     const code = sanitizeTextForPdf((budget.code || "").trim() || "—");
     const customHeader = showInnerHeaderBand ? (innerHeaderText ?? "").trim() : "";
     const customFooter = showInnerFooterBand ? (innerFooterText ?? "").trim() : "";
+    const innerHeaderLayouts = [headerFooterProps?.all_header_layout, headerFooterProps?.inner_header_layout];
+    const innerFooterLayouts = [headerFooterProps?.all_footer_layout, headerFooterProps?.inner_footer_layout];
+    const hasInnerHeaderLayout = hasAnyHeaderFooterPdfLayout(innerHeaderLayouts);
+    const hasInnerFooterLayout = hasAnyHeaderFooterPdfLayout(innerFooterLayouts);
     const customHeaderReserve = Math.max(
         44,
         Math.min(220, Number.isFinite(innerHeaderHeight) ? Number(innerHeaderHeight) : INNER_HEADER_RESERVE)
@@ -977,8 +989,14 @@ function InnerPdfPage({
         34,
         Math.min(220, Number.isFinite(innerFooterHeight) ? Number(innerFooterHeight) : INNER_FOOTER_RESERVE)
     );
-    const headerReserve = customHeader ? customHeaderReserve : (showRunningHeader ? INNER_HEADER_RESERVE : 0);
-    const footerReserve = showInnerFooterBand ? (customFooter ? customFooterReserve : INNER_FOOTER_RESERVE) : 0;
+    const headerReserve =
+        showInnerHeaderBand && (customHeader || hasInnerHeaderLayout)
+            ? customHeaderReserve
+            : (showRunningHeader ? INNER_HEADER_RESERVE : 0);
+    const footerReserve =
+        showInnerFooterBand && (customFooter || hasInnerFooterLayout)
+            ? customFooterReserve
+            : 0;
 
     const wmTop = headerReserve > 0 ? INNER_PAD + headerReserve : INNER_PAD;
     const wmHeight = Math.max(40, INNER_PAGE_H - wmTop - (INNER_PAD + footerReserve));
@@ -1055,38 +1073,83 @@ function InnerPdfPage({
                     {children}
                 </View>
             </View>
-            {customHeader ? (
-                <View style={[styles.runningHeaderBand, { minHeight: customHeaderReserve }]} fixed>
-                    <Text style={{ fontSize: 9, color: theme.colors.text, lineHeight: 1.3 }}>{customHeader}</Text>
-                </View>
-            ) : showRunningHeader ? (
-                <View style={styles.runningHeaderBand} fixed>
-                    <PdfProposalHeaderBand settings={settings} logoSrc={logoSrc} companyName={company} />
+            {showInnerHeaderBand && (customHeader || showRunningHeader || hasInnerHeaderLayout) ? (
+                <View
+                    style={[
+                        styles.runningHeaderBand,
+                        {
+                            minHeight: hasInnerHeaderLayout || customHeader
+                                ? customHeaderReserve
+                                : INNER_HEADER_RESERVE,
+                            height: headerReserve || INNER_HEADER_RESERVE,
+                            paddingBottom: hasInnerHeaderLayout ? 0 : 8,
+                        },
+                    ]}
+                    fixed
+                >
+                    {hasInnerHeaderLayout ? (
+                        <HeaderFooterPdfLayer
+                            layouts={innerHeaderLayouts}
+                            pageScope="inner"
+                            region="header"
+                            width={PDF_PAGE_W - 2 * INNER_PAD}
+                            height={headerReserve || INNER_HEADER_RESERVE}
+                            appPublicUrl={settings.app_public_url}
+                            pdfEmbeddedImages={pdfEmbeddedImages}
+                            pageNumbering={headerFooterProps?.page_numbering}
+                        />
+                    ) : customHeader ? (
+                        renderTextWithPageNumbers(
+                            customHeader,
+                            { fontSize: 9, color: theme.colors.text, lineHeight: 1.3 },
+                            headerFooterProps?.page_numbering,
+                            "inner"
+                        )
+                    ) : showRunningHeader ? (
+                        <PdfProposalHeaderBand settings={settings} logoSrc={logoSrc} companyName={company} />
+                    ) : null}
                 </View>
             ) : null}
             {showInnerFooterBand ? (
                 <View
                     style={[
                         styles.runningFooterBand,
-                        ...(customFooter ? [{ minHeight: customFooterReserve }] : []),
+                        {
+                            minHeight: customFooter || hasInnerFooterLayout
+                                ? customFooterReserve
+                                : INNER_FOOTER_RESERVE,
+                            height: footerReserve || INNER_FOOTER_RESERVE,
+                            paddingTop: hasInnerFooterLayout ? 0 : 6,
+                        },
                     ]}
                     fixed
                 >
-                    <Text style={styles.runningFooterMuted}>{customFooter || `Cód. ${code}`}</Text>
-                    <Text
-                        style={styles.runningFooterPage}
-                        render={({ pageNumber, totalPages }) => {
-                            if (paginationCollector && paginationProbeKey) {
-                                const prev = paginationCollector.segmentStartPages[paginationProbeKey];
-                                if (!Number.isFinite(prev) || pageNumber < prev) {
-                                    paginationCollector.segmentStartPages[paginationProbeKey] = pageNumber;
-                                }
-                            }
-                            return `${pageNumber} / ${totalPages}`;
-                        }}
-                    />
+                    {hasInnerFooterLayout ? (
+                        <HeaderFooterPdfLayer
+                            layouts={innerFooterLayouts}
+                            pageScope="inner"
+                            region="footer"
+                            width={PDF_PAGE_W - 2 * INNER_PAD}
+                            height={footerReserve || INNER_FOOTER_RESERVE}
+                            appPublicUrl={settings.app_public_url}
+                            pdfEmbeddedImages={pdfEmbeddedImages}
+                            pageNumbering={headerFooterProps?.page_numbering}
+                        />
+                    ) : (
+                        customFooter ? (
+                            renderTextWithPageNumbers(
+                                customFooter,
+                                styles.runningFooterMuted,
+                                headerFooterProps?.page_numbering,
+                                "inner"
+                            )
+                        ) : (
+                            <Text style={styles.runningFooterMuted}>{`Cód. ${code}`}</Text>
+                        )
+                    )}
                 </View>
             ) : null}
+            <PaginationProbeText paginationCollector={paginationCollector} paginationProbeKey={paginationProbeKey} />
         </Page>
     );
 }
@@ -1451,6 +1514,7 @@ export const ProposalDocument = ({
             innerWatermarkYPct,
             innerWatermarkWidthPct,
             innerWatermarkAspect,
+            headerFooterProps,
         };
         switch (seg.kind) {
             case "cover":
