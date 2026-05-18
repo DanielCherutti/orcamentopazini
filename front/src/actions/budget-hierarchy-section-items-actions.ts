@@ -5,7 +5,7 @@ import { Table } from "surrealdb";
 import { assertActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
-import type { BudgetItem } from "@/types/budget-types";
+import type { BudgetItem, BudgetLocation } from "@/types/budget-types";
 import { serializeBudgetEntity } from "@/actions/budget-shared";
 import { getProductGroupProductsAction } from "@/actions/product-group-actions";
 import {
@@ -50,9 +50,11 @@ async function createBudgetItemInSection(
     unitPrice: number,
     laborCost: number,
     quantity: number,
-    productUnit?: string
+    productUnit?: string,
+    productCode?: string
 ): Promise<string> {
     const unitLabel = productUnit?.trim();
+    const codeLabel = productCode?.trim();
     const orderIndex = await nextSectionItemOrderIndex(db, sectionId);
     const computedTotal = computeItemSubtotal({
         quantity,
@@ -67,6 +69,7 @@ async function createBudgetItemInSection(
         budget_id: requireRecordId("budget", budgetId),
         product_id: requireRecordId("product", productId),
         product_name: productName,
+        ...(codeLabel ? { product_code: codeLabel } : {}),
         ...(unitLabel ? { product_unit: unitLabel } : {}),
         quantity,
         unit_price: unitPrice,
@@ -180,6 +183,9 @@ async function serializeBudgetItemsFromRawQueryRows(
         if (!r.product_name) {
             const resolved = String(pd?.description ?? pd?.name ?? pd?.code ?? "");
             if (resolved) r.product_name = resolved;
+        }
+        if (!r.product_code && pd?.code != null && String(pd.code).trim() !== "") {
+            r.product_code = String(pd.code).trim();
         }
         const u = pd?.unit;
         if (u != null && String(u).trim() !== "" && !r.product_unit) {
@@ -304,6 +310,9 @@ async function hydrateLightItemsProductData(
             row.product_data = mergedPd;
             // Compatibilidade com pontos da UI que leem `item.product_id` como objeto.
             row.product_id = mergedPd;
+            if (!row.product_code && mergedPd.code != null && String(mergedPd.code).trim() !== "") {
+                row.product_code = String(mergedPd.code).trim();
+            }
         } else if (pid && row.product_name) {
             row.product_id = {
                 id: pid,
@@ -313,6 +322,74 @@ async function hydrateLightItemsProductData(
         }
         return it;
     });
+}
+
+/** Preenche `product_code` nos itens do escopo (PDF e itens antigos sem código gravado). */
+export async function enrichBudgetLocationsProductCodes(
+    db: Awaited<ReturnType<typeof getDb>>,
+    locations: BudgetLocation[] | undefined
+): Promise<void> {
+    const items: BudgetItem[] = [];
+    for (const loc of locations ?? []) {
+        for (const sec of loc.sections ?? []) {
+            for (const item of sec.items ?? []) {
+                items.push(item);
+            }
+        }
+    }
+    if (!items.length) return;
+
+    for (const item of items) {
+        const row = item as unknown as Record<string, unknown>;
+        const pid = recordIdToString(row.product_id);
+        if (pid) row.product_id = pid;
+    }
+
+    const productKeys = new Set<string>();
+    for (const item of items) {
+        const row = item as unknown as Record<string, unknown>;
+        if (row.product_code && String(row.product_code).trim() !== "") continue;
+        const pid = extractProductId(row.product_id);
+        if (!pid) continue;
+        const canon = canonicalTableRecordId("product", pid);
+        if (canon) productKeys.add(canon);
+    }
+
+    if (productKeys.size > 0) {
+        const recordIds = [...productKeys]
+            .map((id) => safeStringRecordId("product", id.replace(/^product:/, "")))
+            .filter(Boolean);
+        if (recordIds.length > 0) {
+            try {
+                const res = await db.query<[Array<{ id: unknown; code?: unknown }>]>(
+                    `SELECT id, code FROM product WHERE id INSIDE $ids`,
+                    { ids: recordIds }
+                );
+                const codeByProductId = new Map<string, string>();
+                for (const p of res[0] ?? []) {
+                    const id = recordIdToString(p.id);
+                    const code = String(p.code ?? "").trim();
+                    if (!id || !code) continue;
+                    codeByProductId.set(id, code);
+                    codeByProductId.set(canonicalTableRecordId("product", id), code);
+                }
+                for (const item of items) {
+                    const row = item as unknown as Record<string, unknown>;
+                    if (row.product_code && String(row.product_code).trim() !== "") continue;
+                    const pid = extractProductId(row.product_id);
+                    if (!pid) continue;
+                    const code =
+                        codeByProductId.get(pid) ??
+                        codeByProductId.get(canonicalTableRecordId("product", pid));
+                    if (code) row.product_code = code;
+                }
+            } catch (error) {
+                console.warn("enrichBudgetLocationsProductCodes batch lookup:", error);
+            }
+        }
+    }
+
+    await hydrateLightItemsProductData(db, items);
 }
 
 /**
@@ -578,6 +655,7 @@ export async function addItemAction(sectionId: string, budgetId: string, product
         const unitPrice = Number(product.equipmentPrice || 0);
         const laborCost = Number(product.assemblyPrice || 0);
         const productName = String(product.description || product.code || "");
+        const productCode = String(product.code ?? "").trim();
         const productUnit = String((product as Record<string, unknown>).unit ?? "").trim();
 
         const newItemId = await createBudgetItemInSection(
@@ -589,7 +667,8 @@ export async function addItemAction(sectionId: string, budgetId: string, product
             unitPrice,
             laborCost,
             quantity,
-            productUnit || undefined
+            productUnit || undefined,
+            productCode || undefined
         );
 
         await recalculateBudgetTotal(budgetId);
@@ -649,6 +728,7 @@ export async function addGroupToSectionAction(
             const laborCost = Number(product.assemblyPrice || 0);
             const quantity = Math.max(1, normalizedQty[productId] ?? 1);
             const productName = String(product.description || product.code || "");
+            const productCode = String(product.code ?? "").trim();
             const productUnit = String(product.unit ?? "").trim();
 
             await db.create(new Table("budget_item")).content({
@@ -656,6 +736,7 @@ export async function addGroupToSectionAction(
                 budget_id: requireRecordId("budget", budgetId),
                 product_id: requireRecordId("product", productId),
                 product_name: productName,
+                ...(productCode ? { product_code: productCode } : {}),
                 ...(productUnit ? { product_unit: productUnit } : {}),
                 quantity,
                 unit_price: unitPrice,

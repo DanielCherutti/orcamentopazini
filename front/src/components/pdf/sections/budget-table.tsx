@@ -119,7 +119,8 @@ const styles = StyleSheet.create({
         paddingHorizontal: 6,
         alignItems: 'center'
     },
-    colDesc: { flex: 25, paddingRight: 5 },
+    colCode: { flex: 6, paddingRight: 4 },
+    colDesc: { flex: 20, paddingRight: 5 },
     colQty: { flex: 4, textAlign: 'center' },
     colUnit: { flex: 3, textAlign: 'center' },
     colMoney: { flex: 7, textAlign: 'right' },
@@ -189,6 +190,27 @@ function computeLocationItemValues(location: BudgetLocation) {
         itemFinalValue.set(String(item.id), subtotal + assemblyExtra);
     });
     return { itemFinalValue, assemblyTotal };
+}
+
+function itemCode(item: BudgetItem): string {
+    const clean = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+    const row = item as unknown as Record<string, unknown>;
+    const pidObj =
+        typeof item.product_id === 'object' && item.product_id
+            ? (item.product_id as Record<string, unknown>)
+            : undefined;
+    const pd =
+        row.product_data && typeof row.product_data === 'object'
+            ? (row.product_data as Record<string, unknown>)
+            : undefined;
+
+    return (
+        clean(item.product_code) ||
+        clean(row.product_code) ||
+        clean(pd?.code) ||
+        clean(pidObj?.code) ||
+        '—'
+    );
 }
 
 function itemLabel(item: BudgetItem): string {
@@ -263,6 +285,7 @@ function SectionTableHeader({
 }) {
     return (
         <View style={styles.tableHeader}>
+            <Text style={[styles.textSmall, styles.textBold, styles.colCode]}>CÓDIGO</Text>
             <Text style={[styles.textSmall, styles.textBold, styles.colDesc]}>DESCRIÇÃO</Text>
             <Text style={[styles.textSmall, styles.textBold, styles.colQty]}>QTD</Text>
             <Text style={[styles.textSmall, styles.textBold, styles.colUnit]}>UN</Text>
@@ -557,6 +580,9 @@ export const BudgetTable = ({
                                     ).trim();
                                     return (
                                     <View key={item.id} style={[styles.tableRow, { backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }]}>
+                                        <Text style={[styles.textSmall, styles.colCode]}>
+                                            {sanitizeTextForPdf(itemCode(item))}
+                                        </Text>
                                         <Text style={[styles.textSmall, styles.colDesc]}>
                                             {sanitizeTextForPdf(itemLabel(item))}
                                             {showObservation && observationText ? (

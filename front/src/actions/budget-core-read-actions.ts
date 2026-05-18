@@ -10,7 +10,10 @@ import {
     computeLocationQuoteBreakdown,
     type ScopePricingItem,
 } from "@/lib/budgets/scope-pricing";
-import { getBudgetItemsBySectionIdsLightAction } from "@/actions/budget-hierarchy-section-items-actions";
+import {
+    enrichBudgetLocationsProductCodes,
+    getBudgetItemsBySectionIdsLightAction,
+} from "@/actions/budget-hierarchy-section-items-actions";
 
 export type GetBudgetReadOptions = {
     /** Quando `false`, retorna só o registro `budget` + `FETCH client_id` e `locations: []`. */
@@ -268,6 +271,10 @@ export async function getBudgetPdfScopeAction(
         const data = result[0]?.[0];
         if (!data) return { success: false, error: "Orçamento não encontrado" };
 
+        const rawLocations = (data as Budget).locations;
+        if (rawLocations?.length) {
+            await enrichBudgetLocationsProductCodes(db, rawLocations);
+        }
         const serialized = serializeBudgetEntity(data);
         return { success: true, data: serialized };
     } catch (error) {
