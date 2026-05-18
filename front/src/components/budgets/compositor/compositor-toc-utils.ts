@@ -47,6 +47,25 @@ export interface TocEntryModel {
   page: number;
 }
 
+/** Títulos da antiga página fixa de carta institucional — não entram mais no sumário. */
+export function isIntroTocEntry(title: string): boolean {
+  const n = title
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return (
+    n === "apresentacao" ||
+    n === "carta de apresentacao" ||
+    n === "carta institucional" ||
+    n === "apresentacao institucional"
+  );
+}
+
+export function filterIntroTocEntries<T extends { title: string }>(entries: T[]): T[] {
+  return entries.filter((e) => !isIntroTocEntry(e.title));
+}
+
 /**
  * Gera entradas do sumário a partir da árvore atual.
  * Números de página são estimativas; atualizam-se sempre que a árvore ou itens mudam.
@@ -75,5 +94,5 @@ export function buildTocModel(
     cumulative += documentPageWeight(b, items);
   }
 
-  return entries;
+  return filterIntroTocEntries(entries);
 }
