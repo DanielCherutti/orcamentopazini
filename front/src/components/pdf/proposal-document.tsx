@@ -64,6 +64,12 @@ function htmlBandToPlainText(html: string | undefined): string {
     return sanitizeTextForPdf(stripHtmlToText(String(html ?? ""))).trim();
 }
 
+function editorBandHeightToPt(value: unknown, fallbackPx: number): number {
+    const n = typeof value === "number" ? value : Number(value);
+    const px = Number.isFinite(n) ? n : fallbackPx;
+    return Math.max(18, Math.min(180, px * EDITOR_PX_TO_PT));
+}
+
 function resolvePdfWatermarkBox(
     xPct: number,
     yPct: number,
@@ -114,6 +120,8 @@ type PdfFigureEntry = {
 const PDF_PAGE_W = 595.28;
 const PDF_PAGE_H = 841.89;
 const INNER_PAD = 35;
+const EDITOR_A4_HEIGHT_PX = 1122;
+const EDITOR_PX_TO_PT = PDF_PAGE_H / EDITOR_A4_HEIGHT_PX;
 const ABNT_PARAGRAPH_INDENT = "\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0";
 
 const styles = StyleSheet.create({
@@ -981,14 +989,8 @@ function InnerPdfPage({
     const innerFooterLayouts = [headerFooterProps?.all_footer_layout, headerFooterProps?.inner_footer_layout];
     const hasInnerHeaderLayout = hasAnyHeaderFooterPdfLayout(innerHeaderLayouts);
     const hasInnerFooterLayout = hasAnyHeaderFooterPdfLayout(innerFooterLayouts);
-    const customHeaderReserve = Math.max(
-        44,
-        Math.min(220, Number.isFinite(innerHeaderHeight) ? Number(innerHeaderHeight) : INNER_HEADER_RESERVE)
-    );
-    const customFooterReserve = Math.max(
-        34,
-        Math.min(220, Number.isFinite(innerFooterHeight) ? Number(innerFooterHeight) : INNER_FOOTER_RESERVE)
-    );
+    const customHeaderReserve = editorBandHeightToPt(innerHeaderHeight, INNER_HEADER_RESERVE);
+    const customFooterReserve = editorBandHeightToPt(innerFooterHeight, INNER_FOOTER_RESERVE);
     const headerReserve =
         showInnerHeaderBand && (customHeader || hasInnerHeaderLayout)
             ? customHeaderReserve
@@ -1078,6 +1080,7 @@ function InnerPdfPage({
                     style={[
                         styles.runningHeaderBand,
                         {
+                            ...(hasInnerHeaderLayout ? { top: 0, left: 0, right: 0 } : {}),
                             minHeight: hasInnerHeaderLayout || customHeader
                                 ? customHeaderReserve
                                 : INNER_HEADER_RESERVE,
@@ -1092,7 +1095,7 @@ function InnerPdfPage({
                             layouts={innerHeaderLayouts}
                             pageScope="inner"
                             region="header"
-                            width={PDF_PAGE_W - 2 * INNER_PAD}
+                            width={hasInnerHeaderLayout ? PDF_PAGE_W : PDF_PAGE_W - 2 * INNER_PAD}
                             height={headerReserve || INNER_HEADER_RESERVE}
                             appPublicUrl={settings.app_public_url}
                             pdfEmbeddedImages={pdfEmbeddedImages}
@@ -1115,6 +1118,7 @@ function InnerPdfPage({
                     style={[
                         styles.runningFooterBand,
                         {
+                            ...(hasInnerFooterLayout ? { bottom: 0, left: 0, right: 0 } : {}),
                             minHeight: customFooter || hasInnerFooterLayout
                                 ? customFooterReserve
                                 : INNER_FOOTER_RESERVE,
@@ -1129,7 +1133,7 @@ function InnerPdfPage({
                             layouts={innerFooterLayouts}
                             pageScope="inner"
                             region="footer"
-                            width={PDF_PAGE_W - 2 * INNER_PAD}
+                            width={hasInnerFooterLayout ? PDF_PAGE_W : PDF_PAGE_W - 2 * INNER_PAD}
                             height={footerReserve || INNER_FOOTER_RESERVE}
                             appPublicUrl={settings.app_public_url}
                             pdfEmbeddedImages={pdfEmbeddedImages}

@@ -91,11 +91,15 @@ export function HeaderFooterLayoutEditor({
   const sortedElements = [...layout.elements].sort((a, b) => a.z_index - b.z_index);
   const layerList = [...layout.elements].sort((a, b) => b.z_index - a.z_index);
 
-  const commitLayout = (next: HeaderFooterCanvasLayout) => {
+  const commitLayout = (
+    next: HeaderFooterCanvasLayout,
+    extraPatch?: Partial<HeaderFooterBlockProps>,
+  ) => {
     setLayout(next);
     void onPatch({
       [field]: next,
       ...visibilityPatchFor(scope, region, next.elements.length > 0),
+      ...extraPatch,
     } as Partial<HeaderFooterBlockProps>);
   };
 
@@ -123,7 +127,11 @@ export function HeaderFooterLayoutEditor({
     const nextElement = src ? { ...element, src } : element;
     const next = { version: 1 as const, elements: [...layout.elements, nextElement] };
     setSelectedId(nextElement.id);
-    commitLayout(next);
+    const numberingPatch = type === "page_number" ? pageNumberingPatchFor(scope, region, pageNumbering) : undefined;
+    if (numberingPatch?.page_numbering) {
+      setPageNumberingDraft(normalizePageNumbering(numberingPatch.page_numbering));
+    }
+    commitLayout(next, numberingPatch);
   };
 
   const deleteSelected = () => {
@@ -833,4 +841,20 @@ function visibilityPatchFor(
   if (scope === "all") return { cover_show_footer_band: true, inner_show_footer_band: true };
   if (scope === "cover") return { cover_show_footer_band: true };
   return { inner_show_footer_band: true };
+}
+
+function pageNumberingPatchFor(
+  scope: HeaderFooterLayoutScope,
+  region: HeaderFooterLayoutRegion,
+  current: Required<HeaderFooterPageNumberingConfig>,
+): Partial<HeaderFooterBlockProps> {
+  return {
+    page_numbering: {
+      ...current,
+      enabled: true,
+      placement: region,
+      hide_on_cover: scope === "inner" ? current.hide_on_cover : false,
+      inner_only: scope === "inner" ? current.inner_only : false,
+    },
+  };
 }

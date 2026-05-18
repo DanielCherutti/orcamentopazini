@@ -50,6 +50,8 @@ const PAGE_W = 595.28;
 const PAGE_H = 841.89;
 const BODY_PAD_H = Math.round((22 / 210) * PAGE_W);
 const BODY_PAD_V = Math.round((18 / 297) * PAGE_H);
+const EDITOR_A4_HEIGHT_PX = 1122;
+const EDITOR_PX_TO_PT = PAGE_H / EDITOR_A4_HEIGHT_PX;
 
 const styles = StyleSheet.create({
   page: {
@@ -209,6 +211,12 @@ function clampOpacity(value: number | undefined, fallback: number): number {
   return n;
 }
 
+function editorBandHeightToPt(value: unknown, fallbackPx: number): number {
+  const n = typeof value === "number" ? value : Number(value);
+  const px = Number.isFinite(n) ? n : fallbackPx;
+  return Math.max(18, Math.min(180, px * EDITOR_PX_TO_PT));
+}
+
 function clampCoverImagePt(value: number | undefined, min: number, max: number): number | undefined {
   if (!Number.isFinite(value)) return undefined;
   const n = Number(value);
@@ -301,19 +309,25 @@ export function CompositorCoverPdfPage({
   const headerReserveFromCover = coverProps.cover_pdf_header_band_height_pt;
   const footerReserveFromCover = coverProps.cover_pdf_footer_band_height_pt;
   const headerReserve = customCoverHeaderText || hasCoverHeaderLayout
-    ? clampCoverHeaderBandPt(headerFooterProps?.cover_header_height, DEFAULT_COVER_HEADER_BAND_PT)
+    ? editorBandHeightToPt(headerFooterProps?.cover_header_height, DEFAULT_COVER_HEADER_BAND_PT)
     : clampCoverHeaderBandPt(
         headerReserveFromCover ?? headerFooterProps?.cover_header_height,
         DEFAULT_COVER_HEADER_BAND_PT,
       );
   const footerReserve = customCoverFooterText || hasCoverFooterLayout
-    ? clampCoverFooterBandPt(headerFooterProps?.cover_footer_height, DEFAULT_COVER_FOOTER_BAND_PT)
+    ? editorBandHeightToPt(headerFooterProps?.cover_footer_height, DEFAULT_COVER_FOOTER_BAND_PT)
     : clampCoverFooterBandPt(
         footerReserveFromCover ?? headerFooterProps?.cover_footer_height,
         DEFAULT_COVER_FOOTER_BAND_PT,
       );
   const footerLeft = sanitizeTextForPdf(formatCoverPdfFooterLeftText(coverProps, bandCtx));
   const footerRight = sanitizeTextForPdf(formatCoverPdfFooterRightText(coverProps, bandCtx));
+  const pagePaddingTop = showCoverHeader
+    ? (hasCoverHeaderLayout ? headerReserve : BODY_PAD_V + headerReserve)
+    : BODY_PAD_V;
+  const pagePaddingBottom = showCoverFooter
+    ? (hasCoverFooterLayout ? footerReserve : BODY_PAD_V + footerReserve)
+    : BODY_PAD_V;
 
   /** Marca d’água não pode ocupar a página inteira: cobria cabeçalho/rodapé no PDF (ordem de pintura). */
   const clientLogoBox = resolveClientLogoPdfBox(
@@ -329,8 +343,7 @@ export function CompositorCoverPdfPage({
       size="A4"
       style={[
         styles.page,
-        showCoverHeader ? { paddingTop: BODY_PAD_V + headerReserve } : styles.pagePadTopNoHeader,
-        showCoverFooter ? { paddingBottom: BODY_PAD_V + footerReserve } : styles.pagePadBottomNoFooter,
+        { paddingTop: pagePaddingTop, paddingBottom: pagePaddingBottom },
       ]}
     >
       {/* Marca d’água primeiro; cabeçalho/rodapé com zIndex maior para não ficarem ocultos. */}
@@ -359,6 +372,7 @@ export function CompositorCoverPdfPage({
           style={[
             styles.coverHeaderBand,
             {
+              ...(hasCoverHeaderLayout ? { top: 0, left: 0, right: 0 } : {}),
               minHeight: Math.max(30, headerReserve - 10),
               height: headerReserve,
               paddingBottom: hasCoverHeaderLayout ? 0 : 8,
@@ -371,7 +385,7 @@ export function CompositorCoverPdfPage({
               layouts={coverHeaderLayouts}
               pageScope="cover"
               region="header"
-              width={PAGE_W - 2 * BODY_PAD_H}
+              width={hasCoverHeaderLayout ? PAGE_W : PAGE_W - 2 * BODY_PAD_H}
               height={headerReserve}
               appPublicUrl={settings.app_public_url}
               pdfEmbeddedImages={pdfEmbeddedImages}
@@ -394,6 +408,7 @@ export function CompositorCoverPdfPage({
           style={[
             styles.coverFooterBand,
             {
+              ...(hasCoverFooterLayout ? { bottom: 0, left: 0, right: 0 } : {}),
               minHeight: Math.max(26, footerReserve - 8),
               height: footerReserve,
               paddingTop: hasCoverFooterLayout ? 0 : 6,
@@ -406,7 +421,7 @@ export function CompositorCoverPdfPage({
               layouts={coverFooterLayouts}
               pageScope="cover"
               region="footer"
-              width={PAGE_W - 2 * BODY_PAD_H}
+              width={hasCoverFooterLayout ? PAGE_W : PAGE_W - 2 * BODY_PAD_H}
               height={footerReserve}
               appPublicUrl={settings.app_public_url}
               pdfEmbeddedImages={pdfEmbeddedImages}

@@ -29,10 +29,13 @@ interface HeaderFooterPdfLayerProps {
   pageNumbering?: HeaderFooterPageNumberingConfig;
 }
 
+type HeaderFooterPdfElementData = HeaderFooterCanvasElement & {
+  _origin: "all" | "scope";
+};
+
 export function HeaderFooterPdfLayer({
   layouts,
   pageScope,
-  region,
   width,
   height,
   appPublicUrl,
@@ -43,24 +46,29 @@ export function HeaderFooterPdfLayer({
 
   const elements = layouts
     .flatMap((layout, layoutIdx) =>
-      normalizeHeaderFooterLayout(layout).elements.map((el) => ({ ...el, _layoutIdx: layoutIdx } as any)),
+      normalizeHeaderFooterLayout(layout).elements.map(
+        (el): HeaderFooterPdfElementData => ({
+          ...el,
+          _origin: layoutIdx === 0 ? "all" : "scope",
+        }),
+      ),
     )
-    .sort((a: any, b: any) => {
+    .sort((a, b) => {
       const z = Number(a.z_index) - Number(b.z_index);
       if (z !== 0) return z;
-      return (a._layoutIdx || 0) - (b._layoutIdx || 0);
+      return a._origin.localeCompare(b._origin);
     });
+  const dedupedElements = elements.filter(
+    (element, index, all) => all.findIndex((candidate) => candidate.id === element.id) === index,
+  );
 
-  const visibleElements = elements.filter((element: any) => {
+  const visibleElements = dedupedElements.filter((element) => {
     if (element.type === "image") {
       const src = element.src ? proxyPdfImageSrc(element.src, appPublicUrl, pdfEmbeddedImages) ?? element.src : "";
       if (!src) return false;
     }
     if (element.type === "page_number") {
-      const cfg = normalizePageNumbering(pageNumbering);
-      if (!cfg.enabled) return false;
-      if (pageScope === "cover" && cfg.hide_on_cover) return false;
-      if (pageScope === "cover" && cfg.inner_only) return false;
+      return shouldRenderPositionedPageNumber(element, pageNumbering, pageScope);
     }
     return true;
   });
@@ -69,7 +77,7 @@ export function HeaderFooterPdfLayer({
 
   return (
     <View style={{ position: "absolute", left: 0, top: 0, width, height }}>
-      {visibleElements.map((element: any) => (
+      {visibleElements.map((element) => (
         <HeaderFooterPdfElement
           key={element.id}
           element={element}
@@ -124,7 +132,7 @@ function HeaderFooterPdfElement({
   pageNumbering,
   pageScope,
 }: {
-  element: HeaderFooterCanvasElement;
+  element: HeaderFooterPdfElementData;
   width: number;
   height: number;
   appPublicUrl?: string;
@@ -185,9 +193,9 @@ function HeaderFooterPdfElement({
 
   if (element.type === "page_number") {
     const cfg = normalizePageNumbering(pageNumbering);
-    if (!cfg.enabled) return <View style={{ position: "absolute", opacity: 0, width: 0, height: 0 }} />;
-    if (pageScope === "cover" && cfg.hide_on_cover) return <View style={{ position: "absolute", opacity: 0, width: 0, height: 0 }} />;
-    if (pageScope === "cover" && cfg.inner_only) return <View style={{ position: "absolute", opacity: 0, width: 0, height: 0 }} />;
+    if (!shouldRenderPositionedPageNumber(element, pageNumbering, pageScope)) {
+      return <View style={{ position: "absolute", opacity: 0, width: 0, height: 0 }} />;
+    }
 
     return (
       <View style={box}>
@@ -215,6 +223,16 @@ function HeaderFooterPdfElement({
   );
 }
 
+function shouldRenderPositionedPageNumber(
+  _element: HeaderFooterPdfElementData,
+  pageNumbering: HeaderFooterPageNumberingConfig | undefined,
+  _pageScope?: "cover" | "inner",
+): boolean {
+  const cfg = normalizePageNumbering(pageNumbering);
+  if (!cfg.enabled) return false;
+  return true;
+}
+
 export function renderTextWithPageNumbers(
   rawText: string,
   textStyle: Style,
@@ -231,7 +249,7 @@ export function renderTextWithPageNumbers(
 
   return (
     <Text
-      style={textStyle}
+      style={textStyleWithoutLineHeight(textStyle)}
       render={({ pageNumber, totalPages }) => {
         if (!cfg.enabled || pageNumber < cfg.start_at_page) {
           return text.replace(/\{\{\s*page\s*\}\}/gi, "").replace(/\{\{\s*total\s*\}\}/gi, "");
@@ -270,14 +288,19 @@ function elementBoxStyle(element: HeaderFooterCanvasElement, width: number, heig
 }
 
 function textBoxStyle(element: HeaderFooterCanvasElement): Style {
+  const fontSize = clamp(element.font_size ?? 11, 6, 96);
   return {
-    fontSize: clamp(element.font_size ?? 11, 6, 96),
+    fontSize,
     color: element.color || "#111827",
     fontWeight: element.font_weight === "bold" ? 700 : 400,
     fontStyle: element.font_style === "italic" ? "italic" : "normal",
     textAlign: element.text_align || "left",
-    lineHeight: 1.2,
   };
+}
+
+function textStyleWithoutLineHeight(style: Style): Style {
+  const { lineHeight: _lineHeight, ...rest } = style;
+  return rest;
 }
 
 function formatManualPageNumber(template: string, pageNumber: number, totalPages: number): string {
