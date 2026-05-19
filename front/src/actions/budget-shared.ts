@@ -2,6 +2,19 @@
 // Mantém serialização consistente entre listagem, detalhe e operações.
 
 import { dbAnnotationsToFrontend } from "@/lib/budgets/annotation-convert";
+import { recordIdToString } from "@/lib/surreal-record-ids";
+
+function isExpandedProductRelation(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const o = value as Record<string, unknown>;
+  return (
+    o.description != null ||
+    o.name != null ||
+    o.code != null ||
+    o.equipmentPrice != null ||
+    o.assemblyPrice != null
+  );
+}
 
 type DbEntity = Record<string, unknown>;
 
@@ -70,7 +83,22 @@ export function serializeBudgetEntity<T extends DbEntity>(item: T): T {
   newItem.budget_id = serializeRelation(newItem.budget_id);
   newItem.location_id = serializeRelation(newItem.location_id);
   newItem.section_id = serializeRelation(newItem.section_id);
-  newItem.product_id = serializeRelation(newItem.product_id);
+  if (newItem.product_id != null) {
+    if (isExpandedProductRelation(newItem.product_id)) {
+      newItem.product_id = serializeRelation(newItem.product_id);
+      const po = newItem.product_id as Record<string, unknown>;
+      if (po?.code != null && String(po.code).trim() !== "" && !newItem.product_code) {
+        newItem.product_code = String(po.code).trim();
+      }
+    } else {
+      const pid = recordIdToString(newItem.product_id);
+      if (pid) {
+        newItem.product_id = pid;
+      } else {
+        newItem.product_id = serializeRelation(newItem.product_id);
+      }
+    }
+  }
   if (newItem.block_id) newItem.block_id = String(newItem.block_id);
   if (newItem.parent_id) newItem.parent_id = String(newItem.parent_id);
   if (newItem.group_id) newItem.group_id = String(newItem.group_id);

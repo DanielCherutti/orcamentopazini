@@ -486,13 +486,16 @@ export async function syncProductCatalogToDraftBudgetItemsAction(
             const newTotal = (unitPrice + laborCost) * qty;
 
             const curName = String(item.product_name ?? "");
+            const curCode = String(item.product_code ?? "");
             const curUnit = String(item.product_unit ?? "");
             const curU = Number(item.unit_price ?? 0);
             const curL = Number(item.labor_cost ?? 0);
             const curT = Number(item.total ?? 0);
 
+            const productCode = snapshot.code.trim();
             const unchanged =
                 curName === productName &&
+                curCode === productCode &&
                 curUnit === productUnit &&
                 curU === unitPrice &&
                 curL === laborCost &&
@@ -503,6 +506,7 @@ export async function syncProductCatalogToDraftBudgetItemsAction(
             if (!unchanged) {
                 await db.update(itemRecordId).merge({
                     product_name: productName,
+                    ...(productCode ? { product_code: productCode } : {}),
                     product_unit: productUnit,
                     unit_price: unitPrice,
                     labor_cost: laborCost,

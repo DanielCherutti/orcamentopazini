@@ -34,6 +34,10 @@ import {
     getCompositorPanelLabel,
     getScopeBlockLabel,
 } from '@/components/budgets/compositor/compositor-content-utils';
+import {
+    filterIntroTocEntries,
+    isIntroTocEntry,
+} from '@/components/budgets/compositor/compositor-toc-utils';
 
 interface ProposalDocumentProps {
     budget: Budget;
@@ -751,7 +755,6 @@ function estimateDetailTocRowsFromScope(
 
 type PdfSegment =
     | { kind: "cover" }
-    | { kind: "intro" }
     | { kind: "toc" }
     | { kind: "figures" }
     | { kind: "quote" }
@@ -817,16 +820,11 @@ function buildPdfSegmentsFromCompositorRoots(
     imagesByBlock: Record<string, Array<{ url?: string; composed_url?: string }>>
 ): PdfSegment[] {
     const segments: PdfSegment[] = [];
-    let placedIntro = false;
     let placedQuote = false;
     let placedDetail = false;
     for (const b of roots) {
         if (b.type === "cover") {
             segments.push({ kind: "cover" });
-            if (!placedIntro) {
-                segments.push({ kind: "intro" });
-                placedIntro = true;
-            }
         } else if (b.type === "toc") {
             segments.push({ kind: "toc" });
         } else if (b.type === "figures" && includeFiguresPage) {
@@ -853,7 +851,7 @@ function buildPdfSegmentsFromCompositorRoots(
 }
 
 function defaultPdfSegmentsNoCompositor(): PdfSegment[] {
-    return [{ kind: "cover" }, { kind: "intro" }, { kind: "quote" }, { kind: "detail" }, { kind: "terms" }];
+    return [{ kind: "cover" }, { kind: "quote" }, { kind: "detail" }, { kind: "terms" }];
 }
 
 function assignPdfSegmentPages(segments: PdfSegment[]): {
@@ -866,7 +864,7 @@ function assignPdfSegmentPages(segments: PdfSegment[]): {
     let detailPage = 1;
     const sessionPages = new Map<string, number>();
     for (const seg of segments) {
-        if (seg.kind === "cover" || seg.kind === "intro" || seg.kind === "toc" || seg.kind === "figures") {
+        if (seg.kind === "cover" || seg.kind === "toc" || seg.kind === "figures") {
             p += 1;
         } else if (seg.kind === "quote") {
             quotePage = p;
@@ -898,9 +896,13 @@ function collectSessionTocRowsForPrintedLayout(
             if (!hasPrintableSessionSubtree(node, itemsByBlock, imagesByBlock)) {
                 return;
             }
+            const title = (node.label || "Sessão").trim() || "Sessão";
+            if (isIntroTocEntry(title)) {
+                return;
+            }
             out.push({
                 number: node.number || "",
-                title: (node.label || "Sessão").trim() || "Sessão",
+                title,
                 depth: safeLayoutIndentDepth(node.depth, 24),
                 page: Number.isFinite(page) && page > 0 ? Math.min(Math.trunc(page), 99999) : 1,
             });
@@ -1349,7 +1351,7 @@ export const ProposalDocument = ({
         : defaultPdfSegmentsNoCompositor();
 
     if (hasCompositorStructure && !segments.some((s) => s.kind === "cover")) {
-        segments = [{ kind: "cover" }, { kind: "intro" }, ...segments];
+        segments = [{ kind: "cover" }, ...segments];
     }
 
     const { detailPage: fallbackDetailPage, sessionPages: fallbackSessionPages } =
@@ -1420,7 +1422,7 @@ export const ProposalDocument = ({
         costsDisplayMode: detailCostsMode,
         detailTitle: detailSectionTitle,
     });
-    const tocRows = [...sessionTocRows, ...adequacoesTocRows];
+    const tocRows = filterIntroTocEntries([...sessionTocRows, ...adequacoesTocRows]);
 
     const figureRows =
         hasCompositorStructure && includeFiguresPage
@@ -1492,7 +1494,6 @@ export const ProposalDocument = ({
     }
 
     const pdfCompanyName = sanitizeTextForPdf(settings.company_name);
-    const pdfIntroduction = sanitizeTextForPdf(settings.introduction_text);
     const pdfClosing = sanitizeTextForPdf(settings.closing_text);
     const innerHeaderText = htmlBandToPlainText(headerFooterProps.inner_header_html);
     const innerFooterText = htmlBandToPlainText(headerFooterProps.inner_footer_html);
@@ -1531,15 +1532,6 @@ export const ProposalDocument = ({
                         headerFooterProps={headerFooterProps}
                         pdfEmbeddedImages={pdfEmbeddedImages}
                     />
-                );
-            case "intro":
-                return (
-                    <InnerPdfPage pageKey={keyBase} title="Apresentação" paginationProbeKey="intro" {...innerCommon}>
-                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-pdf Style não tipa whiteSpace */}
-                        <Text style={{ whiteSpace: "pre-wrap", textAlign: "left" } as any}>
-                            {pdfIntroduction}
-                        </Text>
-                    </InnerPdfPage>
                 );
             case "toc":
                 return (

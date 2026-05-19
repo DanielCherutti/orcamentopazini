@@ -253,7 +253,7 @@ export function BudgetDataSection({
                             disabled={!isEditable}
                         />
                         <p className="text-xs text-muted-foreground">
-                            Esta descrição aparecerá na introdução do PDF.
+                            Descrição do objeto do orçamento (uso interno / referência).
                         </p>
                     </div>
                 </CardContent>
