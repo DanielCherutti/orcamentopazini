@@ -155,11 +155,11 @@ export function BudgetWorkspace({
                             <Info className="h-4 w-4 shrink-0" />
                             {budget.status === "finalized" ? (
                                 <>
-                                    Este compositor está <strong>finalizado</strong> e não pode mais ser editado — apenas visualizado, pré-visualização e PDF. Duplique para criar uma nova versão em andamento.
+                                    Este compositor está <strong>finalizado</strong> e não pode mais ser editado — apenas visualizado, pré-visualização e PDF. Use <strong>Criar revisão</strong> para abrir uma cópia editável abaixo desta proposta (mesmo código).
                                 </>
                             ) : (
                                 <>
-                                    Este compositor está em status <strong>{getBudgetStatusLabel(String(budget.status))}</strong> e não pode mais ser editado. Duplique para criar uma nova versão em andamento.
+                                    Este compositor está em status <strong>{getBudgetStatusLabel(String(budget.status))}</strong> e não pode mais ser editado. Use <strong>Criar revisão</strong> para uma cópia editável ligada a esta proposta.
                                 </>
                             )}
                         </div>

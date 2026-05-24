@@ -17,6 +17,7 @@ import {
   syncDraftPricesAction,
 } from "./budget-core-write-actions";
 import { duplicateBudgetAction } from "./budget-core-duplicate-actions";
+import { createBudgetRevisionAction } from "./budget-core-revision-actions";
 import { getBudgetsAction } from "./budget-listing-actions";
 import {
   addItemAction,
@@ -51,6 +52,7 @@ export {
   deleteBudgetAction,
   updateBudgetAction,
   duplicateBudgetAction,
+  createBudgetRevisionAction,
   syncDraftPricesAction,
   // Hierarchy
   addLocationAction,

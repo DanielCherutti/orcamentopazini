@@ -4,13 +4,17 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { Budget } from "@/types/budget-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Save, Eye, Pencil, Lock } from "lucide-react";
+import { ArrowLeft, Save, Eye, Pencil, Lock, GitBranchPlus } from "lucide-react";
 import { updateBudgetAction } from "@/actions/budget-core-write-actions";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ClientSelector } from "./client-selector";
 import type { ActiveTab } from "@/components/budgets/workspace-context";
 import { isBudgetEditableStatus } from "@/lib/budgets/budget-status";
+import { canShowCreateRevisionButton, formatBudgetRevisionBadge } from "@/lib/budgets/budget-revision";
+import { budgetEditUrl } from "@/lib/budgets/budget-path";
+import { useBudgetsRepository } from "@/lib/budgets/use-budgets-repository";
 import { toast } from "@/lib/toast";
 
 interface BudgetWorkspaceHeaderProps {
@@ -35,9 +39,13 @@ export function BudgetWorkspaceHeader({
     onTabChange,
     tabs,
 }: BudgetWorkspaceHeaderProps) {
+    const router = useRouter();
+    const repo = useBudgetsRepository();
     const [editingTitle, setEditingTitle] = useState(false);
     const [titleValue, setTitleValue] = useState(budget.title || "");
+    const [creatingRevision, setCreatingRevision] = useState(false);
     const titleInputRef = useRef<HTMLInputElement>(null);
+    const revisionBadge = formatBudgetRevisionBadge(budget.revision_number);
 
     useEffect(() => {
         if (editingTitle) titleInputRef.current?.select();
@@ -81,6 +89,27 @@ export function BudgetWorkspaceHeader({
     };
 
     const editable = isBudgetEditableStatus(budget.status);
+    const canRevision = canShowCreateRevisionButton(budget, [budget]);
+
+    const handleCreateRevision = async () => {
+        if (!budget.id || creatingRevision) return;
+        if (
+            !confirm(
+                "Criar uma revisão em andamento a partir deste orçamento? O original permanece finalizado e não poderá ser editado."
+            )
+        ) {
+            return;
+        }
+        setCreatingRevision(true);
+        const res = await repo.createBudgetRevision(budget.id);
+        setCreatingRevision(false);
+        if (res.success && res.newBudgetId) {
+            toast.success("Revisão criada. Você pode editar a nova versão.");
+            router.push(budgetEditUrl(res.newBudgetId));
+            return;
+        }
+        toast.error(res.error || "Não foi possível criar a revisão.");
+    };
 
     return (
         <header className="border-b bg-card shrink-0 flex items-stretch h-12 overflow-hidden">
@@ -130,6 +159,12 @@ export function BudgetWorkspaceHeader({
 
                 {budget.status && getStatusBadge(budget.status)}
 
+                {revisionBadge ? (
+                    <span className="px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 text-xs font-medium shrink-0">
+                        {revisionBadge}
+                    </span>
+                ) : null}
+
                 {hasChanges && editable && (
                     <span className="text-xs text-orange-600 font-medium shrink-0">• Não salvo</span>
                 )}
@@ -175,6 +210,17 @@ export function BudgetWorkspaceHeader({
                     >
                         <Save className="h-3.5 w-3.5 mr-1.5" />
                         Salvar
+                    </Button>
+                )}
+                {canRevision && (
+                    <Button
+                        size="sm"
+                        variant="default"
+                        disabled={creatingRevision}
+                        onClick={handleCreateRevision}
+                    >
+                        <GitBranchPlus className="h-3.5 w-3.5 mr-1.5" />
+                        {creatingRevision ? "Criando…" : "Criar revisão"}
                     </Button>
                 )}
                 {editable && onBudgetRefresh && (

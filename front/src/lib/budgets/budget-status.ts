@@ -14,6 +14,11 @@ export function isBudgetEditableStatus(status: string | undefined | null): boole
     return status === "draft";
 }
 
+/** Revisão só a partir de orçamento finalizado ou já encerrado no fluxo. */
+export function canCreateBudgetRevision(status: string | undefined | null): boolean {
+    return Boolean(status) && status !== "draft";
+}
+
 /** Rótulos para exibição (pt-BR). */
 export function getBudgetStatusLabel(status: string): string {
     const labels: Record<string, string> = {

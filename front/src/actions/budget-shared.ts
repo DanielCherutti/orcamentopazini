@@ -101,6 +101,16 @@ export function serializeBudgetEntity<T extends DbEntity>(item: T): T {
   }
   if (newItem.block_id) newItem.block_id = String(newItem.block_id);
   if (newItem.parent_id) newItem.parent_id = String(newItem.parent_id);
+  if (newItem.parent_budget_id != null) {
+    newItem.parent_budget_id = serializeRelationAsId(newItem.parent_budget_id);
+  }
+  if (newItem.root_budget_id != null) {
+    newItem.root_budget_id = serializeRelationAsId(newItem.root_budget_id);
+  }
+  if (newItem.revision_number != null && newItem.revision_number !== "") {
+    const rev = Number(newItem.revision_number);
+    if (Number.isFinite(rev)) newItem.revision_number = rev;
+  }
   if (newItem.group_id) newItem.group_id = String(newItem.group_id);
   if (newItem.group_instance_id) newItem.group_instance_id = String(newItem.group_instance_id);
 

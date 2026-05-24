@@ -97,6 +97,12 @@ export const budgetSchema = z.object({
     status: z
         .enum(['draft', 'finalized', 'sent', 'approved', 'rejected'])
         .default('draft'),
+    /** Orçamento de origem imediata (revisão anterior). */
+    parent_budget_id: z.string().optional(),
+    /** Raiz da cadeia de revisões (primeiro orçamento da proposta). */
+    root_budget_id: z.string().optional(),
+    /** 1, 2, 3… — ausente no orçamento original. */
+    revision_number: z.number().int().min(1).optional(),
     total_value: z.number().default(0),
 
     // Numeração hierárquica legada (ex: seção 5 → locais 5.1, 5.2)

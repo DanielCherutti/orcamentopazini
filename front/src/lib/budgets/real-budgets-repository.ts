@@ -21,6 +21,7 @@ import {
   duplicateSectionAction,
   duplicateLocationAction,
   duplicateBudgetAction,
+  createBudgetRevisionAction,
 } from "@/actions/budget-actions";
 import { deleteBudgetImage as deleteBudgetImageAction } from "@/actions/budget-annotations";
 
@@ -97,6 +98,10 @@ export const realBudgetsRepository: BudgetsRepository = {
 
   async duplicateBudget(budgetId: string, newTitle?: string) {
     return await duplicateBudgetAction(budgetId, newTitle);
+  },
+
+  async createBudgetRevision(budgetId: string) {
+    return await createBudgetRevisionAction(budgetId);
   },
 
   async deleteBudget(budgetId: string) {
