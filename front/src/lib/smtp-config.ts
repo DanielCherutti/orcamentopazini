@@ -9,6 +9,8 @@ export type SmtpConfig = {
     user: string;
     pass: string;
     from: string;
+    /** Respostas do cliente (Reply-To); se vazio, usa o remetente From. */
+    replyTo?: string;
 };
 
 export function getAppBaseUrl(): string | null {
@@ -47,5 +49,6 @@ export function getSmtpConfig(): SmtpConfig | null {
         process.env.EMAIL_FROM?.trim() ||
         process.env.SMTP_FROM?.trim() ||
         user;
-    return { host, port, secure, user, pass, from };
+    const replyTo = process.env.SMTP_REPLY_TO?.trim() || undefined;
+    return { host, port, secure, user, pass, from, replyTo };
 }

@@ -10,13 +10,17 @@ export type ProposalMailRow = {
     smtp_user?: string;
     smtp_pass?: string;
     smtp_from?: string;
+    smtp_reply_to?: string;
+    imap_host?: string;
+    imap_user?: string;
+    imap_pass?: string;
 };
 
 async function fetchMailRow(): Promise<ProposalMailRow | null> {
     try {
         const db = await getDb();
         const result = await db.query<[ProposalMailRow[]]>(
-            "SELECT app_public_url, smtp_host, smtp_port, smtp_secure, smtp_user, smtp_pass, smtp_from FROM proposal_settings LIMIT 1",
+            "SELECT app_public_url, smtp_host, smtp_port, smtp_secure, smtp_user, smtp_pass, smtp_from, smtp_reply_to, imap_host, imap_user, imap_pass FROM proposal_settings LIMIT 1",
         );
         return result[0]?.[0] ?? null;
     } catch (e) {
@@ -49,7 +53,13 @@ export async function resolveSmtpConfigForInvite(): Promise<SmtpConfig | null> {
         const secure =
             s === true || s === "true" || s === 1 || s === "1";
         const from = row.smtp_from?.trim() || user;
-        return { host, port, secure, user, pass, from };
+        const replyTo = row.smtp_reply_to?.trim() || undefined;
+        return { host, port, secure, user, pass, from, replyTo };
     }
     return getSmtpConfig();
+}
+
+/** Linha de e-mail do banco (inclui campos IMAP opcionais). */
+export async function fetchProposalMailRow(): Promise<ProposalMailRow | null> {
+    return fetchMailRow();
 }

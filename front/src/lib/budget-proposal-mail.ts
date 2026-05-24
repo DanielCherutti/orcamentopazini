@@ -28,14 +28,21 @@ function escapeHtml(s: string): string {
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+export type SendBudgetEmailResult =
+    | { ok: true; internetMessageId: string }
+    | { ok: false; error: string };
+
 export async function sendBudgetProposalEmail(options: {
     to: string;
     subject: string;
     message?: string;
     companyName?: string;
-    pdfFilename: string;
-    pdfBuffer: Buffer;
-}): Promise<{ ok: true } | { ok: false; error: string }> {
+    pdfFilename?: string;
+    pdfBuffer?: Buffer;
+    internetMessageId?: string;
+    inReplyTo?: string;
+    references?: string[];
+}): Promise<SendBudgetEmailResult> {
     const cfg = await resolveSmtpConfigForInvite();
     if (!cfg) {
         return {
@@ -67,13 +74,17 @@ export async function sendBudgetProposalEmail(options: {
         const personal = options.message?.trim() || "";
         const intro =
             personal ||
-            "Segue em anexo a proposta comercial solicitada. Permanecemos à disposição para esclarecimentos.";
+            (options.pdfBuffer
+                ? "Segue em anexo a proposta comercial solicitada. Permanecemos à disposição para esclarecimentos."
+                : "Segue retorno referente à nossa proposta comercial.");
 
         const text = [intro, "", `Atenciosamente,`, company].join("\n");
 
         const htmlPersonal = personal
             ? `<p style="margin:0 0 12px;white-space:pre-wrap">${escapeHtml(personal)}</p>`
-            : `<p style="margin:0 0 12px">Segue em anexo a proposta comercial solicitada. Permanecemos à disposição para esclarecimentos.</p>`;
+            : options.pdfBuffer
+              ? `<p style="margin:0 0 12px">Segue em anexo a proposta comercial solicitada. Permanecemos à disposição para esclarecimentos.</p>`
+              : `<p style="margin:0 0 12px">Segue retorno referente à nossa proposta comercial.</p>`;
 
         const html = `
 <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.5;color:#1a1a1a;max-width:560px">
@@ -81,22 +92,49 @@ export async function sendBudgetProposalEmail(options: {
   <p style="margin:24px 0 0;color:#555">Atenciosamente,<br/><strong>${escapeHtml(company)}</strong></p>
 </div>`.trim();
 
-        await transporter.sendMail({
+        const messageId =
+            options.internetMessageId?.trim() ||
+            `<pazini.${Date.now()}.${Math.random().toString(36).slice(2)}@${cfg.host.replace(/[^a-z0-9.-]/gi, "") || "pazini.local"}>`;
+
+        const headers: Record<string, string> = {};
+        if (options.inReplyTo) {
+            headers["In-Reply-To"] = options.inReplyTo.startsWith("<")
+                ? options.inReplyTo
+                : `<${options.inReplyTo}>`;
+        }
+        if (options.references?.length) {
+            headers.References = options.references
+                .map((r) => (r.startsWith("<") ? r : `<${r}>`))
+                .join(" ");
+        }
+
+        const attachments =
+            options.pdfBuffer && options.pdfFilename
+                ? [
+                      {
+                          filename: options.pdfFilename,
+                          content: options.pdfBuffer,
+                          contentType: "application/pdf",
+                      },
+                  ]
+                : [];
+
+        const replyTo = cfg.replyTo?.trim() || cfg.from;
+
+        const info = await transporter.sendMail({
             from: cfg.from,
+            replyTo,
             to: options.to,
             subject: options.subject,
             text,
             html,
-            attachments: [
-                {
-                    filename: options.pdfFilename,
-                    content: options.pdfBuffer,
-                    contentType: "application/pdf",
-                },
-            ],
+            messageId,
+            headers: Object.keys(headers).length ? headers : undefined,
+            attachments,
         });
 
-        return { ok: true };
+        const sentId = info.messageId || messageId;
+        return { ok: true, internetMessageId: sentId };
     } catch (e) {
         console.error("[budget-proposal-mail] Falha ao enviar:", e);
         return { ok: false, error: formatSmtpFailure(e) };

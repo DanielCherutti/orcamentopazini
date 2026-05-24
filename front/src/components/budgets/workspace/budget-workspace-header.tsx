@@ -11,7 +11,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ClientSelector } from "./client-selector";
 import type { ActiveTab } from "@/components/budgets/workspace-context";
-import { isBudgetEditableStatus } from "@/lib/budgets/budget-status";
+import { canUseBudgetEmail, isBudgetEditableStatus } from "@/lib/budgets/budget-status";
 import { canShowCreateRevisionButton, formatBudgetRevisionBadge } from "@/lib/budgets/budget-revision";
 import { budgetEditUrl } from "@/lib/budgets/budget-path";
 import { useBudgetsRepository } from "@/lib/budgets/use-budgets-repository";
@@ -91,6 +91,7 @@ export function BudgetWorkspaceHeader({
     };
 
     const editable = isBudgetEditableStatus(budget.status);
+    const emailEnabled = canUseBudgetEmail(budget.status);
     const canRevision = canShowCreateRevisionButton(budget, [budget]);
 
     const handleCreateRevision = async () => {
@@ -184,21 +185,36 @@ export function BudgetWorkspaceHeader({
 
             {/* Center: tabs */}
             <div className="flex flex-1 items-stretch justify-center">
-                {tabs.map((tab) => (
-                    <button
-                        key={tab.id}
-                        onClick={() => onTabChange(tab.id)}
-                        className={cn(
-                            "flex items-center gap-1.5 px-5 text-sm font-medium border-b-2 transition-colors",
-                            activeTab === tab.id
-                                ? "border-primary text-primary"
-                                : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
-                        )}
-                    >
-                        {tab.icon}
-                        {tab.label}
-                    </button>
-                ))}
+                {tabs.map((tab) => {
+                    const tabDisabled = tab.id === "email" && !emailEnabled;
+                    return (
+                        <button
+                            key={tab.id}
+                            type="button"
+                            disabled={tabDisabled}
+                            title={
+                                tabDisabled
+                                    ? "Finalize o orçamento para enviar e-mail ao cliente"
+                                    : undefined
+                            }
+                            onClick={() => {
+                                if (!tabDisabled) onTabChange(tab.id);
+                            }}
+                            className={cn(
+                                "flex items-center gap-1.5 px-5 text-sm font-medium border-b-2 transition-colors",
+                                tabDisabled &&
+                                    "opacity-45 cursor-not-allowed hover:text-muted-foreground hover:border-transparent",
+                                !tabDisabled &&
+                                    (activeTab === tab.id
+                                        ? "border-primary text-primary"
+                                        : "border-transparent text-muted-foreground hover:text-foreground hover:border-border")
+                            )}
+                        >
+                            {tab.icon}
+                            {tab.label}
+                        </button>
+                    );
+                })}
             </div>
 
             {/* Right: actions */}

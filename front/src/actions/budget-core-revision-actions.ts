@@ -120,6 +120,62 @@ async function familyHasDraftRevision(
     return (familyRes?.[0] || []).some((row) => isBudgetEditableStatus(String(row.status)));
 }
 
+/** Indica se este orçamento pode originar uma nova revisão (ex.: aba E-mail). */
+export async function canCreateBudgetRevisionForBudgetAction(
+    budgetId: string
+): Promise<{ success: boolean; canCreate?: boolean; hint?: string }> {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, hint: auth.error };
+
+    const db = await getDb();
+    try {
+        const budgetRecordId = requireRecordId("budget", budgetId);
+        const res = await db.query<
+            [Array<{ status?: string; parent_budget_id?: unknown; root_budget_id?: unknown; id?: unknown }>]
+        >("SELECT status, parent_budget_id, root_budget_id, id FROM $id", {
+            id: budgetRecordId,
+        });
+        const row = res[0]?.[0];
+        if (!row) {
+            return { success: true, canCreate: false, hint: "Orçamento não encontrado." };
+        }
+
+        if (!canCreateBudgetRevision(String(row.status))) {
+            return {
+                success: true,
+                canCreate: false,
+                hint: "Finalize o orçamento antes de criar uma revisão.",
+            };
+        }
+
+        if (row.parent_budget_id) {
+            return {
+                success: true,
+                canCreate: false,
+                hint: "Crie a revisão a partir do orçamento principal da proposta.",
+            };
+        }
+
+        const rootBudgetId = resolveRelationId(row.root_budget_id) || String(row.id);
+        const rootBudgetRecordId = requireRecordId("budget", rootBudgetId);
+        if (await familyHasDraftRevision(db, rootBudgetRecordId)) {
+            return {
+                success: true,
+                canCreate: false,
+                hint: "Já existe uma revisão em andamento nesta proposta.",
+            };
+        }
+
+        return { success: true, canCreate: true };
+    } catch (e) {
+        if (e instanceof InvalidRecordIdError) {
+            return { success: false, hint: e.message };
+        }
+        if (isTokenExpiredError(e)) resetDb();
+        return { success: false, hint: "Não foi possível verificar revisões." };
+    }
+}
+
 /**
  * Cria revisão editável (`draft`) a partir de orçamento finalizado (ou outro status fechado).
  * Mantém o mesmo `code` da proposta e encadeia `parent_budget_id` / `root_budget_id`.

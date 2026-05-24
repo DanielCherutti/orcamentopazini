@@ -1,19 +1,25 @@
 "use client";
 
 import { useState, useEffect, useCallback, createContext, useContext } from "react";
+import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Info, FileText, Loader2, Map as MapIcon, Mail, Printer, Table2 } from "lucide-react";
 import { Budget } from "@/types/budget-types";
 import { BudgetTreeV2 } from "./editor/budget-tree-v2";
 import { BudgetWorkspaceHeader } from "./workspace/budget-workspace-header";
 import { BudgetEmailTab } from "./workspace/budget-email-tab";
+import { BudgetEmailSyncProvider } from "./workspace/budget-email-sync-context";
 import { toast } from "@/lib/toast";
 import { useBudgetsRepository } from "@/lib/budgets/use-budgets-repository";
 import { getBudgetAction, getBudgetShellAction } from "@/actions/budget-actions";
 import { updateBudgetAction } from "@/actions/budget-core-write-actions";
 import { getCompositorPanelLabel } from "@/components/budgets/compositor/compositor-content-utils";
 import { budgetPdfUrl } from "@/lib/budgets/budget-path";
-import { getBudgetStatusLabel, isBudgetEditableStatus } from "@/lib/budgets/budget-status";
+import {
+    canUseBudgetEmail,
+    getBudgetStatusLabel,
+    isBudgetEditableStatus,
+} from "@/lib/budgets/budget-status";
 import { cn } from "@/lib/utils";
 import { WorkspaceContext, type ActiveTab } from "./workspace-context";
 
@@ -80,8 +86,16 @@ export function BudgetWorkspace({
     const [useLightScopeRead] = useState(Boolean(initialUseLightScopeRead));
     const [hasChanges, setHasChanges] = useState(false);
     const [environmentsExpanded, setEnvironmentsExpanded] = useState(false);
-    const [activeTab, setActiveTab] = useState<ActiveTab>('budget');
+    const searchParams = useSearchParams();
+    const [activeTab, setActiveTab] = useState<ActiveTab>("budget");
     const repo = useBudgetsRepository();
+
+    useEffect(() => {
+        const tab = searchParams.get("tab");
+        if (tab === "email" && canUseBudgetEmail(budget.status)) {
+            setActiveTab("email");
+        }
+    }, [searchParams, budget.status]);
 
     const toggleEnvironmentsExpanded = () => setEnvironmentsExpanded((prev) => !prev);
 
@@ -90,6 +104,13 @@ export function BudgetWorkspace({
     }, [initialBudget]);
 
     const isReadOnly = !isBudgetEditableStatus(budget.status);
+    const emailEnabled = canUseBudgetEmail(budget.status);
+
+    useEffect(() => {
+        if (activeTab === "email" && !canUseBudgetEmail(budget.status)) {
+            setActiveTab("budget");
+        }
+    }, [activeTab, budget.status]);
 
     const handleRefresh = async () => {
         const id = budget.id as string;
@@ -168,7 +189,7 @@ export function BudgetWorkspace({
                     )}
 
                     {useCompositor ? (
-                        <>
+                        <BudgetEmailSyncProvider budgetId={budgetId} enabled={emailEnabled}>
                             {/* Conteúdo das abas */}
                             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                                 {/* Aba Compositor */}
@@ -225,13 +246,13 @@ export function BudgetWorkspace({
                                     </div>
                                 )}
 
-                                {activeTab === 'email' && (
+                                {activeTab === "email" && emailEnabled && (
                                     <div className="flex-1 flex min-h-0 overflow-hidden">
                                         <BudgetEmailTab budget={budget} />
                                     </div>
                                 )}
                             </div>
-                        </>
+                        </BudgetEmailSyncProvider>
                     ) : (
                         /* Editor legado (sem abas) */
                         <div className="flex-1 flex flex-col min-h-0 bg-white overflow-hidden">

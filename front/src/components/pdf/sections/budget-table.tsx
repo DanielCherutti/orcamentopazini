@@ -589,7 +589,9 @@ export function BudgetTable({
         centerInPage = false
     ) => {
         if (needsPageBreak) {
-            pdfPages.push(<PdfForcedPageBreak breakKey={`pb-${pageKey}`} />);
+            pdfPages.push(
+                <PdfForcedPageBreak key={`pb-${pageKey}`} breakKey={`pb-${pageKey}`} />
+            );
         }
         pdfPages.push(
             <View

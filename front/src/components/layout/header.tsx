@@ -1,6 +1,7 @@
 "use client";
 
 import { PanelLeft, PanelLeftClose } from "lucide-react";
+import { BudgetEmailNotificationsBell } from "@/components/layout/budget-email-notifications-bell";
 import { useSidebar } from "./sidebar-context";
 
 export function Header() {
@@ -18,8 +19,8 @@ export function Header() {
                 </button>
                 <h1 className="text-lg font-semibold text-foreground">Pazini Engenharia</h1>
             </div>
-            <div className="flex items-center gap-4">
-                {/* Placeholder for header actions */}
+            <div className="flex items-center gap-2">
+                <BudgetEmailNotificationsBell />
             </div>
         </header>
     );

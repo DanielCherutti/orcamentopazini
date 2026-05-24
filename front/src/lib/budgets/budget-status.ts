@@ -19,6 +19,11 @@ export function canCreateBudgetRevision(status: string | undefined | null): bool
     return Boolean(status) && status !== "draft";
 }
 
+/** Envio e leitura de e-mail da proposta (aba E-mail) — só após finalizar. */
+export function canUseBudgetEmail(status: string | undefined | null): boolean {
+    return status === "finalized" || status === "sent" || status === "approved";
+}
+
 /** Rótulos para exibição (pt-BR). */
 export function getBudgetStatusLabel(status: string): string {
     const labels: Record<string, string> = {

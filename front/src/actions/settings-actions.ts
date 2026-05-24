@@ -39,13 +39,20 @@ export interface ProposalSettings {
     smtp_secure?: boolean;
     smtp_user?: string;
     smtp_from?: string;
+    /** E-mail que recebe respostas do cliente (cabeçalho Reply-To). */
+    smtp_reply_to?: string;
     /** Só leitura (servidor): indica se já existe senha SMTP gravada — nunca envie de volta no salvamento. */
     smtp_pass_configured?: boolean;
+    /** IMAP opcional (busca de respostas na aba E-mail do orçamento). Vazio = derivado do SMTP. */
+    imap_host?: string;
+    imap_user?: string;
+    imap_pass_configured?: boolean;
 }
 
 /** Payload do formulário ao salvar (senha nova opcional). */
 export type UpdateProposalSettingsInput = ProposalSettings & {
     smtp_pass_new?: string;
+    imap_pass_new?: string;
 };
 
 /** Dados de marca legíveis sem sessão (apenas para tela de login / branding). */
@@ -133,12 +140,16 @@ export async function getProposalSettingsAction() {
 
         const smtp_pass_configured =
             typeof plain.smtp_pass === "string" && plain.smtp_pass.length > 0;
+        const imap_pass_configured =
+            typeof plain.imap_pass === "string" && plain.imap_pass.length > 0;
         delete plain.smtp_pass;
+        delete plain.imap_pass;
 
         const settings: ProposalSettings = {
             ...(plain as unknown as ProposalSettings),
             id: plain.id != null ? String(plain.id) : undefined,
             smtp_pass_configured,
+            imap_pass_configured,
         };
 
         if (settings.smtp_port != null && typeof settings.smtp_port !== "number") {
@@ -173,12 +184,23 @@ export async function updateProposalSettingsAction(data: UpdateProposalSettingsI
 
     const db = await getDb();
     try {
-        const { smtp_pass_new, smtp_pass_configured: _cfg, id: _id, ...rest } = data;
+        const {
+            smtp_pass_new,
+            imap_pass_new,
+            smtp_pass_configured: _smtpCfg,
+            imap_pass_configured: _imapCfg,
+            id: _id,
+            ...rest
+        } = data;
         const cleanData: Record<string, unknown> = { ...rest };
         delete cleanData.smtp_pass;
+        delete cleanData.imap_pass;
 
         if (smtp_pass_new != null && String(smtp_pass_new).trim() !== "") {
             cleanData.smtp_pass = String(smtp_pass_new).trim();
+        }
+        if (imap_pass_new != null && String(imap_pass_new).trim() !== "") {
+            cleanData.imap_pass = String(imap_pass_new).trim();
         }
 
         if (cleanData.smtp_port === "" || cleanData.smtp_port === undefined) {
@@ -212,4 +234,31 @@ export async function updateProposalSettingsAction(data: UpdateProposalSettingsI
         if (isTokenExpiredError(e)) resetDb();
         return { success: false, error: e instanceof Error ? e.message : "Erro ao salvar configurações" };
     }
+}
+
+export async function testImapConnectionAction(): Promise<{
+    success: boolean;
+    error?: string;
+    imapHost?: string;
+    imapUser?: string;
+}> {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const { resolveImapConfig } = await import("@/lib/imap-config");
+    const { testImapConnection } = await import("@/lib/imap-connect");
+
+    const imap = await resolveImapConfig();
+    if (!imap) {
+        return {
+            success: false,
+            error: "IMAP não configurado. Preencha SMTP (e opcionalmente IMAP) em Configurações da empresa.",
+        };
+    }
+
+    const result = await testImapConnection(imap);
+    if (!result.ok) {
+        return { success: false, error: result.error, imapHost: imap.host, imapUser: imap.user };
+    }
+    return { success: true, imapHost: imap.host, imapUser: imap.user };
 }

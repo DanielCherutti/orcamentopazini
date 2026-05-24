@@ -23,6 +23,8 @@ const ALLOWED_TABLES = new Set([
     "budget_item",
     "budget_image",
     "budget_block",
+    "budget_email_thread",
+    "budget_email_message",
     "image_annotation",
     "image_library",
     "proposal_settings",

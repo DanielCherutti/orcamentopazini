@@ -14,6 +14,11 @@ export function budgetEditUrl(id: string): string {
   return `/budgets/budget/${budgetIdToPath(id)}`;
 }
 
+/** Abre o workspace do orçamento na aba E-mail. */
+export function budgetEditEmailUrl(id: string): string {
+  return `${budgetEditUrl(id)}?tab=email`;
+}
+
 /** Monta a URL da página de visualização do PDF (shell com iframe). */
 export function budgetPdfUrl(id: string): string {
   return `/budgets/budget/${budgetIdToPath(id)}/pdf`;

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
     ProposalSettings,
+    testImapConnectionAction,
     updateProposalSettingsAction,
 } from "@/actions/settings-actions";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,8 @@ export function SettingsForm({ initialSettings }: { initialSettings: ProposalSet
     const router = useRouter();
     const [formData, setFormData] = useState(initialSettings);
     const [smtpPassNew, setSmtpPassNew] = useState("");
+    const [imapPassNew, setImapPassNew] = useState("");
+    const [imapTesting, setImapTesting] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [logoUploading, setLogoUploading] = useState(false);
     const logoFileInputRef = useRef<HTMLInputElement>(null);
@@ -34,10 +37,12 @@ export function SettingsForm({ initialSettings }: { initialSettings: ProposalSet
             const res = await updateProposalSettingsAction({
                 ...formData,
                 smtp_pass_new: smtpPassNew.trim() || undefined,
+                imap_pass_new: imapPassNew.trim() || undefined,
             });
             if (res.success) {
                 toast.success("Configurações salvas!");
                 setSmtpPassNew("");
+                setImapPassNew("");
                 router.refresh();
             } else {
                 toast.error(res.error || "Erro ao salvar");
@@ -46,6 +51,24 @@ export function SettingsForm({ initialSettings }: { initialSettings: ProposalSet
             toast.error("Erro inesperado");
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleTestImap = async () => {
+        setImapTesting(true);
+        try {
+            const res = await testImapConnectionAction();
+            if (res.success) {
+                toast.success(
+                    `IMAP conectado (${res.imapUser ?? "conta"} em ${res.imapHost ?? "servidor"}).`
+                );
+            } else {
+                toast.error(res.error || "Falha ao conectar no IMAP.");
+            }
+        } catch {
+            toast.error("Erro ao testar IMAP.");
+        } finally {
+            setImapTesting(false);
         }
     };
 
@@ -292,8 +315,12 @@ export function SettingsForm({ initialSettings }: { initialSettings: ProposalSet
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <Mail className="size-5" />
-                        E-mail (convites de usuário)
+                        E-mail (convites e orçamentos)
                     </CardTitle>
+                    <CardDescription>
+                        O envio usa SMTP. A aba E-mail do orçamento busca respostas via IMAP na mesma conta
+                        (ou nos campos IMAP abaixo).
+                    </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="space-y-2">
@@ -381,6 +408,23 @@ export function SettingsForm({ initialSettings }: { initialSettings: ProposalSet
                                 placeholder="igual ao usuário ou alias autorizado"
                             />
                         </div>
+                        <div className="space-y-2 md:col-span-2">
+                            <Label htmlFor="smtp_reply_to">Reply-To (receber respostas)</Label>
+                            <Input
+                                id="smtp_reply_to"
+                                type="email"
+                                autoComplete="off"
+                                value={formData.smtp_reply_to || ""}
+                                onChange={(e) =>
+                                    setFormData({ ...formData, smtp_reply_to: e.target.value })
+                                }
+                                placeholder="ex.: comercial@engenhariapazini.com.br (evite no-reply)"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Quando o cliente clica em Responder, o Gmail envia para este endereço.
+                                Configure o IMAP com a mesma caixa (ou usuário com acesso a ela).
+                            </p>
+                        </div>
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="smtp_pass_new">Senha SMTP</Label>
@@ -401,6 +445,66 @@ export function SettingsForm({ initialSettings }: { initialSettings: ProposalSet
                                 Já existe uma senha salva. Preencha só se quiser substituir.
                             </p>
                         )}
+                    </div>
+                    <div className="border-t pt-4 space-y-4">
+                        <p className="text-sm font-medium">IMAP (opcional — buscar respostas)</p>
+                        <p className="text-xs text-muted-foreground">
+                            Deixe em branco para usar o mesmo servidor/usuário/senha do SMTP. Gmail:
+                            ative IMAP e use senha de aplicativo. Microsoft 365: IMAP precisa estar
+                            liberado no tenant.
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="imap_host">Servidor IMAP</Label>
+                                <Input
+                                    id="imap_host"
+                                    value={formData.imap_host || ""}
+                                    onChange={(e) =>
+                                        setFormData({ ...formData, imap_host: e.target.value })
+                                    }
+                                    placeholder="imap.gmail.com (automático se vazio)"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="imap_user">Usuário IMAP</Label>
+                                <Input
+                                    id="imap_user"
+                                    type="email"
+                                    autoComplete="off"
+                                    value={formData.imap_user || ""}
+                                    onChange={(e) =>
+                                        setFormData({ ...formData, imap_user: e.target.value })
+                                    }
+                                    placeholder="e-mail completo (automático se vazio)"
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="imap_pass_new">Senha IMAP</Label>
+                            <Input
+                                id="imap_pass_new"
+                                type="password"
+                                autoComplete="new-password"
+                                value={imapPassNew}
+                                onChange={(e) => setImapPassNew(e.target.value)}
+                                placeholder={
+                                    formData.imap_pass_configured
+                                        ? "Deixe em branco para manter"
+                                        : "Senha de aplicativo (se diferente do SMTP)"
+                                }
+                            />
+                        </div>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            disabled={imapTesting}
+                            onClick={handleTestImap}
+                        >
+                            {imapTesting ? (
+                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            ) : null}
+                            Testar conexão IMAP
+                        </Button>
                     </div>
                 </CardContent>
             </Card>
