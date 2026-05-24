@@ -2,7 +2,7 @@
 
 import { createContext, useContext } from "react";
 
-export type ActiveTab = 'budget' | 'scope' | 'quote' | 'print';
+export type ActiveTab = 'budget' | 'scope' | 'quote' | 'print' | 'email';
 
 export type WorkspaceContextType = {
   activeTab: ActiveTab;

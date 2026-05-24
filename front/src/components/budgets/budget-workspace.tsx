@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback, createContext, useContext } from "react";
 import dynamic from "next/dynamic";
-import { Info, FileText, Loader2, Map as MapIcon, Printer, Table2 } from "lucide-react";
+import { Info, FileText, Loader2, Map as MapIcon, Mail, Printer, Table2 } from "lucide-react";
 import { Budget } from "@/types/budget-types";
 import { BudgetTreeV2 } from "./editor/budget-tree-v2";
 import { BudgetWorkspaceHeader } from "./workspace/budget-workspace-header";
+import { BudgetEmailTab } from "./workspace/budget-email-tab";
 import { toast } from "@/lib/toast";
 import { useBudgetsRepository } from "@/lib/budgets/use-budgets-repository";
 import { getBudgetAction, getBudgetShellAction } from "@/actions/budget-actions";
@@ -53,6 +54,7 @@ const TABS: { id: ActiveTab; label: string; icon: React.ReactNode }[] = [
     { id: 'scope',   label: 'Adequações',    icon: <MapIcon className="h-3.5 w-3.5" /> },
     { id: 'quote',   label: 'Orçamento', icon: <Table2 className="h-3.5 w-3.5" /> },
     { id: 'print',   label: 'Impressão', icon: <Printer className="h-3.5 w-3.5" /> },
+    { id: 'email',   label: 'E-mail', icon: <Mail className="h-3.5 w-3.5" /> },
 ];
 
 interface BudgetWorkspaceProps {
@@ -220,6 +222,12 @@ export function BudgetWorkspace({
                                             className="flex-1 w-full border-0"
                                             title="PDF do compositor"
                                         />
+                                    </div>
+                                )}
+
+                                {activeTab === 'email' && (
+                                    <div className="flex-1 flex min-h-0 overflow-hidden">
+                                        <BudgetEmailTab budget={budget} />
                                     </div>
                                 )}
                             </div>
