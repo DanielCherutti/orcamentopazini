@@ -82,6 +82,10 @@ const styles = StyleSheet.create({
     sectionLead: {
         marginBottom: 6,
     },
+    /** Título/cabeçalho + imagem na mesma folha (não partir no meio). */
+    sceneImageSlot: {
+        marginBottom: 6,
+    },
     /**
      * Altura moderada: caixa muito alta + `wrap={false}` no trecho força o bloco inteiro
      * para a página seguinte e deixa um vazio grande no fim da página anterior.
@@ -276,6 +280,89 @@ function sectionWantsLaborSplitOnPrint(sec: { items?: BudgetItem[] }): boolean {
     });
 }
 
+function SectionItemsTable({
+    sec,
+    showCosts,
+    laborCols,
+    costsDisplayMode,
+    itemFinalValue,
+}: {
+    sec: { id?: string; items?: BudgetItem[] };
+    showCosts: boolean;
+    laborCols: boolean;
+    costsDisplayMode: CostDisplayMode;
+    itemFinalValue: Map<string, number>;
+}) {
+    return (
+        <View style={styles.table}>
+            <View style={styles.tableFrame}>
+                <SectionTableHeader showCosts={showCosts} laborCols={laborCols} />
+                {(sec.items || []).map((item, idx) => {
+                    const finalVal = Number(itemFinalValue.get(String(item.id)) ?? 0);
+                    const cells = pdfItemValueCells(item, finalVal, laborCols);
+                    const showObservation = Boolean(
+                        (item as unknown as Record<string, unknown>).observation_show_on_print
+                    );
+                    const observationText = stripHtmlToText(
+                        String((item as unknown as Record<string, unknown>).observation_text ?? '')
+                    ).trim();
+                    return (
+                        <View
+                            key={item.id}
+                            style={[
+                                styles.tableRow,
+                                { backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' },
+                            ]}
+                        >
+                            <Text style={[styles.textSmall, styles.colCode]}>
+                                {sanitizeTextForPdf(itemCode(item))}
+                            </Text>
+                            <Text style={[styles.textSmall, styles.colDesc]}>
+                                {sanitizeTextForPdf(itemLabel(item))}
+                                {showObservation && observationText ? (
+                                    <Text style={styles.itemObservationText}>
+                                        {sanitizeTextForPdf(` - Obs: ${observationText}`)}
+                                    </Text>
+                                ) : null}
+                            </Text>
+                            <Text style={[styles.textSmall, styles.colQty]}>
+                                {sanitizeTextForPdf(String(item.quantity ?? '').trim())}
+                            </Text>
+                            <Text style={[styles.textSmall, styles.colUnit]}>
+                                {sanitizeTextForPdf(itemUnit(item))}
+                            </Text>
+                            {showCosts && laborCols ? (
+                                <>
+                                    <Text style={[styles.textSmall, styles.colMoney]}>{cells.equip}</Text>
+                                    <Text style={[styles.textSmall, styles.colMoney]}>{cells.mo}</Text>
+                                    <Text style={[styles.textSmall, styles.colTotal]}>{cells.total}</Text>
+                                </>
+                            ) : showCosts ? (
+                                <Text style={[styles.textSmall, styles.colTotal]}>
+                                    {formatMoney(finalVal)}
+                                </Text>
+                            ) : null}
+                        </View>
+                    );
+                })}
+            </View>
+            {showCosts && costsDisplayMode === 'section' ? (
+                <View style={styles.subtotalRow}>
+                    <Text style={[styles.textSmall, styles.textBold]}>
+                        Total trecho:{' '}
+                        {formatMoney(
+                            (sec.items ?? []).reduce(
+                                (sum, item) => sum + Number(itemFinalValue.get(String(item.id)) ?? 0),
+                                0
+                            )
+                        )}
+                    </Text>
+                </View>
+            ) : null}
+        </View>
+    );
+}
+
 function SectionTableHeader({
     showCosts,
     laborCols,
@@ -302,45 +389,41 @@ function SectionTableHeader({
     );
 }
 
-function SectionSceneImages({
-    images,
-    mode,
-    pdfImagePublicBase,
-    pdfEmbeddedImages,
-    figurePageCollector,
-}: {
-    images: BudgetImage[] | undefined;
-    mode: 'first' | 'rest' | 'all';
-    pdfImagePublicBase?: string;
-    pdfEmbeddedImages?: PdfEmbeddedImages;
-    figurePageCollector?: { segmentStartPages: Record<string, number> };
-}) {
-    const fullList = (images ?? []).filter((img) => {
+function filterSceneImages(images: BudgetImage[] | undefined): BudgetImage[] {
+    return (images ?? []).filter((img) => {
         const raw = img?.composed_url || img?.url;
         return typeof raw === 'string' && raw.trim().length > 0;
     });
-    const list =
-        mode === 'first'
-            ? fullList.slice(0, 1)
-            : mode === 'rest'
-                ? fullList.slice(1)
-                : fullList;
-    if (!list.length) return null;
+}
 
+const PDF_PAGE_BREAK_TEXT_STYLE = {
+    fontSize: 1,
+    lineHeight: 1,
+    color: '#ffffff',
+} as const;
+
+/** Quebra forçada como irmão direto no fluxo do PDF (mais confiável que `break` aninhado). */
+function PdfForcedPageBreak({ breakKey }: { breakKey: string }) {
     return (
-        <>
-            {list.map((sceneImg, imgIdx) => (
-                <View key={sceneImg?.id ?? `img-${imgIdx}`}>
-                    <SectionSceneImage
-                        sceneImg={sceneImg}
-                        imageKey={sceneImg?.id ?? `img-${imgIdx}`}
-                        pdfImagePublicBase={pdfImagePublicBase}
-                        pdfEmbeddedImages={pdfEmbeddedImages}
-                        figurePageCollector={figurePageCollector}
-                    />
-                </View>
-            ))}
-        </>
+        <Text key={breakKey} break style={PDF_PAGE_BREAK_TEXT_STYLE}>
+            {'\u00A0'}
+        </Text>
+    );
+}
+
+/** Título/cabeçalho + imagem na mesma folha (a folha é aberta por `PdfForcedPageBreak` acima). */
+function SceneImageSlot({
+    lead,
+    children,
+}: {
+    lead?: React.ReactNode;
+    children: React.ReactNode;
+}) {
+    return (
+        <View style={styles.sceneImageSlot} wrap={false}>
+            {lead}
+            {children}
+        </View>
     );
 }
 
@@ -455,7 +538,7 @@ function pdfItemValueCells(
     };
 }
 
-export const BudgetTable = ({
+export function BudgetTable({
     locations,
     sectionNumber = 1,
     showCosts = false,
@@ -473,165 +556,174 @@ export const BudgetTable = ({
     pdfEmbeddedImages?: PdfEmbeddedImages;
     /** Primeira passada do PDF: coleta página real por figura (`figure:<id>`). */
     figurePageCollector?: { segmentStartPages: Record<string, number> };
-}) => (
-    <View>
-        {locations.map((loc, locIdx) => {
-            const locNum = `${sectionNumber}.${locIdx + 1}`;
-            const locLabel = singleLinePdfLabel(loc.name);
-            const locDescription = singleLinePdfLabel(stripHtmlToText(String(loc.description ?? '')));
-            const sections = loc.sections ?? [];
-            const { itemFinalValue } = computeLocationItemValues(loc);
-            const locationTotal = sections.reduce((sum, sec) => {
-                const sectionTotal = (sec.items ?? []).reduce((acc, item) => {
-                    if (!item.id) return acc;
-                    return acc + Number(itemFinalValue.get(String(item.id)) ?? 0);
-                }, 0);
-                return sum + sectionTotal;
+}) {
+    // Sem hooks: BudgetTable é renderizado pelo @react-pdf/renderer (fora do React DOM).
+    const pdfPages: React.ReactNode[] = [];
+    let needsPageBreak = false;
+
+    const pushPdfPage = (pageKey: string, content: React.ReactNode) => {
+        if (needsPageBreak) {
+            pdfPages.push(<PdfForcedPageBreak breakKey={`pb-${pageKey}`} />);
+        }
+        pdfPages.push(
+            <View key={pageKey} wrap={false}>
+                {content}
+            </View>
+        );
+        needsPageBreak = true;
+    };
+
+    for (const [locIdx, loc] of locations.entries()) {
+        const locNum = `${sectionNumber}.${locIdx + 1}`;
+        const locLabel = singleLinePdfLabel(loc.name);
+        const locDescription = singleLinePdfLabel(stripHtmlToText(String(loc.description ?? '')));
+        const sections = loc.sections ?? [];
+        const { itemFinalValue } = computeLocationItemValues(loc);
+        const locationTotal = sections.reduce((sum, sec) => {
+            const sectionTotal = (sec.items ?? []).reduce((acc, item) => {
+                if (!item.id) return acc;
+                return acc + Number(itemFinalValue.get(String(item.id)) ?? 0);
             }, 0);
-            return (
-            <View key={loc.id} style={styles.locationBlock}>
-                <View style={styles.locationHeaderWrap}>
-                    <Text style={styles.locationHeaderText}>
-                        {sanitizeTextForPdf(`${locNum} — ${locLabel}`)}
+            return sum + sectionTotal;
+        }, 0);
+        const locPhotoList = filterSceneImages(loc.images);
+        const locHasPhotos = locPhotoList.length > 0;
+        const locId = String(loc.id ?? `loc-${locIdx}`);
+
+        const locationHeader = (
+            <View style={styles.locationHeaderWrap}>
+                <Text style={styles.locationHeaderText}>
+                    {sanitizeTextForPdf(`${locNum} — ${locLabel}`)}
+                </Text>
+                {locDescription ? (
+                    <Text style={styles.locationHeaderDescription}>
+                        {sanitizeTextForPdf(`Obs: ${locDescription}`)}
                     </Text>
-                    {locDescription ? (
-                        <Text style={styles.locationHeaderDescription}>
-                            {sanitizeTextForPdf(`Obs: ${locDescription}`)}
-                        </Text>
-                    ) : null}
-                </View>
-
-                {(loc.images ?? []).some((img) => !!(img?.composed_url || img?.url)) ? (
-                    <View style={styles.locationPhotosBlock}>
-                        <Text style={styles.locationPhotosTitle}>FOTOS DO LOCAL</Text>
-                        <SectionSceneImages
-                            images={loc.images}
-                            mode="all"
-                            pdfImagePublicBase={pdfImagePublicBase}
-                            pdfEmbeddedImages={pdfEmbeddedImages}
-                            figurePageCollector={figurePageCollector}
-                        />
-                    </View>
-                ) : null}
-
-                {sections.length === 0 ? (
-                    <View style={{ marginTop: 2, marginBottom: 6 }}>
-                        <Text style={[styles.textSmall, { color: '#6b7280' }]}>Sem trechos neste local</Text>
-                    </View>
-                ) : null}
-
-                {sections.map((sec, secIdx) => {
-                    const secNum = `${locNum}.${secIdx + 1}`;
-                    const secLabel = singleLinePdfLabel(sec.name).toUpperCase();
-                    const laborCols = showCosts && sectionWantsLaborSplitOnPrint(sec);
-                    const hasSceneImages = (sec.images ?? []).some(
-                        (img) => !!(img?.composed_url || img?.url)
-                    );
-                    return (
-                    <View key={sec.id} style={styles.sectionBlock}>
-                        {/*
-                          Mantém o fluxo quebrável entre páginas para evitar grandes áreas em branco.
-                          Se faltar espaço no fim da página, a imagem pode ir para a próxima sem "puxar"
-                          todo o bloco de abertura do trecho junto.
-                        */}
-                        <View style={styles.sectionLead}>
-                            <View style={styles.sectionHeaderWrap}>
-                                <Text style={styles.sectionTitle}>
-                                    {sanitizeTextForPdf(`${secNum} — ${secLabel}`)}
-                                </Text>
-                            </View>
-                            <SectionSceneImages
-                                images={sec.images}
-                                mode="first"
-                                pdfImagePublicBase={pdfImagePublicBase}
-                                pdfEmbeddedImages={pdfEmbeddedImages}
-                                figurePageCollector={figurePageCollector}
-                            />
-                            {!hasSceneImages ? (
-                                <SectionTableHeader showCosts={showCosts} laborCols={laborCols} />
-                            ) : null}
-                        </View>
-                        {hasSceneImages ? (
-                            <SectionSceneImages
-                                images={sec.images}
-                                mode="rest"
-                                pdfImagePublicBase={pdfImagePublicBase}
-                                pdfEmbeddedImages={pdfEmbeddedImages}
-                                figurePageCollector={figurePageCollector}
-                            />
-                        ) : null}
-
-                        {/* Lista de Itens */}
-                        <View style={styles.table}>
-                            <View style={styles.tableFrame}>
-                                {hasSceneImages ? (
-                                    <SectionTableHeader showCosts={showCosts} laborCols={laborCols} />
-                                ) : null}
-
-                                {/* Rows */}
-                                {(sec.items || []).map((item, idx) => {
-                                    const finalVal = Number(itemFinalValue.get(String(item.id)) ?? 0);
-                                    const cells = pdfItemValueCells(item, finalVal, laborCols);
-                                    const showObservation = Boolean(
-                                        (item as unknown as Record<string, unknown>).observation_show_on_print
-                                    );
-                                    const observationText = stripHtmlToText(
-                                        String((item as unknown as Record<string, unknown>).observation_text ?? '')
-                                    ).trim();
-                                    return (
-                                    <View key={item.id} style={[styles.tableRow, { backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }]}>
-                                        <Text style={[styles.textSmall, styles.colCode]}>
-                                            {sanitizeTextForPdf(itemCode(item))}
-                                        </Text>
-                                        <Text style={[styles.textSmall, styles.colDesc]}>
-                                            {sanitizeTextForPdf(itemLabel(item))}
-                                            {showObservation && observationText ? (
-                                                <Text style={styles.itemObservationText}>
-                                                    {sanitizeTextForPdf(` - Obs: ${observationText}`)}
-                                                </Text>
-                                            ) : null}
-                                        </Text>
-                                        <Text style={[styles.textSmall, styles.colQty]}>
-                                            {sanitizeTextForPdf(String(item.quantity ?? '').trim())}
-                                        </Text>
-                                        <Text style={[styles.textSmall, styles.colUnit]}>
-                                            {sanitizeTextForPdf(itemUnit(item))}
-                                        </Text>
-                                        {showCosts && laborCols ? (
-                                            <>
-                                                <Text style={[styles.textSmall, styles.colMoney]}>{cells.equip}</Text>
-                                                <Text style={[styles.textSmall, styles.colMoney]}>{cells.mo}</Text>
-                                                <Text style={[styles.textSmall, styles.colTotal]}>{cells.total}</Text>
-                                            </>
-                                        ) : showCosts ? (
-                                            <Text style={[styles.textSmall, styles.colTotal]}>
-                                                {formatMoney(finalVal)}
-                                            </Text>
-                                        ) : null}
-                                    </View>
-                                );
-                                })}
-                            </View>
-                            {showCosts && costsDisplayMode === 'section' ? (
-                                <View style={styles.subtotalRow}>
-                                    <Text style={[styles.textSmall, styles.textBold]}>
-                                        Total trecho: {formatMoney((sec.items ?? []).reduce((sum, item) => sum + Number(itemFinalValue.get(String(item.id)) ?? 0), 0))}
-                                    </Text>
-                                </View>
-                            ) : null}
-                        </View>
-                    </View>
-                    );
-                })}
-                {showCosts && costsDisplayMode === 'location' ? (
-                    <View style={styles.subtotalRow}>
-                        <Text style={[styles.textSmall, styles.textBold]}>
-                            Total local: {formatMoney(locationTotal)}
-                        </Text>
-                    </View>
                 ) : null}
             </View>
+        );
+
+        if (locPhotoList.length > 0) {
+            for (let imgIdx = 0; imgIdx < locPhotoList.length; imgIdx++) {
+                const sceneImg = locPhotoList[imgIdx];
+                pushPdfPage(
+                    `${locId}-loc-photo-${sceneImg?.id ?? imgIdx}`,
+                    <View style={styles.locationBlock}>
+                        {imgIdx === 0 ? locationHeader : null}
+                        <View style={styles.locationPhotosBlock}>
+                            <SceneImageSlot
+                                lead={
+                                    imgIdx === 0 ? (
+                                        <Text style={styles.locationPhotosTitle}>FOTOS DO LOCAL</Text>
+                                    ) : null
+                                }
+                            >
+                                <SectionSceneImage
+                                    sceneImg={sceneImg}
+                                    imageKey={sceneImg?.id ?? `loc-img-${imgIdx}`}
+                                    pdfImagePublicBase={pdfImagePublicBase}
+                                    pdfEmbeddedImages={pdfEmbeddedImages}
+                                    figurePageCollector={figurePageCollector}
+                                />
+                            </SceneImageSlot>
+                        </View>
+                    </View>
+                );
+            }
+        } else if (sections.length > 0) {
+            pushPdfPage(
+                `${locId}-loc-header`,
+                <View style={styles.locationBlock}>{locationHeader}</View>
             );
-        })}
-    </View>
-);
+        }
+
+        for (const [secIdx, sec] of sections.entries()) {
+            const secNum = `${locNum}.${secIdx + 1}`;
+            const secLabel = singleLinePdfLabel(sec.name).toUpperCase();
+            const laborCols = showCosts && sectionWantsLaborSplitOnPrint(sec);
+            const sceneList = filterSceneImages(sec.images);
+            const secId = String(sec.id ?? `sec-${secIdx}`);
+            const sectionTitleLead = (
+                <View style={styles.sectionHeaderWrap}>
+                    <Text style={styles.sectionTitle}>
+                        {sanitizeTextForPdf(`${secNum} — ${secLabel}`)}
+                    </Text>
+                </View>
+            );
+
+            if (sceneList.length > 0) {
+                for (let imgIdx = 0; imgIdx < sceneList.length; imgIdx++) {
+                    const sceneImg = sceneList[imgIdx];
+                    const isFirst = imgIdx === 0;
+                    const isLast = imgIdx === sceneList.length - 1;
+
+                    pushPdfPage(
+                        `${locId}-${secId}-scene-${sceneImg?.id ?? imgIdx}`,
+                        <View style={styles.sectionBlock}>
+                            <SceneImageSlot lead={isFirst ? sectionTitleLead : null}>
+                                <SectionSceneImage
+                                    sceneImg={sceneImg}
+                                    imageKey={sceneImg?.id ?? `sec-img-${imgIdx}`}
+                                    pdfImagePublicBase={pdfImagePublicBase}
+                                    pdfEmbeddedImages={pdfEmbeddedImages}
+                                    figurePageCollector={figurePageCollector}
+                                />
+                            </SceneImageSlot>
+                            {isLast ? (
+                                <SectionItemsTable
+                                    sec={sec}
+                                    showCosts={showCosts}
+                                    laborCols={laborCols}
+                                    costsDisplayMode={costsDisplayMode}
+                                    itemFinalValue={itemFinalValue}
+                                />
+                            ) : null}
+                        </View>
+                    );
+                }
+            } else {
+                pushPdfPage(
+                    `${locId}-${secId}-table`,
+                    <View style={styles.sectionBlock}>
+                        <View style={styles.sectionLead}>
+                            {sectionTitleLead}
+                            <SectionTableHeader showCosts={showCosts} laborCols={laborCols} />
+                        </View>
+                        <SectionItemsTable
+                            sec={sec}
+                            showCosts={showCosts}
+                            laborCols={laborCols}
+                            costsDisplayMode={costsDisplayMode}
+                            itemFinalValue={itemFinalValue}
+                        />
+                    </View>
+                );
+            }
+        }
+
+        if (sections.length === 0) {
+            pushPdfPage(
+                `${locId}-empty`,
+                <View style={styles.locationBlock}>
+                    {!locHasPhotos ? locationHeader : null}
+                    <View style={{ marginTop: 2, marginBottom: 6 }}>
+                        <Text style={[styles.textSmall, { color: '#6b7280' }]}>
+                            Sem trechos neste local
+                        </Text>
+                    </View>
+                </View>
+            );
+        } else if (showCosts && costsDisplayMode === 'location') {
+            pushPdfPage(
+                `${locId}-subtotal`,
+                <View style={styles.subtotalRow}>
+                    <Text style={[styles.textSmall, styles.textBold]}>
+                        Total local: {formatMoney(locationTotal)}
+                    </Text>
+                </View>
+            );
+        }
+    }
+
+    return <View>{pdfPages}</View>;
+}

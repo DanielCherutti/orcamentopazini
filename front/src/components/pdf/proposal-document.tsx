@@ -19,6 +19,11 @@ import { splitCoverHtmlFragmentToSegments, splitCoverHtmlIntoPdfBlocks } from '@
 import { stripHtmlToText } from '@/lib/pdf/html-to-plain-text';
 import { sanitizeCoverHtmlForPdf } from '@/lib/pdf/sanitize-inline-styles-for-pdf';
 import { sanitizeTextForPdf } from '@/lib/pdf/sanitize-pdf-text';
+import {
+    PDF_SCENE_IMAGE_LEAD_H,
+    placeSceneImageInPaginationEstimate,
+    type SceneImagePaginationState,
+} from '@/lib/pdf/scene-image-page-breaks';
 import { pdfInnerRunningHeaderShouldShow } from '@/lib/pdf/pdf-proposal-header';
 import { PdfProposalHeaderBand } from '@/components/pdf/pdf-proposal-header-band';
 import {
@@ -619,6 +624,12 @@ function estimateRenderedFigurePagesFromScope(
         28; // faixa do título da seção
     let page = Math.max(1, Math.trunc(detailStartPage || 1));
     let y = 0;
+    const sceneState: SceneImagePaginationState = { page, y, imagesSeen: 0 };
+
+    const syncSceneState = () => {
+        page = sceneState.page;
+        y = sceneState.y;
+    };
 
     const ensureSpace = (h: number) => {
         if (y > 0 && y + h > pageContentMax) {
@@ -629,29 +640,68 @@ function estimateRenderedFigurePagesFromScope(
     const addHeight = (h: number) => {
         ensureSpace(h);
         y += h;
+        sceneState.page = page;
+        sceneState.y = y;
     };
 
-    for (const loc of locations ?? []) {
+    for (const [locIdx, loc] of (locations ?? []).entries()) {
+        if (locIdx > 0 && sceneState.imagesSeen > 0) {
+            sceneState.page += 1;
+            sceneState.y = 0;
+            syncSceneState();
+        }
         addHeight(38); // locationHeader aprox.
         const locationImgs = (loc.images ?? []).filter((img) => !!img?.id);
-        for (const img of locationImgs) {
-            const imgBlockH = 252; // sceneImage(240) + margem + respiro
-            ensureSpace(imgBlockH);
-            out[String(img.id)] = page;
-            y += imgBlockH;
+        for (let imgIdx = 0; imgIdx < locationImgs.length; imgIdx++) {
+            const img = locationImgs[imgIdx];
+            syncSceneState();
+            out[String(img.id)] = placeSceneImageInPaginationEstimate(sceneState, pageContentMax, {
+                leadHeight: imgIdx === 0 ? PDF_SCENE_IMAGE_LEAD_H : 0,
+            });
+            syncSceneState();
         }
+        const locHasPhotos = locationImgs.length > 0;
+        const sectionsHaveScenes = (loc.sections ?? []).some(
+            (sec) => (sec.images ?? []).filter((img) => !!img?.id).length > 0
+        );
+        const breakBetweenLocPhotosAndSections = locHasPhotos && sectionsHaveScenes;
+        if (breakBetweenLocPhotosAndSections) {
+            sceneState.page += 1;
+            sceneState.y = 0;
+            syncSceneState();
+        }
+        let firstSectionWithScenesHandled = false;
         for (const sec of loc.sections ?? []) {
-            addHeight(22); // sectionTitle aprox.
-            const firstImg = (sec.images ?? [])[0];
-            if (firstImg?.id) {
-                const imgBlockH = 252; // sceneImage(240) + margem + respiro (alinhado a budget-table.tsx)
-                ensureSpace(imgBlockH);
-                out[String(firstImg.id)] = page;
-                y += imgBlockH;
+            const sectionImgs = (sec.images ?? []).filter((img) => !!img?.id);
+            const isFirstSectionWithScenes =
+                sectionImgs.length > 0 && !firstSectionWithScenesHandled;
+            if (isFirstSectionWithScenes) {
+                firstSectionWithScenesHandled = true;
+            }
+            if (sectionImgs.length === 0) {
+                addHeight(22); // sectionTitle aprox.
+            }
+            for (let imgIdx = 0; imgIdx < sectionImgs.length; imgIdx++) {
+                const img = sectionImgs[imgIdx];
+                syncSceneState();
+                const suppressFirstSectionBreak =
+                    breakBetweenLocPhotosAndSections &&
+                    isFirstSectionWithScenes &&
+                    imgIdx === 0;
+                out[String(img.id)] = placeSceneImageInPaginationEstimate(sceneState, pageContentMax, {
+                    leadHeight: imgIdx === 0 ? 22 : 0,
+                    suppressBreak: suppressFirstSectionBreak,
+                });
+                syncSceneState();
             }
             const rows = (sec.items ?? []).length;
             const tableH = 16 + rows * 17 + (opts.showCosts && opts.costsDisplayMode === "section" ? 14 : 0);
-            addHeight(Math.max(24, tableH));
+            if (sectionImgs.length > 0) {
+                // Tabela na mesma folha da última foto do trecho.
+                addHeight(Math.max(24, tableH));
+            } else {
+                addHeight(22 + Math.max(24, tableH));
+            }
         }
         if (opts.showCosts && opts.costsDisplayMode === "location") {
             addHeight(14);
@@ -683,6 +733,12 @@ function estimateDetailTocRowsFromScope(
         28; // faixa do título da seção
     let page = Math.max(1, Math.trunc(params.detailStartPage || 1));
     let y = 0;
+    const sceneState: SceneImagePaginationState = { page, y, imagesSeen: 0 };
+
+    const syncSceneState = () => {
+        page = sceneState.page;
+        y = sceneState.y;
+    };
 
     const ensureSpace = (h: number) => {
         if (y > 0 && y + h > pageContentMax) {
@@ -693,6 +749,14 @@ function estimateDetailTocRowsFromScope(
     const addHeight = (h: number) => {
         ensureSpace(h);
         y += h;
+        sceneState.page = page;
+        sceneState.y = y;
+    };
+
+    const addSceneImageHeight = (opts?: { leadHeight?: number }) => {
+        syncSceneState();
+        placeSceneImageInPaginationEstimate(sceneState, pageContentMax, opts);
+        syncSceneState();
     };
 
     // Capítulo raiz de Adequações no sumário
@@ -705,6 +769,11 @@ function estimateDetailTocRowsFromScope(
 
     for (const [locIdx, loc] of (locations ?? []).entries()) {
         const locNum = `${params.sectionNumber}.${locIdx + 1}`;
+        if (locIdx > 0 && sceneState.imagesSeen > 0) {
+            sceneState.page += 1;
+            sceneState.y = 0;
+            syncSceneState();
+        }
         ensureSpace(38); // locationHeader aprox.
         out.push({
             number: locNum,
@@ -713,26 +782,59 @@ function estimateDetailTocRowsFromScope(
             page,
         });
         addHeight(38);
-        const locationImageCount = (loc.images ?? []).filter((img) => !!img?.id).length;
-        for (let i = 0; i < locationImageCount; i++) {
-            addHeight(252); // sceneImage(240) + margem + respiro
+        const locationImgs = (loc.images ?? []).filter((img) => !!img?.id);
+        const locHasPhotos = locationImgs.length > 0;
+        for (let imgIdx = 0; imgIdx < locationImgs.length; imgIdx++) {
+            addSceneImageHeight({
+                leadHeight: imgIdx === 0 ? PDF_SCENE_IMAGE_LEAD_H : 0,
+            });
         }
+
+        const sectionsHaveScenes = (loc.sections ?? []).some(
+            (sec) => (sec.images ?? []).filter((img) => !!img?.id).length > 0
+        );
+        const breakBetweenLocPhotosAndSections = locHasPhotos && sectionsHaveScenes;
+        if (breakBetweenLocPhotosAndSections) {
+            sceneState.page += 1;
+            sceneState.y = 0;
+            syncSceneState();
+        }
+        let firstSectionWithScenesHandled = false;
 
         for (const [secIdx, sec] of (loc.sections ?? []).entries()) {
             const secNum = `${locNum}.${secIdx + 1}`;
-            ensureSpace(22); // sectionTitle aprox.
-            out.push({
-                number: secNum,
-                title: (sec.name || "Trecho").trim() || "Trecho",
-                depth: 2,
-                page,
-            });
-            addHeight(22);
-
-            // Todas as cenas influenciam a paginação das próximas linhas do sumário.
-            const imageCount = (sec.images ?? []).filter((img) => !!img?.id).length;
-            for (let i = 0; i < imageCount; i++) {
-                addHeight(252); // sceneImage(240) + margem + respiro
+            const sectionImgs = (sec.images ?? []).filter((img) => !!img?.id);
+            const isFirstSectionWithScenes =
+                sectionImgs.length > 0 && !firstSectionWithScenesHandled;
+            if (isFirstSectionWithScenes) {
+                firstSectionWithScenesHandled = true;
+            }
+            if (sectionImgs.length === 0) {
+                ensureSpace(22); // sectionTitle aprox.
+                out.push({
+                    number: secNum,
+                    title: (sec.name || "Trecho").trim() || "Trecho",
+                    depth: 2,
+                    page,
+                });
+                addHeight(22);
+            } else {
+                syncSceneState();
+                const sectionPage = placeSceneImageInPaginationEstimate(sceneState, pageContentMax, {
+                    leadHeight: 22,
+                    suppressBreak:
+                        breakBetweenLocPhotosAndSections && isFirstSectionWithScenes,
+                });
+                syncSceneState();
+                out.push({
+                    number: secNum,
+                    title: (sec.name || "Trecho").trim() || "Trecho",
+                    depth: 2,
+                    page: sectionPage,
+                });
+                for (let imgIdx = 1; imgIdx < sectionImgs.length; imgIdx++) {
+                    addSceneImageHeight();
+                }
             }
 
             const rows = (sec.items ?? []).length;
