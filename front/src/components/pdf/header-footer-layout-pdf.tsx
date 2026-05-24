@@ -75,9 +75,12 @@ export function HeaderFooterPdfLayer({
 
   if (!visibleElements.length) return <View style={{ position: "absolute", opacity: 0, width: 0, height: 0 }} />;
 
+  const pageNumberElements = visibleElements.filter((element) => element.type === "page_number");
+  const layeredElements = visibleElements.filter((element) => element.type !== "page_number");
+
   return (
     <View style={{ position: "absolute", left: 0, top: 0, width, height }}>
-      {visibleElements.map((element) => (
+      {layeredElements.map((element) => (
         <HeaderFooterPdfElement
           key={element.id}
           element={element}
@@ -85,6 +88,17 @@ export function HeaderFooterPdfLayer({
           height={height}
           appPublicUrl={appPublicUrl}
           pdfEmbeddedImages={pdfEmbeddedImages}
+          pageNumbering={pageNumbering}
+          pageScope={pageScope}
+        />
+      ))}
+      {/* React-PDF drops text inside nested absolute boxes in fixed bands; page numbers need a direct Text node. */}
+      {pageNumberElements.map((element) => (
+        <PositionedPageNumberText
+          key={element.id}
+          element={element}
+          width={width}
+          height={height}
           pageNumbering={pageNumbering}
           pageScope={pageScope}
         />
@@ -226,11 +240,54 @@ function HeaderFooterPdfElement({
 function shouldRenderPositionedPageNumber(
   _element: HeaderFooterPdfElementData,
   pageNumbering: HeaderFooterPageNumberingConfig | undefined,
-  _pageScope?: "cover" | "inner",
+  pageScope?: "cover" | "inner",
 ): boolean {
   const cfg = normalizePageNumbering(pageNumbering);
   if (!cfg.enabled) return false;
+  if (pageScope === "cover" && (cfg.hide_on_cover || cfg.inner_only)) return false;
   return true;
+}
+
+function PositionedPageNumberText({
+  element,
+  width,
+  height,
+  pageNumbering,
+  pageScope,
+}: {
+  element: HeaderFooterPdfElementData;
+  width: number;
+  height: number;
+  pageNumbering?: HeaderFooterPageNumberingConfig;
+  pageScope?: "cover" | "inner";
+}) {
+  const cfg = normalizePageNumbering(pageNumbering);
+  const boxWidth = (clamp(element.width_pct, 1, 100) / 100) * width;
+  const boxHeight = (clamp(element.height_pct, 1, 100) / 100) * height;
+  const padding = Math.max(0, Number(element.padding ?? 4));
+
+  return (
+    <Text
+      style={[
+        textStyleWithoutLineHeight(textBoxStyle(element)),
+        {
+          marginLeft: (clamp(element.x_pct, 0, 100) / 100) * width,
+          marginTop: (clamp(element.y_pct, 0, 100) / 100) * height,
+          width: boxWidth,
+          minHeight: boxHeight,
+          padding,
+          opacity: clamp(element.opacity ?? 1, 0, 1),
+        },
+      ]}
+      render={({ pageNumber, totalPages }) => {
+        if (pageNumber < cfg.start_at_page) return "";
+        if (pageScope === "cover" && (cfg.hide_on_cover || cfg.inner_only)) return "";
+        const current = Math.max(0, pageNumber - cfg.start_at_page + cfg.first_page_number);
+        const total = Math.max(current, totalPages - cfg.start_at_page + cfg.first_page_number);
+        return formatManualPageNumber(element.text || "{{page}} / {{total}}", current, total);
+      }}
+    />
+  );
 }
 
 export function renderTextWithPageNumbers(
