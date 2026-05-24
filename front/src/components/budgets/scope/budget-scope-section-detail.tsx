@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn, toAbsoluteImageUrl } from "@/lib/utils";
 import { toast } from "@/lib/toast";
+import { useConfirmDialog } from "@/components/providers/confirm-dialog-provider";
 import { CompositorRichTextEditor, CollapsibleEditorSection } from "@/components/budgets/compositor/compositor-rich-text-editor";
 import { BudgetImageGallery } from "@/components/budgets/budget-image-gallery";
 import { useScopeFigureNumbers } from "@/components/budgets/use-scope-figure-numbers";
@@ -99,6 +100,7 @@ export function SectionDetail({
     disableScopePayloadCache = false,
     batchedLocationItems,
 }: SectionDetailProps) {
+    const confirmDialog = useConfirmDialog();
     const [name, setName] = useState(section?.name ?? "");
     const [editingName, setEditingName] = useState(false);
     const [description, setDescription] = useState(section?.description ?? "");
@@ -408,7 +410,13 @@ export function SectionDetail({
                             type="button"
                             title="Excluir trecho"
                             onClick={async () => {
-                                if (!confirm("Remover este trecho e seus itens?")) return;
+                                const ok = await confirmDialog({
+                                    title: "Remover trecho",
+                                    description: "Remover este trecho e seus itens?",
+                                    confirmLabel: "Remover",
+                                    destructive: true,
+                                });
+                                if (!ok) return;
                                 const result = await deleteSectionAction(sectionId, budgetId);
                                 if (result.success) onRefresh();
                                 else toast.error(result.error || "Erro ao remover trecho");

@@ -18,6 +18,7 @@ import { ChevronDown, ChevronRight, Copy, Layers, Save, Trash2, X } from "lucide
 import { useBudgetsRepository } from "@/lib/budgets/use-budgets-repository";
 import { QuantityTextInput } from "@/components/budgets/quantity-text-input";
 import { toast } from "@/lib/toast";
+import { useConfirmDialog } from "@/components/providers/confirm-dialog-provider";
 
 import type { BudgetItem } from "@/types/budget-types";
 import { buildItemSegments } from "@/lib/budgets/item-group-segment";
@@ -179,6 +180,7 @@ interface SectionSceneCardProps {
 }
 
 export function SectionSceneCard({ section, budget_id, sectionNumber, onRefresh }: SectionSceneCardProps) {
+    const confirmDialog = useConfirmDialog();
     const repo = useBudgetsRepository();
     const [addPhotoOpen, setAddPhotoOpen] = useState(false);
     const [editingImage, setEditingImage] = useState<BudgetImage | null>(null);
@@ -269,7 +271,13 @@ export function SectionSceneCard({ section, budget_id, sectionNumber, onRefresh 
     }, [sectionId, budget_id, repo, onRefresh]);
 
     const handleDeleteItem = async (itemId: string) => {
-        if (!confirm("Excluir item?")) return;
+        const ok = await confirmDialog({
+            title: "Excluir item",
+            description: "Excluir este item?",
+            confirmLabel: "Excluir",
+            destructive: true,
+        });
+        if (!ok) return;
         try {
             if (!itemId) return;
             await repo.deleteItem(itemId, budget_id);
@@ -291,7 +299,13 @@ export function SectionSceneCard({ section, budget_id, sectionNumber, onRefresh 
     }, [repo, budget_id, onRefresh]);
 
     const handleDeleteSection = async () => {
-        if (!confirm("Excluir todo este trecho e seus itens?")) return;
+        const ok = await confirmDialog({
+            title: "Excluir trecho",
+            description: "Excluir todo este trecho e seus itens?",
+            confirmLabel: "Excluir",
+            destructive: true,
+        });
+        if (!ok) return;
         try {
             await repo.deleteSection(sectionId, budget_id);
             onRefresh();

@@ -9,6 +9,7 @@ import { InlineLocationCreator } from "./inline-creators";
 import { cn } from "@/lib/utils";
 import { useBudgetsRepository } from "@/lib/budgets/use-budgets-repository";
 import { toast } from "@/lib/toast";
+import { useConfirmDialog } from "@/components/providers/confirm-dialog-provider";
 
 interface LocationSidebarProps {
     locations: BudgetLocation[];
@@ -44,6 +45,7 @@ export function LocationSidebar({
     isReadOnly = false,
 }: LocationSidebarProps) {
     const repo = useBudgetsRepository();
+    const confirmDialog = useConfirmDialog();
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
     const [addingForLocationId, setAddingForLocationId] = useState<string | null>(null);
     const [newSectionName, setNewSectionName] = useState("");
@@ -81,7 +83,13 @@ export function LocationSidebar({
 
     const handleDeleteSection = async (sectionId: string, e: MouseEvent) => {
         e.stopPropagation();
-        if (!confirm("Remover este trecho e seus itens?")) return;
+        const ok = await confirmDialog({
+            title: "Remover trecho",
+            description: "Remover este trecho e seus itens?",
+            confirmLabel: "Remover",
+            destructive: true,
+        });
+        if (!ok) return;
         const res = await repo.deleteSection(sectionId, budgetId);
         if (res.success) {
             await onRefresh();

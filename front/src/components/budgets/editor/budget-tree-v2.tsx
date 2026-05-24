@@ -7,6 +7,7 @@ import { LocationDetailPanel } from "./location-detail-panel";
 import { InlineLocationCreator } from "./inline-creators";
 import { useBudgetsRepository } from "@/lib/budgets/use-budgets-repository";
 import { toast } from "@/lib/toast";
+import { useConfirmDialog } from "@/components/providers/confirm-dialog-provider";
 import { EnvironmentsToggle } from "./environments-toggle";
 import {
   Select,
@@ -26,6 +27,7 @@ export function BudgetTreeV2({ budget, onRefresh, isReadOnly = false }: BudgetTr
   const locations = useMemo(() => budget.locations || [], [budget.locations]);
   const budgetId = budget.id as string;
   const repo = useBudgetsRepository();
+  const confirmDialog = useConfirmDialog();
 
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(
     null
@@ -71,8 +73,13 @@ export function BudgetTreeV2({ budget, onRefresh, isReadOnly = false }: BudgetTr
   }, [locations, selectedLocationId, selectedSectionId]);
 
   const handleDeleteLocation = async (id: string, name: string) => {
-    if (!confirm(`Tem certeza que deseja excluir o local "${name}" e todos os seus itens?`))
-      return;
+    const ok = await confirmDialog({
+      title: "Excluir local",
+      description: `Tem certeza que deseja excluir o local "${name}" e todos os seus itens?`,
+      confirmLabel: "Excluir",
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       if (!budgetId) throw new Error("ID do orçamento inválido");
       await repo.deleteLocation(id, budgetId);

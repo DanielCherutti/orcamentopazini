@@ -13,6 +13,7 @@ import {
     moveBlockToParentAction,
 } from "@/actions/budget-compositor-block-actions";
 import { toast } from "@/lib/toast";
+import { useConfirmDialog } from "@/components/providers/confirm-dialog-provider";
 import type { BudgetBlock, BlockType } from "@/types/budget-compositor-types";
 import { flattenTree } from "@/types/budget-compositor-types";
 import {
@@ -416,6 +417,7 @@ interface BlockTreeNodeProps {
 }
 
 function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth, isReadOnly = false, autoEditId, onAutoEdit, onBlockCreated }: BlockTreeNodeProps) {
+  const confirmDialog = useConfirmDialog();
   const [collapsed, setCollapsed] = useState(false);
   const [adding, setAdding] = useState(false);
   const [addingSubSession, setAddingSubSession] = useState(false);
@@ -485,7 +487,13 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm(`Remover "${block.label || block.type}"? Isso excluirá todos os itens dentro.`)) return;
+    const ok = await confirmDialog({
+      title: "Remover bloco",
+      description: `Remover "${block.label || block.type}"? Isso excluirá todos os itens dentro.`,
+      confirmLabel: "Remover",
+      destructive: true,
+    });
+    if (!ok) return;
     setDeleting(true);
     const result = await deleteBlockAction(block.id, budgetId);
     if (!result.success) {

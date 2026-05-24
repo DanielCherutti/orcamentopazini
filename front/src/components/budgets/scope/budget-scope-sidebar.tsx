@@ -57,6 +57,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
+import { useConfirmDialog } from "@/components/providers/confirm-dialog-provider";
 import type { ScopeLocation, ScopeSection } from "@/actions/budget-scope-actions";
 import {
     applyQuoteCommercialFactor,
@@ -241,6 +242,7 @@ export function ScopeSidebar({
     scopeNumber,
     onPrefetchSection,
 }: ScopeSidebarProps) {
+    const confirmDialog = useConfirmDialog();
     const [localLocations, setLocalLocations] = useState(locations);
     useEffect(() => {
         setLocalLocations(locations);
@@ -566,7 +568,13 @@ export function ScopeSidebar({
 
     const handleDeleteLocation = async (locationId: string, e: MouseEvent) => {
         e.stopPropagation();
-        if (!confirm("Remover este local e todos os seus trechos?")) return;
+        const ok = await confirmDialog({
+            title: "Remover local",
+            description: "Remover este local e todos os seus trechos?",
+            confirmLabel: "Remover",
+            destructive: true,
+        });
+        if (!ok) return;
         const result = await deleteLocationAction(locationId, budgetId);
         if (result.success) {
             await onRefresh();
@@ -1026,6 +1034,7 @@ function LocationNode({
     isReadOnly,
     onPrefetchSection,
 }: LocationNodeProps) {
+    const confirmDialog = useConfirmDialog();
     const {
         attributes,
         listeners,
@@ -1076,7 +1085,13 @@ function LocationNode({
 
     const handleDeleteSection = async (sectionId: string, e: MouseEvent) => {
         e.stopPropagation();
-        if (!confirm("Remover este trecho e seus itens?")) return;
+        const ok = await confirmDialog({
+            title: "Remover trecho",
+            description: "Remover este trecho e seus itens?",
+            confirmLabel: "Remover",
+            destructive: true,
+        });
+        if (!ok) return;
         const result = await deleteSectionAction(sectionId, budgetId);
         if (result.success) await onRefresh();
         else toast.error(result.error || "Erro ao remover trecho");

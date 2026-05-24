@@ -25,6 +25,7 @@ import {
 } from "@/lib/budgets/budget-revision";
 import { annotateBudgetListRows, type BudgetListDisplayRow } from "@/lib/budgets/budget-list-tree";
 import { cn } from "@/lib/utils";
+import { useConfirmDialog } from "@/components/providers/confirm-dialog-provider";
 
 function BudgetListBranch({ isLast }: { isLast: boolean }) {
     return (
@@ -59,6 +60,7 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
     const [isPending, startTransition] = useTransition();
     const isFirstRender = useRef(true);
     const repo = useBudgetsRepository();
+    const confirmDialog = useConfirmDialog();
 
     const [budgets, setBudgets] = useState<Budget[]>(initialBudgets);
     const [meta, setMeta] = useState(initialMeta);
@@ -102,13 +104,13 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
 
     const handleCreateRevision = async (budget: Budget) => {
         if (!budget.id) return;
-        if (
-            !confirm(
-                "Criar revisão em andamento a partir deste orçamento? O original permanece bloqueado."
-            )
-        ) {
-            return;
-        }
+        const ok = await confirmDialog({
+            title: "Criar revisão",
+            description:
+                "Criar revisão em andamento a partir deste orçamento? O original permanece bloqueado.",
+            confirmLabel: "Criar revisão",
+        });
+        if (!ok) return;
         setCreatingRevisionId(String(budget.id));
         const res = await repo.createBudgetRevision(String(budget.id));
         setCreatingRevisionId(null);
@@ -144,13 +146,13 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
     const handleDeleteBudget = async (budget: Budget) => {
         const id = String(budget.id);
         const label = budget.title || budget.code || "este orçamento";
-        if (
-            !confirm(
-                `Excluir permanentemente o orçamento "${label}"? Esta ação não pode ser desfeita.`
-            )
-        ) {
-            return;
-        }
+        const ok = await confirmDialog({
+            title: "Excluir orçamento",
+            description: `Excluir permanentemente o orçamento "${label}"? Esta ação não pode ser desfeita.`,
+            confirmLabel: "Excluir",
+            destructive: true,
+        });
+        if (!ok) return;
         setDeletingId(id);
         const res = await repo.deleteBudget(id);
         setDeletingId(null);

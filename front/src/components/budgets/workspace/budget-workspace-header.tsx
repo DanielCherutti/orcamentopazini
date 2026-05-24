@@ -16,6 +16,7 @@ import { canShowCreateRevisionButton, formatBudgetRevisionBadge } from "@/lib/bu
 import { budgetEditUrl } from "@/lib/budgets/budget-path";
 import { useBudgetsRepository } from "@/lib/budgets/use-budgets-repository";
 import { toast } from "@/lib/toast";
+import { useConfirmDialog } from "@/components/providers/confirm-dialog-provider";
 
 interface BudgetWorkspaceHeaderProps {
     budget: Budget;
@@ -41,6 +42,7 @@ export function BudgetWorkspaceHeader({
 }: BudgetWorkspaceHeaderProps) {
     const router = useRouter();
     const repo = useBudgetsRepository();
+    const confirmDialog = useConfirmDialog();
     const [editingTitle, setEditingTitle] = useState(false);
     const [titleValue, setTitleValue] = useState(budget.title || "");
     const [creatingRevision, setCreatingRevision] = useState(false);
@@ -93,13 +95,13 @@ export function BudgetWorkspaceHeader({
 
     const handleCreateRevision = async () => {
         if (!budget.id || creatingRevision) return;
-        if (
-            !confirm(
-                "Criar uma revisão em andamento a partir deste orçamento? O original permanece finalizado e não poderá ser editado."
-            )
-        ) {
-            return;
-        }
+        const ok = await confirmDialog({
+            title: "Criar revisão",
+            description:
+                "Criar uma revisão em andamento a partir deste orçamento? O original permanece finalizado e não poderá ser editado.",
+            confirmLabel: "Criar revisão",
+        });
+        if (!ok) return;
         setCreatingRevision(true);
         const res = await repo.createBudgetRevision(budget.id);
         setCreatingRevision(false);
@@ -229,13 +231,13 @@ export function BudgetWorkspaceHeader({
                         variant="outline"
                         className="border-primary/40"
                         onClick={async () => {
-                            if (
-                                !confirm(
-                                    "Finalizar este compositor? Depois disso ele não poderá mais ser editado — apenas visualizado, pré-visualização e PDF."
-                                )
-                            ) {
-                                return;
-                            }
+                            const ok = await confirmDialog({
+                                title: "Finalizar compositor",
+                                description:
+                                    "Finalizar este compositor? Depois disso ele não poderá mais ser editado — apenas visualizado, pré-visualização e PDF.",
+                                confirmLabel: "Finalizar",
+                            });
+                            if (!ok) return;
                             const res = await updateBudgetAction(budget.id!, { status: "finalized" });
                             if (res.success) {
                                 toast.success("Compositor finalizado.");

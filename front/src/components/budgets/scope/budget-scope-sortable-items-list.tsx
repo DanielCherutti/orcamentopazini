@@ -20,6 +20,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
+import { useConfirmDialog } from "@/components/providers/confirm-dialog-provider";
 import type { ProductGroup } from "@/actions/product-group-actions";
 import type { BudgetItem } from "@/types/budget-types";
 import {
@@ -243,6 +244,7 @@ function SortableItemsListEditable({
     quoteMarkupPercent = 0,
     quoteDiscountPercent = 0,
 }: SortableItemsListProps) {
+    const confirmDialog = useConfirmDialog();
     const [segments, setSegments] = useState<ItemSegment[]>(() => buildItemSegments(items));
     const segmentsRef = useRef(segments);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
@@ -290,7 +292,13 @@ function SortableItemsListEditable({
     const handleBulkDelete = useCallback(async () => {
         const ids = [...selectedIds];
         if (ids.length === 0) return;
-        if (!confirm(`Remover ${ids.length} produto(s) deste trecho?`)) return;
+        const ok = await confirmDialog({
+            title: "Remover produtos",
+            description: `Remover ${ids.length} produto(s) deste trecho?`,
+            confirmLabel: "Remover",
+            destructive: true,
+        });
+        if (!ok) return;
         setBulkDeleting(true);
         try {
             const result = await deleteBudgetItemsBulkAction(ids, budgetId);
@@ -310,7 +318,7 @@ function SortableItemsListEditable({
         } finally {
             setBulkDeleting(false);
         }
-    }, [selectedIds, budgetId, onRefresh]);
+    }, [selectedIds, budgetId, onRefresh, confirmDialog]);
 
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 

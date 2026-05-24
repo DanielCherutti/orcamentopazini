@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn, toAbsoluteImageUrl } from "@/lib/utils";
 import { toast } from "@/lib/toast";
+import { useConfirmDialog } from "@/components/providers/confirm-dialog-provider";
 import { CompositorRichTextEditor, CollapsibleEditorSection } from "@/components/budgets/compositor/compositor-rich-text-editor";
 import { BudgetImageGallery } from "@/components/budgets/budget-image-gallery";
 import { BudgetPhotoAnnotatorDialog } from "@/components/budgets/budget-photo-annotator-dialog";
@@ -71,6 +72,7 @@ export function LocationDetail({
     scopeDataVersion = 0,
     productGroups,
 }: LocationDetailProps) {
+    const confirmDialog = useConfirmDialog();
     const [name, setName] = useState(location?.name ?? "");
     const [editingName, setEditingName] = useState(false);
     const [dupDialog, setDupDialog] = useState(false);
@@ -249,7 +251,13 @@ export function LocationDetail({
                             type="button"
                             title="Excluir local"
                             onClick={async () => {
-                                if (!confirm("Remover este local e todos os seus trechos?")) return;
+                                const ok = await confirmDialog({
+                                    title: "Remover local",
+                                    description: "Remover este local e todos os seus trechos?",
+                                    confirmLabel: "Remover",
+                                    destructive: true,
+                                });
+                                if (!ok) return;
                                 const result = await deleteLocationAction(locationId, budgetId);
                                 if (result.success) onRefresh();
                                 else toast.error(result.error || "Erro ao remover local");

@@ -8,6 +8,7 @@ import {
 import { cn, toAbsoluteImageUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ImageIcon, Pencil, Trash2 } from "lucide-react";
+import { useConfirmDialog } from "@/components/providers/confirm-dialog-provider";
 
 export interface BudgetImageGalleryProps {
   images: BudgetImage[];
@@ -32,10 +33,16 @@ export function BudgetImageGallery({
   readOnly = false,
   figureNumbersByImageId,
 }: BudgetImageGalleryProps) {
-  const handleDeleteClick = (image: BudgetImage) => {
-    if (confirm("Excluir esta foto e suas anotações?")) {
-      onDelete(image);
-    }
+  const confirmDialog = useConfirmDialog();
+
+  const handleDeleteClick = async (image: BudgetImage) => {
+    const ok = await confirmDialog({
+      title: "Excluir foto",
+      description: "Excluir esta foto e suas anotações?",
+      confirmLabel: "Excluir",
+      destructive: true,
+    });
+    if (ok) onDelete(image);
   };
 
   if (images.length === 0) {

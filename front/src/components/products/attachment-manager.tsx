@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Upload, FileIcon, X, Loader2, Download } from "lucide-react";
+import { toast } from "@/lib/toast";
 
 export type Attachment = {
     id: string; // usually filename or path
@@ -52,7 +53,7 @@ export function AttachmentManager({ productId, attachments, onAttachmentsChange 
             onAttachmentsChange([...attachments, newAttachment]);
         } catch (error) {
             console.error(error);
-            alert("Erro ao enviar anexo");
+            toast.error("Erro ao enviar anexo");
         } finally {
             setIsUploading(false);
         }
