@@ -118,9 +118,14 @@ const styles = StyleSheet.create({
     color: "#171717",
     marginBottom: 6,
   },
-  coverImageBase: {
+  coverImageFrame: {
+    width: "100%",
+    alignItems: "center",
     marginBottom: 8,
+  },
+  coverImageBase: {
     objectFit: "contain",
+    objectPosition: "center",
   },
   coverHeaderBand: {
     position: "absolute",
@@ -469,8 +474,10 @@ export function CompositorCoverPdfPage({
           if (b.type === "img") {
             const src = proxyPdfImageSrc(b.src, settings.app_public_url, pdfEmbeddedImages) ?? b.src;
             return (
-              /* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */
-              <Image key={`cover-img-${i}`} src={src} style={[styles.coverImageBase, resolveCoverBlockImageStyle(b)]} />
+              <View key={`cover-img-${i}`} style={styles.coverImageFrame}>
+                {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
+                <Image src={src} style={[styles.coverImageBase, resolveCoverBlockImageStyle(b)]} />
+              </View>
             );
           }
           const segs = splitCoverHtmlFragmentToSegments(b.content);

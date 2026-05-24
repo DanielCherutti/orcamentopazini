@@ -1,3 +1,13 @@
+/** Altura A4 em pontos (react-pdf). */
+export const PDF_A4_PAGE_H = 841.89;
+
+/**
+ * Altura útil na página interna do detalhamento (margens + cabeçalho/rodapé + título da seção).
+ * Espelha `pageContentMax` em `proposal-document.tsx`.
+ */
+export const PDF_DETAIL_PAGE_CONTENT_H =
+    PDF_A4_PAGE_H - 35 - 108 - 35 - 44 - 28;
+
 /** Altura aproximada de um bloco de cena no PDF (sceneImage 240pt + margens). */
 export const PDF_SCENE_IMAGE_BLOCK_H = 252;
 

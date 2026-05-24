@@ -14,6 +14,7 @@ import {
 import { type PdfEmbeddedImages, proxyPdfImageSrc } from '@/lib/pdf/pdf-image-src';
 import { stripHtmlToText } from '@/lib/pdf/html-to-plain-text';
 import { sanitizeTextForPdf } from '@/lib/pdf/sanitize-pdf-text';
+import { PDF_DETAIL_PAGE_CONTENT_H } from '@/lib/pdf/scene-image-page-breaks';
 
 const styles = StyleSheet.create({
     locationBlock: {
@@ -66,17 +67,20 @@ const styles = StyleSheet.create({
         paddingHorizontal: 6,
         paddingVertical: 4,
     },
-    sectionTitle: {
+    /** Mesmo estilo do cabeçalho do local (listra em largura total). */
+    sectionHeaderWrap: {
+        marginTop: 4,
+        paddingBottom: 5,
+        marginBottom: 6,
+        width: '100%',
+        alignSelf: 'stretch',
+        borderBottomWidth: 1.5,
+        borderBottomColor: theme.colors.primary,
+    },
+    sectionHeaderText: {
         fontSize: 16,
         fontFamily: theme.fonts.bold,
         color: theme.colors.primary,
-    },
-    sectionHeaderWrap: {
-        marginTop: 2,
-        paddingBottom: 5,
-        marginBottom: 6,
-        borderBottomWidth: 1.5,
-        borderBottomColor: theme.colors.primary,
     },
     /** Bloco de abertura do trecho (título + primeira cena). */
     sectionLead: {
@@ -85,17 +89,35 @@ const styles = StyleSheet.create({
     /** Título/cabeçalho + imagem na mesma folha (não partir no meio). */
     sceneImageSlot: {
         marginBottom: 6,
+        width: '100%',
+    },
+    /** Centraliza a imagem na largura útil da página. */
+    sceneImageFrame: {
+        width: '100%',
+        flexDirection: 'row',
+        justifyContent: 'center',
     },
     /**
      * Altura moderada: caixa muito alta + `wrap={false}` no trecho força o bloco inteiro
      * para a página seguinte e deixa um vazio grande no fim da página anterior.
      */
     sceneImage: {
-        width: 525,
+        width: 480,
         height: 240,
-        alignSelf: 'center',
         marginBottom: 10,
         objectFit: 'contain',
+        objectPosition: 'center',
+    },
+    pdfPageRoot: {
+        width: '100%',
+    },
+    /** Centraliza o bloco no meio da área útil da folha (eixo vertical). */
+    pdfPageRootCentered: {
+        minHeight: PDF_DETAIL_PAGE_CONTENT_H,
+        justifyContent: 'center',
+    },
+    sectionPageBlock: {
+        width: '100%',
     },
     table: {
         marginTop: 5,
@@ -447,7 +469,7 @@ function SectionSceneImage({
     const figureId = sceneImg?.id ? String(sceneImg.id) : undefined;
 
     return (
-        <View key={imageKey}>
+        <View key={imageKey} style={styles.sceneImageFrame}>
             {figurePageCollector && figureId ? (
                 <View
                     /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- `render` não tipado no react-pdf */
@@ -561,12 +583,20 @@ export function BudgetTable({
     const pdfPages: React.ReactNode[] = [];
     let needsPageBreak = false;
 
-    const pushPdfPage = (pageKey: string, content: React.ReactNode) => {
+    const pushPdfPage = (
+        pageKey: string,
+        content: React.ReactNode,
+        centerInPage = false
+    ) => {
         if (needsPageBreak) {
             pdfPages.push(<PdfForcedPageBreak breakKey={`pb-${pageKey}`} />);
         }
         pdfPages.push(
-            <View key={pageKey} wrap={false}>
+            <View
+                key={pageKey}
+                wrap={false}
+                style={[styles.pdfPageRoot, centerInPage ? styles.pdfPageRootCentered : null]}
+            >
                 {content}
             </View>
         );
@@ -627,7 +657,8 @@ export function BudgetTable({
                                 />
                             </SceneImageSlot>
                         </View>
-                    </View>
+                    </View>,
+                    true
                 );
             }
         } else if (sections.length > 0) {
@@ -645,7 +676,7 @@ export function BudgetTable({
             const secId = String(sec.id ?? `sec-${secIdx}`);
             const sectionTitleLead = (
                 <View style={styles.sectionHeaderWrap}>
-                    <Text style={styles.sectionTitle}>
+                    <Text style={styles.sectionHeaderText}>
                         {sanitizeTextForPdf(`${secNum} — ${secLabel}`)}
                     </Text>
                 </View>
@@ -659,8 +690,9 @@ export function BudgetTable({
 
                     pushPdfPage(
                         `${locId}-${secId}-scene-${sceneImg?.id ?? imgIdx}`,
-                        <View style={styles.sectionBlock}>
-                            <SceneImageSlot lead={isFirst ? sectionTitleLead : null}>
+                        <View style={[styles.sectionBlock, styles.sectionPageBlock]}>
+                            {isFirst ? sectionTitleLead : null}
+                            <SceneImageSlot>
                                 <SectionSceneImage
                                     sceneImg={sceneImg}
                                     imageKey={sceneImg?.id ?? `sec-img-${imgIdx}`}
@@ -678,7 +710,8 @@ export function BudgetTable({
                                     itemFinalValue={itemFinalValue}
                                 />
                             ) : null}
-                        </View>
+                        </View>,
+                        true
                     );
                 }
             } else {

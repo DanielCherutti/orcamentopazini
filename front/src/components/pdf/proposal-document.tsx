@@ -278,15 +278,19 @@ const styles = StyleSheet.create({
     sessionRichParagraphSpacer: {
         height: 10,
     },
-    sessionRichImageBase: {
+    sessionImageFrame: {
+        width: '100%',
+        alignItems: 'center',
         marginTop: 4,
         marginBottom: 6,
+    },
+    sessionRichImageBase: {
         objectFit: 'contain',
+        objectPosition: 'center',
     },
     sessionGalleryImageBase: {
-        marginTop: 4,
-        marginBottom: 6,
         objectFit: 'contain',
+        objectPosition: 'center',
     },
     quoteCard: {
         borderWidth: 1,
@@ -1319,16 +1323,19 @@ export const ProposalDocument = ({
                 if (b.src?.trim()) renderedImageKeys.add(b.src.trim());
                 if (src?.trim()) renderedImageKeys.add(src.trim());
                 return (
-                    // eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image
-                    <Image
-                        key={`${rowKey}-img-${i}`}
-                        src={src}
-                        style={[
-                            styles.sessionRichImageBase,
-                            { width: Math.min(520, Math.max(110, b.widthPt ?? 520)) },
-                            ...(Number.isFinite(b.heightPt) ? [{ height: Math.min(520, Math.max(80, Number(b.heightPt))) }] : []),
-                        ]}
-                    />
+                    <View key={`${rowKey}-img-${i}`} style={styles.sessionImageFrame}>
+                        {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
+                        <Image
+                            src={src}
+                            style={[
+                                styles.sessionRichImageBase,
+                                { width: Math.min(520, Math.max(110, b.widthPt ?? 520)) },
+                                ...(Number.isFinite(b.heightPt)
+                                    ? [{ height: Math.min(520, Math.max(80, Number(b.heightPt))) }]
+                                    : []),
+                            ]}
+                        />
+                    </View>
                 );
             }
             const segs = splitCoverHtmlFragmentToSegments(b.content, { preserveEmptyParagraphs: true });
@@ -1900,12 +1907,19 @@ export const ProposalDocument = ({
                                                               proxyPdfImageSrc(raw, settings.app_public_url, pdfEmbeddedImages) ??
                                                               raw;
                                                           return (
-                                                              // eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image
-                                                              <Image
+                                                              <View
                                                                   key={`session-gallery-${sessionRoot.id}-${idx}-${imgIdx}`}
-                                                                  src={src}
-                                                                  style={[styles.sessionGalleryImageBase, { width: 520 }]}
-                                                              />
+                                                                  style={styles.sessionImageFrame}
+                                                              >
+                                                                  {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
+                                                                  <Image
+                                                                      src={src}
+                                                                      style={[
+                                                                          styles.sessionGalleryImageBase,
+                                                                          { width: 520 },
+                                                                      ]}
+                                                                  />
+                                                              </View>
                                                           );
                                                       })
                                                     : null}
