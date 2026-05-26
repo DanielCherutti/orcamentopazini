@@ -6,8 +6,24 @@ export type CoverPdfBlock =
     | { type: "img"; src: string; widthPt?: number; heightPt?: number };
 
 export type CoverPdfTextSegment =
-    | { kind: "paragraph"; text: string; textAlign?: "left" | "center" | "right" | "justify"; isEmpty?: boolean }
-    | { kind: "heading"; level: 1 | 2 | 3; text: string; textAlign?: "left" | "center" | "right" | "justify" };
+    | {
+          kind: "paragraph";
+          /** Texto plano (fallback). */
+          text: string;
+          /** HTML interno do bloco (para renderização rica no PDF). */
+          rawHtml?: string;
+          textAlign?: "left" | "center" | "right" | "justify";
+          isEmpty?: boolean;
+      }
+    | {
+          kind: "heading";
+          level: 1 | 2 | 3;
+          /** Texto plano (fallback). */
+          text: string;
+          /** HTML interno do bloco (para renderização rica no PDF). */
+          rawHtml?: string;
+          textAlign?: "left" | "center" | "right" | "justify";
+      };
 
 function parseTextAlignFromAttrs(attrs: string): "left" | "center" | "right" | "justify" | undefined {
     const m =
@@ -68,17 +84,24 @@ export function splitCoverHtmlFragmentToSegments(
                     segments.push({
                         kind: "paragraph",
                         text: "",
+                        rawHtml: inner,
                         textAlign: parseTextAlignFromAttrs(attrs),
                         isEmpty: true,
                     });
                 }
                 continue;
             }
-            segments.push({ kind: "paragraph", text, textAlign: parseTextAlignFromAttrs(attrs), isEmpty: false });
+            segments.push({
+                kind: "paragraph",
+                text,
+                rawHtml: inner,
+                textAlign: parseTextAlignFromAttrs(attrs),
+                isEmpty: false,
+            });
         } else {
             if (!text.trim()) continue;
             const level = (tag === "h1" ? 1 : tag === "h2" ? 2 : 3) as 1 | 2 | 3;
-            segments.push({ kind: "heading", level, text, textAlign: parseTextAlignFromAttrs(attrs) });
+            segments.push({ kind: "heading", level, text, rawHtml: inner, textAlign: parseTextAlignFromAttrs(attrs) });
         }
     }
     if (segments.length === 0) {

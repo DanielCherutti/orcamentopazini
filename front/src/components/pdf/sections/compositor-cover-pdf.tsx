@@ -99,6 +99,10 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     textAlign: "left",
   },
+  coverParagraphSpacer: {
+    height: 12,
+    marginBottom: 6,
+  },
   coverHeading1: {
     fontSize: 20,
     fontFamily: theme.fonts.bold,
@@ -171,6 +175,59 @@ const styles = StyleSheet.create({
     lineHeight: 1.3,
   },
 });
+
+type InlineRun = { text: string; bold: boolean; italic: boolean };
+
+function decodeBasicEntities(input: string): string {
+  return input
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, "\"")
+    .replace(/&#39;/g, "'");
+}
+
+function parseInlineRuns(html: string): InlineRun[] {
+  const runs: InlineRun[] = [];
+  let bold = false;
+  let italic = false;
+  const re = /<br\s*\/?>|<\/?(strong|b|em|i)\b[^>]*>|<[^>]+>/gi;
+  let last = 0;
+  let m: RegExpExecArray | null;
+
+  const pushText = (raw: string) => {
+    const t = decodeBasicEntities(raw.replace(/\s+/g, " "));
+    if (!t) return;
+    runs.push({ text: t, bold, italic });
+  };
+
+  while ((m = re.exec(html)) !== null) {
+    if (m.index > last) pushText(html.slice(last, m.index));
+    const tag = m[0].toLowerCase();
+    if (tag.startsWith("<br")) {
+      runs.push({ text: "\n", bold, italic });
+    } else if (tag.startsWith("<strong") || tag.startsWith("<b")) {
+      bold = true;
+    } else if (tag.startsWith("</strong") || tag.startsWith("</b")) {
+      bold = false;
+    } else if (tag.startsWith("<em") || tag.startsWith("<i")) {
+      italic = true;
+    } else if (tag.startsWith("</em") || tag.startsWith("</i")) {
+      italic = false;
+    }
+    last = m.index + m[0].length;
+  }
+  if (last < html.length) pushText(html.slice(last));
+  return runs;
+}
+
+function runFontFamily(run: InlineRun): string {
+  if (run.bold && run.italic) return theme.fonts.boldOblique;
+  if (run.bold) return theme.fonts.bold;
+  if (run.italic) return theme.fonts.oblique;
+  return theme.fonts.body;
+}
 
 function resolveClientLogoPdfBox(
   coverProps: CoverBlockProps,
@@ -509,7 +566,7 @@ export function CompositorCoverPdfPage({
               </View>
             );
           }
-          const segs = splitCoverHtmlFragmentToSegments(b.content);
+          const segs = splitCoverHtmlFragmentToSegments(b.content, { preserveEmptyParagraphs: true });
           if (!segs.length) return null;
           return (
             <React.Fragment key={`cover-txt-${i}`}>
@@ -521,22 +578,39 @@ export function CompositorCoverPdfPage({
                       : seg.level === 2
                         ? styles.coverHeading2
                         : styles.coverHeading3;
+                  const runs = seg.rawHtml ? parseInlineRuns(seg.rawHtml) : [];
                   return (
                     <Text
                       key={`${i}-${j}`}
                       style={seg.textAlign ? [hs, { textAlign: seg.textAlign }] : hs}
                     >
-                      {seg.text}
+                      {runs.length
+                        ? runs.map((r, k) => (
+                            <Text key={`${i}-${j}-${k}`} style={{ fontFamily: runFontFamily(r) }}>
+                              {r.text}
+                            </Text>
+                          ))
+                        : seg.text}
                     </Text>
                   );
                 }
+                if (seg.isEmpty) {
+                  return <View key={`${i}-${j}`} style={styles.coverParagraphSpacer} wrap={false} />;
+                }
                 const align = seg.textAlign;
+                const runs = seg.rawHtml ? parseInlineRuns(seg.rawHtml) : [];
                 return (
                   <Text
                     key={`${i}-${j}`}
                     style={align ? [styles.coverText, { textAlign: align }] : styles.coverText}
                   >
-                    {seg.text}
+                    {runs.length
+                      ? runs.map((r, k) => (
+                          <Text key={`${i}-${j}-${k}`} style={{ fontFamily: runFontFamily(r) }}>
+                            {r.text}
+                          </Text>
+                        ))
+                      : seg.text}
                   </Text>
                 );
               })}

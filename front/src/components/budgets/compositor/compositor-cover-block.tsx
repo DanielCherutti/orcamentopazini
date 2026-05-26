@@ -463,6 +463,11 @@ export function CompositorCoverBlock({
           readOnly={Boolean(isReadOnly)}
           value={props.cover_document_html ?? ""}
           onChange={(html) => patch({ cover_document_html: html })}
+          wordPageBottomLeftText={
+            budget?.code?.trim()
+              ? `Código do Orçamento: ${budget.code.trim()}`
+              : undefined
+          }
           wordPageWatermarkUrl={props.cover_watermark_url?.trim() || undefined}
           wordPageWatermarkOpacity={props.cover_watermark_opacity ?? 0.12}
           wordPageClientLogo={

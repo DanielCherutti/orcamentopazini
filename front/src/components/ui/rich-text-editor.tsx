@@ -63,6 +63,8 @@ interface RichTextEditorProps {
     onLayoutChange: (layout: { xPct: number; yPct: number; widthPct: number }) => void;
     onAspectChange: (aspect: number) => void;
   };
+  /** Só `variant="word"`: texto fixo no canto inferior esquerdo da folha. */
+  wordPageBottomLeftText?: string;
   /** Guias visuais de cabeçalho/corpo/rodapé no modo Word. */
   wordPageBands?: {
     headerHeight: number;
@@ -234,6 +236,7 @@ export function RichTextEditor({
   wordPageWatermarkScalePct = 100,
   wordPageWatermarkLayout,
   wordPageClientLogo,
+  wordPageBottomLeftText,
   wordPageBands,
   valueNormalize,
 }: RichTextEditorProps) {
@@ -1105,6 +1108,15 @@ export function RichTextEditor({
                   aspectRatio: "210 / 297",
                 }}
               >
+                {isWord && wordPageBottomLeftText?.trim() ? (
+                  <div
+                    className="pointer-events-none absolute z-[30] select-none text-[9pt] leading-snug text-neutral-700"
+                    style={{ left: "22mm", bottom: "18mm" }}
+                    aria-hidden
+                  >
+                    {wordPageBottomLeftText.trim()}
+                  </div>
+                ) : null}
                 {wordPageWatermarkUrl?.trim() ? (
                   wordPageWatermarkLayout ? (
                     <WordPageWatermark
