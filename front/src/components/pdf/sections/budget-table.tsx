@@ -597,7 +597,11 @@ export function BudgetTable({
             <View
                 key={pageKey}
                 wrap={false}
-                style={[styles.pdfPageRoot, centerInPage ? styles.pdfPageRootCentered : null]}
+                style={
+                    centerInPage
+                        ? [styles.pdfPageRoot, styles.pdfPageRootCentered]
+                        : styles.pdfPageRoot
+                }
             >
                 {content}
             </View>
