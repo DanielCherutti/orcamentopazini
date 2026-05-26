@@ -275,7 +275,8 @@ export const CompositorRichTextEditor = memo(function CompositorRichTextEditor({
   return (
     <RichTextEditor
       value={value}
-      onChange={(html) => onChange(sanitizeRichHtmlForStorage(html))}
+      valueNormalize={sanitizeRichHtmlForStorage}
+      onChange={onChange}
       placeholder={placeholder}
       persistenceKey={persistenceKey}
       variant={variant}

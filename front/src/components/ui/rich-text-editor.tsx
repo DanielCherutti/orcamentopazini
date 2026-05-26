@@ -73,6 +73,11 @@ interface RichTextEditorProps {
     onHeaderHeightChange?: (height: number) => void;
     onFooterHeightChange?: (height: number) => void;
   };
+  /**
+   * Normalização aplicada ao HTML antes de `onChange` (ex.: sanitize ao salvar).
+   * Deve ser a mesma função usada pelo pai em `value`, para não re-sincronizar o editor a cada tecla.
+   */
+  valueNormalize?: (html: string) => string;
 }
 
 const WORD_RIBBON_TABS = [
@@ -230,9 +235,13 @@ export function RichTextEditor({
   wordPageWatermarkLayout,
   wordPageClientLogo,
   wordPageBands,
+  valueNormalize,
 }: RichTextEditorProps) {
   const shouldUseFloatingHeaderImages = variant === "word" && !!wordPageBands;
-  const initialEditorValue = shouldUseFloatingHeaderImages ? hoistFloatingImages(value) : value;
+  const normalizeStoredHtml = (html: string) => valueNormalize?.(html) ?? html;
+  const initialEditorValue = shouldUseFloatingHeaderImages
+    ? hoistFloatingImages(normalizeStoredHtml(value || ""))
+    : normalizeStoredHtml(value || "");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wordPaperRef = useRef<HTMLDivElement>(null);
   const bandScrollRef = useRef<HTMLDivElement>(null);
@@ -287,14 +296,16 @@ export function RichTextEditor({
     content: shouldUseFloatingHeaderImages ? hoistFloatingImages(initialEditorValue) : initialEditorValue,
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
-      lastEmittedHtmlRef.current = html;
-      onChange(html);
+      const stored = normalizeStoredHtml(html);
+      lastEmittedHtmlRef.current = stored;
+      onChange(stored);
       if (!shouldUseFloatingHeaderImages) return;
       const hoisted = getHoistedHtmlIfNeeded(html);
       if (!hoisted) return;
-      scheduleSetContent(editor, hoisted, (next) => {
-        lastEmittedHtmlRef.current = next;
-        onChange(next);
+      const storedHoisted = normalizeStoredHtml(hoisted);
+      scheduleSetContent(editor, hoisted, () => {
+        lastEmittedHtmlRef.current = storedHoisted;
+        onChange(storedHoisted);
       });
     },
     onCreate: ({ editor }) => {
@@ -427,25 +438,30 @@ export function RichTextEditor({
   useEffect(() => {
     if (!editor) return;
     let cancelled = false;
-    const normalized = shouldUseFloatingHeaderImages ? hoistFloatingImages(value || "") : value || "";
-    if (normalized === lastEmittedHtmlRef.current) return;
+    const stored = normalizeStoredHtml(value || "");
+    const normalized = shouldUseFloatingHeaderImages
+      ? hoistFloatingImages(stored)
+      : stored;
+    if (stored === lastEmittedHtmlRef.current) return;
+    if (editor.isFocused) return;
     if (editor.getHTML() === normalized) {
-      lastEmittedHtmlRef.current = normalized;
+      lastEmittedHtmlRef.current = stored;
       return;
     }
     queueMicrotask(() => {
       if (cancelled || editor.isDestroyed) return;
-      if (editor.getHTML() === normalized) {
-        lastEmittedHtmlRef.current = normalized;
+      if (editor.isFocused) return;
+      if (normalizeStoredHtml(editor.getHTML()) === stored) {
+        lastEmittedHtmlRef.current = stored;
         return;
       }
       editor.commands.setContent(normalized, { emitUpdate: false });
-      lastEmittedHtmlRef.current = normalized;
+      lastEmittedHtmlRef.current = stored;
     });
     return () => {
       cancelled = true;
     };
-  }, [value, editor, shouldUseFloatingHeaderImages]);
+  }, [value, editor, shouldUseFloatingHeaderImages, valueNormalize]);
 
   if (!editor) return null;
 
