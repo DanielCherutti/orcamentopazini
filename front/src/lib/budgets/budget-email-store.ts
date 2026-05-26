@@ -2,6 +2,7 @@ import { Table } from "surrealdb";
 import { getDb, isTokenExpiredError, resetDb } from "@/lib/surreal";
 import { requireRecordId, recordIdToString } from "@/lib/surreal-record-ids";
 import { generateThreadPublicToken } from "@/lib/budgets/budget-email-thread-token";
+import { parseRecipientList } from "@/lib/budgets/budget-email-recipients";
 
 export type BudgetEmailMessageRow = {
     id: string;
@@ -10,6 +11,7 @@ export type BudgetEmailMessageRow = {
     direction: "out" | "in";
     from_email: string;
     to_email: string;
+    cc_email?: string;
     subject: string;
     body_text: string;
     internet_message_id?: string;
@@ -42,6 +44,7 @@ function serializeMessage(row: Record<string, unknown>): BudgetEmailMessageRow {
         direction: row.direction === "in" ? "in" : "out",
         from_email: String(row.from_email ?? ""),
         to_email: String(row.to_email ?? ""),
+        cc_email: row.cc_email ? String(row.cc_email) : undefined,
         subject: String(row.subject ?? ""),
         body_text: String(row.body_text ?? ""),
         internet_message_id: row.internet_message_id
@@ -201,6 +204,7 @@ export async function insertBudgetEmailMessage(input: {
     direction: "out" | "in";
     fromEmail: string;
     toEmail: string;
+    ccEmail?: string;
     subject: string;
     bodyText: string;
     internetMessageId?: string;
@@ -219,6 +223,7 @@ export async function insertBudgetEmailMessage(input: {
         direction: input.direction,
         from_email: input.fromEmail,
         to_email: input.toEmail,
+        ...(input.ccEmail ? { cc_email: input.ccEmail } : {}),
         subject: input.subject,
         body_text: input.bodyText,
         ...(input.internetMessageId
@@ -243,6 +248,53 @@ export async function touchThreadSync(threadId: string): Promise<void> {
     } catch (e) {
         if (isTokenExpiredError(e)) resetDb();
     }
+}
+
+export async function collectParticipantEmailsForBudget(budgetId: string): Promise<Set<string>> {
+    const emails = new Set<string>();
+    const threads = await listThreadsForBudget(budgetId);
+    for (const t of threads) {
+        if (t.participant_email) emails.add(t.participant_email);
+    }
+    const messages = await listMessagesForBudget(budgetId);
+    for (const m of messages) {
+        if (m.direction === "out") {
+            for (const addr of parseRecipientList(m.to_email)) emails.add(addr);
+            if (m.cc_email) {
+                for (const addr of parseRecipientList(m.cc_email)) emails.add(addr);
+            }
+        } else if (m.from_email) {
+            emails.add(m.from_email.trim().toLowerCase());
+        }
+    }
+    return emails;
+}
+
+export async function collectAllParticipantEmails(): Promise<Set<string>> {
+    const emails = new Set<string>();
+    const threads = await listThreadsWithOutbound();
+    for (const t of threads) {
+        if (t.participant_email) emails.add(t.participant_email);
+    }
+    const db = await getDb();
+    const res = await db.query<
+        [Array<{ to_email?: string; cc_email?: string; from_email?: string; direction?: string }>]
+    >(
+        `SELECT to_email, cc_email, from_email, direction FROM budget_email_message
+         WHERE direction IN ['out', 'in']`
+    );
+    for (const row of res[0] || []) {
+        if (row.direction === "out" && row.to_email) {
+            for (const addr of parseRecipientList(String(row.to_email))) emails.add(addr);
+            if (row.cc_email) {
+                for (const addr of parseRecipientList(String(row.cc_email))) emails.add(addr);
+            }
+        }
+        if (row.direction === "in" && row.from_email) {
+            emails.add(String(row.from_email).trim().toLowerCase());
+        }
+    }
+    return emails;
 }
 
 export async function collectKnownMessageIdsForBudget(budgetId: string): Promise<Set<string>> {

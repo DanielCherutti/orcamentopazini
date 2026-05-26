@@ -41,6 +41,15 @@ import {
 import { useBudgetEmailSync } from "@/components/budgets/workspace/budget-email-sync-context";
 import { useGlobalBudgetEmailSyncOptional } from "@/components/providers/global-budget-email-sync";
 import { useConfirmDialog } from "@/components/providers/confirm-dialog-provider";
+import {
+    EmailRecipientsChipsInput,
+    type EmailRecipientsChipsInputHandle,
+} from "@/components/budgets/workspace/email-recipients-chips-input";
+import {
+    formatRecipientList,
+    parseRecipientList,
+    validateToAndCc,
+} from "@/lib/budgets/budget-email-recipients";
 import { budgetEditUrl, budgetPdfApiUrl } from "@/lib/budgets/budget-path";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -102,7 +111,10 @@ export function BudgetEmailTab({ budget }: BudgetEmailTabProps) {
     );
 
     const [messages, setMessages] = useState<BudgetEmailMessageDto[]>([]);
-    const [to, setTo] = useState("");
+    const [toEmails, setToEmails] = useState<string[]>([]);
+    const [ccEmails, setCcEmails] = useState<string[]>([]);
+    const toInputRef = useRef<EmailRecipientsChipsInputHandle>(null);
+    const ccInputRef = useRef<EmailRecipientsChipsInputHandle>(null);
     const [subject, setSubject] = useState(defaultSubject);
     const [message, setMessage] = useState("");
     const [includePdf, setIncludePdf] = useState(true);
@@ -160,17 +172,32 @@ export function BudgetEmailTab({ budget }: BudgetEmailTabProps) {
         };
     }, []);
 
+    const applyComposeFromMessages = useCallback(
+        (list: BudgetEmailMessageDto[], participant?: string) => {
+            const lastOut = [...list].reverse().find((m) => m.direction === "out");
+            if (lastOut) {
+                setToEmails(parseRecipientList(lastOut.to_email));
+                setCcEmails(lastOut.cc_email ? parseRecipientList(lastOut.cc_email) : []);
+                return;
+            }
+            if (participant) {
+                setToEmails((prev) =>
+                    prev.length > 0 ? prev : parseRecipientList(participant)
+                );
+            }
+        },
+        []
+    );
+
     const applyConversation = useCallback(
         (res: Awaited<ReturnType<typeof getBudgetEmailConversationAction>>) => {
             if (!isMountedRef.current) return;
             if (res.success && res.messages) {
                 setMessages(res.messages);
-                if (res.participant_email) {
-                    setTo((prev) => prev.trim() || res.participant_email!);
-                }
+                applyComposeFromMessages(res.messages, res.participant_email);
             }
         },
-        []
+        [applyComposeFromMessages]
     );
 
     const loadConversation = useCallback(async () => {
@@ -267,7 +294,10 @@ export function BudgetEmailTab({ budget }: BudgetEmailTabProps) {
         getCustomerAction(clientId).then((res) => {
             if (cancelled || !isMountedRef.current) return;
             if (res.success && res.data?.email?.trim()) {
-                setTo((prev) => prev.trim() || res.data!.email!.trim());
+                const clientEmail = res.data!.email!.trim().toLowerCase();
+                setToEmails((prev) =>
+                    prev.length > 0 ? prev : parseRecipientList(clientEmail)
+                );
             }
         });
         return () => {
@@ -276,22 +306,39 @@ export function BudgetEmailTab({ budget }: BudgetEmailTabProps) {
     }, [budget.client_id]);
 
     const handleSend = async () => {
-        const email = to.trim();
-        if (!email) {
-            toast.error("Informe o e-mail do destinatário.");
+        const toPending = toInputRef.current?.commitPending();
+        if (toPending) {
+            toast.error(toPending);
             return;
         }
+        const ccPending = ccInputRef.current?.commitPending();
+        if (ccPending) {
+            toast.error(ccPending);
+            return;
+        }
+
+        const parsed = validateToAndCc(toEmails, ccEmails);
+        if (!parsed.ok) {
+            toast.error(parsed.error);
+            return;
+        }
+
+        const toPayload = formatRecipientList(parsed.to);
+        const ccPayload =
+            parsed.cc.length > 0 ? formatRecipientList(parsed.cc) : undefined;
 
         setSending(true);
         try {
             const res = hasOutbound
                 ? await sendBudgetEmailReplyAction(budgetId, {
-                      to: email,
+                      to: toPayload,
+                      cc: ccPayload,
                       message: message.trim(),
                       subject: subject.trim() || undefined,
                   })
                 : await sendBudgetProposalByEmailAction(budgetId, {
-                      to: email,
+                      to: toPayload,
+                      cc: ccPayload,
                       message: message.trim() || undefined,
                       subject: subject.trim() || defaultSubject,
                       includePdf,
@@ -503,17 +550,37 @@ export function BudgetEmailTab({ budget }: BudgetEmailTabProps) {
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4 pt-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="budget-email-to">Para</Label>
-                                <Input
-                                    id="budget-email-to"
-                                    type="email"
-                                    value={to}
-                                    onChange={(e) => setTo(e.target.value)}
-                                    disabled={sending || hasConversation}
-                                    className="h-9"
-                                />
-                            </div>
+                            <EmailRecipientsChipsInput
+                                ref={toInputRef}
+                                id="budget-email-to"
+                                label="Para"
+                                emails={toEmails}
+                                onChange={setToEmails}
+                                disabled={sending || hasConversation}
+                                placeholder="email@empresa.com"
+                                reservedEmails={ccEmails}
+                                hint={
+                                    hasConversation
+                                        ? undefined
+                                        : "Digite o e-mail e pressione espaço para fixar. Vários destinatários no mesmo envio."
+                                }
+                            />
+                            <EmailRecipientsChipsInput
+                                ref={ccInputRef}
+                                id="budget-email-cc"
+                                label="Cc"
+                                emails={ccEmails}
+                                onChange={setCcEmails}
+                                disabled={sending || hasConversation}
+                                placeholder="copia@empresa.com"
+                                reservedEmails={toEmails}
+                                optional
+                                hint={
+                                    hasConversation
+                                        ? undefined
+                                        : "Cópia visível para todos (como no Outlook)."
+                                }
+                            />
                             {!hasOutbound ? (
                                 <div className="space-y-2">
                                     <Label htmlFor="budget-email-subject">Assunto</Label>
@@ -573,7 +640,7 @@ export function BudgetEmailTab({ budget }: BudgetEmailTabProps) {
                             <Button
                                 type="button"
                                 className="w-full"
-                                disabled={sending || !to.trim()}
+                                disabled={sending || toEmails.length === 0}
                                 onClick={handleSend}
                             >
                                 {sending ? (

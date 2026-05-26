@@ -27,11 +27,14 @@ import { resolveInviteAppBaseUrl } from "@/lib/proposal-mail-settings";
 import { resolveSmtpConfigForInvite } from "@/lib/proposal-mail-settings";
 import { smtpFromAddress } from "@/lib/imap-config";
 import { resolveBudgetEmailMailboxInfo } from "@/lib/budget-email-mailbox-info";
+import {
+    formatRecipientList,
+    parseRecipientList,
+    validateToAndCc,
+} from "@/lib/budgets/budget-email-recipients";
 import { canUseBudgetEmail } from "@/lib/budgets/budget-status";
 import { getDb } from "@/lib/surreal";
 import { requireRecordId } from "@/lib/surreal-record-ids";
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const EMAIL_LOCKED_ERROR =
     "Envio de e-mail disponível apenas após finalizar o orçamento.";
@@ -60,6 +63,7 @@ export type BudgetEmailMessageDto = {
     direction: "out" | "in";
     from_email: string;
     to_email: string;
+    cc_email?: string;
     subject: string;
     body_text: string;
     has_pdf_attachment: boolean;
@@ -92,6 +96,7 @@ export async function getBudgetEmailConversationAction(budgetId: string): Promis
                 direction: m.direction,
                 from_email: m.from_email,
                 to_email: m.to_email,
+                cc_email: m.cc_email,
                 subject: stripThreadTokenFromSubject(m.subject),
                 body_text: m.body_text,
                 has_pdf_attachment: Boolean(m.has_pdf_attachment),
@@ -221,6 +226,7 @@ async function sendAndRecordMessage(
     budgetId: string,
     payload: {
         to: string;
+        cc?: string;
         subject: string;
         message?: string;
         includePdf: boolean;
@@ -228,8 +234,18 @@ async function sendAndRecordMessage(
         references?: string[];
     }
 ): Promise<{ success: boolean; error?: string }> {
-    const to = payload.to.trim().toLowerCase();
-    const thread = await getOrCreateThread(budgetId, to);
+    const parsed = validateToAndCc(
+        parseRecipientList(payload.to),
+        payload.cc ? parseRecipientList(payload.cc) : []
+    );
+    if (!parsed.ok) return { success: false, error: parsed.error };
+
+    const recipients = parsed.to;
+    const ccRecipients = parsed.cc;
+    const primaryTo = recipients[0]!;
+    const toStored = formatRecipientList(recipients);
+    const ccStored = ccRecipients.length > 0 ? formatRecipientList(ccRecipients) : undefined;
+    const thread = await getOrCreateThread(budgetId, primaryTo);
     const subjectWithToken = appendThreadTokenToSubject(payload.subject, thread.public_token);
 
     const pdfOrigin = (await resolveInviteAppBaseUrl()) ?? undefined;
@@ -255,7 +271,8 @@ async function sendAndRecordMessage(
     const fromEmail = smtpCfg ? smtpFromAddress(smtpCfg).toLowerCase() : "";
 
     const mail = await sendBudgetProposalEmail({
-        to,
+        to: recipients,
+        cc: ccRecipients.length > 0 ? ccRecipients : undefined,
         subject: subjectWithToken,
         message: payload.message,
         companyName,
@@ -280,7 +297,8 @@ async function sendAndRecordMessage(
         budgetId,
         direction: "out",
         fromEmail,
-        toEmail: to,
+        toEmail: toStored,
+        ccEmail: ccStored,
         subject: subjectWithToken,
         bodyText: bodyStored,
         internetMessageId: mail.internetMessageId,
@@ -295,6 +313,7 @@ export async function sendBudgetProposalByEmailAction(
     budgetId: string,
     payload: {
         to: string;
+        cc?: string;
         message?: string;
         subject?: string;
         includePdf?: boolean;
@@ -305,11 +324,6 @@ export async function sendBudgetProposalByEmailAction(
 
     const allowed = await assertBudgetEmailAllowed(budgetId);
     if (!allowed.ok) return { success: false, error: allowed.error };
-
-    const to = payload.to?.trim().toLowerCase();
-    if (!to || !EMAIL_RE.test(to)) {
-        return { success: false, error: "Informe um e-mail válido do destinatário." };
-    }
 
     const pdfOrigin = (await resolveInviteAppBaseUrl()) ?? undefined;
     const pdfResult = await generateBudgetPdfBuffer(budgetId, { pdfRequestOrigin: pdfOrigin });
@@ -325,7 +339,8 @@ export async function sendBudgetProposalByEmailAction(
     const subject = payload.subject?.trim() || defaultSubject;
 
     const res = await sendAndRecordMessage(budgetId, {
-        to,
+        to: payload.to ?? "",
+        cc: payload.cc,
         subject,
         message: payload.message,
         includePdf: payload.includePdf !== false,
@@ -341,6 +356,7 @@ export async function sendBudgetEmailReplyAction(
     budgetId: string,
     payload: {
         to: string;
+        cc?: string;
         message: string;
         subject?: string;
         includePdf?: boolean;
@@ -352,10 +368,6 @@ export async function sendBudgetEmailReplyAction(
     const allowed = await assertBudgetEmailAllowed(budgetId);
     if (!allowed.ok) return { success: false, error: allowed.error };
 
-    const to = payload.to?.trim().toLowerCase();
-    if (!to || !EMAIL_RE.test(to)) {
-        return { success: false, error: "Informe um e-mail válido." };
-    }
     if (!payload.message?.trim()) {
         return { success: false, error: "Escreva uma mensagem para enviar." };
     }
@@ -374,7 +386,8 @@ export async function sendBudgetEmailReplyAction(
     const inReplyTo = last?.internet_message_id;
 
     const res = await sendAndRecordMessage(budgetId, {
-        to,
+        to: payload.to ?? "",
+        cc: payload.cc,
         subject,
         message: payload.message,
         includePdf: false,

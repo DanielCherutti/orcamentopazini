@@ -1,6 +1,8 @@
 import {
     collectAllKnownMessageIds,
+    collectAllParticipantEmails,
     collectKnownMessageIdsForBudget,
+    collectParticipantEmailsForBudget,
     listThreadIdsWithOutboundForBudget,
     listThreadsForBudget,
     listThreadsWithOutbound,
@@ -33,7 +35,7 @@ export async function buildSyncContext(budgetId: string): Promise<BudgetSyncCont
         budgetKey: canonicalTableRecordId("budget", budgetId),
         threads,
         knownIds,
-        participantEmails: new Set(threads.map((t) => t.participant_email)),
+        participantEmails: await collectParticipantEmailsForBudget(budgetId),
         threadIdsWithOutbound,
         scopeBudgetKey: canonicalTableRecordId("budget", budgetId),
     };
@@ -47,7 +49,7 @@ export async function buildGlobalSyncContext(): Promise<EmailSyncContext> {
     return {
         threads,
         knownIds,
-        participantEmails: new Set(threads.map((t) => t.participant_email)),
+        participantEmails: await collectAllParticipantEmails(),
         threadIdsWithOutbound,
         scopeBudgetKey: null,
     };

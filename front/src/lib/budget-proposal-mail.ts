@@ -33,7 +33,8 @@ export type SendBudgetEmailResult =
     | { ok: false; error: string };
 
 export async function sendBudgetProposalEmail(options: {
-    to: string;
+    to: string | string[];
+    cc?: string | string[];
     subject: string;
     message?: string;
     companyName?: string;
@@ -121,10 +122,18 @@ export async function sendBudgetProposalEmail(options: {
 
         const replyTo = cfg.replyTo?.trim() || cfg.from;
 
+        const cc =
+            options.cc == null
+                ? undefined
+                : Array.isArray(options.cc)
+                  ? options.cc
+                  : options.cc;
+
         const info = await transporter.sendMail({
             from: cfg.from,
             replyTo,
             to: options.to,
+            ...(cc && (Array.isArray(cc) ? cc.length > 0 : cc) ? { cc } : {}),
             subject: options.subject,
             text,
             html,
