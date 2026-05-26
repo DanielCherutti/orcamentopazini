@@ -109,6 +109,10 @@ const styles = StyleSheet.create({
     pdfPageRoot: {
         width: '100%',
     },
+    /** Conteúdo contínuo após foto/título — permite quebra de página (ex.: tabela longa). */
+    pdfFlowRoot: {
+        width: '100%',
+    },
     sectionPageBlock: {
         width: '100%',
     },
@@ -116,27 +120,60 @@ const styles = StyleSheet.create({
         marginTop: 5,
         width: '100%',
     },
-    tableFrame: {
-        borderWidth: 1,
-        borderColor: 'transparent',
-        borderRadius: 6,
-        overflow: 'hidden',
+    tableHeaderShell: {
+        width: '100%',
+        borderTopWidth: 1,
+        borderLeftWidth: 1,
+        borderRightWidth: 1,
+        borderColor: '#d1d5db',
+        borderStyle: 'solid',
+        borderTopLeftRadius: 6,
+        borderTopRightRadius: 6,
     },
     tableHeader: {
         flexDirection: 'row',
         borderBottomWidth: 1,
-        borderBottomColor: theme.colors.border,
+        borderBottomColor: '#d1d5db',
+        borderStyle: 'solid',
         paddingVertical: 6,
         paddingHorizontal: 6,
         backgroundColor: '#f3f4f6',
     },
+    /**
+     * Bloco indivisível por linha. borderBottom no mesmo View evita o filho “foot”
+     * ir para a página seguinte na quebra (causa comum de borda inferior ausente).
+     */
+    tableRowShell: {
+        width: '100%',
+        borderLeftWidth: 1,
+        borderRightWidth: 1,
+        borderBottomWidth: 2,
+        borderColor: '#d1d5db',
+        borderStyle: 'solid',
+    },
+    tableRowShellLast: {
+        borderBottomWidth: 2,
+        borderBottomLeftRadius: 6,
+        borderBottomRightRadius: 6,
+    },
+    /** Reforço no fim absoluto da tabela (última página). */
+    tableEndCap: {
+        width: '100%',
+        height: 2,
+        backgroundColor: '#d1d5db',
+        borderLeftWidth: 1,
+        borderRightWidth: 1,
+        borderBottomWidth: 1,
+        borderColor: '#d1d5db',
+        borderStyle: 'solid',
+        borderBottomLeftRadius: 6,
+        borderBottomRightRadius: 6,
+    },
     tableRow: {
         flexDirection: 'row',
-        borderBottomWidth: 0.5,
-        borderBottomColor: theme.colors.border,
         paddingVertical: 7,
         paddingHorizontal: 6,
-        alignItems: 'center'
+        alignItems: 'center',
     },
     colCode: { flex: 6, paddingRight: 4 },
     colDesc: { flex: 20, paddingRight: 5 },
@@ -308,25 +345,36 @@ function SectionItemsTable({
     costsDisplayMode: CostDisplayMode;
     itemFinalValue: Map<string, number>;
 }) {
+    const items = sec.items ?? [];
     return (
-        <View style={styles.table}>
-            <View style={styles.tableFrame}>
+        <View style={styles.table} wrap>
+            <View wrap={false} style={styles.tableHeaderShell}>
                 <SectionTableHeader showCosts={showCosts} laborCols={laborCols} />
-                {(sec.items || []).map((item, idx) => {
-                    const finalVal = Number(itemFinalValue.get(String(item.id)) ?? 0);
-                    const cells = pdfItemValueCells(item, finalVal, laborCols);
-                    const showObservation = Boolean(
-                        (item as unknown as Record<string, unknown>).observation_show_on_print
-                    );
-                    const observationText = stripHtmlToText(
-                        String((item as unknown as Record<string, unknown>).observation_text ?? '')
-                    ).trim();
-                    return (
+            </View>
+            {items.map((item, idx) => {
+                const finalVal = Number(itemFinalValue.get(String(item.id)) ?? 0);
+                const cells = pdfItemValueCells(item, finalVal, laborCols);
+                const showObservation = Boolean(
+                    (item as unknown as Record<string, unknown>).observation_show_on_print
+                );
+                const observationText = stripHtmlToText(
+                    String((item as unknown as Record<string, unknown>).observation_text ?? '')
+                ).trim();
+                const isLastRow = idx === items.length - 1;
+                const rowBlock = (
+                    <View
+                        style={[
+                            styles.tableRowShell,
+                            isLastRow ? styles.tableRowShellLast : null,
+                        ]}
+                    >
                         <View
-                            key={item.id}
                             style={[
                                 styles.tableRow,
-                                { backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f8fafc' },
+                                {
+                                    backgroundColor:
+                                        idx % 2 === 0 ? '#ffffff' : '#f8fafc',
+                                },
                             ]}
                         >
                             <Text style={[styles.textSmall, styles.colCode]}>
@@ -348,9 +396,15 @@ function SectionItemsTable({
                             </Text>
                             {showCosts && laborCols ? (
                                 <>
-                                    <Text style={[styles.textSmall, styles.colMoney]}>{cells.equip}</Text>
-                                    <Text style={[styles.textSmall, styles.colMoney]}>{cells.mo}</Text>
-                                    <Text style={[styles.textSmall, styles.colTotal]}>{cells.total}</Text>
+                                    <Text style={[styles.textSmall, styles.colMoney]}>
+                                        {cells.equip}
+                                    </Text>
+                                    <Text style={[styles.textSmall, styles.colMoney]}>
+                                        {cells.mo}
+                                    </Text>
+                                    <Text style={[styles.textSmall, styles.colTotal]}>
+                                        {cells.total}
+                                    </Text>
                                 </>
                             ) : showCosts ? (
                                 <Text style={[styles.textSmall, styles.colTotal]}>
@@ -358,15 +412,28 @@ function SectionItemsTable({
                                 </Text>
                             ) : null}
                         </View>
+                    </View>
+                );
+                if (!isLastRow) {
+                    return (
+                        <View key={item.id} wrap={false}>
+                            {rowBlock}
+                        </View>
                     );
-                })}
-            </View>
+                }
+                return (
+                    <View key={item.id} wrap={false}>
+                        {rowBlock}
+                        <View style={styles.tableEndCap} />
+                    </View>
+                );
+            })}
             {showCosts && costsDisplayMode === 'section' ? (
-                <View style={styles.subtotalRow}>
+                <View style={styles.subtotalRow} wrap={false}>
                     <Text style={[styles.textSmall, styles.textBold]}>
                         Total trecho:{' '}
                         {formatMoney(
-                            (sec.items ?? []).reduce(
+                            items.reduce(
                                 (sum, item) => sum + Number(itemFinalValue.get(String(item.id)) ?? 0),
                                 0
                             )
@@ -576,6 +643,7 @@ export function BudgetTable({
     const pdfPages: React.ReactNode[] = [];
     let needsPageBreak = false;
 
+    /** Nova folha + bloco que não deve ser cortado (foto, título). */
     const pushPdfPage = (pageKey: string, content: React.ReactNode) => {
         if (needsPageBreak) {
             pdfPages.push(
@@ -588,6 +656,15 @@ export function BudgetTable({
             </View>
         );
         needsPageBreak = true;
+    };
+
+    /** Continua no fluxo da página — tabela longa pode quebrar em várias folhas. */
+    const pushFlowBlock = (blockKey: string, content: React.ReactNode) => {
+        pdfPages.push(
+            <View key={blockKey} style={styles.pdfFlowRoot}>
+                {content}
+            </View>
+        );
     };
 
     for (const [locIdx, loc] of locations.entries()) {
@@ -673,6 +750,7 @@ export function BudgetTable({
                     const sceneImg = sceneList[imgIdx];
                     const isFirst = imgIdx === 0;
                     const isLast = imgIdx === sceneList.length - 1;
+                    const hasItems = (sec.items?.length ?? 0) > 0;
 
                     pushPdfPage(
                         `${locId}-${secId}-scene-${sceneImg?.id ?? imgIdx}`,
@@ -687,7 +765,13 @@ export function BudgetTable({
                                     figurePageCollector={figurePageCollector}
                                 />
                             </SceneImageSlot>
-                            {isLast ? (
+                        </View>
+                    );
+
+                    if (isLast && hasItems) {
+                        pushFlowBlock(
+                            `${locId}-${secId}-items`,
+                            <View style={styles.sectionBlock}>
                                 <SectionItemsTable
                                     sec={sec}
                                     showCosts={showCosts}
@@ -695,18 +779,18 @@ export function BudgetTable({
                                     costsDisplayMode={costsDisplayMode}
                                     itemFinalValue={itemFinalValue}
                                 />
-                            ) : null}
-                        </View>
-                    );
+                            </View>
+                        );
+                    }
                 }
             } else {
                 pushPdfPage(
+                    `${locId}-${secId}-table-head`,
+                    <View style={styles.sectionBlock}>{sectionTitleLead}</View>
+                );
+                pushFlowBlock(
                     `${locId}-${secId}-table`,
                     <View style={styles.sectionBlock}>
-                        <View style={styles.sectionLead}>
-                            {sectionTitleLead}
-                            <SectionTableHeader showCosts={showCosts} laborCols={laborCols} />
-                        </View>
                         <SectionItemsTable
                             sec={sec}
                             showCosts={showCosts}

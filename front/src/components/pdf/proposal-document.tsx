@@ -1103,10 +1103,11 @@ function InnerPdfPage({
         showInnerHeaderBand && (customHeader || hasInnerHeaderLayout)
             ? customHeaderReserve
             : (showRunningHeader ? INNER_HEADER_RESERVE : 0);
-    const footerReserve =
-        showInnerFooterBand && (customFooter || hasInnerFooterLayout)
-            ? customFooterReserve
-            : 0;
+    const footerReserve = !showInnerFooterBand
+        ? 0
+        : customFooter || hasInnerFooterLayout
+          ? customFooterReserve
+          : INNER_FOOTER_RESERVE;
 
     const wmTop = headerReserve > 0 ? INNER_PAD + headerReserve : INNER_PAD;
     const wmHeight = Math.max(40, INNER_PAGE_H - wmTop - (INNER_PAD + footerReserve));
