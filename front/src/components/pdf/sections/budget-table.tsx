@@ -14,8 +14,6 @@ import {
 import { type PdfEmbeddedImages, proxyPdfImageSrc } from '@/lib/pdf/pdf-image-src';
 import { stripHtmlToText } from '@/lib/pdf/html-to-plain-text';
 import { sanitizeTextForPdf } from '@/lib/pdf/sanitize-pdf-text';
-import { PDF_DETAIL_PAGE_CONTENT_H } from '@/lib/pdf/scene-image-page-breaks';
-
 const styles = StyleSheet.create({
     locationBlock: {
         marginBottom: 20
@@ -110,11 +108,6 @@ const styles = StyleSheet.create({
     },
     pdfPageRoot: {
         width: '100%',
-    },
-    /** Centraliza o bloco no meio da área útil da folha (eixo vertical). */
-    pdfPageRootCentered: {
-        minHeight: PDF_DETAIL_PAGE_CONTENT_H,
-        justifyContent: 'center',
     },
     sectionPageBlock: {
         width: '100%',
@@ -583,26 +576,14 @@ export function BudgetTable({
     const pdfPages: React.ReactNode[] = [];
     let needsPageBreak = false;
 
-    const pushPdfPage = (
-        pageKey: string,
-        content: React.ReactNode,
-        centerInPage = false
-    ) => {
+    const pushPdfPage = (pageKey: string, content: React.ReactNode) => {
         if (needsPageBreak) {
             pdfPages.push(
                 <PdfForcedPageBreak key={`pb-${pageKey}`} breakKey={`pb-${pageKey}`} />
             );
         }
         pdfPages.push(
-            <View
-                key={pageKey}
-                wrap={false}
-                style={
-                    centerInPage
-                        ? [styles.pdfPageRoot, styles.pdfPageRootCentered]
-                        : styles.pdfPageRoot
-                }
-            >
+            <View key={pageKey} wrap={false} style={styles.pdfPageRoot}>
                 {content}
             </View>
         );
@@ -663,8 +644,7 @@ export function BudgetTable({
                                 />
                             </SceneImageSlot>
                         </View>
-                    </View>,
-                    true
+                    </View>
                 );
             }
         } else if (sections.length > 0) {
@@ -716,8 +696,7 @@ export function BudgetTable({
                                     itemFinalValue={itemFinalValue}
                                 />
                             ) : null}
-                        </View>,
-                        true
+                        </View>
                     );
                 }
             } else {
