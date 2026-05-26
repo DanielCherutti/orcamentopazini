@@ -1090,24 +1090,21 @@ function InnerPdfPage({
         ? proxyPdfImageSrc(logoUrl, settings.app_public_url, pdfEmbeddedImages)
         : undefined;
     const showRunningHeader = showInnerHeaderBand && pdfInnerRunningHeaderShouldShow(settings);
-    const code = sanitizeTextForPdf((budget.code || "").trim() || "—");
     const customHeader = showInnerHeaderBand ? (innerHeaderText ?? "").trim() : "";
     const customFooter = showInnerFooterBand ? (innerFooterText ?? "").trim() : "";
     const innerHeaderLayouts = [headerFooterProps?.all_header_layout, headerFooterProps?.inner_header_layout];
     const innerFooterLayouts = [headerFooterProps?.all_footer_layout, headerFooterProps?.inner_footer_layout];
     const hasInnerHeaderLayout = hasAnyHeaderFooterPdfLayout(innerHeaderLayouts);
     const hasInnerFooterLayout = hasAnyHeaderFooterPdfLayout(innerFooterLayouts);
+    const hasInnerFooterContent = Boolean(customFooter || hasInnerFooterLayout);
     const customHeaderReserve = editorBandHeightToPt(innerHeaderHeight, INNER_HEADER_RESERVE);
     const customFooterReserve = editorBandHeightToPt(innerFooterHeight, INNER_FOOTER_RESERVE);
     const headerReserve =
         showInnerHeaderBand && (customHeader || hasInnerHeaderLayout)
             ? customHeaderReserve
             : (showRunningHeader ? INNER_HEADER_RESERVE : 0);
-    const footerReserve = !showInnerFooterBand
-        ? 0
-        : customFooter || hasInnerFooterLayout
-          ? customFooterReserve
-          : INNER_FOOTER_RESERVE;
+    const footerReserve =
+        showInnerFooterBand && hasInnerFooterContent ? customFooterReserve : 0;
 
     const wmTop = headerReserve > 0 ? INNER_PAD + headerReserve : INNER_PAD;
     const wmHeight = Math.max(40, INNER_PAGE_H - wmTop - (INNER_PAD + footerReserve));
@@ -1222,16 +1219,14 @@ function InnerPdfPage({
                     ) : null}
                 </View>
             ) : null}
-            {showInnerFooterBand ? (
+            {showInnerFooterBand && hasInnerFooterContent ? (
                 <View
                     style={[
                         styles.runningFooterBand,
                         {
                             ...(hasInnerFooterLayout ? { bottom: 0, left: 0, right: 0 } : {}),
-                            minHeight: customFooter || hasInnerFooterLayout
-                                ? customFooterReserve
-                                : INNER_FOOTER_RESERVE,
-                            height: footerReserve || INNER_FOOTER_RESERVE,
+                            minHeight: customFooterReserve,
+                            height: footerReserve,
                             paddingTop: hasInnerFooterLayout ? 0 : 6,
                         },
                     ]}
@@ -1243,21 +1238,17 @@ function InnerPdfPage({
                             pageScope="inner"
                             region="footer"
                             width={hasInnerFooterLayout ? PDF_PAGE_W : PDF_PAGE_W - 2 * INNER_PAD}
-                            height={footerReserve || INNER_FOOTER_RESERVE}
+                            height={footerReserve}
                             appPublicUrl={settings.app_public_url}
                             pdfEmbeddedImages={pdfEmbeddedImages}
                             pageNumbering={headerFooterProps?.page_numbering}
                         />
                     ) : (
-                        customFooter ? (
-                            renderTextWithPageNumbers(
-                                customFooter,
-                                styles.runningFooterMuted,
-                                headerFooterProps?.page_numbering,
-                                "inner"
-                            )
-                        ) : (
-                            <Text style={styles.runningFooterMuted}>{`Cód. ${code}`}</Text>
+                        renderTextWithPageNumbers(
+                            customFooter,
+                            styles.runningFooterMuted,
+                            headerFooterProps?.page_numbering,
+                            "inner"
                         )
                     )}
                 </View>

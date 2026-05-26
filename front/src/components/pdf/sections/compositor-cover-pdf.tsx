@@ -11,12 +11,14 @@ import { theme } from "../theme";
 import { sanitizeTextForPdf } from "@/lib/pdf/sanitize-pdf-text";
 import {
     buildCoverPdfBandContext,
+    formatCoverBudgetCodeLabel,
     formatCoverPdfFooterLeftText,
     formatCoverPdfFooterRightText,
     resolveCoverPageShowFooterBand,
     resolveCoverPageShowHeaderBand,
     resolveCoverPdfHeaderCompanyText,
     resolveCoverPdfHeaderLogoUrl,
+    shouldShowCoverBudgetCodeStamp,
 } from "@/lib/pdf/cover-pdf-band-resolve";
 import { PdfProposalHeaderBand } from "@/components/pdf/pdf-proposal-header-band";
 import { DEFAULT_CLIENT_LOGO_LAYOUT } from "@/lib/budgets/cover-client-logo-layout";
@@ -155,6 +157,18 @@ const styles = StyleSheet.create({
   coverFooterMuted: {
     fontSize: 8,
     color: theme.colors.textLight,
+  },
+  /** Código do orçamento na capa — só texto, sem linha de rodapé. */
+  coverBudgetCodeStamp: {
+    position: "absolute",
+    bottom: BODY_PAD_V,
+    left: BODY_PAD_H,
+    zIndex: 4,
+  },
+  coverBudgetCodeText: {
+    fontSize: 9,
+    color: theme.colors.text,
+    lineHeight: 1.3,
   },
 });
 
@@ -327,10 +341,20 @@ export function CompositorCoverPdfPage({
       );
   const footerLeft = sanitizeTextForPdf(formatCoverPdfFooterLeftText(coverProps, bandCtx));
   const footerRight = sanitizeTextForPdf(formatCoverPdfFooterRightText(coverProps, bandCtx));
+  const showCoverBudgetCodeStamp = shouldShowCoverBudgetCodeStamp(
+    coverProps,
+    Boolean(customCoverFooterText),
+    hasCoverFooterLayout,
+  );
+  const coverBudgetCodeLabel = sanitizeTextForPdf(formatCoverBudgetCodeLabel(bandCtx));
+  const hasCoverFooterBandContent = Boolean(
+    customCoverFooterText || hasCoverFooterLayout || footerLeft.trim() || footerRight.trim(),
+  );
+  const showCoverFooterBand = showCoverFooter && hasCoverFooterBandContent;
   const pagePaddingTop = showCoverHeader
     ? (hasCoverHeaderLayout ? headerReserve : BODY_PAD_V + headerReserve)
     : BODY_PAD_V;
-  const pagePaddingBottom = showCoverFooter
+  const pagePaddingBottom = showCoverFooterBand
     ? (hasCoverFooterLayout ? footerReserve : BODY_PAD_V + footerReserve)
     : BODY_PAD_V;
 
@@ -340,7 +364,7 @@ export function CompositorCoverPdfPage({
     headerReserve,
     footerReserve,
     showCoverHeader,
-    showCoverFooter,
+    showCoverFooterBand,
   );
 
   return (
@@ -408,7 +432,7 @@ export function CompositorCoverPdfPage({
           )}
         </View>
       ) : null}
-      {showCoverFooter ? (
+      {showCoverFooterBand ? (
         <View
           style={[
             styles.coverFooterBand,
@@ -445,6 +469,11 @@ export function CompositorCoverPdfPage({
               <Text style={styles.coverFooterMuted}>{footerRight}</Text>
             </>
           )}
+        </View>
+      ) : null}
+      {showCoverBudgetCodeStamp ? (
+        <View style={styles.coverBudgetCodeStamp} fixed>
+          <Text style={styles.coverBudgetCodeText}>{coverBudgetCodeLabel}</Text>
         </View>
       ) : null}
       {clientLogoSrc && clientLogoBox ? (

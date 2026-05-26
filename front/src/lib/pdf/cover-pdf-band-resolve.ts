@@ -80,6 +80,21 @@ export function formatCoverPdfFooterLeftText(
     return "";
 }
 
+/** Texto fixo na capa (canto inferior esquerdo) — não é faixa de rodapé. */
+export function formatCoverBudgetCodeLabel(ctx: CoverPdfBandContext): string {
+    return `Código do Orçamento: ${ctx.code}`;
+}
+
+export function shouldShowCoverBudgetCodeStamp(
+    coverProps: CoverBlockProps,
+    hasCustomCoverFooterHtml: boolean,
+    hasCoverFooterLayout: boolean,
+): boolean {
+    if (hasCustomCoverFooterHtml || hasCoverFooterLayout) return false;
+    if (coverProps.cover_pdf_footer_left_template?.trim()) return false;
+    return true;
+}
+
 export function formatCoverPdfFooterRightText(
     coverProps: CoverBlockProps,
     ctx: CoverPdfBandContext
