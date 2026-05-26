@@ -365,7 +365,7 @@ function SectionItemsTable({
                     <View
                         style={[
                             styles.tableRowShell,
-                            isLastRow ? styles.tableRowShellLast : null,
+                            ...(isLastRow ? [styles.tableRowShellLast] : []),
                         ]}
                     >
                         <View
