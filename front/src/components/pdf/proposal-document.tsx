@@ -41,6 +41,7 @@ import {
 } from '@/components/budgets/compositor/compositor-content-utils';
 import {
     filterIntroTocEntries,
+    flattenDocumentBlocks,
     isIntroTocEntry,
 } from '@/components/budgets/compositor/compositor-toc-utils';
 
@@ -1023,6 +1024,78 @@ function collectSessionTocRowsForPrintedLayout(
     return out;
 }
 
+type PrintedTocRow = { number: string; title: string; depth: number; page: number };
+
+/** Sumário do PDF na ordem do documento (sessões, orçamento, adequações). */
+function collectCompositorTocRowsInDocumentOrder(
+    roots: BudgetBlock[],
+    opts: {
+        quotePage: number;
+        detailStartPage: number;
+        sectionNumberPdf: number;
+        detailTitle: string;
+        sessionPages: Map<string, number>;
+        itemsByBlock: Record<string, BudgetItem[]>;
+        imagesByBlock: Record<string, Array<{ url?: string; composed_url?: string }>>;
+        locations: BudgetLocation[] | undefined;
+        showRunningHeader: boolean;
+        showCosts: boolean;
+        costsDisplayMode: "location" | "section" | "general";
+    }
+): PrintedTocRow[] {
+    const sessionRows = collectSessionTocRowsForPrintedLayout(
+        roots,
+        opts.sessionPages,
+        opts.itemsByBlock,
+        opts.imagesByBlock
+    );
+    const sessionRowByNumber = new Map(
+        sessionRows.filter((r) => r.number).map((r) => [r.number, r] as const)
+    );
+    const adequacoesRows = estimateDetailTocRowsFromScope(opts.locations, {
+        sectionNumber: opts.sectionNumberPdf,
+        detailStartPage: opts.detailStartPage,
+        showRunningHeader: opts.showRunningHeader,
+        showCosts: opts.showCosts,
+        costsDisplayMode: opts.costsDisplayMode,
+        detailTitle: opts.detailTitle,
+    });
+    const out: PrintedTocRow[] = [];
+    let adequacoesInserted = false;
+
+    for (const b of flattenDocumentBlocks(roots)) {
+        if (b.type === "quote" && b.number) {
+            out.push({
+                number: b.number,
+                title: "ORÇAMENTO",
+                depth: safeLayoutIndentDepth(b.depth, 24),
+                page:
+                    Number.isFinite(opts.quotePage) && opts.quotePage > 0
+                        ? Math.min(Math.trunc(opts.quotePage), 99999)
+                        : 1,
+            });
+        } else if (b.type === "scope" && b.number && !adequacoesInserted) {
+            out.push(...adequacoesRows);
+            adequacoesInserted = true;
+        } else if (b.type === "session" && b.number) {
+            const row = sessionRowByNumber.get(b.number);
+            if (row) {
+                out.push(row);
+                sessionRowByNumber.delete(b.number);
+            }
+        }
+    }
+
+    for (const row of sessionRowByNumber.values()) {
+        out.push(row);
+    }
+    if (!adequacoesInserted && adequacoesRows.length > 0) {
+        out.push(...adequacoesRows);
+    }
+
+    return out;
+}
+
 const INNER_HEADER_RESERVE = 108;
 const INNER_FOOTER_RESERVE = 44;
 const INNER_PAGE_H = PDF_PAGE_H;
@@ -1455,9 +1528,15 @@ export const ProposalDocument = ({
         segments = [{ kind: "cover" }, ...segments];
     }
 
-    const { detailPage: fallbackDetailPage, sessionPages: fallbackSessionPages } =
-        assignPdfSegmentPages(segments);
+    const {
+        quotePage: fallbackQuotePage,
+        detailPage: fallbackDetailPage,
+        sessionPages: fallbackSessionPages,
+    } = assignPdfSegmentPages(segments);
     const resolvedSegmentPages = resolvedPagination?.segmentStartPages ?? {};
+    const quotePage = Number.isFinite(resolvedSegmentPages.quote)
+        ? Math.max(1, Math.trunc(resolvedSegmentPages.quote))
+        : fallbackQuotePage;
     const detailPage = Number.isFinite(resolvedSegmentPages.detail)
         ? Math.max(1, Math.trunc(resolvedSegmentPages.detail))
         : fallbackDetailPage;
@@ -1507,23 +1586,32 @@ export const ProposalDocument = ({
     );
     const quotePercents = readQuoteSplitPercents(budget);
 
-    const sessionTocRows = hasCompositorStructure
-        ? collectSessionTocRowsForPrintedLayout(
-              compositorPdf!.roots,
-              sessionPages,
-              compositorItemsByBlock,
-              compositorImagesByBlock
+    const tocRows = hasCompositorStructure
+        ? filterIntroTocEntries(
+              collectCompositorTocRowsInDocumentOrder(compositorPdf!.roots, {
+                  quotePage,
+                  detailStartPage: detailPage,
+                  sectionNumberPdf,
+                  detailTitle: detailSectionTitle,
+                  sessionPages,
+                  itemsByBlock: compositorItemsByBlock,
+                  imagesByBlock: compositorImagesByBlock,
+                  locations,
+                  showRunningHeader: pdfInnerRunningHeaderShouldShow(settings),
+                  showCosts: detailShowCosts,
+                  costsDisplayMode: detailCostsMode,
+              })
           )
-        : [];
-    const adequacoesTocRows = estimateDetailTocRowsFromScope(locations, {
-        sectionNumber: sectionNumberPdf,
-        detailStartPage: detailPage,
-        showRunningHeader: pdfInnerRunningHeaderShouldShow(settings),
-        showCosts: detailShowCosts,
-        costsDisplayMode: detailCostsMode,
-        detailTitle: detailSectionTitle,
-    });
-    const tocRows = filterIntroTocEntries([...sessionTocRows, ...adequacoesTocRows]);
+        : filterIntroTocEntries(
+              estimateDetailTocRowsFromScope(locations, {
+                  sectionNumber: sectionNumberPdf,
+                  detailStartPage: detailPage,
+                  showRunningHeader: pdfInnerRunningHeaderShouldShow(settings),
+                  showCosts: detailShowCosts,
+                  costsDisplayMode: detailCostsMode,
+                  detailTitle: detailSectionTitle,
+              })
+          );
 
     const figureRows =
         hasCompositorStructure && includeFiguresPage

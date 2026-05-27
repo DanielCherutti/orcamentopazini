@@ -35,9 +35,17 @@ export function documentPageWeight(block: BudgetBlock, items: Record<string, Bud
       return 0.75;
     case "scope":
       return 2.25;
+    case "quote":
+      return 1;
     default:
       return 0.45;
   }
+}
+
+function chapterTitleForToc(block: BudgetBlock): string {
+  if (block.type === "quote") return "ORÇAMENTO";
+  if (block.type === "scope") return getScopeBlockLabel(block.label);
+  return (block.label || "Sessão").trim() || "Sessão";
 }
 
 export interface TocEntryModel {
@@ -79,14 +87,11 @@ export function buildTocModel(
   let cumulative = 1;
 
   for (const b of ordered) {
-    if ((b.type === "session" || b.type === "scope") && b.number) {
+    if ((b.type === "session" || b.type === "scope" || b.type === "quote") && b.number) {
       const page = Math.max(1, Math.floor(cumulative));
       entries.push({
         number: b.number,
-        title:
-          b.type === "scope"
-            ? getScopeBlockLabel(b.label)
-            : (b.label || "Sessão").trim() || "Sessão",
+        title: chapterTitleForToc(b),
         depth: b.depth,
         page,
       });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, memo } from "react";
+import { useRef, useState, memo } from "react";
 import { Image as ImageIcon, Package, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
@@ -140,7 +140,7 @@ export const CompositorRichTextEditor = memo(function CompositorRichTextEditor({
   wordPageClientLogo,
   wordPageBands,
 }: CompositorRichTextEditorProps) {
-  const [insertImage, setInsertImage] = useState<((url: string) => void) | null>(null);
+  const insertImageRef = useRef<(url: string) => void>(() => {});
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [productOpen, setProductOpen] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
@@ -163,7 +163,7 @@ export const CompositorRichTextEditor = memo(function CompositorRichTextEditor({
       toast.error("Este produto não possui imagem.");
       return;
     }
-    insertImage?.(product.imageUrl);
+    insertImageRef.current(product.imageUrl);
     setProductOpen(false);
   };
 
@@ -206,7 +206,7 @@ export const CompositorRichTextEditor = memo(function CompositorRichTextEditor({
                   type="button"
                   className="relative aspect-video w-full overflow-hidden rounded-md border bg-muted/30 hover:ring-2 hover:ring-primary"
                   onClick={() => {
-                    insertImage?.(img.composed_url || img.url);
+                    insertImageRef.current(img.composed_url || img.url);
                     setGalleryOpen(false);
                   }}
                 >
@@ -286,7 +286,9 @@ export const CompositorRichTextEditor = memo(function CompositorRichTextEditor({
       readOnly={readOnly}
       onUploadImage={handleUploadImage}
       extraToolbarItems={extraToolbarItems}
-      onEditorReady={(fn) => setInsertImage(() => fn)}
+      onEditorReady={(fn) => {
+        insertImageRef.current = fn;
+      }}
       wordPageWatermarkUrl={wordPageWatermarkUrl}
       wordPageWatermarkOpacity={wordPageWatermarkOpacity}
       wordPageWatermarkScalePct={wordPageWatermarkScalePct}

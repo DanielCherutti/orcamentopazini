@@ -154,6 +154,31 @@ function scheduleSetContent(editor: Editor, html: string, onApplied?: (next: str
   });
 }
 
+/** Evita flushSync do TipTap ao montar EditorContent durante o render do pai. */
+function TiptapEditorSurface({
+  editor,
+  className,
+  style,
+}: {
+  editor: Editor;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, [editor]);
+  if (!mounted) {
+    return <div className={className} style={style} aria-hidden />;
+  }
+  return (
+    <div className={className} style={style}>
+      <EditorContent editor={editor} />
+    </div>
+  );
+}
+
 const FontSizeMark = Mark.create({
   name: 'fontSize',
   addAttributes() {
@@ -319,16 +344,19 @@ export function RichTextEditor({
         });
       }
       if (onEditorReady) {
-        onEditorReady((url: string) => {
-          editor
-            .chain()
-            .focus()
-            .setImage(
-              shouldUseFloatingHeaderImages
-                ? { src: url, floating: true, x: 8, y: 8, width: 96 }
-                : { src: url }
-            )
-            .run();
+        queueMicrotask(() => {
+          if (editor.isDestroyed) return;
+          onEditorReady((url: string) => {
+            editor
+              .chain()
+              .focus()
+              .setImage(
+                shouldUseFloatingHeaderImages
+                  ? { src: url, floating: true, x: 8, y: 8, width: 96 }
+                  : { src: url }
+              )
+              .run();
+          });
         });
       }
     },
@@ -771,7 +799,7 @@ export function RichTextEditor({
       className="word-band-editor-scroll h-full overflow-visible [&_.tiptap]:!bg-transparent"
       style={wordBandEditorVars}
     >
-      <EditorContent editor={editor} />
+      <TiptapEditorSurface editor={editor} />
     </div>
   );
 
@@ -1266,7 +1294,7 @@ export function RichTextEditor({
                   </>
                 ) : (
                   <div className="relative z-0 min-h-full flex-1 [&_.tiptap]:!bg-transparent [&_.tiptap]:min-h-full">
-                    <EditorContent editor={editor} />
+                    <TiptapEditorSurface editor={editor} />
                   </div>
                 )}
               </div>
@@ -1293,7 +1321,7 @@ export function RichTextEditor({
             )}
           </div>
         </fieldset>
-        <EditorContent editor={editor} />
+        <TiptapEditorSurface editor={editor} className="[&_.tiptap-content]:min-h-[300px]" />
       </div>
     </>
   );

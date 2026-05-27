@@ -329,7 +329,7 @@ export function buildTree(
   };
   sortChildren(roots);
 
-  // 4. Numeração hierárquica para capítulos (session/scope): 1, 1.1, 2, …
+  // 4. Numeração hierárquica para capítulos (session/scope/quote): 1, 1.1, 2, …
   const assignNumbers = (
     nodes: BudgetBlock[],
     sessionParentNumber: string,
@@ -338,7 +338,7 @@ export function buildTree(
     let sessionIndex = 0;
     for (const node of nodes) {
       node.depth = depth;
-      if (node.type === "session" || node.type === "scope") {
+      if (node.type === "session" || node.type === "scope" || node.type === "quote") {
         sessionIndex++;
         node.number = sessionParentNumber
           ? `${sessionParentNumber}.${sessionIndex}`

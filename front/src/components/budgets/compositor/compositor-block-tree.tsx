@@ -644,11 +644,18 @@ function QuoteRenderer({ block, budgetId }: CompositorRendererProps) {
             id={`block-${block.id}`}
             className="rounded-lg border-2 border-dashed border-primary/30 bg-primary/5 p-5 space-y-3"
         >
-            <div className="flex items-center gap-2">
-                <Table2 className="h-5 w-5 text-primary" />
-                <span className="font-bold text-sm text-primary uppercase tracking-wide">
-                    ORÇAMENTO
-                </span>
+            <div className="flex items-baseline gap-3 pb-2 border-b-2 border-primary/50">
+                {block.number && (
+                    <span className="shrink-0 font-mono font-bold text-2xl text-primary">
+                        {block.number}.
+                    </span>
+                )}
+                <div className="flex items-center gap-2 min-w-0">
+                    <Table2 className="h-5 w-5 text-primary shrink-0" />
+                    <span className="font-bold text-sm text-primary uppercase tracking-wide">
+                        ORÇAMENTO
+                    </span>
+                </div>
             </div>
             <p className="text-sm text-muted-foreground">
                 Este bloco representa o detalhamento financeiro (itens, valores e totais)
