@@ -101,6 +101,8 @@ interface CompositorRichTextEditorProps {
     onLayoutChange: (layout: { xPct: number; yPct: number; widthPct: number }) => void;
     onAspectChange: (aspect: number) => void;
   };
+  /** Texto fixo no canto inferior esquerdo da folha (ex.: código do orçamento). */
+  wordPageBottomLeftText?: string;
   wordPageClientLogo?: {
     url: string;
     readOnly: boolean;
@@ -134,6 +136,7 @@ export const CompositorRichTextEditor = memo(function CompositorRichTextEditor({
   wordPageWatermarkOpacity,
   wordPageWatermarkScalePct,
   wordPageWatermarkLayout,
+  wordPageBottomLeftText,
   wordPageClientLogo,
   wordPageBands,
 }: CompositorRichTextEditorProps) {
@@ -288,6 +291,7 @@ export const CompositorRichTextEditor = memo(function CompositorRichTextEditor({
       wordPageWatermarkOpacity={wordPageWatermarkOpacity}
       wordPageWatermarkScalePct={wordPageWatermarkScalePct}
       wordPageWatermarkLayout={wordPageWatermarkLayout}
+      wordPageBottomLeftText={wordPageBottomLeftText}
       wordPageClientLogo={wordPageClientLogo}
       wordPageBands={wordPageBands}
     />
