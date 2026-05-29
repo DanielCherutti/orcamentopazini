@@ -59,7 +59,6 @@ import { useBlockDescription, useBlockLabel } from "./compositor-content-hooks";
 import { CompositorItemRow } from "./compositor-item-row";
 import { CompositorDocumentContext } from "./compositor-document-context";
 import { CompositorCoverBlock } from "./compositor-cover-block";
-import { CompositorCoverPdfBandsMenuEntry } from "./compositor-cover-pdf-bands-menu-entry";
 import { HeaderFooterLayoutEditor } from "./header-footer-layout-editor";
 import { CompositorTocBlock } from "./compositor-toc-block";
 import { CompositorFiguresBlock } from "./compositor-figures-block";
@@ -694,7 +693,6 @@ function mergeHeaderFooterProps(raw: Record<string, unknown> | undefined): Heade
 function HeaderFooterRenderer({
     block,
     budgetId,
-    onRefresh,
     isReadOnly,
 }: CompositorRendererProps) {
     const persistedProps = mergeHeaderFooterProps(block.props as Record<string, unknown> | undefined);
@@ -794,13 +792,6 @@ function HeaderFooterRenderer({
                   : props.inner_watermark_scale_pct ?? 100;
         return (
             <div className="space-y-4">
-                {key === "cover" ? (
-                    <CompositorCoverPdfBandsMenuEntry
-                        budgetId={budgetId}
-                        isReadOnly={isReadOnly}
-                        onRefresh={onRefresh}
-                    />
-                ) : null}
                 {key === "all" ? (
                     <div className="rounded-lg border bg-card p-3 space-y-3">
                         <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

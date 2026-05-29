@@ -123,8 +123,6 @@ export function shouldShowCoverPdfHeaderBand(
     const hasCompositorOverride = Boolean(overrideName || overrideLogo);
     if (hasCompositorOverride) return true;
 
-    if (settings.pdf_header_fill_from_settings !== true) return false;
-
     const company = resolveCoverPdfHeaderCompanyText(coverProps, settings.company_name);
     const logo = resolveCoverPdfHeaderLogoUrl(coverProps, settings.company_logo_url);
     const sub = settings.company_header_subtitle?.trim();

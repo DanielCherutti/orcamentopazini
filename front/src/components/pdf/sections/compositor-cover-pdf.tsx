@@ -370,11 +370,10 @@ export function CompositorCoverPdfPage({
   );
   const blocks = splitCoverHtmlIntoPdfBlocks(html);
   const bandCtx = buildCoverPdfBandContext(budget);
-  const fill = settings.pdf_header_fill_from_settings === true;
   const companyName = sanitizeTextForPdf(
-    resolveCoverPdfHeaderCompanyText(coverProps, fill ? settings.company_name : undefined),
+    resolveCoverPdfHeaderCompanyText(coverProps, settings.company_name),
   );
-  const logoUrlRaw = resolveCoverPdfHeaderLogoUrl(coverProps, fill ? settings.company_logo_url : undefined);
+  const logoUrlRaw = resolveCoverPdfHeaderLogoUrl(coverProps, settings.company_logo_url);
   const logoSrc = logoUrlRaw
     ? proxyPdfImageSrc(logoUrlRaw, settings.app_public_url, pdfEmbeddedImages)
     : undefined;

@@ -23,9 +23,8 @@ export function hasPdfContactLines(settings: ProposalSettings): boolean {
     return buildPdfContactLines(settings).length > 0;
 }
 
-/** Cabeçalho em páginas internas — só se identidade no PDF estiver ativada em Configurações. */
+/** Cabeçalho em páginas internas — visibilidade fica centralizada no bloco header_footer. */
 export function pdfInnerRunningHeaderShouldShow(settings: ProposalSettings): boolean {
-    if (settings.pdf_header_fill_from_settings !== true) return false;
     const company = settings.company_name?.trim();
     const logo = settings.company_logo_url?.trim();
     const sub = settings.company_header_subtitle?.trim();

@@ -17,14 +17,9 @@ export interface ProposalSettings {
     closing_text?: string;
     company_name?: string;
     company_logo_url?: string;
-    /** Linha abaixo do nome no cabeçalho do PDF (ex.: ENGENHARIA). */
+    /** Linha abaixo do nome quando dados da empresa forem usados em um cabeçalho do PDF. */
     company_header_subtitle?: string;
-    /**
-     * Se true, o cabeçalho do PDF usa nome da empresa, URL do logo, subtítulo e contatos desta tela.
-     * Se false, o cabeçalho fica em branco (exceto substituições só na capa no compositor).
-     */
-    pdf_header_fill_from_settings?: boolean;
-    /** Contatos exibidos à direita no cabeçalho das propostas (PDF). */
+    /** Contatos disponíveis para o bloco cabeçalho/rodapé do compositor. */
     pdf_contact_whatsapp?: string;
     pdf_contact_facebook?: string;
     pdf_contact_email?: string;
@@ -64,7 +59,6 @@ export type PublicProposalBranding = {
 };
 
 const PROPOSAL_SETTINGS_DEFAULTS: ProposalSettings = {
-  pdf_header_fill_from_settings: true,
   company_name: "Pazini - Móveis Planejados",
   introduction_text: `Prezado Cliente,
 
@@ -144,6 +138,7 @@ export async function getProposalSettingsAction() {
             typeof plain.imap_pass === "string" && plain.imap_pass.length > 0;
         delete plain.smtp_pass;
         delete plain.imap_pass;
+        delete plain.pdf_header_fill_from_settings;
 
         const settings: ProposalSettings = {
             ...(plain as unknown as ProposalSettings),
@@ -159,15 +154,6 @@ export async function getProposalSettingsAction() {
             const s = settings.smtp_secure as unknown;
             settings.smtp_secure =
                 s === true || s === "true" || s === 1 || s === "1";
-        }
-
-        if (settings.pdf_header_fill_from_settings != null && typeof settings.pdf_header_fill_from_settings !== "boolean") {
-            const s = settings.pdf_header_fill_from_settings as unknown;
-            settings.pdf_header_fill_from_settings =
-                s === true || s === "true" || s === 1 || s === "1";
-        }
-        if (settings.pdf_header_fill_from_settings == null) {
-            settings.pdf_header_fill_from_settings = true;
         }
 
         return { success: true, data: settings };
@@ -195,6 +181,7 @@ export async function updateProposalSettingsAction(data: UpdateProposalSettingsI
         const cleanData: Record<string, unknown> = { ...rest };
         delete cleanData.smtp_pass;
         delete cleanData.imap_pass;
+        delete cleanData.pdf_header_fill_from_settings;
 
         if (smtp_pass_new != null && String(smtp_pass_new).trim() !== "") {
             cleanData.smtp_pass = String(smtp_pass_new).trim();

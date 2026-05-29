@@ -1154,11 +1154,8 @@ function InnerPdfPage({
     innerWatermarkAspect?: number;
     headerFooterProps?: HeaderFooterBlockProps;
 }) {
-    const fill = settings.pdf_header_fill_from_settings === true;
-    const company = fill
-        ? sanitizeTextForPdf(settings.company_name?.trim() || "")
-        : "";
-    const logoUrl = fill ? settings.company_logo_url?.trim() : undefined;
+    const company = sanitizeTextForPdf(settings.company_name?.trim() || "");
+    const logoUrl = settings.company_logo_url?.trim();
     const logoSrc = logoUrl
         ? proxyPdfImageSrc(logoUrl, settings.app_public_url, pdfEmbeddedImages)
         : undefined;

@@ -73,14 +73,9 @@ export function PdfProposalHeaderBand({
     companyName: string;
 }) {
     const color = resolvePdfHeaderPrimaryColor(settings);
-    const fill = settings.pdf_header_fill_from_settings === true;
-    const subtitle = fill
-        ? sanitizeTextForPdf(settings.company_header_subtitle?.trim() || "")
-        : "";
+    const subtitle = sanitizeTextForPdf(settings.company_header_subtitle?.trim() || "");
     const name = sanitizeTextForPdf(companyName.trim());
-    const lines = fill
-        ? buildPdfContactLines(settings).map((l) => sanitizeTextForPdf(l))
-        : [];
+    const lines = buildPdfContactLines(settings).map((l) => sanitizeTextForPdf(l));
 
     return (
         <View style={styles.band}>

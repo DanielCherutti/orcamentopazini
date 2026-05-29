@@ -214,39 +214,17 @@ export function SettingsForm({ initialSettings }: { initialSettings: ProposalSet
                 </CardContent>
             </Card>
 
-            {/* Cabeçalho do PDF */}
+            {/* Dados usados pelo PDF; liga/desliga e layout ficam no compositor. */}
             <Card>
                 <CardHeader>
-                    <CardTitle>Cabeçalho das propostas (PDF)</CardTitle>
+                    <CardTitle>Dados da empresa para o PDF</CardTitle>
                     <CardDescription>
-                        Layout em duas colunas: marca à esquerda e contatos à direita — como no modelo comercial. Usa a{" "}
-                        <strong>cor primária</strong> acima. Só entra no PDF com a opção abaixo ativada (nome, logo,
-                        subtítulo e contatos somem se estiver desligada).
+                        Nome, logo, subtítulo e contatos que podem ser usados pelo bloco{" "}
+                        <strong>Cabeçalho e Rodapé</strong> do compositor. A ativação, layout e escopo do
+                        cabeçalho/rodapé ficam centralizados no compositor.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-4">
-                        <Checkbox
-                            id="pdf_header_fill_from_settings"
-                            checked={formData.pdf_header_fill_from_settings === true}
-                            onCheckedChange={(c) =>
-                                setFormData({
-                                    ...formData,
-                                    pdf_header_fill_from_settings: c === true,
-                                })
-                            }
-                        />
-                        <div className="space-y-1">
-                            <Label htmlFor="pdf_header_fill_from_settings" className="cursor-pointer text-sm font-medium">
-                                Usar estes dados no cabeçalho do PDF
-                            </Label>
-                            <p className="text-xs text-muted-foreground leading-snug">
-                                Nas páginas internas e na capa (quando a faixa superior estiver ligada no compositor),
-                                estes dados só aparecem com esta opção ativa. Desligada, o cabeçalho fica vazio; na capa
-                                você ainda pode usar substituições só no bloco Capa.
-                            </p>
-                        </div>
-                    </div>
                     <div className="space-y-2">
                         <Label>Linha abaixo do nome (opcional)</Label>
                         <Input
