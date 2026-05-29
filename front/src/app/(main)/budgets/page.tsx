@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getBudgetsAction } from "@/actions/budget-actions";
+import { BudgetImportDialog } from "@/components/budgets/budget-import-dialog";
 import { BudgetsTable } from "@/components/budgets/budgets-table";
 import { SearchInput } from "@/components/budgets/search-input";
 import { SearchBadge } from "@/components/budgets/search-badge";
@@ -40,12 +41,15 @@ export default async function BudgetsPage(props: {
             title="Orçamentos"
             description="Propostas comerciais em rascunho ou enviadas. Busque por título ou cliente."
             action={
-                <Button asChild className="rounded-lg shadow-sm">
-                    <Link href="/budgets/new">
-                        <Plus className="mr-2 h-4 w-4" />
-                        Novo orçamento
-                    </Link>
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                    <BudgetImportDialog />
+                    <Button asChild className="rounded-lg shadow-sm">
+                        <Link href="/budgets/new">
+                            <Plus className="mr-2 h-4 w-4" />
+                            Novo orçamento
+                        </Link>
+                    </Button>
+                </div>
             }
         >
             <DashboardContentCard className="flex flex-col gap-6">

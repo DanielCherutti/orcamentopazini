@@ -14,6 +14,7 @@ import {
     DialogDescription,
 } from "@/components/ui/dialog";
 import { ArrowDown, ArrowUp, ArrowUpDown, Copy, Edit2, Eye, GitBranchPlus, Trash2 } from "lucide-react";
+import { BudgetExportDialog } from "@/components/budgets/budget-export-dialog";
 import { useBudgetsRepository } from "@/lib/budgets/use-budgets-repository";
 import { budgetEditUrl } from "@/lib/budgets/budget-path";
 import { toast } from "@/lib/toast";
@@ -316,6 +317,15 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                     <GitBranchPlus className="h-4 w-4" />
                 </Button>
             )}
+            <BudgetExportDialog
+                budgetId={String(budget.id)}
+                budgetCode={budget.code}
+                disabled={
+                    duplicatingId === String(budget.id) ||
+                    deletingId === String(budget.id) ||
+                    creatingRevisionId === String(budget.id)
+                }
+            />
             <Button
                 variant="outline"
                 size="icon"
@@ -479,6 +489,16 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                             {creatingRevisionId === String(budget.id) ? "Criando…" : "Revisão"}
                         </Button>
                     )}
+                    <BudgetExportDialog
+                        budgetId={String(budget.id)}
+                        budgetCode={budget.code}
+                        variant="default"
+                        disabled={
+                            duplicatingId === String(budget.id) ||
+                            deletingId === String(budget.id) ||
+                            creatingRevisionId === String(budget.id)
+                        }
+                    />
                     <Button
                         variant="outline"
                         className="rounded-sm"
