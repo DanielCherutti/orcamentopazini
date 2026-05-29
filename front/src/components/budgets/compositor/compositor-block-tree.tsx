@@ -801,6 +801,52 @@ function HeaderFooterRenderer({
                         onRefresh={onRefresh}
                     />
                 ) : null}
+                {key === "all" ? (
+                    <div className="rounded-lg border bg-card p-3 space-y-3">
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Faixas de todas as páginas (PDF)
+                        </Label>
+                        <div className="flex flex-wrap items-center gap-4">
+                            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Checkbox
+                                    checked={
+                                        props.cover_show_header_band !== false &&
+                                        props.inner_show_header_band !== false
+                                    }
+                                    disabled={isReadOnly}
+                                    onCheckedChange={(v) => {
+                                        const checked = v === true;
+                                        void handlePatch({
+                                            cover_show_header_band: checked,
+                                            inner_show_header_band: checked,
+                                        });
+                                    }}
+                                />
+                                Mostrar faixa superior
+                            </label>
+                            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Checkbox
+                                    checked={
+                                        props.cover_show_footer_band !== false &&
+                                        props.inner_show_footer_band !== false
+                                    }
+                                    disabled={isReadOnly}
+                                    onCheckedChange={(v) => {
+                                        const checked = v === true;
+                                        void handlePatch({
+                                            cover_show_footer_band: checked,
+                                            inner_show_footer_band: checked,
+                                        });
+                                    }}
+                                />
+                                Mostrar faixa inferior
+                            </label>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                            Estes controles ligam ou desligam cabeçalho e rodapé na capa e nas páginas internas.
+                        </p>
+                    </div>
+                ) : null}
                 {key === "cover" ? (
                     <div className="rounded-lg border bg-card p-3 space-y-3">
                         <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
