@@ -300,11 +300,32 @@ function clampCoverImagePt(value: number | undefined, min: number, max: number):
   return Math.max(min, Math.min(max, n));
 }
 
-function resolveCoverBlockImageStyle(block: { widthPt?: number; heightPt?: number }) {
+function resolveCoverBlockImageFrameStyle(align?: "left" | "center" | "right") {
+  if (align === "left") return [styles.coverImageFrame, { alignItems: "flex-start" as const }];
+  if (align === "right") return [styles.coverImageFrame, { alignItems: "flex-end" as const }];
+  return styles.coverImageFrame;
+}
+
+function resolveCoverBlockImageStyle(block: {
+  widthPt?: number;
+  heightPt?: number;
+  naturalWidth?: number;
+  naturalHeight?: number;
+}) {
   const maxWidth = PAGE_W - 2 * BODY_PAD_H;
   const maxHeight = PAGE_H * 0.56;
   const width = clampCoverImagePt(block.widthPt, 36, maxWidth);
   const height = clampCoverImagePt(block.heightPt, 24, maxHeight);
+  const naturalAspect =
+    Number.isFinite(block.naturalWidth) &&
+    Number.isFinite(block.naturalHeight) &&
+    Number(block.naturalWidth) > 0 &&
+    Number(block.naturalHeight) > 0
+      ? Number(block.naturalWidth) / Number(block.naturalHeight)
+      : undefined;
+  if (width && height && naturalAspect && Math.abs(width / height - naturalAspect) < 0.03) {
+    return { width, height: width / naturalAspect };
+  }
   if (width && height) return { width, height };
   if (width) return { width };
   if (height) return { height };
@@ -560,7 +581,7 @@ export function CompositorCoverPdfPage({
           if (b.type === "img") {
             const src = proxyPdfImageSrc(b.src, settings.app_public_url, pdfEmbeddedImages) ?? b.src;
             return (
-              <View key={`cover-img-${i}`} style={styles.coverImageFrame}>
+              <View key={`cover-img-${i}`} style={resolveCoverBlockImageFrameStyle(b.align)}>
                 {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
                 <Image src={src} style={[styles.coverImageBase, resolveCoverBlockImageStyle(b)]} />
               </View>

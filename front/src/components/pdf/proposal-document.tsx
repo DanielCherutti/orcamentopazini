@@ -1378,6 +1378,34 @@ export const ProposalDocument = ({
             return tag.replace(/\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i, `src="${proxied}"`);
         });
     };
+    const resolveRichImageFrameStyle = (align?: "left" | "center" | "right") => {
+        if (align === "left") return [styles.sessionImageFrame, { alignItems: "flex-start" as const }];
+        if (align === "right") return [styles.sessionImageFrame, { alignItems: "flex-end" as const }];
+        return styles.sessionImageFrame;
+    };
+    const resolveRichImageSizeStyle = (block: {
+        widthPt?: number;
+        heightPt?: number;
+        naturalWidth?: number;
+        naturalHeight?: number;
+    }) => {
+        const maxWidth = 520;
+        const width = Math.min(maxWidth, Math.max(110, block.widthPt ?? maxWidth));
+        const naturalAspect =
+            Number.isFinite(block.naturalWidth) &&
+            Number.isFinite(block.naturalHeight) &&
+            Number(block.naturalWidth) > 0 &&
+            Number(block.naturalHeight) > 0
+                ? Number(block.naturalWidth) / Number(block.naturalHeight)
+                : undefined;
+        const height = Number.isFinite(block.heightPt)
+            ? Math.min(520, Math.max(80, Number(block.heightPt)))
+            : undefined;
+        if (height && naturalAspect && Math.abs(width / height - naturalAspect) < 0.03) {
+            return { width, height: width / naturalAspect };
+        }
+        return height ? { width, height } : { width };
+    };
     const renderSessionHtml = (htmlRaw: string, rowKey: string) => {
         const html = sanitizeCoverHtmlForPdf(rewriteImgSrcInHtml(htmlRaw));
         const blocks = splitCoverHtmlIntoPdfBlocks(html);
@@ -1388,16 +1416,13 @@ export const ProposalDocument = ({
                 if (b.src?.trim()) renderedImageKeys.add(b.src.trim());
                 if (src?.trim()) renderedImageKeys.add(src.trim());
                 return (
-                    <View key={`${rowKey}-img-${i}`} style={styles.sessionImageFrame}>
+                    <View key={`${rowKey}-img-${i}`} style={resolveRichImageFrameStyle(b.align)}>
                         {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
                         <Image
                             src={src}
                             style={[
                                 styles.sessionRichImageBase,
-                                { width: Math.min(520, Math.max(110, b.widthPt ?? 520)) },
-                                ...(Number.isFinite(b.heightPt)
-                                    ? [{ height: Math.min(520, Math.max(80, Number(b.heightPt))) }]
-                                    : []),
+                                resolveRichImageSizeStyle(b),
                             ]}
                         />
                     </View>
