@@ -173,8 +173,8 @@ export interface HeaderFooterPageNumberingConfig {
 }
 
 export const DEFAULT_HEADER_FOOTER_PROPS: HeaderFooterBlockProps = {
-  cover_show_header_band: undefined,
-  cover_show_footer_band: undefined,
+  cover_show_header_band: false,
+  cover_show_footer_band: false,
   cover_watermark_url: "",
   cover_watermark_opacity: 0.12,
   cover_watermark_scale_pct: 100,
@@ -194,8 +194,8 @@ export const DEFAULT_HEADER_FOOTER_PROPS: HeaderFooterBlockProps = {
   cover_footer_html: "",
   cover_header_height: 108,
   cover_footer_height: 44,
-  inner_show_header_band: undefined,
-  inner_show_footer_band: undefined,
+  inner_show_header_band: false,
+  inner_show_footer_band: false,
   inner_header_html: "",
   inner_footer_html: "",
   inner_header_height: 96,

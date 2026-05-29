@@ -135,42 +135,25 @@ export function shouldShowCoverPdfHeaderBand(
  * no bloco cabeçalho/rodapé (o antigo `true ?? shouldShow(...)` ignorava “sem cabeçalho”).
  */
 export function resolveCoverPageShowHeaderBand(
-    coverProps: CoverBlockProps,
-    settings: ProposalSettings,
+    _coverProps: CoverBlockProps,
+    _settings: ProposalSettings,
     headerFooterProps:
         | { cover_show_header_band?: boolean; legacy_cover_pdf_show_header_band?: boolean }
         | undefined,
-    hasCustomCoverHeaderHtml: boolean,
+    _hasCustomCoverHeaderHtml: boolean,
 ): boolean {
-    /*
-     * O bloco header_footer e o modal antigo podem coexistir em documentos já salvos.
-     * Quando o bloco novo grava false, ele é a ordem final: nem layout compartilhado,
-     * nem conteúdo legado, nem dados das Configurações devem ressuscitar a faixa.
-     */
-    if (headerFooterProps?.cover_show_header_band === false) return false;
     if (headerFooterProps?.cover_show_header_band === true) return true;
-    if (coverProps.cover_pdf_show_header_band === false) return false;
-    if (headerFooterProps?.legacy_cover_pdf_show_header_band === false) return false;
-    if (hasCustomCoverHeaderHtml) return true;
-    return shouldShowCoverPdfHeaderBand(coverProps, settings);
+    return false;
 }
 
 /** Rodapé da capa: idem com `cover_pdf_show_footer_band`. */
 export function resolveCoverPageShowFooterBand(
-    coverProps: CoverBlockProps,
+    _coverProps: CoverBlockProps,
     headerFooterProps:
         | { cover_show_footer_band?: boolean; legacy_cover_pdf_show_footer_band?: boolean }
         | undefined,
-    hasCustomCoverFooterHtml: boolean,
+    _hasCustomCoverFooterHtml: boolean,
 ): boolean {
-    /*
-     * Mesma precedência do cabeçalho: false explícito no bloco novo significa
-     * "sem rodapé na capa", mesmo que ainda existam layouts/textos salvos.
-     */
-    if (headerFooterProps?.cover_show_footer_band === false) return false;
     if (headerFooterProps?.cover_show_footer_band === true) return true;
-    if (coverProps.cover_pdf_show_footer_band === false) return false;
-    if (headerFooterProps?.legacy_cover_pdf_show_footer_band === false) return false;
-    if (hasCustomCoverFooterHtml) return true;
-    return resolveCoverPdfShowFooterBand(coverProps);
+    return false;
 }

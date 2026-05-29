@@ -801,8 +801,8 @@ function HeaderFooterRenderer({
                             <label className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <Checkbox
                                     checked={
-                                        props.cover_show_header_band !== false &&
-                                        props.inner_show_header_band !== false
+                                        props.cover_show_header_band === true &&
+                                        props.inner_show_header_band === true
                                     }
                                     disabled={isReadOnly}
                                     onCheckedChange={(v) => {
@@ -818,8 +818,8 @@ function HeaderFooterRenderer({
                             <label className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <Checkbox
                                     checked={
-                                        props.cover_show_footer_band !== false &&
-                                        props.inner_show_footer_band !== false
+                                        props.cover_show_footer_band === true &&
+                                        props.inner_show_footer_band === true
                                     }
                                     disabled={isReadOnly}
                                     onCheckedChange={(v) => {
@@ -846,7 +846,7 @@ function HeaderFooterRenderer({
                         <div className="flex flex-wrap items-center gap-4">
                             <label className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <Checkbox
-                                    checked={props.cover_show_header_band !== false}
+                                    checked={props.cover_show_header_band === true}
                                     disabled={isReadOnly}
                                     onCheckedChange={(v) => {
                                         void handlePatch({ cover_show_header_band: v === true });
@@ -856,7 +856,7 @@ function HeaderFooterRenderer({
                             </label>
                             <label className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <Checkbox
-                                    checked={props.cover_show_footer_band !== false}
+                                    checked={props.cover_show_footer_band === true}
                                     disabled={isReadOnly}
                                     onCheckedChange={(v) => {
                                         void handlePatch({ cover_show_footer_band: v === true });
@@ -878,7 +878,7 @@ function HeaderFooterRenderer({
                         <div className="flex flex-wrap items-center gap-4">
                             <label className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <Checkbox
-                                    checked={props.inner_show_header_band !== false}
+                                    checked={props.inner_show_header_band === true}
                                     disabled={isReadOnly}
                                     onCheckedChange={(v) => {
                                         void handlePatch({ inner_show_header_band: v === true });
@@ -888,7 +888,7 @@ function HeaderFooterRenderer({
                             </label>
                             <label className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <Checkbox
-                                    checked={props.inner_show_footer_band !== false}
+                                    checked={props.inner_show_footer_band === true}
                                     disabled={isReadOnly}
                                     onCheckedChange={(v) => {
                                         void handlePatch({ inner_show_footer_band: v === true });
