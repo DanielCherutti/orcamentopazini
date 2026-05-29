@@ -15,7 +15,7 @@ import { goToNextCell } from 'prosemirror-tables';
 import {
   Bold, Italic, Underline as UnderlineIcon, List, ListOrdered,
   Heading1, Heading2, AlignLeft, AlignCenter, AlignRight, AlignJustify,
-  ImagePlus, Table2, PanelTop, PanelBottom, Hash, ChevronDown,
+  ImagePlus, Table2, PanelTop, PanelBottom, Hash, ChevronDown, GripHorizontal,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -285,6 +285,10 @@ export function RichTextEditor({
     footerHeight: wordPageBands?.footerHeight ?? 40,
   });
   const [fontSizePx, setFontSizePx] = useState<number>(11);
+  const [imageSelection, setImageSelection] = useState<{
+    active: boolean;
+    align: "left" | "center" | "right";
+  }>({ active: false, align: "center" });
   const [headerTemplateOpen, setHeaderTemplateOpen] = useState(false);
   const [footerTemplateOpen, setFooterTemplateOpen] = useState(false);
   const previewBandHeightsRef = useRef(previewBandHeights);
@@ -353,7 +357,7 @@ export function RichTextEditor({
               .setImage(
                 shouldUseFloatingHeaderImages
                   ? { src: url, floating: true, x: 8, y: 8, width: 96 }
-                  : { src: url }
+                  : { src: url, imageAlign: "center", floating: false }
               )
               .run();
           });
@@ -399,7 +403,7 @@ export function RichTextEditor({
                   .setImage(
                     shouldUseFloatingHeaderImages
                       ? { src: url, floating: true, x: 8, y: 8, width: 96 }
-                      : { src: url }
+                      : { src: url, imageAlign: "center", floating: false }
                   )
                   .run();
               }).catch(() => {});
@@ -414,7 +418,7 @@ export function RichTextEditor({
                     .setImage(
                       shouldUseFloatingHeaderImages
                         ? { src: dataUrl, floating: true, x: 8, y: 8, width: 96 }
-                        : { src: dataUrl }
+                        : { src: dataUrl, imageAlign: "center", floating: false }
                     )
                     .run();
                 }
@@ -451,6 +455,14 @@ export function RichTextEditor({
       if (Number.isFinite(parsed) && parsed >= 8 && parsed <= 96) {
         setFontSizePx(parsed);
       }
+      const imageAttrs = editor.getAttributes("image");
+      const align = imageAttrs.imageAlign === "left" || imageAttrs.imageAlign === "right"
+        ? imageAttrs.imageAlign
+        : "center";
+      setImageSelection({
+        active: editor.isActive("image"),
+        align,
+      });
     };
     syncFontSize();
     editor.on('selectionUpdate', syncFontSize);
@@ -513,6 +525,14 @@ export function RichTextEditor({
   };
 
   const wc = isWord ? 'h-7 w-7 p-0' : undefined;
+  const setSelectedImageAlign = (align: "left" | "center" | "right") => {
+    editor
+      .chain()
+      .focus()
+      .updateAttributes("image", { imageAlign: align, floating: false })
+      .run();
+    setImageSelection({ active: true, align });
+  };
 
   const hiddenImageInput = onUploadImage ? (
     <input
@@ -531,7 +551,7 @@ export function RichTextEditor({
           .setImage(
             shouldUseFloatingHeaderImages
               ? { src: url, floating: true, x: 8, y: 8, width: 96 }
-              : { src: url }
+              : { src: url, imageAlign: "center", floating: false }
           )
           .run();
         e.target.value = "";
@@ -552,6 +572,44 @@ export function RichTextEditor({
       >
         <ImagePlus className="h-4 w-4" />
       </Button>
+    </>
+  ) : null;
+
+  const imagePositionTools = imageSelection.active ? (
+    <>
+      <div className={cn("my-auto h-6 w-px bg-border", isWord && "bg-neutral-300")} />
+      <div className="flex items-center gap-0.5" aria-label="Posição da imagem">
+        <Button
+          variant={imageSelection.align === "left" ? "default" : "ghost"}
+          size="sm"
+          type="button"
+          title="Imagem à esquerda"
+          onClick={() => setSelectedImageAlign("left")}
+          className={wc}
+        >
+          <AlignLeft className="h-4 w-4" />
+        </Button>
+        <Button
+          variant={imageSelection.align === "center" ? "default" : "ghost"}
+          size="sm"
+          type="button"
+          title="Imagem ao centro"
+          onClick={() => setSelectedImageAlign("center")}
+          className={wc}
+        >
+          <AlignCenter className="h-4 w-4" />
+        </Button>
+        <Button
+          variant={imageSelection.align === "right" ? "default" : "ghost"}
+          size="sm"
+          type="button"
+          title="Imagem à direita"
+          onClick={() => setSelectedImageAlign("right")}
+          className={wc}
+        >
+          <AlignRight className="h-4 w-4" />
+        </Button>
+      </div>
     </>
   ) : null;
 
@@ -591,6 +649,7 @@ export function RichTextEditor({
     <>
       {fontToolsBasic}
       {imageToolbarButton}
+      {imagePositionTools}
       {extraToolbarItems}
     </>
   );
@@ -713,6 +772,7 @@ export function RichTextEditor({
     if (!wordPageBands) return;
     e.preventDefault();
     e.stopPropagation();
+    wordPageBands.onSelectBand?.(kind);
     const paper = wordPaperRef.current;
     if (!paper) return;
     const rect = paper.getBoundingClientRect();
@@ -1224,11 +1284,15 @@ export function RichTextEditor({
                     >
                       {wordPageBands.activeBand === "footer" ? renderWordBandEditor() : null}
                     </div>
-                    <div className="pointer-events-none absolute inset-0 z-[15]" aria-hidden>
+                    <div className="pointer-events-none absolute inset-0 z-[35]" aria-hidden>
                     {(() => {
                       const { headerPct, footerPct, bodyStart, bodyEnd } = wordBandPercents;
                       const activeHeader = wordPageBands.activeBand === "header";
                       const activeFooter = wordPageBands.activeBand === "footer";
+                      const resizeHandleClass =
+                        "pointer-events-auto absolute left-0 right-0 z-[40] flex h-7 -translate-y-1/2 cursor-ns-resize touch-none items-center justify-center";
+                      const resizeGripClass =
+                        "flex h-5 w-10 items-center justify-center rounded-full border border-primary/45 bg-white/95 text-primary shadow-sm transition-colors hover:border-primary hover:bg-primary hover:text-primary-foreground";
                       return (
                         <>
                           <div
@@ -1246,11 +1310,14 @@ export function RichTextEditor({
                             <button
                               type="button"
                               aria-label="Redimensionar cabeçalho"
-                              className="pointer-events-auto absolute left-1/2 z-[20] flex min-h-7 min-w-14 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize touch-none items-center justify-center rounded-full border border-primary/50 bg-white/95 text-[10px] text-primary shadow"
+                              title="Redimensionar cabeçalho"
+                              className={resizeHandleClass}
                               style={{ top: `${bodyStart}%` }}
                               onPointerDownCapture={startBandResize("header")}
                             >
-                              arraste
+                              <span className={resizeGripClass}>
+                                <GripHorizontal className="h-3.5 w-3.5" aria-hidden />
+                              </span>
                             </button>
                           ) : null}
                           <div
@@ -1261,11 +1328,14 @@ export function RichTextEditor({
                             <button
                               type="button"
                               aria-label="Redimensionar rodapé"
-                              className="pointer-events-auto absolute left-1/2 z-[20] flex min-h-7 min-w-14 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize touch-none items-center justify-center rounded-full border border-primary/50 bg-white/95 text-[10px] text-primary shadow"
+                              title="Redimensionar rodapé"
+                              className={resizeHandleClass}
                               style={{ top: `${bodyEnd}%` }}
                               onPointerDownCapture={startBandResize("footer")}
                             >
-                              arraste
+                              <span className={resizeGripClass}>
+                                <GripHorizontal className="h-3.5 w-3.5" aria-hidden />
+                              </span>
                             </button>
                           ) : null}
                           <div

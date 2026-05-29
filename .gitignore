@@ -57,3 +57,5 @@ front/uploads/
 # Refs (documentação de referência - pode ser versionado se necessário)
 refs/
 front/public/uploads/*
+front/package-lock.json
+front/node_modules

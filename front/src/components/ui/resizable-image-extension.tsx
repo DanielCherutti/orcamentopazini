@@ -12,6 +12,9 @@ declare module "@tiptap/extension-image" {
     floating?: boolean;
     x?: number;
     y?: number;
+    naturalWidth?: number;
+    naturalHeight?: number;
+    imageAlign?: "left" | "center" | "right";
   }
 }
 
@@ -38,10 +41,16 @@ function ResizableImageComponent({ node, selected, updateAttributes, editor, get
 
   const width: number | null = node.attrs.width ?? null;
   const height: number | null = node.attrs.height ?? null;
+  const naturalWidth = Number(node.attrs.naturalWidth ?? 0);
+  const naturalHeight = Number(node.attrs.naturalHeight ?? 0);
   const floating = Boolean(node.attrs.floating);
   const inWordBand = Boolean(editor?.view.dom.closest(".word-band-mode"));
   const useBandOverlay = inWordBand;
-  const showHandles = selected || floating || useBandOverlay;
+  const effectiveFloating = floating && inWordBand;
+  const imageAlign = (node.attrs.imageAlign === "left" || node.attrs.imageAlign === "right")
+    ? node.attrs.imageAlign
+    : "center";
+  const showHandles = selected || effectiveFloating || useBandOverlay;
   const x = Number(node.attrs.x ?? 8);
   const y = Number(node.attrs.y ?? 8);
   const [draftRect, setDraftRect] = useState({
@@ -63,8 +72,13 @@ function ResizableImageComponent({ node, selected, updateAttributes, editor, get
     setOverlayRoot(getWordBandOverlayRoot(editor));
   }, [editor, useBandOverlay]);
 
+  useEffect(() => {
+    if (inWordBand || !floating) return;
+    updateAttributes({ floating: false, x: null, y: null });
+  }, [floating, inWordBand, updateAttributes]);
+
   function startMove(e: React.PointerEvent) {
-    if (!floating && !inWordBand) return;
+    if (!effectiveFloating && !inWordBand) return;
     e.preventDefault();
     e.stopPropagation();
 
@@ -129,6 +143,12 @@ function ResizableImageComponent({ node, selected, updateAttributes, editor, get
       const startY = e.clientY;
       const startW = imgRef.current?.offsetWidth ?? (width ?? 300);
       const startH = imgRef.current?.offsetHeight ?? (height ?? 200);
+      const aspect =
+        naturalWidth > 0 && naturalHeight > 0
+          ? naturalWidth / naturalHeight
+          : startW > 0 && startH > 0
+            ? startW / startH
+            : 1;
       let nextWidth = startW;
       let nextHeight = startH;
 
@@ -136,10 +156,25 @@ function ResizableImageComponent({ node, selected, updateAttributes, editor, get
         const dx = ev.clientX - startX;
         const dy = ev.clientY - startY;
 
-        if (dir.includes("e")) nextWidth = Math.max(50, startW + dx);
-        if (dir.includes("w")) nextWidth = Math.max(50, startW - dx);
-        if (dir.includes("s")) nextHeight = Math.max(30, startH + dy);
-        if (dir.includes("n")) nextHeight = Math.max(30, startH - dy);
+        const rawWidth = dir.includes("e") ? startW + dx : startW - dx;
+        const rawHeight = dir.includes("s") ? startH + dy : startH - dy;
+
+        if (ev.shiftKey) {
+          const widthFromPointer = Math.max(50, rawWidth);
+          const heightFromPointer = Math.max(30, rawHeight);
+          const horizontalDelta = Math.abs(widthFromPointer - startW);
+          const verticalDelta = Math.abs(heightFromPointer - startH);
+          if (horizontalDelta >= verticalDelta) {
+            nextWidth = widthFromPointer;
+            nextHeight = Math.max(30, nextWidth / aspect);
+          } else {
+            nextHeight = heightFromPointer;
+            nextWidth = Math.max(50, nextHeight * aspect);
+          }
+        } else {
+          if (dir.includes("e") || dir.includes("w")) nextWidth = Math.max(50, rawWidth);
+          if (dir.includes("s") || dir.includes("n")) nextHeight = Math.max(30, rawHeight);
+        }
 
         setDraftRect((prev) => ({
           ...prev,
@@ -154,7 +189,7 @@ function ResizableImageComponent({ node, selected, updateAttributes, editor, get
         updateAttributes({
           width: Math.round(nextWidth),
           height: Math.round(nextHeight),
-          floating: true,
+          ...(inWordBand ? { floating: true } : { floating: false }),
         });
       }
 
@@ -173,31 +208,47 @@ function ResizableImageComponent({ node, selected, updateAttributes, editor, get
     boxShadow: selected ? "0 0 0 2px #06b6d4" : undefined,
     pointerEvents: "auto",
   };
+  const flowFrameStyle: React.CSSProperties = {
+    position: "relative",
+    width: draftRect.width ? `${draftRect.width}px` : "auto",
+    height: draftRect.height ? `${draftRect.height}px` : "auto",
+    maxWidth: "100%",
+  };
 
   const imageFrame = (
     <div
       contentEditable={false}
       data-floating-overlay="true"
-      style={useBandOverlay ? frameStyle : undefined}
+      style={useBandOverlay ? frameStyle : flowFrameStyle}
       className={useBandOverlay ? "word-floating-overlay" : undefined}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         ref={imgRef}
         data-drag-handle=""
-        data-floating={floating || useBandOverlay ? "true" : undefined}
+        data-floating={effectiveFloating || useBandOverlay ? "true" : undefined}
+        data-image-align={imageAlign}
         src={node.attrs.src}
         alt={node.attrs.alt ?? ""}
         title={node.attrs.title ?? undefined}
         draggable={false}
+        onLoad={(event) => {
+          const image = event.currentTarget;
+          if (!naturalWidth && !naturalHeight && image.naturalWidth > 0 && image.naturalHeight > 0) {
+            updateAttributes({
+              naturalWidth: image.naturalWidth,
+              naturalHeight: image.naturalHeight,
+            });
+          }
+        }}
         onClick={selectNodeOnClick}
         onPointerDown={startMove}
         style={{
           display: "block",
           width: "100%",
           height: draftRect.height ? "100%" : "auto",
-          objectFit: "fill",
-          cursor: floating || useBandOverlay ? "move" : "grab",
+          objectFit: "contain",
+          cursor: effectiveFloating || useBandOverlay ? "move" : "default",
           userSelect: "none",
         }}
       />
@@ -242,15 +293,23 @@ function ResizableImageComponent({ node, selected, updateAttributes, editor, get
       contentEditable={false}
       data-floating-wrapper={floating ? "true" : undefined}
       style={{
-        display: floating ? "inline-flex" : "inline-block",
-        position: floating ? "absolute" : "relative",
-        left: floating ? `${draftRect.x}px` : undefined,
-        top: floating ? `${draftRect.y}px` : undefined,
-        zIndex: floating ? 40 : undefined,
-        pointerEvents: floating ? "auto" : undefined,
-        width: draftRect.width ? `${draftRect.width}px` : "auto",
-        height: draftRect.height ? `${draftRect.height}px` : "auto",
-        maxWidth: floating ? undefined : "100%",
+        display: effectiveFloating ? "inline-flex" : "flex",
+        justifyContent:
+          !effectiveFloating && imageAlign === "left"
+            ? "flex-start"
+            : !effectiveFloating && imageAlign === "right"
+              ? "flex-end"
+              : "center",
+        position: effectiveFloating ? "absolute" : "relative",
+        left: effectiveFloating ? `${draftRect.x}px` : undefined,
+        top: effectiveFloating ? `${draftRect.y}px` : undefined,
+        zIndex: effectiveFloating ? 40 : undefined,
+        pointerEvents: effectiveFloating ? "auto" : undefined,
+        width: effectiveFloating ? (draftRect.width ? `${draftRect.width}px` : "auto") : "100%",
+        height: effectiveFloating ? (draftRect.height ? `${draftRect.height}px` : "auto") : "auto",
+        maxWidth: effectiveFloating ? undefined : "100%",
+        marginTop: effectiveFloating ? undefined : 8,
+        marginBottom: effectiveFloating ? undefined : 8,
         boxShadow: selected ? "0 0 0 2px #06b6d4" : undefined,
       }}
     >
@@ -300,6 +359,34 @@ export const ResizableImage = Image.extend({
           return {};
         },
       },
+      naturalWidth: {
+        default: null,
+        parseHTML(el) {
+          const v = el.getAttribute("data-natural-width");
+          const n = Number(v);
+          return Number.isFinite(n) && n > 0 ? n : null;
+        },
+        renderHTML(attrs) {
+          const n = Number(attrs.naturalWidth);
+          return Number.isFinite(n) && n > 0
+            ? { "data-natural-width": String(Math.round(n)) }
+            : {};
+        },
+      },
+      naturalHeight: {
+        default: null,
+        parseHTML(el) {
+          const v = el.getAttribute("data-natural-height");
+          const n = Number(v);
+          return Number.isFinite(n) && n > 0 ? n : null;
+        },
+        renderHTML(attrs) {
+          const n = Number(attrs.naturalHeight);
+          return Number.isFinite(n) && n > 0
+            ? { "data-natural-height": String(Math.round(n)) }
+            : {};
+        },
+      },
       floating: {
         default: false,
         parseHTML(el) {
@@ -310,6 +397,30 @@ export const ResizableImage = Image.extend({
         },
         renderHTML(attrs) {
           return attrs.floating ? { "data-floating": "true" } : {};
+        },
+      },
+      imageAlign: {
+        default: "center",
+        parseHTML(el) {
+          const data = el.getAttribute("data-image-align");
+          if (data === "left" || data === "center" || data === "right") return data;
+          const style = (el as HTMLElement).style;
+          if (style.marginLeft === "auto" && style.marginRight === "auto") return "center";
+          if (style.marginLeft === "auto") return "right";
+          if (style.marginRight === "auto") return "left";
+          return "center";
+        },
+        renderHTML(attrs) {
+          const align = attrs.imageAlign === "left" || attrs.imageAlign === "right"
+            ? attrs.imageAlign
+            : "center";
+          const style =
+            align === "left"
+              ? "display: block; margin-left: 0; margin-right: auto"
+              : align === "right"
+                ? "display: block; margin-left: auto; margin-right: 0"
+                : "display: block; margin-left: auto; margin-right: auto";
+          return { "data-image-align": align, style };
         },
       },
       x: {

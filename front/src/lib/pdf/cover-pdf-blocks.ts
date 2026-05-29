@@ -3,7 +3,15 @@ import { sanitizeTextForPdf } from "@/lib/pdf/sanitize-pdf-text";
 
 export type CoverPdfBlock =
     | { type: "text"; content: string }
-    | { type: "img"; src: string; widthPt?: number; heightPt?: number };
+    | {
+          type: "img";
+          src: string;
+          widthPt?: number;
+          heightPt?: number;
+          naturalWidth?: number;
+          naturalHeight?: number;
+          align?: "left" | "center" | "right";
+      };
 
 export type CoverPdfTextSegment =
     | {
@@ -60,6 +68,49 @@ function parseImgDimensionPt(tag: string, prop: "width" | "height"): number | un
         tag.match(new RegExp(String.raw`\b${prop}\s*=\s*'([^']+)'`, "i"))?.[1] ??
         tag.match(new RegExp(String.raw`\b${prop}\s*=\s*([^\s>]+)`, "i"))?.[1];
     return parseCssLengthToPt(attrQ);
+}
+
+function parseNumericAttribute(tag: string, attr: string): number | undefined {
+    const raw =
+        tag.match(new RegExp(String.raw`\b${attr}\s*=\s*"([^"]+)"`, "i"))?.[1] ??
+        tag.match(new RegExp(String.raw`\b${attr}\s*=\s*'([^']+)'`, "i"))?.[1] ??
+        tag.match(new RegExp(String.raw`\b${attr}\s*=\s*([^\s>]+)`, "i"))?.[1];
+    if (!raw) return undefined;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+function parseImageAlignFromContext(html: string, imgStart: number, imgEnd: number, tag: string) {
+    const dataAlign =
+        tag.match(/\bdata-image-align\s*=\s*"([^"]+)"/i)?.[1] ??
+        tag.match(/\bdata-image-align\s*=\s*'([^']+)'/i)?.[1] ??
+        tag.match(/\bdata-image-align\s*=\s*([^\s>]+)/i)?.[1];
+    if (dataAlign === "left" || dataAlign === "center" || dataAlign === "right") return dataAlign;
+
+    const imgAlign = parseTextAlignFromAttrs(tag);
+    if (imgAlign === "left" || imgAlign === "center" || imgAlign === "right") return imgAlign;
+
+    const before = html.slice(0, imgStart);
+    const after = html.slice(imgEnd);
+    const openBlock = before.match(/<(p|div|figure)\b([^>]*)>[^<]*$/i);
+    if (openBlock && new RegExp(String.raw`^\s*</${openBlock[1]}\s*>`, "i").test(after)) {
+        const blockAlign = parseTextAlignFromAttrs(openBlock[2]);
+        if (blockAlign === "left" || blockAlign === "center" || blockAlign === "right") return blockAlign;
+    }
+
+    const style =
+        tag.match(/style\s*=\s*"([^"]*)"/i)?.[1] ??
+        tag.match(/style\s*=\s*'([^']*)'/i)?.[1] ??
+        "";
+    const normalized = style.toLowerCase();
+    if (/margin-left\s*:\s*auto/.test(normalized) && /margin-right\s*:\s*auto/.test(normalized)) return "center";
+    if (/float\s*:\s*right/.test(normalized) || /margin-left\s*:\s*auto/.test(normalized)) return "right";
+    if (/float\s*:\s*left/.test(normalized) || /margin-right\s*:\s*auto/.test(normalized)) return "left";
+    return undefined;
+}
+
+function stripEmptyImageWrapperFromTextBlock(content: string): string {
+    return content.replace(/<(p|div|figure)\b[^>]*>\s*$/i, "").replace(/^\s*<\/(p|div|figure)\s*>/i, "");
 }
 
 /**
@@ -136,6 +187,9 @@ export function splitCoverHtmlIntoPdfBlocks(html: string): CoverPdfBlock[] {
                 src,
                 widthPt: parseImgDimensionPt(tag, "width"),
                 heightPt: parseImgDimensionPt(tag, "height"),
+                naturalWidth: parseNumericAttribute(tag, "data-natural-width"),
+                naturalHeight: parseNumericAttribute(tag, "data-natural-height"),
+                align: parseImageAlignFromContext(html, m.index, m.index + tag.length, tag),
             });
         }
         last = m.index + tag.length;
@@ -146,5 +200,11 @@ export function splitCoverHtmlIntoPdfBlocks(html: string): CoverPdfBlock[] {
     if (blocks.length === 0) {
         blocks.push({ type: "text", content: html });
     }
-    return blocks;
+    return blocks
+        .map((block) =>
+            block.type === "text"
+                ? { ...block, content: stripEmptyImageWrapperFromTextBlock(block.content) }
+                : block
+        )
+        .filter((block) => block.type === "img" || stripHtmlToText(block.content).trim() || /<(p|div|h1|h2|h3)\b/i.test(block.content));
 }
