@@ -1,30 +1,26 @@
 import path from "node:path";
 import { Table, StringRecordId } from "surrealdb";
 import { getDb } from "@/lib/surreal";
-import { saveUploadBuffer } from "@/lib/upload";
+import { saveUploadBufferPreservingPath } from "@/lib/upload";
 import { getNextBudgetNumberAction } from "@/actions/budget-core-read-actions";
 import {
     recalculateBudgetTotalValue,
     createBudgetDuplicationMaps,
 } from "@/actions/budget-core-duplicate-internals";
 import { buildDuplicatedBudgetItemContent, extractProductId } from "@/actions/budget-hierarchy-helpers";
+import { BUDGET_PACKAGE_MANIFEST } from "@/lib/budgets/budget-package-constants";
 import {
-    BUDGET_PACKAGE_MANIFEST,
-    BUDGET_PACKAGE_MAX_IMPORT_BYTES,
-} from "@/lib/budgets/budget-package-constants";
-import { exportId, resolveRelationExportId } from "@/lib/budgets/budget-package-serialize";
+    exportId,
+    lookupExportIdInMap,
+    normalizeRelationExportId,
+    resolveRelationExportId,
+} from "@/lib/budgets/budget-package-serialize";
 import {
-    isBudgetPackageManifestV1,
+    normalizeBudgetPackageManifest,
     type BudgetPackageManifestV1,
 } from "@/lib/budgets/budget-package-types";
-import {
-    collectUploadPaths,
-    replaceUploadUrls,
-    toApiUploadUrl,
-    uploadPathFromUrl,
-    zipPathForUpload,
-} from "@/lib/budgets/budget-package-urls";
-import { parseZipBuffer } from "@/lib/budgets/budget-package-zip";
+import { normalizeAllUploadUrlsInValue, zipHasAssetFiles } from "@/lib/budgets/budget-package-urls";
+import { decodeZipUtf8Entry, parseZipBuffer } from "@/lib/budgets/budget-package-zip";
 
 export type ImportBudgetPackageResult =
     | { ok: true; budgetId: string; title: string }
@@ -35,54 +31,70 @@ function sanitizeFilename(name: string): string {
     return base.replace(/[^\w.\-]+/g, "_") || "import.pazini.zip";
 }
 
-async function buildUrlRemapFromZip(
-    manifest: BudgetPackageManifestV1,
+function normalizeZipEntryKey(name: string): string {
+    return name.replace(/\\/g, "/").replace(/^\/+/, "");
+}
+
+function indexZipEntries(entries: Array<{ name: string; data: Buffer }>): Map<string, Buffer> {
+    const map = new Map<string, Buffer>();
+    for (const e of entries) {
+        const key = normalizeZipEntryKey(e.name);
+        if (!key) continue;
+        map.set(key, e.data);
+    }
+    return map;
+}
+
+function findManifestBuffer(zipFiles: Map<string, Buffer>): Buffer | undefined {
+    const direct = zipFiles.get(BUDGET_PACKAGE_MANIFEST);
+    if (direct) return direct;
+
+    const lowerManifest = BUDGET_PACKAGE_MANIFEST.toLowerCase();
+    for (const [key, buf] of zipFiles) {
+        const normalized = key.toLowerCase();
+        if (normalized === lowerManifest || normalized.endsWith(`/${lowerManifest}`)) {
+            return buf;
+        }
+    }
+    return undefined;
+}
+
+function isZipPackageFilename(name: string): boolean {
+    return name.endsWith(".zip") || name.endsWith(".pazini.zip") || name.includes(".pazini.");
+}
+
+type RestoreUploadFilesResult = {
+    restored: number;
+    missingInZip: number;
+};
+
+/** Restaura arquivos do ZIP em `uploads/` mantendo o mesmo caminho (UUIDs das URLs). */
+async function restoreUploadFilesFromZip(
     zipFiles: Map<string, Buffer>,
-): Promise<Map<string, string>> {
-    const uploadPaths = new Set<string>();
-    collectUploadPaths(manifest, uploadPaths);
+): Promise<RestoreUploadFilesResult> {
+    let restored = 0;
+    let missingInZip = 0;
 
-    const pathToNewUrl = new Map<string, string>();
-
-    for (const relPath of uploadPaths) {
-        const zipKey = zipPathForUpload(relPath);
-        const buf = zipFiles.get(zipKey);
-        if (!buf) continue;
-
-        const folder = path.posix.dirname(relPath.replace(/\\/g, "/"));
-        const folderArg = folder === "." ? "" : folder;
-        const newUrl = await saveUploadBuffer(buf, folderArg, path.basename(relPath));
-        pathToNewUrl.set(relPath, newUrl);
+    const keys = [...zipFiles.keys()].map((k) => normalizeZipEntryKey(k));
+    const byRel = new Map<string, Buffer>();
+    for (const key of keys) {
+        if (!key.startsWith("files/")) continue;
+        const rel = key.slice("files/".length);
+        if (!rel || rel.includes("..")) continue;
+        byRel.set(rel, zipFiles.get(key)!);
     }
 
-    const urlMap = new Map<string, string>();
-    const allStrings = new Set<string>();
-
-    const walkStrings = (v: unknown) => {
-        if (typeof v === "string") {
-            allStrings.add(v);
-            return;
+    for (const [rel, buf] of byRel) {
+        try {
+            await saveUploadBufferPreservingPath(buf, rel);
+            restored++;
+        } catch (err) {
+            console.warn(`[budget-import] falha ao gravar upload ${rel}:`, err);
+            missingInZip++;
         }
-        if (Array.isArray(v)) {
-            for (const x of v) walkStrings(x);
-            return;
-        }
-        if (v && typeof v === "object") {
-            for (const x of Object.values(v as Record<string, unknown>)) walkStrings(x);
-        }
-    };
-    walkStrings(manifest);
-
-    for (const str of allStrings) {
-        const rel = uploadPathFromUrl(str);
-        if (!rel) continue;
-        const newUrl = pathToNewUrl.get(rel);
-        if (!newUrl) continue;
-        urlMap.set(str, newUrl);
-        urlMap.set(toApiUploadUrl(rel), newUrl);
     }
 
-    return urlMap;
+    return { restored, missingInZip };
 }
 
 async function resolveOrCreateClient(
@@ -118,37 +130,61 @@ async function resolveOrCreateClient(
     return new StringRecordId(String(row.id));
 }
 
+async function createProductFromPayload(
+    db: Awaited<ReturnType<typeof getDb>>,
+    raw: Record<string, unknown>,
+    oldKey: string,
+    map: Map<string, StringRecordId>,
+) {
+    const code = raw.code != null ? String(raw.code).trim() : "";
+    if (code) {
+        const existing = await db.query<[Array<{ id: unknown }>]>(
+            "SELECT id FROM product WHERE code = $code LIMIT 1",
+            { code },
+        );
+        const row = existing[0]?.[0];
+        if (row?.id) {
+            const id = new StringRecordId(String(row.id));
+            map.set(oldKey, id);
+            return;
+        }
+    }
+
+    const payload = normalizeAllUploadUrlsInValue({ ...raw }) as Record<string, unknown>;
+    delete payload._exportId;
+    delete payload.id;
+    payload.created_at = new Date().toISOString();
+    payload.updated_at = new Date().toISOString();
+
+    const created = await db.create(new Table("product")).content(payload);
+    const row = Array.isArray(created) ? created[0] : created;
+    map.set(oldKey, new StringRecordId(String(row.id)));
+}
+
 async function resolveProductIdMap(
     db: Awaited<ReturnType<typeof getDb>>,
-    products: Array<Record<string, unknown>>,
-    urlMap: Map<string, string>,
+    manifest: BudgetPackageManifestV1,
 ): Promise<Map<string, StringRecordId>> {
     const map = new Map<string, StringRecordId>();
 
-    for (const raw of products) {
-        const oldKey = exportId(raw);
-        const code = raw.code != null ? String(raw.code).trim() : "";
-        if (code) {
-            const existing = await db.query<[Array<{ id: unknown }>]>(
-                "SELECT id FROM product WHERE code = $code LIMIT 1",
-                { code },
-            );
-            const row = existing[0]?.[0];
-            if (row?.id) {
-                map.set(oldKey, new StringRecordId(String(row.id)));
-                continue;
-            }
-        }
+    for (const raw of manifest.products) {
+        await createProductFromPayload(db, raw, exportId(raw), map);
+    }
 
-        const payload = replaceUploadUrls({ ...raw }, urlMap) as Record<string, unknown>;
-        delete payload._exportId;
-        delete payload.id;
-        payload.created_at = new Date().toISOString();
-        payload.updated_at = new Date().toISOString();
+    for (const item of manifest.items) {
+        const prodKey =
+            normalizeRelationExportId(item.product_id) ??
+            extractProductId(item.product_id);
+        if (!prodKey || map.has(prodKey)) continue;
 
-        const created = await db.create(new Table("product")).content(payload);
-        const row = Array.isArray(created) ? created[0] : created;
-        map.set(oldKey, new StringRecordId(String(row.id)));
+        const embedded: Record<string, unknown> = {
+            code: item.product_code ?? item.code,
+            description: item.product_name ?? item.description ?? "Produto importado",
+            unit: item.product_unit ?? item.unit,
+            imageUrl: item.product_image_url ?? item.imageUrl,
+            unit_price: item.unit_price,
+        };
+        await createProductFromPayload(db, embedded, prodKey, map);
     }
 
     return map;
@@ -181,8 +217,7 @@ async function importManifestStructure(
             else rest.push(block);
         }
         for (const block of batch) {
-            const parentKey = resolveRelationExportId(block.parent_id);
-            const parentId = parentKey ? blockIdMap.get(parentKey) : undefined;
+            const parentId = lookupExportIdInMap(blockIdMap, block.parent_id);
             const props =
                 block.props && typeof block.props === "object" ? { ...(block.props as object) } : {};
             const created = await db.create(new Table("budget_block")).content({
@@ -218,9 +253,15 @@ async function importManifestStructure(
     }
 
     for (const sec of manifest.sections) {
-        const locKey = resolveRelationExportId(sec.location_id);
-        const locId = locKey ? locationIdMap.get(locKey) : null;
-        if (!locId) continue;
+        const locId = lookupExportIdInMap(locationIdMap, sec.location_id);
+        if (!locId) {
+            console.warn(
+                "[budget-import] trecho ignorado (local não encontrado):",
+                sec.name,
+                normalizeRelationExportId(sec.location_id),
+            );
+            continue;
+        }
         const created = await db.create(new Table("budget_section")).content({
             location_id: locId,
             budget_id: newBudgetRecordId,
@@ -243,24 +284,16 @@ async function importManifestStructure(
         const content = buildDuplicatedBudgetItemContent(item as Record<string, unknown>);
         content.budget_id = newBudgetRecordId;
 
-        const secKey = resolveRelationExportId(item.section_id);
-        const blockKey = resolveRelationExportId(item.block_id);
-        if (secKey) {
-            const secId = sectionIdMap.get(secKey);
-            if (secId) content.section_id = secId;
-        }
-        if (blockKey) {
-            const blockId = blockIdMap.get(blockKey);
-            if (blockId) content.block_id = blockId;
-        }
+        const secId = lookupExportIdInMap(sectionIdMap, item.section_id);
+        const blockId = lookupExportIdInMap(blockIdMap, item.block_id);
+        if (secId) content.section_id = secId;
+        if (blockId) content.block_id = blockId;
 
         const prodKey =
-            resolveRelationExportId(item.product_id) ??
-            (typeof item.product_id === "string" ? item.product_id : extractProductId(item.product_id));
-        if (prodKey && productMap.has(prodKey)) {
-            content.product_id = productMap.get(prodKey);
-        } else if (typeof item.product_id === "string") {
-            content.product_id = item.product_id;
+            normalizeRelationExportId(item.product_id) ?? extractProductId(item.product_id);
+        if (prodKey) {
+            const mapped = lookupExportIdInMap(productMap, prodKey) ?? productMap.get(prodKey);
+            if (mapped) content.product_id = mapped;
         }
 
         const created = await db.create(new Table("budget_item")).content(content);
@@ -271,36 +304,33 @@ async function importManifestStructure(
     const imageIdMap = new Map<string, StringRecordId>();
 
     for (const img of manifest.images) {
-        const locKey = resolveRelationExportId(img.location_id);
-        const secKey = resolveRelationExportId(img.section_id);
-        const blockKey = resolveRelationExportId(img.block_id);
+        const locId = lookupExportIdInMap(locationIdMap, img.location_id);
+        const secId = lookupExportIdInMap(sectionIdMap, img.section_id);
+        const blockId = lookupExportIdInMap(blockIdMap, img.block_id);
 
         const content: Record<string, unknown> = {
             budget_id: newBudgetRecordId,
-            url: img.url,
+            url: normalizeAllUploadUrlsInValue(img.url),
             width: img.width,
             height: img.height,
             order_index: img.order_index ?? Date.now(),
             created_at: new Date().toISOString(),
         };
-        if (img.composed_url) content.composed_url = img.composed_url;
+        if (img.composed_url) {
+            content.composed_url = normalizeAllUploadUrlsInValue(img.composed_url);
+        }
         if (img.caption) content.caption = img.caption;
         if (img.editor_viewport != null) content.editor_viewport = img.editor_viewport;
         if (img.figure_frame_orientation) content.figure_frame_orientation = img.figure_frame_orientation;
 
-        if (blockKey) {
-            const mapped = blockIdMap.get(blockKey);
-            if (!mapped) continue;
-            content.block_id = mapped;
-        } else if (secKey) {
-            const mapped = sectionIdMap.get(secKey);
-            if (!mapped) continue;
-            content.section_id = mapped;
-        } else if (locKey) {
-            const mapped = locationIdMap.get(locKey);
-            if (!mapped) continue;
-            content.location_id = mapped;
+        if (blockId) {
+            content.block_id = blockId;
+        } else if (secId) {
+            content.section_id = secId;
+        } else if (locId) {
+            content.location_id = locId;
         } else {
+            console.warn("[budget-import] imagem ignorada (sem local/trecho/bloco):", img.url);
             continue;
         }
 
@@ -310,8 +340,7 @@ async function importManifestStructure(
     }
 
     for (const ann of manifest.annotations) {
-        const imgKey = resolveRelationExportId(ann.image_id);
-        const newImageId = imgKey ? imageIdMap.get(imgKey) : null;
+        const newImageId = lookupExportIdInMap(imageIdMap, ann.image_id);
         if (!newImageId) continue;
 
         const record: Record<string, unknown> = {
@@ -344,31 +373,35 @@ export async function importBudgetPackage(
     originalName: string,
     options?: { title?: string },
 ): Promise<ImportBudgetPackageResult> {
-    if (fileBuffer.length > BUDGET_PACKAGE_MAX_IMPORT_BYTES) {
-        return {
-            ok: false,
-            error: `Arquivo muito grande (máx. ${Math.round(BUDGET_PACKAGE_MAX_IMPORT_BYTES / 1024 / 1024)} MB)`,
-            status: 413,
-        };
-    }
-
     let manifestRaw: unknown;
     const zipFiles = new Map<string, Buffer>();
 
     const name = sanitizeFilename(originalName).toLowerCase();
-    if (name.endsWith(".zip") || name.endsWith(".pazini.zip")) {
+    if (isZipPackageFilename(name)) {
         try {
             const entries = parseZipBuffer(fileBuffer);
-            for (const e of entries) {
-                zipFiles.set(e.name.replace(/\\/g, "/"), e.data);
+            const indexed = indexZipEntries(entries);
+            for (const [key, data] of indexed) {
+                zipFiles.set(key, data);
             }
-            const manifestBuf = zipFiles.get(BUDGET_PACKAGE_MANIFEST);
+            const manifestBuf = findManifestBuffer(zipFiles);
             if (!manifestBuf) {
-                return { ok: false, error: "Pacote inválido: manifest.json ausente", status: 400 };
+                const sample = [...zipFiles.keys()].slice(0, 8).join(", ");
+                return {
+                    ok: false,
+                    error: `Pacote inválido: manifest.json ausente${sample ? ` (entradas: ${sample}…)` : ""}`,
+                    status: 400,
+                };
             }
-            manifestRaw = JSON.parse(manifestBuf.toString("utf8"));
-        } catch {
-            return { ok: false, error: "Arquivo ZIP inválido ou corrompido", status: 400 };
+            manifestRaw = JSON.parse(decodeZipUtf8Entry(manifestBuf));
+        } catch (err) {
+            const detail = err instanceof Error ? err.message : "erro desconhecido";
+            console.error("[budget-import] parse zip:", err);
+            return {
+                ok: false,
+                error: `Arquivo ZIP inválido ou corrompido: ${detail}`,
+                status: 400,
+            };
         }
     } else if (name.endsWith(".json")) {
         try {
@@ -384,26 +417,41 @@ export async function importBudgetPackage(
         };
     }
 
-    if (!isBudgetPackageManifestV1(manifestRaw)) {
+    const manifestNormalized = normalizeBudgetPackageManifest(manifestRaw);
+    if (!manifestNormalized) {
         return { ok: false, error: "Formato de pacote não reconhecido (versão incompatível)", status: 400 };
     }
 
-    let manifest = manifestRaw;
-    const exportMode = manifest.exportMode ?? (zipFiles.size <= 1 ? "data" : "full");
+    let manifest = manifestNormalized;
+    const hasZipAssets = zipHasAssetFiles(zipFiles);
+    const exportMode = manifest.exportMode ?? (hasZipAssets ? "full" : "data");
 
-    let urlMap = new Map<string, string>();
-    if (exportMode !== "data") {
-        urlMap = await buildUrlRemapFromZip(manifest, zipFiles);
-        manifest = replaceUploadUrls(manifest, urlMap) as BudgetPackageManifestV1;
+    if (hasZipAssets) {
+        const { restored, missingInZip } = await restoreUploadFilesFromZip(zipFiles);
+        console.info(
+            `[budget-import] arquivos restaurados: ${restored} (modo ${exportMode})` +
+                (missingInZip ? `, falhas: ${missingInZip}` : ""),
+        );
+    } else if (exportMode !== "data") {
+        console.warn(
+            "[budget-import] pacote marcado como",
+            exportMode,
+            "mas sem pasta files/ no ZIP — imagens continuarão apontando para URLs antigas",
+        );
     }
+
+    manifest = normalizeAllUploadUrlsInValue(manifest) as BudgetPackageManifestV1;
 
     const db = await getDb();
-    const clientRecordId = await resolveOrCreateClient(db, manifest.client);
+    let clientRecordId = await resolveOrCreateClient(db, manifest.client);
     if (!clientRecordId) {
-        return { ok: false, error: "Pacote sem dados de cliente", status: 400 };
+        clientRecordId = await resolveOrCreateClient(db, { name: "Cliente importado" });
+    }
+    if (!clientRecordId) {
+        return { ok: false, error: "Não foi possível criar cliente para o orçamento importado", status: 500 };
     }
 
-    const productMap = await resolveProductIdMap(db, manifest.products, urlMap);
+    const productMap = await resolveProductIdMap(db, manifest);
 
     const numberResult = await getNextBudgetNumberAction();
     const nextCode = numberResult.data?.nextNumber ?? String(Date.now());

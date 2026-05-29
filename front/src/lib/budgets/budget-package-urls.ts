@@ -72,3 +72,42 @@ export function replaceUploadUrls(value: unknown, urlMap: Map<string, string>): 
 export function zipPathForUpload(relativePath: string): string {
     return `files/${relativePath.replace(/^\/+/, "")}`;
 }
+
+export function zipHasAssetFiles(zipFiles: Map<string, Buffer>): boolean {
+    for (const key of zipFiles.keys()) {
+        const n = key.replace(/\\/g, "/");
+        if (n.startsWith("files/") && n.length > "files/".length) return true;
+    }
+    return false;
+}
+
+/** Converte URL absoluta de outro ambiente para `/api/uploads/...` local. */
+export function normalizeUploadUrlToRelative(url: string): string {
+    const rel = uploadPathFromUrl(url);
+    if (!rel) return url;
+    return toApiUploadUrl(rel);
+}
+
+/** Normaliza todas as URLs de upload no manifest (host de produção → caminho relativo). */
+export function normalizeAllUploadUrlsInValue(value: unknown): unknown {
+    if (value == null) return value;
+
+    if (typeof value === "string") {
+        return uploadPathFromUrl(value) ? normalizeUploadUrlToRelative(value) : value;
+    }
+
+    if (Array.isArray(value)) {
+        return value.map((item) => normalizeAllUploadUrlsInValue(item));
+    }
+
+    if (typeof value === "object") {
+        const obj = value as Record<string, unknown>;
+        const next: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(obj)) {
+            next[k] = normalizeAllUploadUrlsInValue(v);
+        }
+        return next;
+    }
+
+    return value;
+}

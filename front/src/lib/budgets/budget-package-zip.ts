@@ -1,4 +1,5 @@
 import zlib from "node:zlib";
+import { unzipSync } from "fflate";
 
 /** CRC-32 (IEEE) para cabeçalhos ZIP. */
 function crc32(buf: Buffer): number {
@@ -82,46 +83,46 @@ export function buildZipBuffer(entries: ZipEntry[]): Buffer {
     return Buffer.concat([...localParts, centralDir, end]);
 }
 
-type ZipFile = { name: string; data: Buffer };
+/** Decodifica entrada de texto do ZIP (JSON) mesmo se ainda vier compactada. */
+export function decodeZipUtf8Entry(buf: Buffer): string {
+    const head = buf.subarray(0, Math.min(buf.length, 16));
+    const looksUtf8Json =
+        head.length > 0 &&
+        (head[0] === 0x7b || head[0] === 0x5b || head[0] === 0xef); // { [ BOM
 
-/** Lê entradas de um ZIP (DEFLATE ou STORE). */
-export function parseZipBuffer(zipBuf: Buffer): ZipFile[] {
-    const files: ZipFile[] = [];
-    let pos = 0;
-
-    while (pos + 30 <= zipBuf.length) {
-        const sig = zipBuf.readUInt32LE(pos);
-        if (sig === 0x06054b50) break;
-        if (sig !== 0x04034b50) {
-            pos++;
-            continue;
-        }
-
-        const method = zipBuf.readUInt16LE(pos + 6);
-        const compSize = zipBuf.readUInt32LE(pos + 18);
-        const uncompSize = zipBuf.readUInt32LE(pos + 22);
-        const nameLen = zipBuf.readUInt16LE(pos + 26);
-        const extraLen = zipBuf.readUInt16LE(pos + 28);
-        const nameStart = pos + 30;
-        const name = zipBuf.subarray(nameStart, nameStart + nameLen).toString("utf8");
-        const dataStart = nameStart + nameLen + extraLen;
-        const compData = zipBuf.subarray(dataStart, dataStart + compSize);
-
-        let data: Buffer;
-        if (method === 0) {
-            data = compData;
-        } else if (method === 8) {
-            data = zlib.inflateRawSync(compData);
-            if (data.length !== uncompSize) {
-                throw new Error(`ZIP: tamanho inválido em ${name}`);
-            }
-        } else {
-            throw new Error(`ZIP: método não suportado (${method}) em ${name}`);
-        }
-
-        files.push({ name, data });
-        pos = dataStart + compSize;
+    if (looksUtf8Json) {
+        return buf.toString("utf8");
     }
 
-    return files;
+    try {
+        return zlib.inflateRawSync(buf).toString("utf8");
+    } catch {
+        return zlib.inflateSync(buf).toString("utf8");
+    }
+}
+
+/**
+ * Extrai entradas de um ZIP (DEFLATE/STORE, ZIP grande).
+ * Usa `fflate` — parser manual falhava em pacotes completos grandes.
+ */
+export function parseZipBuffer(zipBuf: Buffer): ZipEntry[] {
+    if (zipBuf.length < 22) {
+        throw new Error("ZIP: arquivo muito pequeno");
+    }
+
+    try {
+        const unzipped = unzipSync(new Uint8Array(zipBuf));
+        const files: ZipEntry[] = [];
+        for (const [name, data] of Object.entries(unzipped)) {
+            if (!name || name.endsWith("/")) continue;
+            files.push({ name, data: Buffer.from(data) });
+        }
+        if (files.length === 0) {
+            throw new Error("ZIP: nenhuma entrada encontrada");
+        }
+        return files;
+    } catch (err) {
+        const detail = err instanceof Error ? err.message : "erro desconhecido";
+        throw new Error(`ZIP: falha ao extrair (${detail})`);
+    }
 }
