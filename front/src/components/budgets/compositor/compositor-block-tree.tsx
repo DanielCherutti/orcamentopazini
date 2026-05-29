@@ -2,7 +2,7 @@
 
 import type { ComponentType, RefObject } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FileText, Map as MapIcon, ArrowRight, Plus, Table2, Upload } from "lucide-react";
+import { FileText, Map as MapIcon, ArrowRight, Plus, Power, Table2, Upload } from "lucide-react";
 import {
     DndContext,
     PointerSensor,
@@ -790,13 +790,43 @@ function HeaderFooterRenderer({
                 : props.inner_use_cover_watermark
                   ? props.cover_watermark_scale_pct ?? 100
                   : props.inner_watermark_scale_pct ?? 100;
+        const allBandsEnabled =
+            props.cover_show_header_band === true &&
+            props.cover_show_footer_band === true &&
+            props.inner_show_header_band === true &&
+            props.inner_show_footer_band === true;
+        const coverBandsEnabled =
+            props.cover_show_header_band === true && props.cover_show_footer_band === true;
+        const innerBandsEnabled =
+            props.inner_show_header_band === true && props.inner_show_footer_band === true;
         return (
             <div className="space-y-4">
                 {key === "all" ? (
                     <div className="rounded-lg border bg-card p-3 space-y-3">
-                        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Faixas de todas as páginas (PDF)
-                        </Label>
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Faixas de todas as páginas (PDF)
+                            </Label>
+                            <Button
+                                type="button"
+                                variant={allBandsEnabled ? "outline" : "default"}
+                                size="sm"
+                                className="h-8 text-xs"
+                                disabled={isReadOnly}
+                                onClick={() => {
+                                    const next = !allBandsEnabled;
+                                    void handlePatch({
+                                        cover_show_header_band: next,
+                                        cover_show_footer_band: next,
+                                        inner_show_header_band: next,
+                                        inner_show_footer_band: next,
+                                    });
+                                }}
+                            >
+                                <Power className="mr-1.5 h-3.5 w-3.5" />
+                                {allBandsEnabled ? "Desativar tudo" : "Ativar tudo"}
+                            </Button>
+                        </div>
                         <div className="flex flex-wrap items-center gap-4">
                             <label className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <Checkbox
@@ -840,9 +870,28 @@ function HeaderFooterRenderer({
                 ) : null}
                 {key === "cover" ? (
                     <div className="rounded-lg border bg-card p-3 space-y-3">
-                        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Faixas da capa (PDF)
-                        </Label>
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Faixas da capa (PDF)
+                            </Label>
+                            <Button
+                                type="button"
+                                variant={coverBandsEnabled ? "outline" : "default"}
+                                size="sm"
+                                className="h-8 text-xs"
+                                disabled={isReadOnly}
+                                onClick={() => {
+                                    const next = !coverBandsEnabled;
+                                    void handlePatch({
+                                        cover_show_header_band: next,
+                                        cover_show_footer_band: next,
+                                    });
+                                }}
+                            >
+                                <Power className="mr-1.5 h-3.5 w-3.5" />
+                                {coverBandsEnabled ? "Desativar capa" : "Ativar capa"}
+                            </Button>
+                        </div>
                         <div className="flex flex-wrap items-center gap-4">
                             <label className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <Checkbox
@@ -872,9 +921,28 @@ function HeaderFooterRenderer({
                 ) : null}
                 {key === "inner" ? (
                     <div className="rounded-lg border bg-card p-3 space-y-3">
-                        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Faixas das páginas internas (PDF)
-                        </Label>
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Faixas das páginas internas (PDF)
+                            </Label>
+                            <Button
+                                type="button"
+                                variant={innerBandsEnabled ? "outline" : "default"}
+                                size="sm"
+                                className="h-8 text-xs"
+                                disabled={isReadOnly}
+                                onClick={() => {
+                                    const next = !innerBandsEnabled;
+                                    void handlePatch({
+                                        inner_show_header_band: next,
+                                        inner_show_footer_band: next,
+                                    });
+                                }}
+                            >
+                                <Power className="mr-1.5 h-3.5 w-3.5" />
+                                {innerBandsEnabled ? "Desativar internas" : "Ativar internas"}
+                            </Button>
+                        </div>
                         <div className="flex flex-wrap items-center gap-4">
                             <label className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <Checkbox
