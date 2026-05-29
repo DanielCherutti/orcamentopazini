@@ -98,7 +98,7 @@ export function HeaderFooterLayoutEditor({
     setLayout(next);
     void onPatch({
       [field]: next,
-      ...visibilityPatchFor(scope, region, next.elements.length > 0),
+      ...visibilityPatchFor(scope, region, next, props),
       ...extraPatch,
     } as Partial<HeaderFooterBlockProps>);
   };
@@ -830,17 +830,28 @@ function safeColor(value: string | undefined, fallback: string): string {
 function visibilityPatchFor(
   scope: HeaderFooterLayoutScope,
   region: HeaderFooterLayoutRegion,
-  hasElements: boolean,
+  nextLayout: HeaderFooterCanvasLayout,
+  props: HeaderFooterBlockProps,
 ): Partial<HeaderFooterBlockProps> {
-  if (!hasElements) return {};
+  const nextField = headerFooterLayoutField(scope, region);
+  const hasLayoutElements = (field: ReturnType<typeof headerFooterLayoutField>) => {
+    if (field === nextField) return nextLayout.elements.length > 0;
+    return normalizeHeaderFooterLayout(props[field]).elements.length > 0;
+  };
+
   if (region === "header") {
-    if (scope === "all") return { cover_show_header_band: true, inner_show_header_band: true };
-    if (scope === "cover") return { cover_show_header_band: true };
-    return { inner_show_header_band: true };
+    const coverHasElements = hasLayoutElements("all_header_layout") || hasLayoutElements("cover_header_layout");
+    const innerHasElements = hasLayoutElements("all_header_layout") || hasLayoutElements("inner_header_layout");
+    if (scope === "all") return { cover_show_header_band: coverHasElements, inner_show_header_band: innerHasElements };
+    if (scope === "cover") return { cover_show_header_band: coverHasElements };
+    return { inner_show_header_band: innerHasElements };
   }
-  if (scope === "all") return { cover_show_footer_band: true, inner_show_footer_band: true };
-  if (scope === "cover") return { cover_show_footer_band: true };
-  return { inner_show_footer_band: true };
+
+  const coverHasElements = hasLayoutElements("all_footer_layout") || hasLayoutElements("cover_footer_layout");
+  const innerHasElements = hasLayoutElements("all_footer_layout") || hasLayoutElements("inner_footer_layout");
+  if (scope === "all") return { cover_show_footer_band: coverHasElements, inner_show_footer_band: innerHasElements };
+  if (scope === "cover") return { cover_show_footer_band: coverHasElements };
+  return { inner_show_footer_band: innerHasElements };
 }
 
 function pageNumberingPatchFor(

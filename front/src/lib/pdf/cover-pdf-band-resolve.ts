@@ -89,7 +89,9 @@ export function shouldShowCoverBudgetCodeStamp(
     coverProps: CoverBlockProps,
     hasCustomCoverFooterHtml: boolean,
     hasCoverFooterLayout: boolean,
+    isCoverFooterBandVisible: boolean,
 ): boolean {
+    if (!isCoverFooterBandVisible) return true;
     if (hasCustomCoverFooterHtml || hasCoverFooterLayout) return false;
     if (coverProps.cover_pdf_footer_left_template?.trim()) return false;
     return true;
@@ -142,6 +144,11 @@ export function resolveCoverPageShowHeaderBand(
         | undefined,
     hasCustomCoverHeaderHtml: boolean,
 ): boolean {
+    /*
+     * O bloco header_footer e o modal antigo podem coexistir em documentos já salvos.
+     * Quando o bloco novo grava false, ele é a ordem final: nem layout compartilhado,
+     * nem conteúdo legado, nem dados das Configurações devem ressuscitar a faixa.
+     */
     if (headerFooterProps?.cover_show_header_band === false) return false;
     if (headerFooterProps?.cover_show_header_band === true) return true;
     if (coverProps.cover_pdf_show_header_band === false) return false;
@@ -158,6 +165,10 @@ export function resolveCoverPageShowFooterBand(
         | undefined,
     hasCustomCoverFooterHtml: boolean,
 ): boolean {
+    /*
+     * Mesma precedência do cabeçalho: false explícito no bloco novo significa
+     * "sem rodapé na capa", mesmo que ainda existam layouts/textos salvos.
+     */
     if (headerFooterProps?.cover_show_footer_band === false) return false;
     if (headerFooterProps?.cover_show_footer_band === true) return true;
     if (coverProps.cover_pdf_show_footer_band === false) return false;

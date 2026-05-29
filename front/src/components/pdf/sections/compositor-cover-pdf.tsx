@@ -419,16 +419,17 @@ export function CompositorCoverPdfPage({
       );
   const footerLeft = sanitizeTextForPdf(formatCoverPdfFooterLeftText(coverProps, bandCtx));
   const footerRight = sanitizeTextForPdf(formatCoverPdfFooterRightText(coverProps, bandCtx));
-  const showCoverBudgetCodeStamp = shouldShowCoverBudgetCodeStamp(
-    coverProps,
-    Boolean(customCoverFooterText),
-    hasCoverFooterLayout,
-  );
-  const coverBudgetCodeLabel = sanitizeTextForPdf(formatCoverBudgetCodeLabel(bandCtx));
   const hasCoverFooterBandContent = Boolean(
     customCoverFooterText || hasCoverFooterLayout || footerLeft.trim() || footerRight.trim(),
   );
   const showCoverFooterBand = showCoverFooter && hasCoverFooterBandContent;
+  const showCoverBudgetCodeStamp = shouldShowCoverBudgetCodeStamp(
+    coverProps,
+    Boolean(customCoverFooterText),
+    hasCoverFooterLayout,
+    showCoverFooterBand,
+  );
+  const coverBudgetCodeLabel = sanitizeTextForPdf(formatCoverBudgetCodeLabel(bandCtx));
   const pagePaddingTop = showCoverHeader
     ? (hasCoverHeaderLayout ? headerReserve : BODY_PAD_V + headerReserve)
     : BODY_PAD_V;
