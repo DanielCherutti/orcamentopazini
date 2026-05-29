@@ -23,8 +23,8 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: "20mb",
     },
-    /** Upload de pacotes .pazini.zip na rota /api/budgets/import */
-    proxyClientMaxBodySize: "250mb",
+    /** Pacotes completos (.pazini.zip) — sem teto prático no app; limite de infra (RAM/disco). */
+    proxyClientMaxBodySize: "10gb",
   },
   images: {
     remotePatterns: [

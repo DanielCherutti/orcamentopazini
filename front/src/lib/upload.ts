@@ -52,6 +52,31 @@ export function uploadPersistErrorResponse(error: unknown): NextResponse {
 /**
  * Persiste bytes já validados (uma única leitura do arquivo no handler).
  */
+/**
+ * Grava o arquivo mantendo o caminho relativo dentro de `uploads/`
+ * (ex.: `budgets/images/uuid.png`) — usado na importação de pacotes .pazini.zip.
+ */
+export async function saveUploadBufferPreservingPath(
+    buffer: Buffer,
+    relativePath: string,
+): Promise<string> {
+    const safe = relativePath.replace(/^\/+/, "").replace(/\\/g, "/");
+    if (!safe || safe.includes("..")) {
+        throw new Error("Caminho de upload inválido");
+    }
+
+    const uploadsRoot = getUploadsRoot();
+    const fullPath = path.join(uploadsRoot, safe);
+    const resolved = path.resolve(fullPath);
+    if (!resolved.startsWith(uploadsRoot + path.sep)) {
+        throw new Error("Caminho de upload inválido");
+    }
+
+    await fs.mkdir(path.dirname(resolved), { recursive: true });
+    await fs.writeFile(resolved, buffer);
+    return `/api/uploads/${safe}`;
+}
+
 export async function saveUploadBuffer(
     buffer: Buffer,
     folder: string,

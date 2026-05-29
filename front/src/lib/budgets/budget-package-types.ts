@@ -33,6 +33,16 @@ export function isBudgetPackageManifestV1(data: unknown): data is BudgetPackageM
         Array.isArray(m.items) &&
         Array.isArray(m.images) &&
         Array.isArray(m.annotations) &&
-        Array.isArray(m.products)
+        (m.products == null || Array.isArray(m.products))
     );
+}
+
+/** Normaliza manifest lido do ZIP/JSON antes da importação. */
+export function normalizeBudgetPackageManifest(data: unknown): BudgetPackageManifestV1 | null {
+    if (!isBudgetPackageManifestV1(data)) return null;
+    return {
+        ...data,
+        products: Array.isArray(data.products) ? data.products : [],
+        client: data.client ?? null,
+    };
 }

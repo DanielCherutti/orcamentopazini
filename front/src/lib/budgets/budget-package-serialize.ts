@@ -42,13 +42,42 @@ export function exportId(row: Record<string, unknown>): string {
     return String(id);
 }
 
-export function resolveRelationExportId(value: unknown): string | null {
+/** Normaliza ID exportado (Surreal `table:id`, `table⟨id⟩`, UUID puro). */
+export function normalizeRelationExportId(value: unknown): string | null {
     if (!value) return null;
-    if (typeof value === "string") return value;
-    if (typeof value === "object" && value !== null) {
+    let raw: string | null = null;
+    if (typeof value === "string") {
+        raw = value;
+    } else if (typeof value === "object" && value !== null) {
         const o = value as Record<string, unknown>;
-        if (o._exportId != null) return String(o._exportId);
-        if (o.id != null) return String(o.id);
+        if (o._exportId != null) raw = String(o._exportId);
+        else if (o.id != null) raw = String(o.id);
+        else if (typeof (value as { toString?: () => string }).toString === "function") {
+            const s = String(value);
+            if (s.includes(":") && !s.startsWith("[object")) raw = s;
+        }
     }
-    return null;
+    if (!raw) return null;
+    return raw.replace(/⟨/g, ":").replace(/⟩/g, "").trim();
+}
+
+export function resolveRelationExportId(value: unknown): string | null {
+    return normalizeRelationExportId(value);
+}
+
+/** Busca ID no mapa de duplicação (chave exata ou sufixo `table:id`). */
+export function lookupExportIdInMap<T>(
+    map: Map<string, T>,
+    relationValue: unknown,
+): T | undefined {
+    const key = normalizeRelationExportId(relationValue);
+    if (!key) return undefined;
+    if (map.has(key)) return map.get(key);
+
+    const bare = key.includes(":") ? key.split(":").pop()! : key;
+    for (const [k, v] of map) {
+        const kBare = k.includes(":") ? k.split(":").pop()! : k;
+        if (kBare === bare || k.endsWith(`:${bare}`)) return v;
+    }
+    return undefined;
 }
