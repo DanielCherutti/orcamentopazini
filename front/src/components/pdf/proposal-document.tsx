@@ -32,6 +32,7 @@ import {
     hasAnyHeaderFooterPdfLayout,
     renderTextWithPageNumbers,
 } from '@/components/pdf/header-footer-layout-pdf';
+import { normalizeHeaderFooterApplyScope } from '@/lib/compositor/header-footer-layout';
 import type { BudgetItem } from '@/types/budget-types';
 import type { BudgetLocation } from '@/types/budget-types';
 import { applyQuoteRowAdjustments } from '@/lib/budgets/scope-pricing';
@@ -1160,10 +1161,22 @@ function InnerPdfPage({
         ? proxyPdfImageSrc(logoUrl, settings.app_public_url, pdfEmbeddedImages)
         : undefined;
     const showRunningHeader = showInnerHeaderBand && pdfInnerRunningHeaderShouldShow(settings);
-    const customHeader = showInnerHeaderBand ? (innerHeaderText ?? "").trim() : "";
-    const customFooter = showInnerFooterBand ? (innerFooterText ?? "").trim() : "";
-    const innerHeaderLayouts = [headerFooterProps?.all_header_layout, headerFooterProps?.inner_header_layout];
-    const innerFooterLayouts = [headerFooterProps?.all_footer_layout, headerFooterProps?.inner_footer_layout];
+    const applyScope = normalizeHeaderFooterApplyScope(headerFooterProps?.apply_scope);
+    const canRenderInnerBands = applyScope === "all" || applyScope === "inner";
+    const customHeader = showInnerHeaderBand && canRenderInnerBands ? (innerHeaderText ?? "").trim() : "";
+    const customFooter = showInnerFooterBand && canRenderInnerBands ? (innerFooterText ?? "").trim() : "";
+    const innerHeaderLayouts =
+        applyScope === "all"
+            ? [headerFooterProps?.all_header_layout]
+            : applyScope === "inner"
+                ? [headerFooterProps?.inner_header_layout]
+                : [];
+    const innerFooterLayouts =
+        applyScope === "all"
+            ? [headerFooterProps?.all_footer_layout]
+            : applyScope === "inner"
+                ? [headerFooterProps?.inner_footer_layout]
+                : [];
     const hasInnerHeaderLayout = hasAnyHeaderFooterPdfLayout(innerHeaderLayouts);
     const hasInnerFooterLayout = hasAnyHeaderFooterPdfLayout(innerFooterLayouts);
     const hasInnerFooterContent = Boolean(customFooter || hasInnerFooterLayout);

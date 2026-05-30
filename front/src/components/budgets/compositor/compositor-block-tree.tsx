@@ -2,7 +2,7 @@
 
 import type { ComponentType, RefObject } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FileText, Map as MapIcon, ArrowRight, Plus, Power, Table2, Upload } from "lucide-react";
+import { FileText, Map as MapIcon, ArrowRight, Plus, Table2, Upload } from "lucide-react";
 import {
     DndContext,
     PointerSensor,
@@ -65,6 +65,10 @@ import { CompositorFiguresBlock } from "./compositor-figures-block";
 import type { ScopeFigureEntry } from "./compositor-figures-utils";
 import { useScopeFigureNumbers } from "@/components/budgets/use-scope-figure-numbers";
 import { parseFigureFrameOrientation } from "@/lib/budgets/figure-frame-utils";
+import {
+    normalizeHeaderFooterApplyScope,
+    type HeaderFooterLayoutScope,
+} from "@/lib/compositor/header-footer-layout";
 
 // ─── Renderers de bloco (modo documento) ──────────────────────────────────────
 
@@ -701,6 +705,7 @@ function HeaderFooterRenderer({
     const coverWatermarkInputRef = useRef<HTMLInputElement | null>(null);
     const innerWatermarkInputRef = useRef<HTMLInputElement | null>(null);
     const [uploadingField, setUploadingField] = useState<"cover" | "inner" | null>(null);
+    const applyScope = normalizeHeaderFooterApplyScope(props.apply_scope);
     const [activeBandByPane, setActiveBandByPane] = useState<{
         all: "header" | "footer";
         cover: "header" | "footer";
@@ -730,6 +735,27 @@ function HeaderFooterRenderer({
                 }
             });
         return patchQueueRef.current;
+    };
+
+    const handleScopeChange = (next: HeaderFooterLayoutScope) => {
+        const patch: Partial<HeaderFooterBlockProps> = { apply_scope: next };
+        if (next === "all") {
+            patch.cover_show_header_band = true;
+            patch.cover_show_footer_band = true;
+            patch.inner_show_header_band = true;
+            patch.inner_show_footer_band = true;
+        } else if (next === "cover") {
+            patch.cover_show_header_band = true;
+            patch.cover_show_footer_band = true;
+            patch.inner_show_header_band = false;
+            patch.inner_show_footer_band = false;
+        } else {
+            patch.cover_show_header_band = false;
+            patch.cover_show_footer_band = false;
+            patch.inner_show_header_band = true;
+            patch.inner_show_footer_band = true;
+        }
+        void handlePatch(patch);
     };
 
     const uploadWatermark = async (
@@ -790,43 +816,13 @@ function HeaderFooterRenderer({
                 : props.inner_use_cover_watermark
                   ? props.cover_watermark_scale_pct ?? 100
                   : props.inner_watermark_scale_pct ?? 100;
-        const allBandsEnabled =
-            props.cover_show_header_band === true &&
-            props.cover_show_footer_band === true &&
-            props.inner_show_header_band === true &&
-            props.inner_show_footer_band === true;
-        const coverBandsEnabled =
-            props.cover_show_header_band === true && props.cover_show_footer_band === true;
-        const innerBandsEnabled =
-            props.inner_show_header_band === true && props.inner_show_footer_band === true;
         return (
             <div className="space-y-4">
                 {key === "all" ? (
                     <div className="rounded-lg border bg-card p-3 space-y-3">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                Faixas de todas as páginas (PDF)
-                            </Label>
-                            <Button
-                                type="button"
-                                variant={allBandsEnabled ? "outline" : "default"}
-                                size="sm"
-                                className="h-8 text-xs"
-                                disabled={isReadOnly}
-                                onClick={() => {
-                                    const next = !allBandsEnabled;
-                                    void handlePatch({
-                                        cover_show_header_band: next,
-                                        cover_show_footer_band: next,
-                                        inner_show_header_band: next,
-                                        inner_show_footer_band: next,
-                                    });
-                                }}
-                            >
-                                <Power className="mr-1.5 h-3.5 w-3.5" />
-                                {allBandsEnabled ? "Desativar tudo" : "Ativar tudo"}
-                            </Button>
-                        </div>
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Faixas de todas as páginas (PDF)
+                        </Label>
                         <div className="flex flex-wrap items-center gap-4">
                             <label className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <Checkbox
@@ -864,34 +860,16 @@ function HeaderFooterRenderer({
                             </label>
                         </div>
                         <p className="text-[11px] text-muted-foreground">
-                            Estes controles ligam ou desligam cabeçalho e rodapé na capa e nas páginas internas.
+                            Esta configuração é aplicada na capa e nas páginas internas. As configurações separadas ficam
+                            bloqueadas enquanto este modo estiver ativo.
                         </p>
                     </div>
                 ) : null}
                 {key === "cover" ? (
                     <div className="rounded-lg border bg-card p-3 space-y-3">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                Faixas da capa (PDF)
-                            </Label>
-                            <Button
-                                type="button"
-                                variant={coverBandsEnabled ? "outline" : "default"}
-                                size="sm"
-                                className="h-8 text-xs"
-                                disabled={isReadOnly}
-                                onClick={() => {
-                                    const next = !coverBandsEnabled;
-                                    void handlePatch({
-                                        cover_show_header_band: next,
-                                        cover_show_footer_band: next,
-                                    });
-                                }}
-                            >
-                                <Power className="mr-1.5 h-3.5 w-3.5" />
-                                {coverBandsEnabled ? "Desativar capa" : "Ativar capa"}
-                            </Button>
-                        </div>
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Faixas da capa (PDF)
+                        </Label>
                         <div className="flex flex-wrap items-center gap-4">
                             <label className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <Checkbox
@@ -915,34 +893,15 @@ function HeaderFooterRenderer({
                             </label>
                         </div>
                         <p className="text-[11px] text-muted-foreground">
-                            Estes dois toggles do bloco <code>header_footer</code> são a fonte principal usada pelo PDF da capa.
+                            Esta configuração aparece somente na capa. As páginas internas ficam sem este cabeçalho/rodapé.
                         </p>
                     </div>
                 ) : null}
                 {key === "inner" ? (
                     <div className="rounded-lg border bg-card p-3 space-y-3">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                Faixas das páginas internas (PDF)
-                            </Label>
-                            <Button
-                                type="button"
-                                variant={innerBandsEnabled ? "outline" : "default"}
-                                size="sm"
-                                className="h-8 text-xs"
-                                disabled={isReadOnly}
-                                onClick={() => {
-                                    const next = !innerBandsEnabled;
-                                    void handlePatch({
-                                        inner_show_header_band: next,
-                                        inner_show_footer_band: next,
-                                    });
-                                }}
-                            >
-                                <Power className="mr-1.5 h-3.5 w-3.5" />
-                                {innerBandsEnabled ? "Desativar internas" : "Ativar internas"}
-                            </Button>
-                        </div>
+                        <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Faixas das páginas internas (PDF)
+                        </Label>
                         <div className="flex flex-wrap items-center gap-4">
                             <label className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <Checkbox
@@ -965,6 +924,9 @@ function HeaderFooterRenderer({
                                 Mostrar faixa inferior
                             </label>
                         </div>
+                        <p className="text-[11px] text-muted-foreground">
+                            Esta configuração aparece somente nas páginas internas. A capa fica sem este cabeçalho/rodapé.
+                        </p>
                     </div>
                 ) : null}
                 {key !== "all" ? (
@@ -1168,12 +1130,16 @@ function HeaderFooterRenderer({
     return (
         <div className="space-y-4 rounded-lg border-2 border-dashed border-primary/30 bg-primary/5 p-5">
             <h3 className="text-sm font-bold uppercase tracking-wide text-primary">Cabeçalho e Rodapé</h3>
-            <Tabs defaultValue="all">
+            <Tabs value={applyScope} onValueChange={(value) => handleScopeChange(value as HeaderFooterLayoutScope)}>
                 <TabsList>
                     <TabsTrigger value="all">Todas as páginas</TabsTrigger>
                     <TabsTrigger value="cover">Capa</TabsTrigger>
                     <TabsTrigger value="inner">Páginas internas</TabsTrigger>
                 </TabsList>
+                <p className="mt-2 text-xs text-muted-foreground">
+                    Escolha um único destino para este cabeçalho/rodapé. Ao usar todas as páginas, os ajustes separados de
+                    capa e páginas internas não são aplicados.
+                </p>
                 <TabsContent value="all">
                     {renderPane("all")}
                 </TabsContent>

@@ -1,4 +1,5 @@
 import type {
+  HeaderFooterApplyScope,
   HeaderFooterCanvasElement,
   HeaderFooterCanvasLayout,
   HeaderFooterPageNumberingConfig,
@@ -29,6 +30,10 @@ export const DEFAULT_PAGE_NUMBERING: Required<HeaderFooterPageNumberingConfig> =
   inner_only: false,
   format: "current_total",
 };
+
+export function normalizeHeaderFooterApplyScope(raw: unknown): HeaderFooterApplyScope {
+  return raw === "cover" || raw === "inner" || raw === "all" ? raw : "all";
+}
 
 export function headerFooterLayoutField(
   scope: HeaderFooterLayoutScope,

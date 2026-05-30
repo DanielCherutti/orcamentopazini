@@ -34,6 +34,7 @@ import {
   hasAnyHeaderFooterPdfLayout,
   renderTextWithPageNumbers,
 } from "@/components/pdf/header-footer-layout-pdf";
+import { normalizeHeaderFooterApplyScope } from "@/lib/compositor/header-footer-layout";
 
 /** Só URL HTTP(S) no HTML — nunca data URI (strings enormes quebram sanitize/split e o layout). */
 function rewriteImgSrcInHtml(html: string, publicBase?: string): string {
@@ -381,23 +382,35 @@ export function CompositorCoverPdfPage({
   const clientLogoSrc = clientLogoUrlRaw
     ? proxyPdfImageSrc(clientLogoUrlRaw, settings.app_public_url, pdfEmbeddedImages)
     : undefined;
-  const customCoverHeaderText = sanitizeTextForPdf(
-    stripHtmlToText(String(headerFooterProps?.cover_header_html ?? ""))
-  ).trim();
-  const customCoverFooterText = sanitizeTextForPdf(
-    stripHtmlToText(String(headerFooterProps?.cover_footer_html ?? ""))
-  ).trim();
-  const coverHeaderLayouts = [headerFooterProps?.all_header_layout, headerFooterProps?.cover_header_layout];
-  const coverFooterLayouts = [headerFooterProps?.all_footer_layout, headerFooterProps?.cover_footer_layout];
+  const applyScope = normalizeHeaderFooterApplyScope(headerFooterProps?.apply_scope);
+  const canRenderCoverBands = applyScope === "all" || applyScope === "cover";
+  const customCoverHeaderText = canRenderCoverBands
+    ? sanitizeTextForPdf(stripHtmlToText(String(headerFooterProps?.cover_header_html ?? ""))).trim()
+    : "";
+  const customCoverFooterText = canRenderCoverBands
+    ? sanitizeTextForPdf(stripHtmlToText(String(headerFooterProps?.cover_footer_html ?? ""))).trim()
+    : "";
+  const coverHeaderLayouts =
+    applyScope === "all"
+      ? [headerFooterProps?.all_header_layout]
+      : applyScope === "cover"
+        ? [headerFooterProps?.cover_header_layout]
+        : [];
+  const coverFooterLayouts =
+    applyScope === "all"
+      ? [headerFooterProps?.all_footer_layout]
+      : applyScope === "cover"
+        ? [headerFooterProps?.cover_footer_layout]
+        : [];
   const hasCoverHeaderLayout = hasAnyHeaderFooterPdfLayout(coverHeaderLayouts);
   const hasCoverFooterLayout = hasAnyHeaderFooterPdfLayout(coverFooterLayouts);
-  const showCoverHeader = resolveCoverPageShowHeaderBand(
+  const showCoverHeader = canRenderCoverBands && resolveCoverPageShowHeaderBand(
     coverProps,
     settings,
     headerFooterProps,
     Boolean(customCoverHeaderText || hasCoverHeaderLayout),
   );
-  const showCoverFooter = resolveCoverPageShowFooterBand(
+  const showCoverFooter = canRenderCoverBands && resolveCoverPageShowFooterBand(
     coverProps,
     headerFooterProps,
     Boolean(customCoverFooterText || hasCoverFooterLayout),

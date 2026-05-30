@@ -840,18 +840,20 @@ function visibilityPatchFor(
   };
 
   if (region === "header") {
-    const coverHasElements = hasLayoutElements("all_header_layout") || hasLayoutElements("cover_header_layout");
-    const innerHasElements = hasLayoutElements("all_header_layout") || hasLayoutElements("inner_header_layout");
-    if (scope === "all") return { cover_show_header_band: coverHasElements, inner_show_header_band: innerHasElements };
-    if (scope === "cover") return { cover_show_header_band: coverHasElements };
-    return { inner_show_header_band: innerHasElements };
+    if (scope === "all") {
+      const hasElements = hasLayoutElements("all_header_layout");
+      return { cover_show_header_band: hasElements, inner_show_header_band: hasElements };
+    }
+    if (scope === "cover") return { cover_show_header_band: hasLayoutElements("cover_header_layout") };
+    return { inner_show_header_band: hasLayoutElements("inner_header_layout") };
   }
 
-  const coverHasElements = hasLayoutElements("all_footer_layout") || hasLayoutElements("cover_footer_layout");
-  const innerHasElements = hasLayoutElements("all_footer_layout") || hasLayoutElements("inner_footer_layout");
-  if (scope === "all") return { cover_show_footer_band: coverHasElements, inner_show_footer_band: innerHasElements };
-  if (scope === "cover") return { cover_show_footer_band: coverHasElements };
-  return { inner_show_footer_band: innerHasElements };
+  if (scope === "all") {
+    const hasElements = hasLayoutElements("all_footer_layout");
+    return { cover_show_footer_band: hasElements, inner_show_footer_band: hasElements };
+  }
+  if (scope === "cover") return { cover_show_footer_band: hasLayoutElements("cover_footer_layout") };
+  return { inner_show_footer_band: hasLayoutElements("inner_footer_layout") };
 }
 
 function pageNumberingPatchFor(
