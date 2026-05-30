@@ -34,7 +34,10 @@ import {
   hasAnyHeaderFooterPdfLayout,
   renderTextWithPageNumbers,
 } from "@/components/pdf/header-footer-layout-pdf";
-import { normalizeHeaderFooterApplyScope } from "@/lib/compositor/header-footer-layout";
+import {
+  getLayoutsForPageScope,
+  resolveHeaderFooterScopeMode,
+} from "@/lib/compositor/header-footer-layout";
 
 /** Só URL HTTP(S) no HTML — nunca data URI (strings enormes quebram sanitize/split e o layout). */
 function rewriteImgSrcInHtml(html: string, publicBase?: string): string {
@@ -382,35 +385,32 @@ export function CompositorCoverPdfPage({
   const clientLogoSrc = clientLogoUrlRaw
     ? proxyPdfImageSrc(clientLogoUrlRaw, settings.app_public_url, pdfEmbeddedImages)
     : undefined;
-  const applyScope = normalizeHeaderFooterApplyScope(headerFooterProps?.apply_scope);
-  const canRenderCoverBands = applyScope === "all" || applyScope === "cover";
-  const customCoverHeaderText = canRenderCoverBands
+  const headerFooterScopeMode = resolveHeaderFooterScopeMode(headerFooterProps);
+  const customCoverHeaderText = headerFooterScopeMode === "separate"
     ? sanitizeTextForPdf(stripHtmlToText(String(headerFooterProps?.cover_header_html ?? ""))).trim()
     : "";
-  const customCoverFooterText = canRenderCoverBands
+  const customCoverFooterText = headerFooterScopeMode === "separate"
     ? sanitizeTextForPdf(stripHtmlToText(String(headerFooterProps?.cover_footer_html ?? ""))).trim()
     : "";
-  const coverHeaderLayouts =
-    applyScope === "all"
-      ? [headerFooterProps?.all_header_layout]
-      : applyScope === "cover"
-        ? [headerFooterProps?.cover_header_layout]
-        : [];
-  const coverFooterLayouts =
-    applyScope === "all"
-      ? [headerFooterProps?.all_footer_layout]
-      : applyScope === "cover"
-        ? [headerFooterProps?.cover_footer_layout]
-        : [];
+  const coverHeaderLayouts = getLayoutsForPageScope({
+    mode: headerFooterScopeMode,
+    allLayout: headerFooterProps?.all_header_layout,
+    scopeLayout: headerFooterProps?.cover_header_layout,
+  });
+  const coverFooterLayouts = getLayoutsForPageScope({
+    mode: headerFooterScopeMode,
+    allLayout: headerFooterProps?.all_footer_layout,
+    scopeLayout: headerFooterProps?.cover_footer_layout,
+  });
   const hasCoverHeaderLayout = hasAnyHeaderFooterPdfLayout(coverHeaderLayouts);
   const hasCoverFooterLayout = hasAnyHeaderFooterPdfLayout(coverFooterLayouts);
-  const showCoverHeader = canRenderCoverBands && resolveCoverPageShowHeaderBand(
+  const showCoverHeader = resolveCoverPageShowHeaderBand(
     coverProps,
     settings,
     headerFooterProps,
     Boolean(customCoverHeaderText || hasCoverHeaderLayout),
   );
-  const showCoverFooter = canRenderCoverBands && resolveCoverPageShowFooterBand(
+  const showCoverFooter = resolveCoverPageShowFooterBand(
     coverProps,
     headerFooterProps,
     Boolean(customCoverFooterText || hasCoverFooterLayout),

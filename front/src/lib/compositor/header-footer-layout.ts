@@ -1,11 +1,12 @@
 import type {
-  HeaderFooterApplyScope,
+  HeaderFooterBlockProps,
   HeaderFooterCanvasElement,
   HeaderFooterCanvasLayout,
   HeaderFooterPageNumberingConfig,
 } from "@/types/budget-compositor-types";
 
 export type HeaderFooterLayoutScope = "all" | "cover" | "inner";
+export type HeaderFooterScopeMode = "all" | "separate";
 export type HeaderFooterLayoutRegion = "header" | "footer";
 export type HeaderFooterLayoutField =
   | "all_header_layout"
@@ -30,10 +31,6 @@ export const DEFAULT_PAGE_NUMBERING: Required<HeaderFooterPageNumberingConfig> =
   inner_only: false,
   format: "current_total",
 };
-
-export function normalizeHeaderFooterApplyScope(raw: unknown): HeaderFooterApplyScope {
-  return raw === "cover" || raw === "inner" || raw === "all" ? raw : "all";
-}
 
 export function headerFooterLayoutField(
   scope: HeaderFooterLayoutScope,
@@ -86,11 +83,39 @@ export function hasHeaderFooterLayoutContent(layout: HeaderFooterCanvasLayout | 
   return Boolean(layout?.elements?.length);
 }
 
+export function resolveHeaderFooterScopeMode(
+  props: Pick<
+    HeaderFooterBlockProps,
+    | "header_footer_scope_mode"
+    | "all_header_layout"
+    | "all_footer_layout"
+    | "cover_header_layout"
+    | "cover_footer_layout"
+    | "inner_header_layout"
+    | "inner_footer_layout"
+  > | undefined,
+): HeaderFooterScopeMode {
+  if (props?.header_footer_scope_mode === "all" || props?.header_footer_scope_mode === "separate") {
+    return props.header_footer_scope_mode;
+  }
+
+  const hasSeparatedLayout =
+    hasHeaderFooterLayoutContent(normalizeHeaderFooterLayout(props?.cover_header_layout)) ||
+    hasHeaderFooterLayoutContent(normalizeHeaderFooterLayout(props?.cover_footer_layout)) ||
+    hasHeaderFooterLayoutContent(normalizeHeaderFooterLayout(props?.inner_header_layout)) ||
+    hasHeaderFooterLayoutContent(normalizeHeaderFooterLayout(props?.inner_footer_layout));
+
+  if (hasSeparatedLayout) return "separate";
+  return "all";
+}
+
 export function getLayoutsForPageScope(params: {
+  mode?: HeaderFooterScopeMode;
   allLayout?: HeaderFooterCanvasLayout;
   scopeLayout?: HeaderFooterCanvasLayout;
 }): HeaderFooterCanvasLayout[] {
-  return [params.allLayout, params.scopeLayout]
+  const layouts = params.mode === "all" ? [params.allLayout] : [params.scopeLayout];
+  return layouts
     .map((layout) => normalizeHeaderFooterLayout(layout))
     .filter(hasHeaderFooterLayoutContent);
 }

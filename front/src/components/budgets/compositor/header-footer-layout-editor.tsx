@@ -38,6 +38,7 @@ import {
   headerFooterLayoutField,
   normalizeHeaderFooterLayout,
   normalizePageNumbering,
+  resolveHeaderFooterScopeMode,
   type HeaderFooterLayoutRegion,
   type HeaderFooterLayoutScope,
 } from "@/lib/compositor/header-footer-layout";
@@ -834,26 +835,27 @@ function visibilityPatchFor(
   props: HeaderFooterBlockProps,
 ): Partial<HeaderFooterBlockProps> {
   const nextField = headerFooterLayoutField(scope, region);
+  const mode = resolveHeaderFooterScopeMode(props);
   const hasLayoutElements = (field: ReturnType<typeof headerFooterLayoutField>) => {
     if (field === nextField) return nextLayout.elements.length > 0;
     return normalizeHeaderFooterLayout(props[field]).elements.length > 0;
   };
 
   if (region === "header") {
-    if (scope === "all") {
-      const hasElements = hasLayoutElements("all_header_layout");
-      return { cover_show_header_band: hasElements, inner_show_header_band: hasElements };
-    }
-    if (scope === "cover") return { cover_show_header_band: hasLayoutElements("cover_header_layout") };
-    return { inner_show_header_band: hasLayoutElements("inner_header_layout") };
+    const sharedHasElements = hasLayoutElements("all_header_layout");
+    const coverHasElements = mode === "all" ? sharedHasElements : hasLayoutElements("cover_header_layout");
+    const innerHasElements = mode === "all" ? sharedHasElements : hasLayoutElements("inner_header_layout");
+    if (scope === "all") return { cover_show_header_band: coverHasElements, inner_show_header_band: innerHasElements };
+    if (scope === "cover") return { cover_show_header_band: coverHasElements };
+    return { inner_show_header_band: innerHasElements };
   }
 
-  if (scope === "all") {
-    const hasElements = hasLayoutElements("all_footer_layout");
-    return { cover_show_footer_band: hasElements, inner_show_footer_band: hasElements };
-  }
-  if (scope === "cover") return { cover_show_footer_band: hasLayoutElements("cover_footer_layout") };
-  return { inner_show_footer_band: hasLayoutElements("inner_footer_layout") };
+  const sharedHasElements = hasLayoutElements("all_footer_layout");
+  const coverHasElements = mode === "all" ? sharedHasElements : hasLayoutElements("cover_footer_layout");
+  const innerHasElements = mode === "all" ? sharedHasElements : hasLayoutElements("inner_footer_layout");
+  if (scope === "all") return { cover_show_footer_band: coverHasElements, inner_show_footer_band: innerHasElements };
+  if (scope === "cover") return { cover_show_footer_band: coverHasElements };
+  return { inner_show_footer_band: innerHasElements };
 }
 
 function pageNumberingPatchFor(

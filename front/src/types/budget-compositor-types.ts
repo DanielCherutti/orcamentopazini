@@ -73,8 +73,8 @@ export interface CoverBlockProps {
 }
 
 export interface HeaderFooterBlockProps {
-  /** Escopo único de aplicação do cabeçalho/rodapé visual. */
-  apply_scope?: HeaderFooterApplyScope;
+  /** Define se cabeçalho/rodapé usam uma configuração única ou configurações separadas por tipo de página. */
+  header_footer_scope_mode?: "all" | "separate";
   /** Controle principal da faixa superior da capa no PDF (bloco header_footer). */
   cover_show_header_band?: boolean;
   /** Controle principal da faixa inferior da capa no PDF (bloco header_footer). */
@@ -133,8 +133,6 @@ export type HeaderFooterElementType =
   | "block"
   | "page_number";
 
-export type HeaderFooterApplyScope = "all" | "cover" | "inner";
-
 export type HeaderFooterTextAlign = "left" | "center" | "right" | "justify";
 
 export interface HeaderFooterCanvasElement {
@@ -177,7 +175,6 @@ export interface HeaderFooterPageNumberingConfig {
 }
 
 export const DEFAULT_HEADER_FOOTER_PROPS: HeaderFooterBlockProps = {
-  apply_scope: "all",
   cover_show_header_band: false,
   cover_show_footer_band: false,
   cover_watermark_url: "",
