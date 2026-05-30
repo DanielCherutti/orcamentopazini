@@ -163,17 +163,9 @@ function HeaderFooterPdfElement({
       : "";
     if (!src) return <View style={{ position: "absolute", opacity: 0, width: 0, height: 0 }} />;
     return (
-      <View style={box}>
+      <>
         {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
-        <Image
-          src={src}
-          style={{
-            width: box.width,
-            height: box.height,
-            objectFit: "contain",
-            opacity: element.opacity ?? 1,
-          }}
-        />
+        <Image src={src} style={imageBoxStyle(element, width, height)} />
         {DEBUG_PDF_LAYER_ORDER ? (
           <Text
             style={{ position: "absolute", left: box.left, top: box.top, fontSize: 6, color: "#ff0000" }}
@@ -181,7 +173,7 @@ function HeaderFooterPdfElement({
             {`img z=${element.z_index}`}
           </Text>
         ) : null}
-      </View>
+      </>
     );
   }
 
@@ -340,6 +332,22 @@ function elementBoxStyle(element: HeaderFooterCanvasElement, width: number, heig
       ? { borderColor: element.border_color, borderWidth: 0.5 }
       : {}),
     padding: Math.max(0, Number(element.padding ?? 4)),
+    transform: element.rotate_deg ? `rotate(${element.rotate_deg}deg)` : undefined,
+  };
+}
+
+function imageBoxStyle(element: HeaderFooterCanvasElement, width: number, height: number): Style {
+  const boxWidth = (clamp(element.width_pct, 1, 100) / 100) * width;
+  const boxHeight = (clamp(element.height_pct, 1, 100) / 100) * height;
+  return {
+    position: "absolute" as const,
+    left: (clamp(element.x_pct, 0, 100) / 100) * width,
+    top: (clamp(element.y_pct, 0, 100) / 100) * height,
+    width: boxWidth,
+    height: boxHeight,
+    objectFit: "contain",
+    objectPosition: "center",
+    opacity: clamp(element.opacity ?? 1, 0, 1),
     transform: element.rotate_deg ? `rotate(${element.rotate_deg}deg)` : undefined,
   };
 }
