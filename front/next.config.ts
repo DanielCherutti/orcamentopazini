@@ -4,6 +4,9 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 const url = new URL(APP_URL);
 
 const nextConfig: NextConfig = {
+  turbopack: {
+    root: process.cwd(),
+  },
   output: "standalone",
   /** Evita empacotar o motor PDF no bundle do Next (quebra renderToBuffer na rota API). */
   serverExternalPackages: [
@@ -20,6 +23,7 @@ const nextConfig: NextConfig = {
     "yoga-layout",
   ],
   experimental: {
+    turbopackFileSystemCacheForDev: false,
     serverActions: {
       bodySizeLimit: "20mb",
     },

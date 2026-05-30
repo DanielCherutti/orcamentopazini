@@ -4,7 +4,10 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { CompositorSidebar } from "./compositor-sidebar";
 import { CompositorContent } from "./compositor-content";
-import { getCompositorTreeAction } from "@/actions/budget-compositor-tree-actions";
+import {
+  getCompositorTreeAction,
+  getCompositorTreeSnapshotAction,
+} from "@/actions/budget-compositor-tree-actions";
 import { getScopeFiguresListAction } from "@/actions/budget-scope-actions";
 import { buildTree } from "@/types/budget-compositor-types";
 import type { ScopeFigureEntry } from "@/components/budgets/compositor/compositor-figures-utils";
@@ -55,7 +58,7 @@ export function BudgetCompositor({
 
   const handleRefresh = useCallback(async () => {
     const [result, figRes] = await Promise.all([
-      getCompositorTreeAction(budgetId),
+      getCompositorTreeSnapshotAction(budgetId),
       getScopeFiguresListAction(budgetId),
     ]);
     if (result.success && result.blocks) {

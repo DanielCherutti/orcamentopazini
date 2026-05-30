@@ -17,6 +17,9 @@ import {
 
 const DEBUG_PDF_LAYER_ORDER =
   typeof process !== "undefined" && process.env && process.env.DEBUG_PDF_LAYER_ORDER === "1";
+const EDITOR_A4_HEIGHT_PX = 1122;
+const PDF_A4_HEIGHT_PT = 841.89;
+const EDITOR_PX_TO_PT = PDF_A4_HEIGHT_PT / EDITOR_A4_HEIGHT_PX;
 
 interface HeaderFooterPdfLayerProps {
   layouts: Array<HeaderFooterCanvasLayout | undefined>;
@@ -75,12 +78,12 @@ export function HeaderFooterPdfLayer({
 
   if (!visibleElements.length) return <View style={{ position: "absolute", opacity: 0, width: 0, height: 0 }} />;
 
-  const pageNumberElements = visibleElements.filter((element) => element.type === "page_number");
-  const layeredElements = visibleElements.filter((element) => element.type !== "page_number");
+  const imageElements = visibleElements.filter((element) => element.type === "image");
+  const textElements = visibleElements.filter((element) => element.type !== "image");
 
   return (
     <View style={{ position: "absolute", left: 0, top: 0, width, height }}>
-      {layeredElements.map((element) => (
+      {imageElements.map((element) => (
         <HeaderFooterPdfElement
           key={element.id}
           element={element}
@@ -92,9 +95,9 @@ export function HeaderFooterPdfLayer({
           pageScope={pageScope}
         />
       ))}
-      {/* React-PDF drops text inside nested absolute boxes in fixed bands; page numbers need a direct Text node. */}
-      {pageNumberElements.map((element) => (
-        <PositionedPageNumberText
+      {/* React-PDF drops text inside nested absolute boxes in fixed bands; text needs direct Text nodes. */}
+      {textElements.map((element) => (
+        <PositionedHeaderFooterText
           key={element.id}
           element={element}
           width={width}
@@ -186,7 +189,7 @@ function HeaderFooterPdfElement({
             key={`${element.id}-col-${index}`}
             style={{
               flex: 1,
-              padding: Math.max(0, Number(element.padding ?? 4)),
+              padding: editorPxToPt(element.padding ?? 4),
               ...(index < columns.length - 1 ? { borderRightWidth: 0.5, borderRightColor: "#d1d5db" } : {}),
             }}
           >
@@ -240,7 +243,7 @@ function shouldRenderPositionedPageNumber(
   return true;
 }
 
-function PositionedPageNumberText({
+function PositionedHeaderFooterText({
   element,
   width,
   height,
@@ -254,32 +257,63 @@ function PositionedPageNumberText({
   pageScope?: "cover" | "inner";
 }) {
   const cfg = normalizePageNumbering(pageNumbering);
-  const boxWidth = (clamp(element.width_pct, 1, 100) / 100) * width;
-  const boxHeight = (clamp(element.height_pct, 1, 100) / 100) * height;
-  const padding = Math.max(0, Number(element.padding ?? 4));
+  if (element.type === "columns") {
+    const columns = (element.columns?.length ? element.columns : ["", "", ""]).slice(0, 3);
+    const box = positionedTextBoxStyle(element, width, height);
+    const columnWidth = Number(box.width ?? 0) / Math.max(1, columns.length);
+    return (
+      <>
+        {columns.map((column, index) => (
+          <Text
+            key={`${element.id}-col-${index}`}
+            style={[
+              textStyleWithoutLineHeight(textBoxStyle(element)),
+              {
+                ...box,
+                left: Number(box.left ?? 0) + columnWidth * index,
+                width: columnWidth,
+                borderRightWidth: index < columns.length - 1 ? 0.5 : undefined,
+                borderRightColor: index < columns.length - 1 ? "#d1d5db" : undefined,
+              },
+            ]}
+          >
+            {sanitizeTextForPdf(column)}
+          </Text>
+        ))}
+      </>
+    );
+  }
 
   return (
     <Text
       style={[
         textStyleWithoutLineHeight(textBoxStyle(element)),
-        {
-          marginLeft: (clamp(element.x_pct, 0, 100) / 100) * width,
-          marginTop: (clamp(element.y_pct, 0, 100) / 100) * height,
-          width: boxWidth,
-          minHeight: boxHeight,
-          padding,
-          opacity: clamp(element.opacity ?? 1, 0, 1),
-        },
+        positionedTextBoxStyle(element, width, height),
       ]}
       render={({ pageNumber, totalPages }) => {
+        if (element.type !== "page_number") {
+          const text = sanitizeTextForPdf(element.text ?? "");
+          if (!/\{\{\s*(page|total)\s*\}\}/i.test(text)) return text;
+        }
         if (pageNumber < cfg.start_at_page) return "";
         if (pageScope === "cover" && (cfg.hide_on_cover || cfg.inner_only)) return "";
         const current = Math.max(0, pageNumber - cfg.start_at_page + cfg.first_page_number);
         const total = Math.max(current, totalPages - cfg.start_at_page + cfg.first_page_number);
-        return formatManualPageNumber(element.text || "{{page}} / {{total}}", current, total);
+        return formatManualPageNumber(
+          element.type === "page_number" ? element.text || "{{page}} / {{total}}" : element.text ?? "",
+          current,
+          total,
+        );
       }}
     />
   );
+}
+
+function positionedTextBoxStyle(element: HeaderFooterCanvasElement, width: number, height: number): Style {
+  return {
+    ...elementBoxStyle(element, width, height),
+    minHeight: (clamp(element.height_pct, 1, 100) / 100) * height,
+  };
 }
 
 export function renderTextWithPageNumbers(
@@ -331,7 +365,7 @@ function elementBoxStyle(element: HeaderFooterCanvasElement, width: number, heig
     ...(element.border_color && element.border_color !== "transparent"
       ? { borderColor: element.border_color, borderWidth: 0.5 }
       : {}),
-    padding: Math.max(0, Number(element.padding ?? 4)),
+    padding: editorPxToPt(element.padding ?? 4),
     transform: element.rotate_deg ? `rotate(${element.rotate_deg}deg)` : undefined,
   };
 }
@@ -353,7 +387,7 @@ function imageBoxStyle(element: HeaderFooterCanvasElement, width: number, height
 }
 
 function textBoxStyle(element: HeaderFooterCanvasElement): Style {
-  const fontSize = clamp(element.font_size ?? 11, 6, 96);
+  const fontSize = editorPxToPt(clamp(element.font_size ?? 11, 6, 96));
   return {
     fontSize,
     color: element.color || "#111827",
@@ -361,6 +395,11 @@ function textBoxStyle(element: HeaderFooterCanvasElement): Style {
     fontStyle: element.font_style === "italic" ? "italic" : "normal",
     textAlign: element.text_align || "left",
   };
+}
+
+function editorPxToPt(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  return (Number.isFinite(n) ? n : 0) * EDITOR_PX_TO_PT;
 }
 
 function textStyleWithoutLineHeight(style: Style): Style {

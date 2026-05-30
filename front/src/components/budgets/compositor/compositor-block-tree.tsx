@@ -797,8 +797,6 @@ function HeaderFooterRenderer({
                 : key === "inner"
                   ? props.inner_footer_height ?? 40
                   : Math.max(props.cover_footer_height ?? 48, props.inner_footer_height ?? 40);
-        const isHeaderActive = activeBand === "header";
-        const activeHeight = isHeaderActive ? headerHeight : footerHeight;
         const watermarkUrl =
             key === "cover"
                 ? props.cover_watermark_url ?? ""
@@ -826,6 +824,27 @@ function HeaderFooterRenderer({
             props.cover_show_header_band === true && props.cover_show_footer_band === true;
         const innerBandsEnabled =
             props.inner_show_header_band === true && props.inner_show_footer_band === true;
+        const headerEnabled =
+            key === "cover"
+                ? props.cover_show_header_band === true
+                : key === "inner"
+                  ? props.inner_show_header_band === true
+                  : props.cover_show_header_band === true && props.inner_show_header_band === true;
+        const footerEnabled =
+            key === "cover"
+                ? props.cover_show_footer_band === true
+                : key === "inner"
+                  ? props.inner_show_footer_band === true
+                  : props.cover_show_footer_band === true && props.inner_show_footer_band === true;
+        const effectiveBand =
+            activeBand === "header" && !headerEnabled && footerEnabled
+                ? "footer"
+                : activeBand === "footer" && !footerEnabled && headerEnabled
+                  ? "header"
+                  : activeBand;
+        const effectiveBandEnabled = effectiveBand === "header" ? headerEnabled : footerEnabled;
+        const effectiveIsHeaderActive = effectiveBand === "header";
+        const effectiveHeight = effectiveIsHeaderActive ? headerHeight : footerHeight;
         return (
             <div className="space-y-4">
                 {key === "all" ? (
@@ -870,7 +889,7 @@ function HeaderFooterRenderer({
                                         });
                                     }}
                                 />
-                                Mostrar faixa superior
+                                Ativar/desativar cabeçalho
                             </label>
                             <label className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <Checkbox
@@ -887,7 +906,7 @@ function HeaderFooterRenderer({
                                         });
                                     }}
                                 />
-                                Mostrar faixa inferior
+                                Ativar/desativar rodapé
                             </label>
                         </div>
                         <p className="text-[11px] text-muted-foreground">
@@ -928,7 +947,7 @@ function HeaderFooterRenderer({
                                         void handlePatch({ cover_show_header_band: v === true });
                                     }}
                                 />
-                                Mostrar faixa superior
+                                Ativar/desativar cabeçalho
                             </label>
                             <label className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <Checkbox
@@ -938,7 +957,7 @@ function HeaderFooterRenderer({
                                         void handlePatch({ cover_show_footer_band: v === true });
                                     }}
                                 />
-                                Mostrar faixa inferior
+                                Ativar/desativar rodapé
                             </label>
                         </div>
                         <p className="text-[11px] text-muted-foreground">
@@ -979,7 +998,7 @@ function HeaderFooterRenderer({
                                         void handlePatch({ inner_show_header_band: v === true });
                                     }}
                                 />
-                                Mostrar faixa superior
+                                Ativar/desativar cabeçalho
                             </label>
                             <label className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <Checkbox
@@ -989,7 +1008,7 @@ function HeaderFooterRenderer({
                                         void handlePatch({ inner_show_footer_band: v === true });
                                     }}
                                 />
-                                Mostrar faixa inferior
+                                Ativar/desativar rodapé
                             </label>
                         </div>
                     </div>
@@ -1112,40 +1131,45 @@ function HeaderFooterRenderer({
                 <div className="rounded-lg border bg-card p-3">
                     <div className="mb-3 flex flex-wrap items-center gap-2">
                         <div className="inline-flex rounded-md border bg-background p-1">
-                            <button
-                                type="button"
-                                className={`h-7 rounded px-2 text-xs font-medium transition ${
-                                    isHeaderActive ? "bg-primary text-primary-foreground" : "text-muted-foreground"
-                                }`}
-                                onClick={() =>
-                                    setActiveBandByPane((prev) => ({ ...prev, [key]: "header" }))
-                                }
-                            >
-                                {key === "cover"
-                                    ? "Cabeçalho - Capa"
-                                    : key === "inner"
-                                      ? "Cabeçalho - Páginas internas"
-                                      : "Cabeçalho - Todas as páginas"}
-                            </button>
-                            <button
-                                type="button"
-                                className={`h-7 rounded px-2 text-xs font-medium transition ${
-                                    !isHeaderActive ? "bg-primary text-primary-foreground" : "text-muted-foreground"
-                                }`}
-                                onClick={() =>
-                                    setActiveBandByPane((prev) => ({ ...prev, [key]: "footer" }))
-                                }
-                            >
-                                {key === "cover"
-                                    ? "Rodapé - Capa"
-                                    : key === "inner"
-                                      ? "Rodapé - Páginas internas"
-                                      : "Rodapé - Todas as páginas"}
-                            </button>
+                            {headerEnabled ? (
+                                <button
+                                    type="button"
+                                    className={`h-7 rounded px-2 text-xs font-medium transition ${
+                                        effectiveIsHeaderActive ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+                                    }`}
+                                    onClick={() =>
+                                        setActiveBandByPane((prev) => ({ ...prev, [key]: "header" }))
+                                    }
+                                >
+                                    {key === "cover"
+                                        ? "Cabeçalho - Capa"
+                                        : key === "inner"
+                                          ? "Cabeçalho - Páginas internas"
+                                          : "Cabeçalho - Todas as páginas"}
+                                </button>
+                            ) : null}
+                            {footerEnabled ? (
+                                <button
+                                    type="button"
+                                    className={`h-7 rounded px-2 text-xs font-medium transition ${
+                                        !effectiveIsHeaderActive ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+                                    }`}
+                                    onClick={() =>
+                                        setActiveBandByPane((prev) => ({ ...prev, [key]: "footer" }))
+                                    }
+                                >
+                                    {key === "cover"
+                                        ? "Rodapé - Capa"
+                                        : key === "inner"
+                                          ? "Rodapé - Páginas internas"
+                                          : "Rodapé - Todas as páginas"}
+                                </button>
+                            ) : null}
                         </div>
+                        {effectiveBandEnabled ? (
                         <div className="ml-auto flex items-center gap-2">
                             <Label className="text-[11px] text-muted-foreground">
-                                Altura do {isHeaderActive ? "cabeçalho" : "rodapé"}
+                                Altura do {effectiveIsHeaderActive ? "cabeçalho" : "rodapé"}
                             </Label>
                             <Input
                                 type="number"
@@ -1154,10 +1178,10 @@ function HeaderFooterRenderer({
                                 step={1}
                                 disabled={isReadOnly}
                                 className="h-8 w-24 text-xs"
-                                value={activeHeight}
+                                value={effectiveHeight}
                                 onChange={(e) => {
                                     const next = Math.max(24, Math.min(240, Number(e.target.value) || 24));
-                                    if (isHeaderActive) {
+                                    if (effectiveIsHeaderActive) {
                                         void handlePatch(
                                             key === "cover"
                                                 ? { cover_header_height: next }
@@ -1177,16 +1201,23 @@ function HeaderFooterRenderer({
                                 }}
                             />
                         </div>
+                        ) : null}
                     </div>
-                    <HeaderFooterLayoutEditor
-                        key={`${block.id}-${key}-${activeBand}`}
-                        scope={key}
-                        region={activeBand}
-                        props={props}
-                        height={activeHeight}
-                        readOnly={Boolean(isReadOnly)}
-                        onPatch={handlePatch}
-                    />
+                    {effectiveBandEnabled ? (
+                        <HeaderFooterLayoutEditor
+                            key={`${block.id}-${key}-${effectiveBand}`}
+                            scope={key}
+                            region={effectiveBand}
+                            props={props}
+                            height={effectiveHeight}
+                            readOnly={Boolean(isReadOnly)}
+                            onPatch={handlePatch}
+                        />
+                    ) : (
+                        <div className="rounded-md border border-dashed bg-muted/20 px-3 py-8 text-center text-xs text-muted-foreground">
+                            Ative o cabeçalho ou o rodapé acima para editar esta área no PDF.
+                        </div>
+                    )}
                 </div>
             </div>
         );
