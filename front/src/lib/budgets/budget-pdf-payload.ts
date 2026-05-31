@@ -7,6 +7,7 @@ import { getCompositorTreeSnapshotAction } from "@/actions/budget-compositor-tre
 import {
     ensureCompositorHeaderFooterBlockAction,
     ensureCompositorQuoteBlockAction,
+    ensureCompositorTermsBlockAction,
 } from "@/actions/budget-compositor-block-actions";
 import { getScopeFiguresListAction } from "@/actions/budget-scope-actions";
 import { buildTree } from "@/types/budget-compositor-types";
@@ -88,6 +89,7 @@ export async function loadBudgetPdfPayload(
         await ensureCompositorHeaderFooterBlockAction(budgetId, { skipRevalidate: true });
         // Garante bloco ORÇAMENTO também na leitura de PDF (orçamentos antigos sem quote raiz).
         await ensureCompositorQuoteBlockAction(budgetId, { skipRevalidate: true });
+        await ensureCompositorTermsBlockAction(budgetId, { skipRevalidate: true });
         const [snap, figRes] = await Promise.all([
             getCompositorTreeSnapshotAction(budgetId),
             getScopeFiguresListAction(budgetId),

@@ -45,7 +45,7 @@ export function documentPageWeight(block: BudgetBlock, items: Record<string, Bud
 function chapterTitleForToc(block: BudgetBlock): string {
   if (block.type === "quote") return "ORÇAMENTO";
   if (block.type === "scope") return getScopeBlockLabel(block.label);
-  return (block.label || "Sessão").trim() || "Sessão";
+  return (block.label || "Seção").trim() || "Seção";
 }
 
 export interface TocEntryModel {

@@ -149,19 +149,17 @@ export function collectRawPdfImageUrlsForPdf(
     const imagesByBlock = compositorPdf?.imagesByBlock ?? {};
     for (const arr of Object.values(imagesByBlock)) {
         for (const img of arr ?? []) {
-            addUrl(set, (img as { composed_url?: string }).composed_url);
-            addUrl(set, (img as { url?: string }).url);
+            const row = img as { composed_url?: string; url?: string };
+            addUrl(set, row.composed_url || row.url);
         }
     }
     for (const loc of budget.locations ?? []) {
         for (const img of loc.images ?? []) {
-            addUrl(set, img.composed_url);
-            addUrl(set, img.url);
+            addUrl(set, img.composed_url || img.url);
         }
         for (const sec of loc.sections ?? []) {
             for (const img of sec.images ?? []) {
-                addUrl(set, img.composed_url);
-                addUrl(set, img.url);
+                addUrl(set, img.composed_url || img.url);
             }
         }
     }

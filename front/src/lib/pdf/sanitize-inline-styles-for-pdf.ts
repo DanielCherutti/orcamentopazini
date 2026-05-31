@@ -176,6 +176,7 @@ const COMPOSITOR_BLOCK_HTML_FIELDS: Record<string, readonly string[]> = {
     ],
     session: ["description"],
     text: ["content"],
+    terms: ["description"],
     location: ["description"],
     section: ["description"],
 };

@@ -150,7 +150,7 @@ export const loginHighlights: LoginHighlight[] = [
     date: "2026-03-24",
     title: "Adequações e compositor: mesma lógica de pai e filho na tela",
     description:
-      "Adequações e Ambientes: o índice mantém todos os trechos visíveis; o ambiente abre todos no painel (como antes em adequações) e o trecho abre só ele. Na aba Compositor: sessão “pai” mostra tudo abaixo (subsessões, locais…); subsessão, local ou trecho mostra só aquele ramo. Para ver todas as raízes no compositor, selecione o bloco ADEQUAÇÕES ou um tipo fora sessão/local/trecho.",
+      "Adequações e Ambientes: o índice mantém todos os trechos visíveis; o ambiente abre todos no painel (como antes em adequações) e o trecho abre só ele. Na aba Compositor: seção “pai” mostra tudo abaixo (subseções, locais…); subseção, local ou trecho mostra só aquele ramo. Para ver todas as raízes no compositor, selecione o bloco ADEQUAÇÕES ou um tipo fora seção/local/trecho.",
   },
   {
     kind: "improvement",

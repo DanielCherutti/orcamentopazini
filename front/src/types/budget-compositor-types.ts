@@ -12,7 +12,8 @@ export type BlockType =
   | "toc"       // Sumário automático (sempre após a capa) — conteúdo derivado da árvore
   | "figures"   // Lista de figuras (após sumário) — imagens do Escopo, automático
   | "quote"     // Orçamento (tabela/valores) — bloco raiz que referencia a aba Orçamento
-  | "session"   // Contêiner: sessão / sub-sessão (qualquer profundidade)
+  | "terms"     // Condições gerais editáveis (opcional)
+  | "session"   // Contêiner: seção / subseção (qualquer profundidade)
   | "text"      // Texto rico (Tiptap HTML)
   | "location"  // Local / Ambiente (com descrição + galeria + trechos)
   | "section"   // Trecho (com descrição + galeria + lista de produtos)
@@ -257,6 +258,10 @@ export interface SessionBlockProps {
 
 export interface TextBlockProps {
   content: string; // HTML gerado pelo Tiptap
+}
+
+export interface TermsBlockProps {
+  description?: string; // HTML gerado pelo Tiptap
 }
 
 export interface LocationBlockProps {

@@ -118,7 +118,7 @@ function SessionRenderer({
                     </span>
                 )}
                 <EditableTitle
-                    value={block.label || "Sessão"}
+                    value={block.label || "Seção"}
                     onSave={handleSaveLabel}
                     className={
                         isRoot
@@ -132,7 +132,7 @@ function SessionRenderer({
                     key={block.id}
                     value={description}
                     onChange={handleChange}
-                    placeholder="Descrição da sessão..."
+                    placeholder="Descrição da seção..."
                 />
             </CollapsibleEditorSection>
         </div>
@@ -558,6 +558,37 @@ function TextRenderer({ block, budgetId, onRefresh }: CompositorRendererProps) {
                     value={description}
                     onChange={handleChange}
                     placeholder="Digite o conteúdo aqui..."
+                />
+            </CollapsibleEditorSection>
+        </div>
+    );
+}
+
+function TermsRenderer({ block, budgetId, onRefresh, isReadOnly }: CompositorRendererProps) {
+    const handleSaveLabel = useBlockLabel(block, budgetId, onRefresh);
+    const { description, handleChange } = useBlockDescription(
+        block,
+        budgetId,
+        onRefresh,
+    );
+    return (
+        <div className="space-y-3 bg-white p-4 rounded-md shadow-sm border-l-4 border-l-primary/40">
+            <div className="flex items-baseline gap-3 pb-2 mb-2 border-b-2 border-primary">
+                <FileText className="h-4 w-4 text-primary shrink-0" />
+                <EditableTitle
+                    value={block.label || "CONDIÇÕES GERAIS"}
+                    onSave={handleSaveLabel}
+                    className="text-xl font-bold text-foreground uppercase"
+                    disabled={isReadOnly}
+                />
+            </div>
+            <CollapsibleEditorSection label="Texto">
+                <CompositorRichTextEditor
+                    key={block.id}
+                    value={description}
+                    onChange={handleChange}
+                    placeholder="Digite as condições gerais..."
+                    readOnly={isReadOnly}
                 />
             </CollapsibleEditorSection>
         </div>
@@ -1287,6 +1318,7 @@ const RENDERERS: Record<string, ComponentType<CompositorRendererProps>> = {
     location: LocationRenderer,
     section: SectionRenderer,
     text: TextRenderer,
+    terms: TermsRenderer,
     scope: ScopeRenderer,
     quote: QuoteRenderer,
 };
@@ -1316,6 +1348,7 @@ function BlockDocument({
     const isToc = block.type === "toc";
     const isFigures = block.type === "figures";
     const isQuote = block.type === "quote";
+    const isTerms = block.type === "terms";
     const isRoot = block.depth === 0;
 
     return (
@@ -1325,10 +1358,11 @@ function BlockDocument({
             {isRoot && isToc && <hr className="border-border mb-6" />}
             {isRoot && isFigures && <hr className="border-border mb-6" />}
             {isRoot && isQuote && <hr className="border-border mb-6" />}
+            {isRoot && isTerms && <hr className="border-border mb-6" />}
 
             <div
                 className={
-                    isCover || isToc || isFigures || isQuote
+                    isCover || isToc || isFigures || isQuote || isTerms
                         ? "mb-8"
                         : isSession
                           ? isRoot
@@ -1394,7 +1428,7 @@ export interface CompositorContentProps {
     isReadOnly?: boolean;
     /**
      * Bloco selecionado no índice — mesmo padrão do Escopo (pai = tudo abaixo, filho = só aquele ramo):
-     * - `session`: essa sessão e todos os descendentes (subsessões, locais, trechos…)
+     * - `session`: essa seção e todos os descendentes (subseções, locais, trechos…)
      * - `location`: local + trechos
      * - `section`: só aquele trecho
      * Demais tipos ou `null` = documento completo (todas as raízes).

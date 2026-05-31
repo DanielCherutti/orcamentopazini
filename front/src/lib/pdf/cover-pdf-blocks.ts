@@ -3,6 +3,7 @@ import { sanitizeTextForPdf } from "@/lib/pdf/sanitize-pdf-text";
 
 export type CoverPdfBlock =
     | { type: "text"; content: string }
+    | { type: "pageBreak" }
     | {
           type: "img";
           src: string;
@@ -113,6 +114,21 @@ function stripEmptyImageWrapperFromTextBlock(content: string): string {
     return content.replace(/<(p|div|figure)\b[^>]*>\s*$/i, "").replace(/^\s*<\/(p|div|figure)\s*>/i, "");
 }
 
+const PAGE_BREAK_ATTR_OR_CLASS_RE = /(?:\bdata-page-break\s*=\s*(?:"true"|'true'|true)|\bclass\s*=\s*(?:"[^"]*\beditor-page-break\b[^"]*"|'[^']*\beditor-page-break\b[^']*'|[^\s>]*\beditor-page-break\b[^\s>]*))/i;
+const PAGE_BREAK_STYLE_RE = /\b(?:break-(?:before|after)|page-break-(?:before|after))\s*:\s*(?:page|always)\b/i;
+
+function tagHasPageBreakMarker(tag: string): boolean {
+    return PAGE_BREAK_ATTR_OR_CLASS_RE.test(tag) || PAGE_BREAK_STYLE_RE.test(tag);
+}
+
+export function htmlContainsPageBreak(raw: unknown): boolean {
+    const html = String(raw ?? "");
+    if (!html.trim()) return false;
+    return /<(?:div|hr)\b[^>]*(?:data-page-break|editor-page-break|break-before|break-after|page-break-before|page-break-after)[^>]*>/i.test(html)
+        ? html.split(/(?=<(?:div|hr)\b)/i).some((fragment) => tagHasPageBreakMarker(fragment.match(/^<[^>]+>/)?.[0] ?? ""))
+        : false;
+}
+
 /**
  * Dentro de um bloco de texto da capa, extrai `<p>`/`<div>` e `<h1>`–`<h3>` na ordem.
  */
@@ -168,15 +184,25 @@ export function splitCoverHtmlFragmentToSegments(
  */
 export function splitCoverHtmlIntoPdfBlocks(html: string): CoverPdfBlock[] {
     if (!html.trim()) return [{ type: "text", content: "" }];
-    const imgRe = /<img\b[^>]*>/gi;
+    const pageBreakAttrOrClass = String.raw`(?:\bdata-page-break\s*=\s*(?:"true"|'true'|true)|\bclass\s*=\s*(?:"[^"]*\beditor-page-break\b[^"]*"|'[^']*\beditor-page-break\b[^']*'|[^\s>]*\beditor-page-break\b[^\s>]*))`;
+    const pageBreakStyle = String.raw`\b(?:break-(?:before|after)|page-break-(?:before|after))\s*:\s*(?:page|always)\b`;
+    const blockRe = new RegExp(
+        String.raw`<img\b[^>]*>|<div\b(?=[^>]*(?:${pageBreakAttrOrClass}|${pageBreakStyle}))[^>]*>[\s\S]*?<\/div>|<hr\b(?=[^>]*(?:${pageBreakAttrOrClass}|${pageBreakStyle}))[^>]*\/?>`,
+        "gi"
+    );
     const blocks: CoverPdfBlock[] = [];
     let last = 0;
     let m: RegExpExecArray | null;
-    while ((m = imgRe.exec(html)) !== null) {
+    while ((m = blockRe.exec(html)) !== null) {
         if (m.index > last) {
             blocks.push({ type: "text", content: html.slice(last, m.index) });
         }
         const tag = m[0];
+        if (tagHasPageBreakMarker(tag)) {
+            blocks.push({ type: "pageBreak" });
+            last = m.index + tag.length;
+            continue;
+        }
         const quoted =
             tag.match(/\bsrc\s*=\s*"([^"]*)"/i)?.[1] ?? tag.match(/\bsrc\s*=\s*'([^']*)'/i)?.[1];
         const unquoted = quoted ?? tag.match(/\bsrc\s*=\s*([^\s>]+)/i)?.[1];
@@ -206,5 +232,5 @@ export function splitCoverHtmlIntoPdfBlocks(html: string): CoverPdfBlock[] {
                 ? { ...block, content: stripEmptyImageWrapperFromTextBlock(block.content) }
                 : block
         )
-        .filter((block) => block.type === "img" || stripHtmlToText(block.content).trim() || /<(p|div|h1|h2|h3)\b/i.test(block.content));
+        .filter((block) => block.type === "img" || block.type === "pageBreak" || stripHtmlToText(block.content).trim() || /<(p|div|h1|h2|h3)\b/i.test(block.content));
 }

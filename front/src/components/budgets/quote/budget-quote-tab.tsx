@@ -238,16 +238,29 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
         [budgetId, isReadOnly, onBudgetRefresh]
     );
 
-    const persistQuoteSplitPercents = useCallback(() => {
-        void persist({
+    const buildQuoteSplitPercentPatch = useCallback(
+        (): Partial<Budget> => ({
             quote_markup_equipment_percent: Number.isFinite(markupEquip) ? markupEquip : 0,
             quote_discount_equipment_percent: Number.isFinite(discountEquip) ? discountEquip : 0,
             quote_markup_assembly_percent: Number.isFinite(markupAsm) ? markupAsm : 0,
             quote_discount_assembly_percent: Number.isFinite(discountAsm) ? discountAsm : 0,
             quote_markup_percent: 0,
             quote_discount_percent: 0,
-        });
-    }, [persist, markupEquip, discountEquip, markupAsm, discountAsm]);
+        }),
+        [markupEquip, discountEquip, markupAsm, discountAsm]
+    );
+
+    const persistQuoteSplitPercents = useCallback(() => {
+        void persist(buildQuoteSplitPercentPatch());
+    }, [persist, buildQuoteSplitPercentPatch]);
+
+    const refreshQuoteValues = useCallback(async () => {
+        if (!isReadOnly) {
+            await updateBudgetAction(budgetId, buildQuoteSplitPercentPatch());
+            await onBudgetRefresh?.();
+        }
+        await load();
+    }, [budgetId, buildQuoteSplitPercentPatch, isReadOnly, load, onBudgetRefresh]);
 
     const tableRows = useMemo((): TableRow[] => {
         if (!quoteLocations.length) return [];
@@ -494,7 +507,7 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
                         size="sm"
                         className="h-11 shrink-0 gap-2 rounded-xl border-border/80 bg-card px-4 font-medium shadow-sm transition-all hover:border-primary/30 hover:bg-primary/[0.04] hover:text-primary"
                         disabled={loading}
-                        onClick={() => void load()}
+                        onClick={() => void refreshQuoteValues()}
                     >
                         <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
                         Atualizar valores

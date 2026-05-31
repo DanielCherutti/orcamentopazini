@@ -18,7 +18,6 @@ import {
     resolveCoverPageShowHeaderBand,
     resolveCoverPdfHeaderCompanyText,
     resolveCoverPdfHeaderLogoUrl,
-    shouldShowCoverBudgetCodeStamp,
 } from "@/lib/pdf/cover-pdf-band-resolve";
 import { PdfProposalHeaderBand } from "@/components/pdf/pdf-proposal-header-band";
 import { DEFAULT_CLIENT_LOGO_LAYOUT } from "@/lib/budgets/cover-client-logo-layout";
@@ -318,8 +317,8 @@ function resolveCoverBlockImageStyle(block: {
 }) {
   const maxWidth = PAGE_W - 2 * BODY_PAD_H;
   const maxHeight = PAGE_H * 0.56;
-  const width = clampCoverImagePt(block.widthPt, 36, maxWidth);
-  const height = clampCoverImagePt(block.heightPt, 24, maxHeight);
+  const width = clampCoverImagePt(block.widthPt, 1, maxWidth);
+  const height = clampCoverImagePt(block.heightPt, 1, maxHeight);
   const naturalAspect =
     Number.isFinite(block.naturalWidth) &&
     Number.isFinite(block.naturalHeight) &&
@@ -435,12 +434,6 @@ export function CompositorCoverPdfPage({
     customCoverFooterText || hasCoverFooterLayout || footerLeft.trim() || footerRight.trim(),
   );
   const showCoverFooterBand = showCoverFooter && hasCoverFooterBandContent;
-  const showCoverBudgetCodeStamp = shouldShowCoverBudgetCodeStamp(
-    coverProps,
-    Boolean(customCoverFooterText),
-    hasCoverFooterLayout,
-    showCoverFooterBand,
-  );
   const coverBudgetCodeLabel = sanitizeTextForPdf(formatCoverBudgetCodeLabel(bandCtx));
   const pagePaddingTop = showCoverHeader
     ? (hasCoverHeaderLayout ? headerReserve : BODY_PAD_V + headerReserve)
@@ -562,7 +555,7 @@ export function CompositorCoverPdfPage({
           )}
         </View>
       ) : null}
-      {showCoverBudgetCodeStamp ? (
+      {coverBudgetCodeLabel ? (
         <View style={styles.coverBudgetCodeStamp} fixed>
           <Text style={styles.coverBudgetCodeText}>{coverBudgetCodeLabel}</Text>
         </View>
@@ -591,6 +584,17 @@ export function CompositorCoverPdfPage({
       ) : null}
       <View style={styles.body} wrap>
         {blocks.map((b, i) => {
+          if (b.type === "pageBreak") {
+            return (
+              <Text
+                key={`cover-pb-${i}`}
+                break
+                style={{ fontSize: 0.1, lineHeight: 0.1, color: "#ffffff", opacity: 0 }}
+              >
+                {" "}
+              </Text>
+            );
+          }
           if (b.type === "img") {
             const src = proxyPdfImageSrc(b.src, settings.app_public_url, pdfEmbeddedImages) ?? b.src;
             return (

@@ -12,6 +12,9 @@ import { DEFAULT_HEADER_FOOTER_PROPS } from "@/types/budget-compositor-types";
 
 type RootBlockRow = { id: unknown; order_index: number; type: string; props?: Record<string, unknown> };
 
+const DEFAULT_TERMS_HTML =
+    "<p>Termos Gerais:</p><p>1. Validade da Proposta: 15 dias.</p><p>2. Prazo de Entrega: 45 dias úteis após medição final.</p><p>3. Garantia: 5 anos contra defeitos de fabricação.</p>";
+
 async function listRootBlocks(
     db: Awaited<ReturnType<typeof getDb>>,
     budgetRecordId: ReturnType<typeof requireRecordId>
@@ -34,6 +37,7 @@ async function normalizeFixedRootOrder(
     const figures = roots.find((r) => r.type === "figures");
     if (!cover || !headerFooter || !toc || !figures) return;
     const scope = roots.find((r) => r.type === "scope");
+    const tocAndFiguresSorted = [toc, figures].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
     const othersSorted = roots
         .filter(
             (r) =>
@@ -45,8 +49,8 @@ async function normalizeFixedRootOrder(
         )
         .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
     const ordered = scope
-        ? [cover, headerFooter, toc, figures, scope, ...othersSorted]
-        : [cover, headerFooter, toc, figures, ...othersSorted];
+        ? [cover, headerFooter, ...tocAndFiguresSorted, scope, ...othersSorted]
+        : [cover, headerFooter, ...tocAndFiguresSorted, ...othersSorted];
     for (let i = 0; i < ordered.length; i++) {
         await db.update(requireRecordId("budget_block", String(ordered[i].id))).merge({
             order_index: i,
@@ -243,7 +247,7 @@ export async function ensureCompositorTocBlockAction(
                 budget_id: budgetRecordId,
                 type: "figures",
                 label: "LISTA DE FIGURAS",
-                order_index: 99997,
+                order_index: 100000,
                 props: {},
             });
             roots = await listRootBlocks(db, budgetRecordId);
@@ -330,6 +334,51 @@ export async function ensureCompositorQuoteBlockAction(
         console.error("ensureCompositorQuoteBlockAction error:", error);
         if (isTokenExpiredError(error)) resetDb();
         return { success: false, error: "Erro ao garantir bloco de orçamento" };
+    }
+}
+
+/**
+ * Garante um bloco opcional `terms` para orçamentos antigos.
+ * Se o usuário remover o bloco, ele permanece removido porque consideramos também registros com deleted_at.
+ */
+export async function ensureCompositorTermsBlockAction(
+    budgetId: string,
+    options?: { skipRevalidate?: boolean }
+): Promise<{ success: boolean; error?: string }> {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const db = await getDb();
+    try {
+        const budgetRecordId = requireRecordId("budget", budgetId);
+        const existingRes = await db.query<[Array<{ id: unknown; deleted_at?: unknown }>]>(
+            "SELECT id, deleted_at FROM budget_block WHERE budget_id = $budgetId AND parent_id IS NONE AND type = 'terms' LIMIT 1",
+            { budgetId: budgetRecordId }
+        );
+        const existing = existingRes[0] || [];
+        if (existing.length > 0) return { success: true };
+
+        const roots = await listRootBlocks(db, budgetRecordId);
+        const maxOrder = roots.reduce((max, r) => Math.max(max, Number(r.order_index ?? 0)), -1);
+        await db.create(new Table("budget_block")).content({
+            budget_id: budgetRecordId,
+            type: "terms",
+            label: "CONDIÇÕES GERAIS",
+            order_index: maxOrder + 1,
+            props: { description: DEFAULT_TERMS_HTML },
+        });
+
+        if (!options?.skipRevalidate) {
+            revalidatePath(budgetRevalidatePath(budgetId));
+        }
+        return { success: true };
+    } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
+        console.error("ensureCompositorTermsBlockAction error:", error);
+        if (isTokenExpiredError(error)) resetDb();
+        return { success: false, error: "Erro ao garantir bloco de condições gerais" };
     }
 }
 
@@ -470,7 +519,7 @@ export async function deleteBlockAction(
         if (row?.type === "figures") {
             return {
                 success: false,
-                error: "A lista de figuras não pode ser removida — ela é gerada automaticamente após o sumário.",
+                error: "A lista de figuras não pode ser removida — ela é gerada automaticamente pelo documento.",
             };
         }
         if (row?.type === "header_footer") {
@@ -552,6 +601,14 @@ export async function moveBlockToParentAction(
                 };
             }
         }
+        if (row?.type === "terms") {
+            if (newParentId !== null) {
+                return {
+                    success: false,
+                    error: "O bloco Condições Gerais deve permanecer na raiz do documento.",
+                };
+            }
+        }
         if (newParentId) {
             if (row?.type === "scope") {
                 return {
@@ -584,7 +641,7 @@ export async function reorderBlocksAction(
 
     const db = await getDb();
     try {
-        const fixedOrder = ["cover", "header_footer", "toc", "figures"];
+        const fixedOrder = ["cover", "header_footer"];
         const fixedPosByType = new Map<string, number>();
         for (let i = 0; i < blockIds.length; i++) {
             const row = await db.select(requireRecordId("budget_block", blockIds[i]));
@@ -599,7 +656,7 @@ export async function reorderBlocksAction(
             if (fixedPositions[i] < fixedPositions[i - 1]) {
                 return {
                     success: false,
-                    error: "A ordem fixa CAPA → CABEÇALHO E RODAPÉ → SUMÁRIO → LISTA DE FIGURAS deve ser mantida.",
+                    error: "A ordem fixa CAPA → CABEÇALHO E RODAPÉ deve ser mantida.",
                 };
             }
         }

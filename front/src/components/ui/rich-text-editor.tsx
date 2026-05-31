@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent, type Editor } from '@tiptap/react';
-import { Mark, mergeAttributes } from '@tiptap/core';
+import { Mark, Node as TiptapNode, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { ResizableImage } from '@/components/ui/resizable-image-extension';
 import TextAlign from '@tiptap/extension-text-align';
@@ -204,6 +204,32 @@ const FontSizeMark = Mark.create({
   },
 });
 
+const PageBreakNode = TiptapNode.create({
+  name: "pageBreak",
+  group: "block",
+  atom: true,
+  selectable: true,
+
+  parseHTML() {
+    return [
+      {
+        tag: 'div[data-page-break="true"]',
+      },
+    ];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return [
+      "div",
+      mergeAttributes(HTMLAttributes, {
+        "data-page-break": "true",
+        class: "editor-page-break",
+      }),
+      ["span", { contenteditable: "false" }, "Quebra de página"],
+    ];
+  },
+});
+
 function getWordBandPercents(headerHeight: number, footerHeight: number) {
   const PAGE_BASELINE_PX = 1122;
   const headerPct = Math.min(
@@ -316,6 +342,7 @@ export function RichTextEditor({
         heading: { levels: [1, 2, 3] },
       }),
       FontSizeMark,
+      PageBreakNode,
       ResizableImage.configure({ inline: true }),
       TextAlign.configure({ types: ['heading', 'paragraph'], defaultAlignment: isWord ? 'left' : 'justify' }),
       Table.configure({
@@ -613,6 +640,14 @@ export function RichTextEditor({
     </>
   ) : null;
 
+  const insertPageBreak = () => {
+    editor
+      .chain()
+      .focus()
+      .insertContent('<div data-page-break="true" class="editor-page-break"><span contenteditable="false">Quebra de página</span></div><p></p>')
+      .run();
+  };
+
   const fontToolsBasic = (
     <>
       <Button
@@ -733,6 +768,17 @@ export function RichTextEditor({
         className={wc}
       >
         <AlignJustify className="w-4 h-4" />
+      </Button>
+      <div className={cn('w-px bg-border h-6 my-auto', isWord && 'bg-neutral-300')} />
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={insertPageBreak}
+        type="button"
+        title="Inserir quebra de página"
+        className={wc}
+      >
+        <GripHorizontal className="w-4 h-4" />
       </Button>
     </>
   );

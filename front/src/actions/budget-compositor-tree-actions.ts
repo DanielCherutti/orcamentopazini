@@ -11,6 +11,7 @@ import {
     ensureCompositorCoverBlockAction,
     ensureCompositorHeaderFooterBlockAction,
     ensureCompositorQuoteBlockAction,
+    ensureCompositorTermsBlockAction,
     ensureCompositorTocBlockAction,
 } from "@/actions/budget-compositor-block-actions";
 
@@ -36,6 +37,7 @@ async function loadCompositorTreeData(
             await ensureCompositorHeaderFooterBlockAction(budgetId);
             await ensureCompositorTocBlockAction(budgetId);
             await ensureCompositorQuoteBlockAction(budgetId);
+            await ensureCompositorTermsBlockAction(budgetId);
         }
 
         const blocksRes = await db.query<[BudgetBlockFlat[]]>(

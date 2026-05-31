@@ -80,31 +80,61 @@ const styles = StyleSheet.create({
         fontFamily: theme.fonts.bold,
         color: theme.colors.primary,
     },
-    /** Bloco de abertura do trecho (título + primeira cena). */
-    sectionLead: {
-        marginBottom: 6,
-    },
-    /** Título/cabeçalho + imagem na mesma folha (não partir no meio). */
-    sceneImageSlot: {
-        marginBottom: 6,
+    sceneGrid: {
         width: '100%',
     },
-    /** Centraliza a imagem na largura útil da página. */
+    sceneGridRow: {
+        flexDirection: 'row',
+        gap: 8,
+        width: '100%',
+        marginBottom: 8,
+    },
+    sceneCard: {
+        flex: 1,
+        height: 230,
+        borderWidth: 1,
+        borderColor: '#cbd5e1',
+        borderRadius: 7,
+        backgroundColor: '#ffffff',
+        padding: 6,
+    },
+    sceneCardSpacer: {
+        flex: 1,
+    },
     sceneImageFrame: {
         width: '100%',
-        flexDirection: 'row',
+        height: 144,
+        alignItems: 'center',
         justifyContent: 'center',
+        backgroundColor: '#f8fafc',
+        borderWidth: 0.5,
+        borderColor: '#e5e7eb',
+        borderRadius: 5,
+        marginBottom: 5,
     },
-    /**
-     * Altura moderada: caixa muito alta + `wrap={false}` no trecho força o bloco inteiro
-     * para a página seguinte e deixa um vazio grande no fim da página anterior.
-     */
     sceneImage: {
-        width: 480,
-        height: 240,
+        width: '100%',
+        height: '100%',
         marginBottom: 10,
         objectFit: 'contain',
         objectPosition: 'center',
+    },
+    sceneCaptionNumber: {
+        fontSize: 8,
+        fontFamily: theme.fonts.bold,
+        color: theme.colors.text,
+        marginBottom: 2,
+    },
+    sceneCaption: {
+        fontSize: 8,
+        color: theme.colors.text,
+        lineHeight: 1.25,
+        maxLines: 5,
+    },
+    sceneMeta: {
+        marginTop: 2,
+        fontSize: 7,
+        color: theme.colors.textLight,
     },
     pdfPageRoot: {
         width: '100%',
@@ -478,46 +508,40 @@ function filterSceneImages(images: BudgetImage[] | undefined): BudgetImage[] {
     });
 }
 
-const PDF_PAGE_BREAK_TEXT_STYLE = {
-    fontSize: 1,
-    lineHeight: 1,
-    color: '#ffffff',
-} as const;
-
-/** Quebra forçada como irmão direto no fluxo do PDF (mais confiável que `break` aninhado). */
-function PdfForcedPageBreak({ breakKey }: { breakKey: string }) {
-    return (
-        <Text key={breakKey} break style={PDF_PAGE_BREAK_TEXT_STYLE}>
-            {'\u00A0'}
-        </Text>
-    );
+function figureCaption(sceneImg: BudgetImage): string {
+    const caption = singleLinePdfLabel(sceneImg.caption);
+    return caption || 'Sem descrição';
 }
 
-/** Título/cabeçalho + imagem na mesma folha (a folha é aberta por `PdfForcedPageBreak` acima). */
-function SceneImageSlot({
-    lead,
-    children,
-}: {
-    lead?: React.ReactNode;
-    children: React.ReactNode;
-}) {
-    return (
-        <View style={styles.sceneImageSlot} wrap={false}>
-            {lead}
-            {children}
-        </View>
-    );
+function figureMeta(sceneImg: BudgetImage): string {
+    const w = Number(sceneImg.width ?? 0);
+    const h = Number(sceneImg.height ?? 0);
+    const size = w > 0 && h > 0 ? `${Math.round(w)} × ${Math.round(h)}px` : '';
+    const hasAnnotations = (sceneImg.annotations?.length ?? 0) > 0;
+    return [size, hasAnnotations ? 'com anotações' : 'sem anotações'].filter(Boolean).join(' · ');
 }
 
-function SectionSceneImage({
+const SCENE_TITLE_KEEP_WITH_NEXT_PT = 176;
+
+function chunkPairs<T>(items: T[]): Array<[T, T | undefined]> {
+    const out: Array<[T, T | undefined]> = [];
+    for (let i = 0; i < items.length; i += 2) {
+        out.push([items[i], items[i + 1]]);
+    }
+    return out;
+}
+
+function SceneImageCard({
     sceneImg,
     imageKey,
+    figureLabel,
     pdfImagePublicBase,
     pdfEmbeddedImages,
     figurePageCollector,
 }: {
     sceneImg: BudgetImage;
     imageKey: string;
+    figureLabel: string;
     pdfImagePublicBase?: string;
     pdfEmbeddedImages?: PdfEmbeddedImages;
     figurePageCollector?: { segmentStartPages: Record<string, number> };
@@ -529,14 +553,14 @@ function SectionSceneImage({
     const figureId = sceneImg?.id ? String(sceneImg.id) : undefined;
 
     return (
-        <View key={imageKey} style={styles.sceneImageFrame}>
+        <View key={imageKey} style={styles.sceneCard} wrap={false}>
             {figurePageCollector && figureId ? (
                 <View
-                    /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- `render` não tipado no react-pdf */
                     render={({ pageNumber }: { pageNumber: number }) => {
                         const key = `figure:${figureId}`;
                         const prev = figurePageCollector.segmentStartPages[key];
                         if (!Number.isFinite(prev) || pageNumber < prev) {
+                            // eslint-disable-next-line react-hooks/immutability -- coletor mutável usado pela primeira passada do React-PDF
                             figurePageCollector.segmentStartPages[key] = pageNumber;
                         }
                         return null;
@@ -553,14 +577,74 @@ function SectionSceneImage({
                         const key = `figure:${figureId}`;
                         const prev = figurePageCollector.segmentStartPages[key];
                         if (!Number.isFinite(prev) || pageNumber < prev) {
+                            // eslint-disable-next-line react-hooks/immutability -- coletor mutável usado pela primeira passada do React-PDF
                             figurePageCollector.segmentStartPages[key] = pageNumber;
                         }
                         return "";
                     }}
                 />
             ) : null}
-            {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt prop */}
-            <Image src={src} style={styles.sceneImage} />
+            <View wrap={false}>
+                <View style={styles.sceneImageFrame}>
+                    {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt prop */}
+                    <Image src={src} style={styles.sceneImage} />
+                </View>
+                <Text style={styles.sceneCaptionNumber}>{sanitizeTextForPdf(figureLabel)}</Text>
+            </View>
+            <Text style={styles.sceneCaption}>
+                {sanitizeTextForPdf(figureCaption(sceneImg))}
+            </Text>
+            <Text style={styles.sceneMeta}>{sanitizeTextForPdf(figureMeta(sceneImg))}</Text>
+        </View>
+    );
+}
+
+function SceneImagesGrid({
+    images,
+    figureLabelFor,
+    pdfImagePublicBase,
+    pdfEmbeddedImages,
+    figurePageCollector,
+    lead,
+}: {
+    images: BudgetImage[];
+    figureLabelFor: (image: BudgetImage, index: number) => string;
+    pdfImagePublicBase?: string;
+    pdfEmbeddedImages?: PdfEmbeddedImages;
+    figurePageCollector?: { segmentStartPages: Record<string, number> };
+    lead?: React.ReactNode;
+}) {
+    const rows = chunkPairs(images);
+    const renderRow = ([left, right]: [BudgetImage, BudgetImage | undefined], rowIdx: number) => (
+        <View key={`scene-row-${rowIdx}`} style={styles.sceneGridRow} wrap={false}>
+            <SceneImageCard
+                sceneImg={left}
+                imageKey={left.id ?? `left-${rowIdx}`}
+                figureLabel={figureLabelFor(left, rowIdx * 2)}
+                pdfImagePublicBase={pdfImagePublicBase}
+                pdfEmbeddedImages={pdfEmbeddedImages}
+                figurePageCollector={figurePageCollector}
+            />
+            {right ? (
+                <SceneImageCard
+                    sceneImg={right}
+                    imageKey={right.id ?? `right-${rowIdx}`}
+                    figureLabel={figureLabelFor(right, rowIdx * 2 + 1)}
+                    pdfImagePublicBase={pdfImagePublicBase}
+                    pdfEmbeddedImages={pdfEmbeddedImages}
+                    figurePageCollector={figurePageCollector}
+                />
+            ) : (
+                <View style={styles.sceneCardSpacer} />
+            )}
+        </View>
+    );
+
+    return (
+        <View style={styles.sceneGrid}>
+            {lead && rows[0] ? lead : null}
+            {lead && rows[0] ? renderRow(rows[0], 0) : null}
+            {rows.slice(lead ? 1 : 0).map((row, idx) => renderRow(row, idx + (lead ? 1 : 0)))}
         </View>
     );
 }
@@ -641,21 +725,12 @@ export function BudgetTable({
 }) {
     // Sem hooks: BudgetTable é renderizado pelo @react-pdf/renderer (fora do React DOM).
     const pdfPages: React.ReactNode[] = [];
-    let needsPageBreak = false;
-
-    /** Nova folha + bloco que não deve ser cortado (foto, título). */
     const pushPdfPage = (pageKey: string, content: React.ReactNode) => {
-        if (needsPageBreak) {
-            pdfPages.push(
-                <PdfForcedPageBreak key={`pb-${pageKey}`} breakKey={`pb-${pageKey}`} />
-            );
-        }
         pdfPages.push(
-            <View key={pageKey} wrap={false} style={styles.pdfPageRoot}>
+            <View key={pageKey} style={styles.pdfPageRoot}>
                 {content}
             </View>
         );
-        needsPageBreak = true;
     };
 
     /** Continua no fluxo da página — tabela longa pode quebrar em várias folhas. */
@@ -698,32 +773,29 @@ export function BudgetTable({
         );
 
         if (locPhotoList.length > 0) {
-            for (let imgIdx = 0; imgIdx < locPhotoList.length; imgIdx++) {
-                const sceneImg = locPhotoList[imgIdx];
-                pushPdfPage(
-                    `${locId}-loc-photo-${sceneImg?.id ?? imgIdx}`,
-                    <View style={styles.locationBlock}>
-                        {imgIdx === 0 ? locationHeader : null}
-                        <View style={styles.locationPhotosBlock}>
-                            <SceneImageSlot
-                                lead={
-                                    imgIdx === 0 ? (
-                                        <Text style={styles.locationPhotosTitle}>FOTOS DO LOCAL</Text>
-                                    ) : null
-                                }
-                            >
-                                <SectionSceneImage
-                                    sceneImg={sceneImg}
-                                    imageKey={sceneImg?.id ?? `loc-img-${imgIdx}`}
-                                    pdfImagePublicBase={pdfImagePublicBase}
-                                    pdfEmbeddedImages={pdfEmbeddedImages}
-                                    figurePageCollector={figurePageCollector}
-                                />
-                            </SceneImageSlot>
-                        </View>
+            pushPdfPage(
+                `${locId}-loc-photos`,
+                <View style={styles.locationBlock}>
+                    {locationHeader}
+                    <View style={styles.locationPhotosBlock}>
+                        <SceneImagesGrid
+                            images={locPhotoList}
+                            figureLabelFor={(_image, index) => `Figura ${index + 1}`}
+                            pdfImagePublicBase={pdfImagePublicBase}
+                            pdfEmbeddedImages={pdfEmbeddedImages}
+                            figurePageCollector={figurePageCollector}
+                            lead={
+                                <Text
+                                    style={styles.locationPhotosTitle}
+                                    minPresenceAhead={SCENE_TITLE_KEEP_WITH_NEXT_PT}
+                                >
+                                    FOTOS DO LOCAL
+                                </Text>
+                            }
+                        />
                     </View>
-                );
-            }
+                </View>
+            );
         } else if (sections.length > 0) {
             pushPdfPage(
                 `${locId}-loc-header`,
@@ -738,7 +810,10 @@ export function BudgetTable({
             const sceneList = filterSceneImages(sec.images);
             const secId = String(sec.id ?? `sec-${secIdx}`);
             const sectionTitleLead = (
-                <View style={styles.sectionHeaderWrap}>
+                <View
+                    style={styles.sectionHeaderWrap}
+                    minPresenceAhead={SCENE_TITLE_KEEP_WITH_NEXT_PT}
+                >
                     <Text style={styles.sectionHeaderText}>
                         {sanitizeTextForPdf(`${secNum} — ${secLabel}`)}
                     </Text>
@@ -746,42 +821,34 @@ export function BudgetTable({
             );
 
             if (sceneList.length > 0) {
-                for (let imgIdx = 0; imgIdx < sceneList.length; imgIdx++) {
-                    const sceneImg = sceneList[imgIdx];
-                    const isFirst = imgIdx === 0;
-                    const isLast = imgIdx === sceneList.length - 1;
-                    const hasItems = (sec.items?.length ?? 0) > 0;
+                const hasItems = (sec.items?.length ?? 0) > 0;
+                pushPdfPage(
+                    `${locId}-${secId}-scenes`,
+                    <View style={[styles.sectionBlock, styles.sectionPageBlock]}>
+                        <SceneImagesGrid
+                            images={sceneList}
+                            figureLabelFor={(_image, index) => `Figura ${index + 1}`}
+                            pdfImagePublicBase={pdfImagePublicBase}
+                            pdfEmbeddedImages={pdfEmbeddedImages}
+                            figurePageCollector={figurePageCollector}
+                            lead={sectionTitleLead}
+                        />
+                    </View>
+                );
 
-                    pushPdfPage(
-                        `${locId}-${secId}-scene-${sceneImg?.id ?? imgIdx}`,
-                        <View style={[styles.sectionBlock, styles.sectionPageBlock]}>
-                            {isFirst ? sectionTitleLead : null}
-                            <SceneImageSlot>
-                                <SectionSceneImage
-                                    sceneImg={sceneImg}
-                                    imageKey={sceneImg?.id ?? `sec-img-${imgIdx}`}
-                                    pdfImagePublicBase={pdfImagePublicBase}
-                                    pdfEmbeddedImages={pdfEmbeddedImages}
-                                    figurePageCollector={figurePageCollector}
-                                />
-                            </SceneImageSlot>
+                if (hasItems) {
+                    pushFlowBlock(
+                        `${locId}-${secId}-items`,
+                        <View style={styles.sectionBlock}>
+                            <SectionItemsTable
+                                sec={sec}
+                                showCosts={showCosts}
+                                laborCols={laborCols}
+                                costsDisplayMode={costsDisplayMode}
+                                itemFinalValue={itemFinalValue}
+                            />
                         </View>
                     );
-
-                    if (isLast && hasItems) {
-                        pushFlowBlock(
-                            `${locId}-${secId}-items`,
-                            <View style={styles.sectionBlock}>
-                                <SectionItemsTable
-                                    sec={sec}
-                                    showCosts={showCosts}
-                                    laborCols={laborCols}
-                                    costsDisplayMode={costsDisplayMode}
-                                    itemFinalValue={itemFinalValue}
-                                />
-                            </View>
-                        );
-                    }
                 }
             } else {
                 pushPdfPage(

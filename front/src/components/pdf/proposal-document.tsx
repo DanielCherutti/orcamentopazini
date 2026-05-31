@@ -15,7 +15,12 @@ import {
 } from '@/types/budget-compositor-types';
 import { mergeCoverDocumentProps, resolveInnerPagesWatermark } from '@/lib/budgets/cover-document';
 import { type PdfEmbeddedImages, proxyPdfImageSrc } from '@/lib/pdf/pdf-image-src';
-import { splitCoverHtmlFragmentToSegments, splitCoverHtmlIntoPdfBlocks } from '@/lib/pdf/cover-pdf-blocks';
+import {
+    htmlContainsPageBreak,
+    splitCoverHtmlFragmentToSegments,
+    splitCoverHtmlIntoPdfBlocks,
+    type CoverPdfBlock,
+} from '@/lib/pdf/cover-pdf-blocks';
 import { stripHtmlToText } from '@/lib/pdf/html-to-plain-text';
 import { sanitizeCoverHtmlForPdf } from '@/lib/pdf/sanitize-inline-styles-for-pdf';
 import { sanitizeTextForPdf } from '@/lib/pdf/sanitize-pdf-text';
@@ -39,10 +44,7 @@ import {
 import type { BudgetItem } from '@/types/budget-types';
 import type { BudgetLocation } from '@/types/budget-types';
 import { applyQuoteRowAdjustments } from '@/lib/budgets/scope-pricing';
-import {
-    getCompositorPanelLabel,
-    getScopeBlockLabel,
-} from '@/components/budgets/compositor/compositor-content-utils';
+import { getScopeBlockLabel } from '@/components/budgets/compositor/compositor-content-utils';
 import {
     filterIntroTocEntries,
     flattenDocumentBlocks,
@@ -137,6 +139,7 @@ const INNER_PAD = 35;
 const EDITOR_A4_HEIGHT_PX = 1122;
 const EDITOR_PX_TO_PT = PDF_PAGE_H / EDITOR_A4_HEIGHT_PX;
 const ABNT_PARAGRAPH_INDENT = "\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0";
+const QUOTE_MONEY_COL_W = 84;
 
 const styles = StyleSheet.create({
     pageWithWatermark: {
@@ -302,6 +305,14 @@ const styles = StyleSheet.create({
         borderColor: '#e5e7eb',
         borderRadius: 8,
         overflow: 'hidden',
+        marginTop: 8,
+    },
+    quoteBudgetCode: {
+        fontSize: 9,
+        fontFamily: theme.fonts.bold,
+        color: theme.colors.text,
+        textAlign: 'right',
+        marginBottom: 8,
     },
     quoteHeaderBar: {
         borderBottomWidth: 1,
@@ -366,18 +377,18 @@ const styles = StyleSheet.create({
         paddingLeft: 14,
     },
     quoteColMoney: {
-        width: 72,
+        width: QUOTE_MONEY_COL_W,
         fontSize: 9,
         textAlign: 'right',
-        paddingHorizontal: 10,
+        paddingHorizontal: 8,
         color: theme.colors.text,
     },
     quoteColMoneyBold: {
-        width: 72,
+        width: QUOTE_MONEY_COL_W,
         fontSize: 9,
         fontFamily: theme.fonts.bold,
         textAlign: 'right',
-        paddingHorizontal: 10,
+        paddingHorizontal: 8,
         color: '#0f172a',
     },
     quoteLocRow: {
@@ -406,11 +417,11 @@ const styles = StyleSheet.create({
         paddingRight: 8,
     },
     quoteTotalValue: {
-        width: 72,
+        width: QUOTE_MONEY_COL_W,
         fontSize: 9,
         fontFamily: theme.fonts.bold,
         textAlign: 'right',
-        paddingHorizontal: 10,
+        paddingHorizontal: 8,
         color: '#78350f',
     },
     quoteFooterLabelsRow: {
@@ -422,12 +433,12 @@ const styles = StyleSheet.create({
         paddingHorizontal: 4,
     },
     quoteFooterLabel: {
-        width: 72,
+        width: QUOTE_MONEY_COL_W,
         fontSize: 7,
         fontFamily: theme.fonts.bold,
         textTransform: 'uppercase',
         textAlign: 'right',
-        paddingHorizontal: 10,
+        paddingHorizontal: 8,
         color: '#92400e',
         letterSpacing: 0.5,
     },
@@ -446,8 +457,8 @@ function collectSessionPrintRows(
     sessionRoot: BudgetBlock,
     itemsByBlock: Record<string, BudgetItem[]>,
     imagesByBlock: Record<string, Array<{ url?: string; composed_url?: string }>>
-): Array<{ depth: number; title: string; html: string; extraText?: string; blockImageUrls: string[] }> {
-    const rows: Array<{ depth: number; title: string; html: string; extraText?: string; blockImageUrls: string[] }> = [];
+): SessionPrintRow[] {
+    const rows: SessionPrintRow[] = [];
     const resolveBlockImageUrls = (blockId: string): string[] =>
         (imagesByBlock[blockId] ?? [])
             .map((img) => (img.composed_url || img.url || "").trim())
@@ -457,7 +468,7 @@ function collectSessionPrintRows(
             const html = String((node.props?.description as string) || '');
             rows.push({
                 depth,
-                title: `${node.number ? `${node.number} ` : ''}${(node.label || 'Sessão').trim()}`,
+                title: `${node.number ? `${node.number} ` : ''}${(node.label || 'Seção').trim()}`,
                 html,
                 blockImageUrls: resolveBlockImageUrls(node.id),
             });
@@ -493,6 +504,14 @@ function collectSessionPrintRows(
     visit(sessionRoot, 0);
     return rows;
 }
+
+type SessionPrintRow = {
+    depth: number;
+    title: string;
+    html: string;
+    extraText?: string;
+    blockImageUrls: string[];
+};
 
 function readQuoteSplitPercents(b: Budget): {
     markupEquip: number;
@@ -871,7 +890,17 @@ type PdfSegment =
     | { kind: "quote" }
     | { kind: "detail" }
     | { kind: "session"; block: BudgetBlock }
-    | { kind: "terms" };
+    | { kind: "terms"; block: BudgetBlock };
+
+type SessionPdfContentPart = {
+    row: SessionPrintRow;
+    rowIndex: number;
+    partIndex: number;
+    blocks: CoverPdfBlock[];
+    contentIndex: number;
+    contentCount: number;
+    hasManualPageBreak: boolean;
+};
 
 function htmlHasVisibleText(raw: unknown): boolean {
     const html = String(raw ?? "");
@@ -898,14 +927,14 @@ function hasPrintableBlockContent(
     });
     if (hasImages) return true;
 
-    if (node.type === "session" || node.type === "location") {
-        return htmlHasVisibleText(node.props?.description);
+    if (node.type === "session" || node.type === "location" || node.type === "terms") {
+        return htmlHasVisibleText(node.props?.description) || htmlContainsPageBreak(node.props?.description);
     }
     if (node.type === "text") {
-        return htmlHasVisibleText(node.props?.content);
+        return htmlHasVisibleText(node.props?.content) || htmlContainsPageBreak(node.props?.content);
     }
     if (node.type === "section") {
-        if (htmlHasVisibleText(node.props?.description)) return true;
+        if (htmlHasVisibleText(node.props?.description) || htmlContainsPageBreak(node.props?.description)) return true;
         const count = itemsByBlock[node.id]?.length ?? 0;
         return count > 0;
     }
@@ -943,6 +972,8 @@ function buildPdfSegmentsFromCompositorRoots(
         } else if (b.type === "quote" && !placedQuote) {
             segments.push({ kind: "quote" });
             placedQuote = true;
+        } else if (b.type === "terms" && hasPrintableBlockContent(b, itemsByBlock, imagesByBlock)) {
+            segments.push({ kind: "terms", block: b });
         } else if (b.type === "scope" && !placedDetail) {
             segments.push({ kind: "detail" });
             placedDetail = true;
@@ -957,12 +988,11 @@ function buildPdfSegmentsFromCompositorRoots(
         // Retrocompatibilidade: orçamentos sem blocos quote/scope ainda imprimem detalhamento.
         segments.push({ kind: "detail" });
     }
-    segments.push({ kind: "terms" });
     return segments;
 }
 
 function defaultPdfSegmentsNoCompositor(): PdfSegment[] {
-    return [{ kind: "cover" }, { kind: "quote" }, { kind: "detail" }, { kind: "terms" }];
+    return [{ kind: "cover" }, { kind: "quote" }, { kind: "detail" }];
 }
 
 function assignPdfSegmentPages(segments: PdfSegment[]): {
@@ -1007,7 +1037,7 @@ function collectSessionTocRowsForPrintedLayout(
             if (!hasPrintableSessionSubtree(node, itemsByBlock, imagesByBlock)) {
                 return;
             }
-            const title = (node.label || "Sessão").trim() || "Sessão";
+            const title = (node.label || "Seção").trim() || "Seção";
             if (isIntroTocEntry(title)) {
                 return;
             }
@@ -1158,6 +1188,7 @@ function InnerPdfPage({
     innerWatermarkAspect?: number;
     headerFooterProps?: HeaderFooterBlockProps;
 }) {
+    const pageTitle = sanitizeTextForPdf(title).trim();
     const company = sanitizeTextForPdf(settings.company_name?.trim() || "");
     const logoUrl = settings.company_logo_url?.trim();
     const logoSrc = logoUrl
@@ -1260,9 +1291,11 @@ function InnerPdfPage({
                 ]}
             >
                 <View style={styles.innerPageForeground}>
-                    <View style={styles.segmentHeader}>
-                        <Text style={styles.headerTitle}>{title}</Text>
-                    </View>
+                    {pageTitle ? (
+                        <View style={styles.segmentHeader}>
+                            <Text style={styles.headerTitle}>{pageTitle}</Text>
+                        </View>
+                    ) : null}
                     {children}
                 </View>
             </View>
@@ -1352,34 +1385,6 @@ export const ProposalDocument = ({
     resolvedPagination,
     paginationCollector,
 }: ProposalDocumentProps) => {
-    const extractImageUrlsFromHtml = (html: string): string[] => {
-        const urls = new Set<string>();
-        if (!html.trim()) return [];
-        const add = (u: string | undefined) => {
-            const t = (u || "").trim().replace(/^['"]|['"]$/g, "");
-            if (!t || t.startsWith("blob:")) return;
-            urls.add(t);
-        };
-        const imgRe = /<img\b[^>]*>/gi;
-        let m: RegExpExecArray | null;
-        while ((m = imgRe.exec(html)) !== null) {
-            const tag = m[0];
-            const src =
-                tag.match(/\bsrc\s*=\s*"([^"]*)"/i)?.[1] ??
-                tag.match(/\bsrc\s*=\s*'([^']*)'/i)?.[1] ??
-                tag.match(/\bsrc\s*=\s*([^\s>]+)/i)?.[1];
-            add(src);
-        }
-        const dataAttrRe = /\bdata-(?:src|image|url)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
-        while ((m = dataAttrRe.exec(html)) !== null) {
-            add((m[1] || m[2] || m[3] || "").trim());
-        }
-        const bgRe = /background-image\s*:\s*url\(([^)]+)\)/gi;
-        while ((m = bgRe.exec(html)) !== null) {
-            add(m[1]);
-        }
-        return [...urls];
-    };
     const rewriteImgSrcInHtml = (html: string): string => {
         if (!html.trim()) return html;
         return html.replace(/<img\b[^>]*>/gi, (tag) => {
@@ -1402,7 +1407,7 @@ export const ProposalDocument = ({
         naturalHeight?: number;
     }) => {
         const maxWidth = 520;
-        const width = Math.min(maxWidth, Math.max(110, block.widthPt ?? maxWidth));
+        const width = Math.min(maxWidth, block.widthPt && block.widthPt > 0 ? block.widthPt : maxWidth);
         const naturalAspect =
             Number.isFinite(block.naturalWidth) &&
             Number.isFinite(block.naturalHeight) &&
@@ -1411,18 +1416,50 @@ export const ProposalDocument = ({
                 ? Number(block.naturalWidth) / Number(block.naturalHeight)
                 : undefined;
         const height = Number.isFinite(block.heightPt)
-            ? Math.min(520, Math.max(80, Number(block.heightPt)))
+            ? Math.min(520, Math.max(1, Number(block.heightPt)))
             : undefined;
         if (height && naturalAspect && Math.abs(width / height - naturalAspect) < 0.03) {
             return { width, height: width / naturalAspect };
         }
         return height ? { width, height } : { width };
     };
-    const renderSessionHtml = (htmlRaw: string, rowKey: string) => {
+    const splitSessionHtmlIntoPdfParts = (htmlRaw: string) => {
         const html = sanitizeCoverHtmlForPdf(rewriteImgSrcInHtml(htmlRaw));
         const blocks = splitCoverHtmlIntoPdfBlocks(html);
+        const parts: Array<{ type: "content"; blocks: CoverPdfBlock[] } | { type: "pageBreak" }> = [];
+        let current: CoverPdfBlock[] = [];
+
+        for (const block of blocks) {
+            if (block.type !== "pageBreak") {
+                current.push(block);
+                continue;
+            }
+            if (current.length > 0) {
+                parts.push({ type: "content", blocks: current });
+                current = [];
+            }
+            parts.push({ type: "pageBreak" });
+        }
+        if (current.length > 0) {
+            parts.push({ type: "content", blocks: current });
+        }
+
+        return parts;
+    };
+    const renderSessionPdfBlocks = (blocks: CoverPdfBlock[], rowKey: string) => {
         const renderedImageKeys = new Set<string>();
         const nodes = blocks.map((b, i) => {
+            if (b.type === "pageBreak") {
+                return (
+                    <Text
+                        key={`${rowKey}-pb-${i}`}
+                        break
+                        style={{ fontSize: 0.1, lineHeight: 0.1, color: "#ffffff", opacity: 0 }}
+                    >
+                        {" "}
+                    </Text>
+                );
+            }
             if (b.type === 'img') {
                 const src = proxyPdfImageSrc(b.src, settings.app_public_url, pdfEmbeddedImages) ?? b.src;
                 if (b.src?.trim()) renderedImageKeys.add(b.src.trim());
@@ -1599,9 +1636,6 @@ export const ProposalDocument = ({
         sessionPages.set(key.slice("session:".length), Math.trunc(value));
     }
     const detailSectionTitle = sanitizeTextForPdf(getScopeBlockLabel(scopeBlock?.label));
-    const compositorSessionPageTitle = sanitizeTextForPdf(
-        getCompositorPanelLabel(budget.compositor_label)
-    );
     /**
      * Numeração do detalhamento no PDF:
      * - compositor: usa o número real do bloco `scope` (ex.: "2")
@@ -1719,10 +1753,9 @@ export const ProposalDocument = ({
         }
     }
 
-    const pdfCompanyName = sanitizeTextForPdf(settings.company_name);
-    const pdfClosing = sanitizeTextForPdf(settings.closing_text);
     const innerHeaderText = htmlBandToPlainText(headerFooterProps.inner_header_html);
     const innerFooterText = htmlBandToPlainText(headerFooterProps.inner_footer_html);
+    const budgetCodeLabel = sanitizeTextForPdf(`Código do Orçamento: ${(budget.code || "").trim() || "—"}`);
 
     const renderPdfSegment = (seg: PdfSegment, i: number): React.ReactNode => {
         const keyBase = `pdf-${i}-${seg.kind}`;
@@ -1767,7 +1800,7 @@ export const ProposalDocument = ({
                         </Text>
                         {tocRows.length === 0 ? (
                             <Text style={{ fontSize: 10, fontStyle: "italic", color: theme.colors.textLight }}>
-                                Nenhuma sessão numerada no documento. Inclua blocos do tipo &quot;Sessão&quot; no
+                                Nenhuma seção numerada no documento. Inclua blocos do tipo &quot;Seção&quot; no
                                 Compositor para aparecerem aqui.
                             </Text>
                         ) : (
@@ -1791,9 +1824,6 @@ export const ProposalDocument = ({
             case "figures":
                 return (
                     <InnerPdfPage pageKey={keyBase} title="Lista de Figuras" paginationProbeKey="figures" {...innerCommon}>
-                        <Text style={{ fontSize: 9, color: theme.colors.textLight, marginBottom: 14 }}>
-                            Figuras de Adequações. A página indicada referencia o início do detalhamento impresso.
-                        </Text>
                         {figureRows.map((row) => (
                             <View key={`fig-${row.n}`} style={styles.tocRow}>
                                 <Text style={styles.tocTitle}>
@@ -1810,6 +1840,7 @@ export const ProposalDocument = ({
             case "quote":
                 return (
                     <InnerPdfPage pageKey={keyBase} title="Orçamento" paginationProbeKey="quote" {...innerCommon}>
+                        <Text style={styles.quoteBudgetCode}>{budgetCodeLabel}</Text>
                         {quoteLocationsForPdf.length > 0 ? (
                             <View style={styles.quoteCard}>
                                 <View style={styles.quoteHeaderBar}>
@@ -1820,10 +1851,10 @@ export const ProposalDocument = ({
                                 <View style={styles.quoteTableHeader}>
                                     <Text style={[styles.quoteHeaderCell, { width: 32 }]}>Nº</Text>
                                     <Text style={[styles.quoteHeaderCell, { flex: 1 }]}>Local / trecho</Text>
-                                    <Text style={[styles.quoteHeaderCell, { width: 72, textAlign: 'right' }]}>
+                                    <Text style={[styles.quoteHeaderCell, { width: QUOTE_MONEY_COL_W, textAlign: 'right' }]}>
                                         Equipamentos
                                     </Text>
-                                    <Text style={[styles.quoteHeaderCell, { width: 72, textAlign: 'right' }]}>
+                                    <Text style={[styles.quoteHeaderCell, { width: QUOTE_MONEY_COL_W, textAlign: 'right' }]}>
                                         Montagem
                                     </Text>
                                 </View>
@@ -1864,7 +1895,8 @@ export const ProposalDocument = ({
                                                     {formatMoney(locationAdjusted.assembly)}
                                                 </Text>
                                             </View>
-                                            {quoteShowSections && loc.sections.map((sec) => {
+                                            {quoteShowSections && loc.sections.map((sec, secIdx) => {
+                                                const secNumber = `${locIdx + 1}.${secIdx + 1}`;
                                                 const sectionBase = computeSectionEquipAssembly(sec.items);
                                                 const sectionAdjusted = applyQuoteRowAdjustments(
                                                     sectionBase.equipment,
@@ -1878,7 +1910,7 @@ export const ProposalDocument = ({
                                                     <View key={`q-sec-${loc.id}-${sec.id}`}>
                                                         <View style={[styles.quoteRow, styles.quoteSecRow]}>
                                                             <Text style={[styles.quoteColIndex, { color: theme.colors.textLight }]}>
-                                                                —
+                                                                {sanitizeTextForPdf(secNumber)}
                                                             </Text>
                                                             <View style={styles.quoteColDescWrap}>
                                                                 <Text style={styles.quoteColDescSec}>
@@ -1976,35 +2008,86 @@ export const ProposalDocument = ({
                     compositorPdf?.items || {},
                     (compositorPdf?.imagesByBlock as Record<string, Array<{ url?: string; composed_url?: string }>>) || {}
                 );
+                const visibleRows = rows.filter((row, idx) => {
+                    const isRootSessionRow = idx === 0 && row.depth === 0;
+                    if (!isRootSessionRow) return true;
+                    return (
+                        htmlHasVisibleText(row.html) ||
+                        htmlContainsPageBreak(row.html) ||
+                        Boolean(row.extraText?.trim()) ||
+                        row.blockImageUrls.length > 0
+                    );
+                });
+                const sessionPages: SessionPdfContentPart[][] = [[]];
+                const currentSessionPage = () => sessionPages[sessionPages.length - 1];
+                visibleRows.forEach((row, idx) => {
+                    const rawParts = row.html?.trim()
+                        ? splitSessionHtmlIntoPdfParts(row.html)
+                        : [];
+                    const parts = rawParts.length > 0
+                        ? rawParts
+                        : [{ type: "content" as const, blocks: [] as CoverPdfBlock[] }];
+                    const hasManualPageBreak = parts.some((part) => part.type === "pageBreak");
+                    const contentCount = parts.filter((part) => part.type === "content").length;
+                    let contentIndex = 0;
+
+                    parts.forEach((part, partIdx) => {
+                        if (part.type === "pageBreak") {
+                            if (currentSessionPage().length > 0) {
+                                sessionPages.push([]);
+                            }
+                            return;
+                        }
+
+                        currentSessionPage().push({
+                            row,
+                            rowIndex: idx,
+                            partIndex: partIdx,
+                            blocks: part.blocks,
+                            contentIndex,
+                            contentCount,
+                            hasManualPageBreak,
+                        });
+                        contentIndex += 1;
+                    });
+                });
+                const nonEmptySessionPages = sessionPages.filter((page) => page.length > 0);
                 return (
-                    <InnerPdfPage
-                        pageKey={`session-page-${sessionRoot.id}`}
-                        title={compositorSessionPageTitle}
-                        paginationProbeKey={`session:${sessionRoot.id}`}
-                        {...innerCommon}
-                    >
-                        <Text style={styles.sessionTitle}>
-                            {sanitizeTextForPdf(
-                                `${sessionRoot.number ? `${sessionRoot.number} ` : ""}${(sessionRoot.label || "Sessão").trim()}`
-                            )}
-                        </Text>
-                        {rows.length === 0 ? (
-                            <Text style={styles.sessionRowText}>Sem conteúdo textual nesta sessão.</Text>
-                        ) : (
-                            rows.map((row, idx) => (
-                                <View
-                                    key={`session-row-${sessionRoot.id}-${idx}`}
-                                    style={[styles.sessionRow, { marginLeft: safeLayoutIndentDepth(row.depth, 5) * 10 }]}
-                                >
-                                    <Text style={styles.sessionRowTitle}>{sanitizeTextForPdf(row.title)}</Text>
-                                    {(() => {
-                                        const rendered = row.html?.trim()
-                                            ? renderSessionHtml(row.html, `session-${sessionRoot.id}-${idx}`)
+                    <React.Fragment key={`session-fragment-${sessionRoot.id}`}>
+                        {(nonEmptySessionPages.length > 0 ? nonEmptySessionPages : [[]]).map((pageRows, pageIdx) => (
+                            <InnerPdfPage
+                                key={`session-page-${sessionRoot.id}-${pageIdx}`}
+                                pageKey={`session-page-${sessionRoot.id}-${pageIdx}`}
+                                title=""
+                                paginationProbeKey={pageIdx === 0 ? `session:${sessionRoot.id}` : undefined}
+                                {...innerCommon}
+                            >
+                                {pageIdx === 0 ? (
+                                    <Text style={styles.sessionTitle}>
+                                        {sanitizeTextForPdf(
+                                            `${sessionRoot.number ? `${sessionRoot.number} ` : ""}${(sessionRoot.label || "Seção").trim()}`
+                                        )}
+                                    </Text>
+                                ) : null}
+                                {visibleRows.length === 0 ? (
+                                    <Text style={styles.sessionRowText}>Sem conteúdo textual nesta seção.</Text>
+                                ) : (
+                                    pageRows.map((item) => {
+                                        const isRootSessionRow = item.rowIndex === 0 && item.row.depth === 0;
+                                        const isFirstContentPart = item.contentIndex === 0;
+                                        const isLastContentPart = item.contentIndex === item.contentCount - 1;
+                                        const rendered = item.blocks.length
+                                            ? renderSessionPdfBlocks(
+                                                  item.blocks,
+                                                  `session-${sessionRoot.id}-${item.rowIndex}-${item.contentIndex}`
+                                              )
                                             : { nodes: null, renderedImageKeys: new Set<string>() };
                                         const fallbackUrls = Array.from(
                                             new Set([
-                                                ...extractImageUrlsFromHtml(row.html || ""),
-                                                ...(row.blockImageUrls || []),
+                                                ...item.blocks.flatMap((block) =>
+                                                    block.type === "img" ? [block.src] : []
+                                                ),
+                                                ...(isFirstContentPart ? item.row.blockImageUrls || [] : []),
                                             ])
                                         );
                                         const fallbackMissing = fallbackUrls.filter((raw) => {
@@ -2016,7 +2099,19 @@ export const ProposalDocument = ({
                                             );
                                         });
                                         return (
-                                            <>
+                                            <View
+                                                key={`session-row-${sessionRoot.id}-${item.rowIndex}-${item.partIndex}`}
+                                                style={[
+                                                    styles.sessionRow,
+                                                    { marginLeft: safeLayoutIndentDepth(item.row.depth, 5) * 10 },
+                                                    ...(item.hasManualPageBreak ? [{ borderBottomWidth: 0 }] : []),
+                                                ]}
+                                            >
+                                                {!isRootSessionRow && isFirstContentPart ? (
+                                                    <Text style={styles.sessionRowTitle}>
+                                                        {sanitizeTextForPdf(item.row.title)}
+                                                    </Text>
+                                                ) : null}
                                                 {rendered.nodes}
                                                 {fallbackMissing.length
                                                     ? fallbackMissing.map((raw, imgIdx) => {
@@ -2025,7 +2120,7 @@ export const ProposalDocument = ({
                                                               raw;
                                                           return (
                                                               <View
-                                                                  key={`session-gallery-${sessionRoot.id}-${idx}-${imgIdx}`}
+                                                                  key={`session-gallery-${sessionRoot.id}-${item.rowIndex}-${item.partIndex}-${imgIdx}`}
                                                                   style={styles.sessionImageFrame}
                                                               >
                                                                   {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
@@ -2040,66 +2135,50 @@ export const ProposalDocument = ({
                                                           );
                                                       })
                                                     : null}
-                                            </>
+                                                {isLastContentPart && item.row.extraText ? (
+                                                    <Text style={styles.sessionRowText}>
+                                                        {sanitizeTextForPdf(item.row.extraText)}
+                                                    </Text>
+                                                ) : null}
+                                            </View>
                                         );
-                                    })()}
-                                    {row.extraText ? (
-                                        <Text style={styles.sessionRowText}>{sanitizeTextForPdf(row.extraText)}</Text>
-                                    ) : null}
-                                </View>
-                            ))
-                        )}
-                    </InnerPdfPage>
+                                    })
+                                )}
+                            </InnerPdfPage>
+                        ))}
+                    </React.Fragment>
                 );
             }
-            case "terms":
+            case "terms": {
+                const termsTitle = sanitizeTextForPdf((seg.block.label || "CONDIÇÕES GERAIS").trim());
+                const rawParts = splitSessionHtmlIntoPdfParts(String(seg.block.props?.description ?? ""));
+                const pages: CoverPdfBlock[][] = [[]];
+                const currentPage = () => pages[pages.length - 1];
+                rawParts.forEach((part) => {
+                    if (part.type === "pageBreak") {
+                        if (currentPage().length > 0) pages.push([]);
+                        return;
+                    }
+                    currentPage().push(...part.blocks);
+                });
+                const contentPages = pages.filter((page) => page.length > 0);
                 return (
-                    <InnerPdfPage
-                        pageKey={keyBase}
-                        title="Condições Gerais"
-                        pageStyleExtra={{ flexDirection: "column" }}
-                        paginationProbeKey="terms"
-                        {...innerCommon}
-                    >
-                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-pdf Style doesn't type whiteSpace */}
-                        <Text style={{ fontSize: 10, whiteSpace: "pre-wrap", marginBottom: 12 } as any}>
-                            {pdfClosing}
-                        </Text>
-                        <View style={{ height: 100 }} />
-                        <View
-                            style={{
-                                flexDirection: "row",
-                                marginBottom: 50,
-                                justifyContent: "space-between",
-                            }}
-                        >
-                            <View
-                                style={{
-                                    borderTopWidth: 1,
-                                    flex: 1,
-                                    alignItems: "center",
-                                    paddingTop: 10,
-                                    marginRight: 20,
-                                }}
+                    <React.Fragment key={`terms-fragment-${seg.block.id}`}>
+                        {(contentPages.length > 0 ? contentPages : [[]]).map((blocks, pageIdx) => (
+                            <InnerPdfPage
+                                key={`terms-page-${seg.block.id}-${pageIdx}`}
+                                pageKey={`terms-page-${seg.block.id}-${pageIdx}`}
+                                title={pageIdx === 0 ? termsTitle : ""}
+                                pageStyleExtra={{ flexDirection: "column" }}
+                                paginationProbeKey={pageIdx === 0 ? "terms" : undefined}
+                                {...innerCommon}
                             >
-                                <Text style={{ fontSize: 11, fontFamily: theme.fonts.bold }}>{pdfCompanyName}</Text>
-                                <Text style={{ fontSize: 9 }}>Diretoria Comercial</Text>
-                            </View>
-                            <View
-                                style={{
-                                    borderTopWidth: 1,
-                                    flex: 1,
-                                    alignItems: "center",
-                                    paddingTop: 10,
-                                    marginLeft: 20,
-                                }}
-                            >
-                                <Text style={{ fontSize: 11, fontFamily: theme.fonts.bold }}>De Acordo</Text>
-                                <Text style={{ fontSize: 9 }}>Cliente</Text>
-                            </View>
-                        </View>
-                    </InnerPdfPage>
+                                {renderSessionPdfBlocks(blocks, `terms-${seg.block.id}-${pageIdx}`).nodes}
+                            </InnerPdfPage>
+                        ))}
+                    </React.Fragment>
                 );
+            }
             default:
                 return null;
         }

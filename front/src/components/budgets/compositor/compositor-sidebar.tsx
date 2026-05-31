@@ -136,7 +136,7 @@ function createCompositorTreeCollisionDetection(
 }
 
 // ─── DroppableSessionInto ─────────────────────────────────────────────────────
-// Zona de drop dentro de uma sessão (para soltar como filho)
+// Zona de drop dentro de uma seção (para soltar como filho)
 
 function DroppableSessionInto({ blockId, depth }: { blockId: string; depth: number }) {
   const { setNodeRef, isOver } = useDroppable({ id: `into:${blockId}` });
@@ -150,8 +150,8 @@ function DroppableSessionInto({ blockId, depth }: { blockId: string; depth: numb
           : "border-muted-foreground/20 text-muted-foreground/30"
       )}>
         {isOver
-          ? <><Plus className="h-3 w-3 shrink-0" /><span>Soltar dentro desta sessão</span></>
-          : <span>Arrastar sessão aqui</span>
+          ? <><Plus className="h-3 w-3 shrink-0" /><span>Soltar dentro desta seção</span></>
+          : <span>Arrastar seção aqui</span>
         }
       </div>
     </div>
@@ -165,6 +165,7 @@ const BLOCK_ICONS: Record<string, React.ReactNode> = {
   toc:      <ListOrdered className="h-3.5 w-3.5 shrink-0 text-primary" />,
   figures:  <ImageIcon className="h-3.5 w-3.5 shrink-0 text-primary" />,
   quote:    <Table2 className="h-3.5 w-3.5 shrink-0 text-primary" />,
+  terms:    <FileText className="h-3.5 w-3.5 shrink-0 text-primary" />,
   session:  <FolderOpen className="h-3.5 w-3.5 shrink-0" />,
   location: <MapPin className="h-3.5 w-3.5 shrink-0" />,
   section:  <Layers className="h-3.5 w-3.5 shrink-0" />,
@@ -174,29 +175,31 @@ const BLOCK_ICONS: Record<string, React.ReactNode> = {
 };
 
 // Opções disponíveis por tipo de pai
-// session → pode conter sub-sessões, locais, texto (mas NÃO trecho direto)
-// location → pode conter trechos e texto (mas NÃO sessão ou local)
-// null (raiz) → sessão + escopo + orçamento
+// session → pode conter subseções, locais, texto (mas NÃO trecho direto)
+// location → pode conter trechos e texto (mas NÃO seção ou local)
+// null (raiz) → seção + escopo + orçamento
 const ALL_OPTIONS: { type: BlockType; label: string; short: string }[] = [
-  { type: "session",  label: "Sub-sessão",      short: "Sessão"  },
+  { type: "session",  label: "Subseção",        short: "Seção"  },
   { type: "location", label: "Local (ambiente)", short: "Local"   },
   { type: "section",  label: "Trecho",           short: "Trecho"  },
   { type: "text",     label: "Texto livre",      short: "Texto"   },
   { type: "scope",    label: "Bloco Detalhamento do projeto", short: COMPOSITOR_SCOPE_BLOCK_DEFAULT_LABEL },
   { type: "quote",    label: "Bloco Orçamento",  short: "ORÇAMENTO"  },
+  { type: "terms",    label: "Condições gerais", short: "CONDIÇÕES"  },
 ];
 
-function getAddOptions(parentType: string | null, hasScopeBlock: boolean, hasQuoteBlock: boolean): typeof ALL_OPTIONS {
+function getAddOptions(parentType: string | null, hasScopeBlock: boolean, hasQuoteBlock: boolean, hasTermsBlock: boolean): typeof ALL_OPTIONS {
   if (parentType === null) {
     return ALL_OPTIONS.filter((o) => {
       if (o.type === "scope") return !hasScopeBlock; // só se ainda não existe
       if (o.type === "quote") return !hasQuoteBlock; // só se ainda não existe
+      if (o.type === "terms") return !hasTermsBlock; // só se ainda não existe
       return o.type === "session";
     });
   }
   if (parentType === "location") return ALL_OPTIONS.filter((o) => o.type === "section" || o.type === "text");
   // session (e qualquer outro contêiner futuro): session, location, text
-  return ALL_OPTIONS.filter((o) => o.type !== "section" && o.type !== "scope" && o.type !== "quote");
+  return ALL_OPTIONS.filter((o) => o.type !== "section" && o.type !== "scope" && o.type !== "quote" && o.type !== "terms");
 }
 
 /** Pré-visualização no portal: segue o ponteiro com o offset do clique (simétrico pra cima/baixo). */
@@ -244,10 +247,10 @@ function SidebarDragPreview({
       <span
         className={cn(
           "min-w-0 flex-1 truncate text-xs font-medium leading-none",
-          (block.type === "session" || isScope || isHeaderFooter || isQuote || block.type === "toc" || block.type === "figures") && "uppercase"
+          (block.type === "session" || isScope || isHeaderFooter || isQuote || block.type === "terms" || block.type === "toc" || block.type === "figures") && "uppercase"
         )}
       >
-        {isScope ? getScopeBlockLabel(block.label) : isHeaderFooter ? "CABEÇALHO E RODAPÉ" : isQuote ? "ORÇAMENTO" : block.type === "toc" ? "SUMÁRIO" : block.type === "figures" ? "LISTA DE FIGURAS" : (block.label || `(${block.type})`)}
+        {isScope ? getScopeBlockLabel(block.label) : isHeaderFooter ? "CABEÇALHO E RODAPÉ" : isQuote ? "ORÇAMENTO" : block.type === "terms" ? (block.label || "CONDIÇÕES GERAIS") : block.type === "toc" ? "SUMÁRIO" : block.type === "figures" ? "LISTA DE FIGURAS" : (block.label || `(${block.type})`)}
       </span>
     </div>
   );
@@ -263,16 +266,17 @@ interface InlineAdderProps {
   depth: number;
   hasScopeBlock?: boolean;
   hasQuoteBlock?: boolean;
+  hasTermsBlock?: boolean;
   onSuccess: () => void;
   onCancel: () => void;
 }
 
-function InlineAdder({ budgetId, parentId, parentType, depth, hasScopeBlock = false, hasQuoteBlock = false, onSuccess, onCancel }: InlineAdderProps) {
+function InlineAdder({ budgetId, parentId, parentType, depth, hasScopeBlock = false, hasQuoteBlock = false, hasTermsBlock = false, onSuccess, onCancel }: InlineAdderProps) {
   const [selectedType, setSelectedType] = useState<BlockType | null>(null);
   const [label, setLabel] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const options = getAddOptions(parentType, hasScopeBlock, hasQuoteBlock);
+  const options = getAddOptions(parentType, hasScopeBlock, hasQuoteBlock, hasTermsBlock);
   const indentPx = (depth + 1) * 12 + 8;
 
   const handleCreate = async (overrideType?: BlockType, overrideLabel?: string) => {
@@ -294,7 +298,8 @@ function InlineAdder({ budgetId, parentId, parentType, depth, hasScopeBlock = fa
       scope: COMPOSITOR_SCOPE_BLOCK_DEFAULT_LABEL,
       header_footer: "CABEÇALHO E RODAPÉ",
       quote: "ORÇAMENTO",
-      session: "Sessão",
+      terms: "CONDIÇÕES GERAIS",
+      session: "Seção",
     };
     if (type in directCreate) {
       handleCreate(type, directCreate[type]!);
@@ -588,7 +593,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
           </span>
         )}
 
-        {/* Botão [+] — em session: adiciona sub-sessão direto; em location: abre submenu */}
+        {/* Botão [+] — em session: adiciona subseção direto; em location: abre submenu */}
         {canAdd && !isReadOnly && (
           <button
             disabled={addingSubSession}
@@ -596,14 +601,14 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
               e.stopPropagation();
               if (block.type === "session") {
                 setAddingSubSession(true);
-                const result = await addBlockAction({ budgetId, parentId: block.id, type: "session", label: "Sessão" });
+                const result = await addBlockAction({ budgetId, parentId: block.id, type: "session", label: "Seção" });
                 setAddingSubSession(false);
                 if (result.success) {
                   if (result.blockId) onBlockCreated?.(result.blockId);
                   setCollapsed(false);
                   onRefresh();
                 } else {
-                  toast.error(result.error || "Erro ao criar sessão");
+                  toast.error(result.error || "Erro ao criar seção");
                 }
               } else {
                 setAdding((v) => !v);
@@ -617,7 +622,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
                   ? "text-primary-foreground hover:bg-primary-foreground/20"
                   : "text-muted-foreground hover:text-primary hover:bg-muted"
             )}
-            title={block.type === "location" ? "Adicionar trecho ou texto" : "Adicionar sub-sessão"}
+            title={block.type === "location" ? "Adicionar trecho ou texto" : "Adicionar subseção"}
           >
             <Plus className="h-3.5 w-3.5" />
           </button>
@@ -669,7 +674,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
         />
       )}
 
-      {/* Zona de drop: arrastar sessão para dentro desta sessão */}
+      {/* Zona de drop: arrastar seção para dentro desta seção */}
       {block.type === "session" && !isScope && !isReadOnly && isDragActive && (
         <DroppableSessionInto blockId={block.id} depth={depth} />
       )}
@@ -701,6 +706,7 @@ export function CompositorSidebar({
   isReadOnly = false,
 }: CompositorSidebarProps) {
   const [addingRootSession, setAddingRootSession] = useState(false);
+  const [addingRootTerms, setAddingRootTerms] = useState(false);
   const [autoEditId, setAutoEditId] = useState<string | null>(null);
   const [childrenReg, setChildrenReg] = useState<ChildrenReg>(() => buildChildrenReg(roots));
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
@@ -728,6 +734,7 @@ export function CompositorSidebar({
   };
 
   const localRoots = childrenReg[ROOT_KEY] ?? [];
+  const hasTermsRoot = localRoots.some((b) => b.type === "terms");
 
   const collisionDetection = useMemo(() => {
     const map = new Map<string, string | null>();
@@ -750,7 +757,7 @@ export function CompositorSidebar({
 
     const activeBlock = flattenTree(roots).find((b) => b.id === String(active.id));
 
-    // Drop dentro de uma sessão (zona "into:")
+    // Drop dentro de uma seção (zona "into:")
     if (overId.startsWith("into:")) {
       if (
         activeBlock?.type === "cover" ||
@@ -758,9 +765,10 @@ export function CompositorSidebar({
         activeBlock?.type === "figures" ||
         activeBlock?.type === "header_footer" ||
         activeBlock?.type === "quote" ||
+        activeBlock?.type === "terms" ||
         activeBlock?.type === "scope"
       ) {
-        toast.error("Detalhamento do projeto, cabeçalho/rodapé, orçamento, capa, sumário e lista de figuras só podem ficar na raiz do documento.");
+        toast.error("Detalhamento do projeto, cabeçalho/rodapé, orçamento, condições gerais, capa, sumário e lista de figuras só podem ficar na raiz do documento.");
         return;
       }
       const targetParentId = overId.slice(5);
@@ -771,9 +779,9 @@ export function CompositorSidebar({
       moveBlockToParentAction(String(active.id), targetParentId, budgetId)
         .then((r) => {
           if (r.success) onRefresh();
-          else { toast.error(r.error || "Erro ao mover sessão"); onRefresh(); }
+          else { toast.error(r.error || "Erro ao mover seção"); onRefresh(); }
         })
-        .catch(() => { toast.error("Erro ao mover sessão"); onRefresh(); });
+        .catch(() => { toast.error("Erro ao mover seção"); onRefresh(); });
       return;
     }
 
@@ -784,12 +792,13 @@ export function CompositorSidebar({
       (activeBlock?.type === "scope" ||
         activeBlock?.type === "header_footer" ||
         activeBlock?.type === "quote" ||
+        activeBlock?.type === "terms" ||
         activeBlock?.type === "cover" ||
         activeBlock?.type === "toc" ||
         activeBlock?.type === "figures") &&
       overParentId !== null
     ) {
-      toast.error("Detalhamento do projeto, cabeçalho/rodapé, orçamento, capa, sumário e lista de figuras só podem ser reordenados na raiz.");
+      toast.error("Detalhamento do projeto, cabeçalho/rodapé, orçamento, condições gerais, capa, sumário e lista de figuras só podem ser reordenados na raiz.");
       return;
     }
 
@@ -810,9 +819,9 @@ export function CompositorSidebar({
       moveBlockToParentAction(String(active.id), overParentId, budgetId)
         .then((r) => {
           if (r.success) onRefresh();
-          else { toast.error(r.error || "Erro ao mover sessão"); onRefresh(); }
+          else { toast.error(r.error || "Erro ao mover seção"); onRefresh(); }
         })
-        .catch(() => { toast.error("Erro ao mover sessão"); onRefresh(); });
+        .catch(() => { toast.error("Erro ao mover seção"); onRefresh(); });
     }
   };
 
@@ -881,7 +890,7 @@ export function CompositorSidebar({
           <nav className="p-1.5 space-y-0">
             {localRoots.length === 0 && !addingRootSession && (
               <p className="text-xs text-muted-foreground px-2 py-4 text-center">
-                Adicione uma sessão para começar.
+                Adicione uma seção para começar.
               </p>
             )}
             <DndContext
@@ -932,9 +941,9 @@ export function CompositorSidebar({
           </nav>
         </div>
 
-        {/* Rodapé: nova sessão raiz — oculto em isReadOnly */}
+        {/* Rodapé: novos blocos raiz — oculto em isReadOnly */}
         {!isReadOnly && (
-          <div className="p-2 border-t shrink-0">
+          <div className="space-y-1.5 p-2 border-t shrink-0">
             <Button
               variant="outline"
               size="sm"
@@ -942,19 +951,50 @@ export function CompositorSidebar({
               disabled={addingRootSession}
               onClick={async () => {
                 setAddingRootSession(true);
-                const result = await addBlockAction({ budgetId, parentId: null, type: "session", label: "Sessão" });
+                const result = await addBlockAction({ budgetId, parentId: null, type: "session", label: "Seção" });
                 setAddingRootSession(false);
                 if (result.success) {
                   if (result.blockId) setAutoEditId(result.blockId);
                   onRefresh();
                 } else {
-                  toast.error(result.error || "Erro ao criar sessão");
+                  toast.error(result.error || "Erro ao criar seção");
                 }
               }}
             >
               <Plus className="h-3.5 w-3.5" />
-              {addingRootSession ? "Criando..." : "Adicionar Sessão"}
+              {addingRootSession ? "Criando..." : "Adicionar Seção"}
             </Button>
+            {!hasTermsRoot ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full text-xs gap-1.5"
+                disabled={addingRootTerms}
+                onClick={async () => {
+                  setAddingRootTerms(true);
+                  const result = await addBlockAction({
+                    budgetId,
+                    parentId: null,
+                    type: "terms",
+                    label: "CONDIÇÕES GERAIS",
+                    props: {
+                      description:
+                        "<p>Termos Gerais:</p><p>1. Validade da Proposta: 15 dias.</p><p>2. Prazo de Entrega: 45 dias úteis após medição final.</p><p>3. Garantia: 5 anos contra defeitos de fabricação.</p>",
+                    },
+                  });
+                  setAddingRootTerms(false);
+                  if (result.success) {
+                    if (result.blockId) setAutoEditId(result.blockId);
+                    onRefresh();
+                  } else {
+                    toast.error(result.error || "Erro ao criar condições gerais");
+                  }
+                }}
+              >
+                <FileText className="h-3.5 w-3.5" />
+                {addingRootTerms ? "Criando..." : "Adicionar Condições"}
+              </Button>
+            ) : null}
           </div>
         )}
       </div>

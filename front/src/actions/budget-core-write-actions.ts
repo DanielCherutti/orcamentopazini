@@ -84,6 +84,16 @@ export async function createBudgetAction(title: string, code: string) {
             props: {},
         });
         await addBlockAction({ budgetId: createdBudget.id!, parentId: null, type: "scope", label: COMPOSITOR_SCOPE_BLOCK_DEFAULT_LABEL });
+        await addBlockAction({
+            budgetId: createdBudget.id!,
+            parentId: null,
+            type: "terms",
+            label: "CONDIÇÕES GERAIS",
+            props: {
+                description:
+                    "<p>Termos Gerais:</p><p>1. Validade da Proposta: 15 dias.</p><p>2. Prazo de Entrega: 45 dias úteis após medição final.</p><p>3. Garantia: 5 anos contra defeitos de fabricação.</p>",
+            },
+        });
 
         revalidatePath("/budgets");
 

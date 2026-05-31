@@ -903,8 +903,11 @@ export function AdvancedImageAnnotator({
         try {
             // Deselecionar para não capturar borda do Transformer na imagem exportada
             setSelectedAnnotationId(null);
-            // Aguardar re-render para o Transformer sumir do canvas
-            await new Promise(r => setTimeout(r, 50));
+            setIsExportingComposedImage(true);
+            // Aguardar o React/Konva redesenhar sem Transformer e sem guias visuais.
+            await new Promise<void>((resolve) => requestAnimationFrame(() => {
+                requestAnimationFrame(() => resolve());
+            }));
 
             const stage = stageRef.current;
             if (!stage) {
@@ -916,8 +919,6 @@ export function AdvancedImageAnnotator({
             const savedScale = stage.scaleX();
             const savedPos = { x: stage.x(), y: stage.y() };
 
-            // Fazer reset, export e restore no mesmo frame de animação para evitar "pulinho" visual
-            setIsExportingComposedImage(true);
             const blob = await new Promise<Blob>((resolve, reject) => {
                 requestAnimationFrame(() => {
                     stage.scale({ x: 1, y: 1 });

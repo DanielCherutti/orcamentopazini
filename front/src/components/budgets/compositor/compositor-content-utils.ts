@@ -29,7 +29,7 @@ export { buildItemSegments, type ItemSegment } from "@/lib/budgets/item-group-se
 /** Referência estável para listas vazias (evita loop setState no SectionRenderer). */
 export const EMPTY_ITEMS: BudgetItem[] = [];
 
-/** Rótulo padrão do painel Compositor (editável; usado no PDF nas páginas de sessão). */
+/** Rótulo padrão do painel Compositor (editável; usado no PDF nas páginas de seção). */
 export const DEFAULT_COMPOSITOR_PANEL_LABEL = "Compositor";
 
 export function getCompositorPanelLabel(label: string | null | undefined): string {
