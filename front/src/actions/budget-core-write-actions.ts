@@ -246,11 +246,22 @@ export async function syncDraftPricesAction(
         const db = await getDb();
         const budgetRecordId = requireRecordId("budget", budgetId);
 
-        const itemsRes = await db.query<[Array<Record<string, unknown>>]>(
-            "SELECT * FROM budget_item WHERE block_id.budget_id = $budgetId FETCH product_id",
-            { budgetId: budgetRecordId }
-        );
-        const items = itemsRes[0] || [];
+        const itemQueries = [
+            "SELECT * FROM budget_item WHERE block_id.budget_id = $budgetId AND deleted_at IS NONE FETCH product_id",
+            "SELECT * FROM budget_item WHERE budget_id = $budgetId AND section_id IS NOT NONE AND deleted_at IS NONE FETCH product_id",
+            "SELECT * FROM budget_item WHERE section_id.location_id.budget_id = $budgetId AND deleted_at IS NONE FETCH product_id",
+            "SELECT * FROM budget_item WHERE section_id.budget_id = $budgetId AND deleted_at IS NONE FETCH product_id",
+        ];
+        const itemsById = new Map<string, Record<string, unknown>>();
+        for (const query of itemQueries) {
+            const itemsRes = await db.query<[Array<Record<string, unknown>>]>(query, {
+                budgetId: budgetRecordId,
+            });
+            for (const item of itemsRes[0] || []) {
+                itemsById.set(String(item.id), item);
+            }
+        }
+        const items = Array.from(itemsById.values());
 
         let updatedCount = 0;
         for (const item of items) {
@@ -332,6 +343,18 @@ function nestedBudgetFromItem(item: Record<string, unknown>): Record<string, unk
         const budget = s.budget_id;
         if (budget && typeof budget === "object" && !Array.isArray(budget)) {
             return budget as Record<string, unknown>;
+        }
+        const location = s.location_id;
+        if (location && typeof location === "object" && !Array.isArray(location)) {
+            const loc = location as Record<string, unknown>;
+            const locationBudget = loc.budget_id;
+            if (
+                locationBudget &&
+                typeof locationBudget === "object" &&
+                !Array.isArray(locationBudget)
+            ) {
+                return locationBudget as Record<string, unknown>;
+            }
         }
     }
     return null;
@@ -478,7 +501,7 @@ export async function syncProductCatalogToDraftBudgetItemsAction(
         const laborCost = snapshot.assemblyPrice;
 
         const itemsRes = await db.query<[Array<Record<string, unknown>>]>(
-            "SELECT * FROM budget_item WHERE product_id = $pid AND deleted_at IS NONE FETCH block_id, section_id, block_id.budget_id, section_id.budget_id",
+            "SELECT * FROM budget_item WHERE product_id = $pid AND deleted_at IS NONE FETCH block_id, section_id, block_id.budget_id, section_id.budget_id, section_id.location_id, section_id.location_id.budget_id",
             { pid: productRecordId }
         );
         const items = itemsRes[0] || [];

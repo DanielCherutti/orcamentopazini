@@ -3,7 +3,7 @@
 import { memo, useCallback, useEffect, useMemo, useState, type FocusEvent } from "react";
 import { getBudgetQuoteTabDataAction } from "@/actions/budget-actions";
 import type { BudgetQuoteTabLocationBreakdown } from "@/actions/budget-core-read-actions";
-import { updateBudgetAction } from "@/actions/budget-core-write-actions";
+import { syncDraftPricesAction, updateBudgetAction } from "@/actions/budget-core-write-actions";
 import type { Budget } from "@/types/budget-types";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -257,6 +257,7 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
     const refreshQuoteValues = useCallback(async () => {
         if (!isReadOnly) {
             await updateBudgetAction(budgetId, buildQuoteSplitPercentPatch());
+            await syncDraftPricesAction(budgetId);
             await onBudgetRefresh?.();
         }
         await load();
