@@ -263,23 +263,26 @@ function PositionedHeaderFooterText({
     const columnWidth = Number(box.width ?? 0) / Math.max(1, columns.length);
     return (
       <>
-        {columns.map((column, index) => (
-          <Text
-            key={`${element.id}-col-${index}`}
-            style={[
-              textStyleWithoutLineHeight(textBoxStyle(element)),
-              {
-                ...box,
-                left: Number(box.left ?? 0) + columnWidth * index,
-                width: columnWidth,
-                borderRightWidth: index < columns.length - 1 ? 0.5 : undefined,
-                borderRightColor: index < columns.length - 1 ? "#d1d5db" : undefined,
-              },
-            ]}
-          >
-            {sanitizeTextForPdf(column)}
-          </Text>
-        ))}
+        {columns.map((column, index) => {
+          const dividerStyle =
+            index < columns.length - 1 ? { borderRightWidth: 0.5, borderRightColor: "#d1d5db" } : {};
+          return (
+            <Text
+              key={`${element.id}-col-${index}`}
+              style={[
+                textStyleWithoutLineHeight(textBoxStyle(element)),
+                {
+                  ...box,
+                  left: Number(box.left ?? 0) + columnWidth * index,
+                  width: columnWidth,
+                  ...dividerStyle,
+                },
+              ]}
+            >
+              {sanitizeTextForPdf(column)}
+            </Text>
+          );
+        })}
       </>
     );
   }
