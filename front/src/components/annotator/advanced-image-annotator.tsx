@@ -923,6 +923,9 @@ export function AdvancedImageAnnotator({
                 requestAnimationFrame(() => {
                     stage.scale({ x: 1, y: 1 });
                     stage.position({ x: 0, y: 0 });
+                    const displayFrameGuideLayer = stage.findOne(".display-frame-guide");
+                    const displayFrameGuideWasVisible = displayFrameGuideLayer?.visible() ?? false;
+                    displayFrameGuideLayer?.visible(false);
                     stage.batchDraw();
 
                     const bbox = computeAnnotatorContentBBox(annotations, imageOffset, imageSize);
@@ -936,6 +939,7 @@ export function AdvancedImageAnnotator({
                     });
 
                     // Restaurar zoom/pan antes de qualquer await, no mesmo frame
+                    displayFrameGuideLayer?.visible(displayFrameGuideWasVisible);
                     stage.scale({ x: savedScale, y: savedScale });
                     stage.position(savedPos);
                     stage.batchDraw();

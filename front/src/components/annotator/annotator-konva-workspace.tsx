@@ -223,7 +223,7 @@ export function AnnotatorKonvaWorkspace({
                         displayFrameGuide &&
                         displayFrameGuide.width > 0 &&
                         displayFrameGuide.height > 0 && (
-                            <Layer listening={false}>
+                            <Layer name="display-frame-guide" listening={false}>
                                 <Rect
                                     x={displayFrameGuide.x}
                                     y={displayFrameGuide.y}

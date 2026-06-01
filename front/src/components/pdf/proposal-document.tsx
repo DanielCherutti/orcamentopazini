@@ -140,6 +140,8 @@ const EDITOR_A4_HEIGHT_PX = 1122;
 const EDITOR_PX_TO_PT = PDF_PAGE_H / EDITOR_A4_HEIGHT_PX;
 const ABNT_PARAGRAPH_INDENT = "\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0";
 const QUOTE_MONEY_COL_W = 84;
+const QUOTE_HEADER_KEEP_WITH_NEXT_PT = 58;
+const QUOTE_TAIL_KEEP_WITH_TOTAL_PT = 72;
 
 const styles = StyleSheet.create({
     pageWithWatermark: {
@@ -318,7 +320,7 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#e5e7eb',
         backgroundColor: '#eff6ff',
-        paddingVertical: 10,
+        paddingVertical: 8,
         paddingHorizontal: 12,
     },
     quoteHeaderTitle: {
@@ -334,7 +336,7 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#e5e7eb',
         backgroundColor: '#f9fafb',
-        paddingVertical: 8,
+        paddingVertical: 6,
         paddingHorizontal: 4,
     },
     quoteHeaderCell: {
@@ -349,7 +351,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         borderBottomWidth: 0.5,
         borderBottomColor: '#f1f5f9',
-        paddingVertical: 7,
+        paddingVertical: 6,
         paddingHorizontal: 4,
         alignItems: 'center',
     },
@@ -402,7 +404,7 @@ const styles = StyleSheet.create({
         borderTopWidth: 2,
         borderTopColor: '#fcd34d',
         backgroundColor: '#fef3c7',
-        paddingVertical: 10,
+        paddingVertical: 8,
         paddingHorizontal: 4,
         alignItems: 'center',
     },
@@ -429,7 +431,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#fffbeb',
         borderTopWidth: 1,
         borderTopColor: '#fde68a',
-        paddingVertical: 6,
+        paddingVertical: 4,
         paddingHorizontal: 4,
     },
     quoteFooterLabel: {
@@ -1843,12 +1845,20 @@ export const ProposalDocument = ({
                         <Text style={styles.quoteBudgetCode}>{budgetCodeLabel}</Text>
                         {quoteLocationsForPdf.length > 0 ? (
                             <View style={styles.quoteCard}>
-                                <View style={styles.quoteHeaderBar}>
+                                <View
+                                    style={styles.quoteHeaderBar}
+                                    wrap={false}
+                                    minPresenceAhead={QUOTE_HEADER_KEEP_WITH_NEXT_PT}
+                                >
                                     <Text style={styles.quoteHeaderTitle}>
                                         Custos de equipamentos — Pazini
                                     </Text>
                                 </View>
-                                <View style={styles.quoteTableHeader}>
+                                <View
+                                    style={styles.quoteTableHeader}
+                                    wrap={false}
+                                    minPresenceAhead={QUOTE_HEADER_KEEP_WITH_NEXT_PT}
+                                >
                                     <Text style={[styles.quoteHeaderCell, { width: 32 }]}>Nº</Text>
                                     <Text style={[styles.quoteHeaderCell, { flex: 1 }]}>Local / trecho</Text>
                                     <Text style={[styles.quoteHeaderCell, { width: QUOTE_MONEY_COL_W, textAlign: 'right' }]}>
@@ -1877,9 +1887,19 @@ export const ProposalDocument = ({
                                         quotePercents.markupAsm,
                                         quotePercents.discountAsm
                                     );
+                                    const isLastLocation = locIdx === quoteLocationsForPdf.length - 1;
+                                    const lastLocationHasPrintableSections = quoteShowSections && loc.sections.length > 0;
                                     return (
                                         <View key={`q-loc-${loc.id}`}>
-                                            <View style={[styles.quoteRow, styles.quoteLocRow]}>
+                                            <View
+                                                style={[styles.quoteRow, styles.quoteLocRow]}
+                                                wrap={false}
+                                                minPresenceAhead={
+                                                    isLastLocation && !lastLocationHasPrintableSections
+                                                        ? QUOTE_TAIL_KEEP_WITH_TOTAL_PT
+                                                        : 0
+                                                }
+                                            >
                                                 <Text style={[styles.quoteColIndex, { fontFamily: theme.fonts.bold }]}>
                                                     {sanitizeTextForPdf(String(locIdx + 1))}
                                                 </Text>
@@ -1906,9 +1926,17 @@ export const ProposalDocument = ({
                                                     quotePercents.markupAsm,
                                                     quotePercents.discountAsm
                                                 );
+                                                const isLastSection =
+                                                    isLastLocation && secIdx === loc.sections.length - 1;
                                                 return (
                                                     <View key={`q-sec-${loc.id}-${sec.id}`}>
-                                                        <View style={[styles.quoteRow, styles.quoteSecRow]}>
+                                                        <View
+                                                            style={[styles.quoteRow, styles.quoteSecRow]}
+                                                            wrap={false}
+                                                            minPresenceAhead={
+                                                                isLastSection ? QUOTE_TAIL_KEEP_WITH_TOTAL_PT : 0
+                                                            }
+                                                        >
                                                             <Text style={[styles.quoteColIndex, { color: theme.colors.textLight }]}>
                                                                 {sanitizeTextForPdf(secNumber)}
                                                             </Text>
@@ -1960,7 +1988,11 @@ export const ProposalDocument = ({
                                     );
                                     return (
                                         <>
-                                            <View style={styles.quoteTotalRow}>
+                                            <View
+                                                style={styles.quoteTotalRow}
+                                                wrap={false}
+                                                minPresenceAhead={24}
+                                            >
                                                 <Text style={{ width: 32 }} />
                                                 <Text style={styles.quoteTotalLabel}>Totais</Text>
                                                 <Text style={styles.quoteTotalValue}>
@@ -1970,7 +2002,7 @@ export const ProposalDocument = ({
                                                     {formatMoney(totals.assembly)}
                                                 </Text>
                                             </View>
-                                            <View style={styles.quoteFooterLabelsRow}>
+                                            <View style={styles.quoteFooterLabelsRow} wrap={false}>
                                                 <Text style={{ width: 32 }} />
                                                 <View style={{ flex: 1 }} />
                                                 <Text style={styles.quoteFooterLabel}>Equipamentos</Text>

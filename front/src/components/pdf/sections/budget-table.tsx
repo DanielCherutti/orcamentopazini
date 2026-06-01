@@ -37,10 +37,10 @@ const styles = StyleSheet.create({
         fontFamily: theme.fonts.boldOblique,
     },
     sectionBlock: {
-        marginBottom: 16,
+        marginBottom: 12,
         paddingLeft: 0,
         borderWidth: 1,
-        borderColor: '#e5e7eb',
+        borderColor: '#d8dee9',
         borderRadius: 8,
         backgroundColor: '#ffffff',
         padding: 8,
@@ -82,59 +82,88 @@ const styles = StyleSheet.create({
     },
     sceneGrid: {
         width: '100%',
+        alignItems: 'center',
     },
     sceneGridRow: {
         flexDirection: 'row',
         gap: 8,
         width: '100%',
-        marginBottom: 8,
+        marginBottom: 6,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     sceneCard: {
         flex: 1,
-        height: 230,
-        borderWidth: 1,
-        borderColor: '#cbd5e1',
-        borderRadius: 7,
+        height: 228,
+        borderWidth: 0,
+        borderColor: '#ffffff',
+        borderRadius: 4,
         backgroundColor: '#ffffff',
-        padding: 6,
+        padding: 2,
+    },
+    sceneCardFull: {
+        flexGrow: 0,
+        flexShrink: 0,
+        flexBasis: 390,
+        width: 390,
+        height: 258,
+        alignSelf: 'center',
     },
     sceneCardSpacer: {
         flex: 1,
     },
     sceneImageFrame: {
         width: '100%',
-        height: 144,
+        height: 190,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#f8fafc',
-        borderWidth: 0.5,
-        borderColor: '#e5e7eb',
-        borderRadius: 5,
-        marginBottom: 5,
+        backgroundColor: '#ffffff',
+        borderWidth: 0,
+        borderColor: '#ffffff',
+        borderRadius: 0,
+        marginBottom: 1,
+    },
+    sceneImageFrameFull: {
+        height: 218,
     },
     sceneImage: {
         width: '100%',
         height: '100%',
-        marginBottom: 10,
         objectFit: 'contain',
         objectPosition: 'center',
     },
-    sceneCaptionNumber: {
+    sceneCaptionRow: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'baseline',
+        width: '100%',
+        paddingHorizontal: 8,
+        gap: 6,
+    },
+    sceneCaptionLabel: {
         fontSize: 8,
         fontFamily: theme.fonts.bold,
         color: theme.colors.text,
-        marginBottom: 2,
+        flexShrink: 0,
     },
     sceneCaption: {
-        fontSize: 8,
-        color: theme.colors.text,
-        lineHeight: 1.25,
-        maxLines: 5,
-    },
-    sceneMeta: {
-        marginTop: 2,
-        fontSize: 7,
+        fontSize: 7.5,
         color: theme.colors.textLight,
+        fontFamily: theme.fonts.oblique,
+        lineHeight: 1.2,
+        maxLines: 3,
+        textAlign: 'center',
+        flexShrink: 1,
+        maxWidth: 280,
+    },
+    sceneObservation: {
+        marginTop: 1,
+        fontSize: 6.6,
+        color: theme.colors.textLight,
+        fontFamily: theme.fonts.oblique,
+        lineHeight: 1.15,
+        maxLines: 2,
+        textAlign: 'center',
     },
     pdfPageRoot: {
         width: '100%',
@@ -165,7 +194,7 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#d1d5db',
         borderStyle: 'solid',
-        paddingVertical: 6,
+        paddingVertical: 5,
         paddingHorizontal: 6,
         backgroundColor: '#f3f4f6',
     },
@@ -201,7 +230,7 @@ const styles = StyleSheet.create({
     },
     tableRow: {
         flexDirection: 'row',
-        paddingVertical: 7,
+        paddingVertical: 6,
         paddingHorizontal: 6,
         alignItems: 'center',
     },
@@ -214,16 +243,16 @@ const styles = StyleSheet.create({
     subtotalRow: {
         flexDirection: 'row',
         justifyContent: 'flex-end',
-        marginTop: 6,
+        marginTop: 4,
         backgroundColor: '#f8fafc',
         borderWidth: 1,
         borderColor: '#e2e8f0',
         borderRadius: 6,
-        paddingVertical: 5,
+        paddingVertical: 4,
         paddingHorizontal: 8,
     },
 
-    textSmall: { fontSize: 9, color: theme.colors.text },
+    textSmall: { fontSize: 8.7, color: theme.colors.text },
     textBold: { fontFamily: theme.fonts.bold, color: theme.colors.text },
     itemObservationText: { fontFamily: theme.fonts.boldOblique }
 });
@@ -378,7 +407,11 @@ function SectionItemsTable({
     const items = sec.items ?? [];
     return (
         <View style={styles.table} wrap>
-            <View wrap={false} style={styles.tableHeaderShell}>
+            <View
+                wrap={false}
+                style={styles.tableHeaderShell}
+                minPresenceAhead={items.length > 0 ? TABLE_HEADER_KEEP_WITH_NEXT_PT : 0}
+            >
                 <SectionTableHeader showCosts={showCosts} laborCols={laborCols} />
             </View>
             {items.map((item, idx) => {
@@ -446,13 +479,21 @@ function SectionItemsTable({
                 );
                 if (!isLastRow) {
                     return (
-                        <View key={item.id} wrap={false}>
+                        <View
+                            key={item.id}
+                            wrap={false}
+                            minPresenceAhead={idx >= items.length - 3 ? TABLE_TAIL_KEEP_TOGETHER_PT : 0}
+                        >
                             {rowBlock}
                         </View>
                     );
                 }
                 return (
-                    <View key={item.id} wrap={false}>
+                    <View
+                        key={item.id}
+                        wrap={false}
+                        minPresenceAhead={showCosts && costsDisplayMode === 'section' ? 28 : 0}
+                    >
                         {rowBlock}
                         <View style={styles.tableEndCap} />
                     </View>
@@ -513,15 +554,21 @@ function figureCaption(sceneImg: BudgetImage): string {
     return caption || 'Sem descrição';
 }
 
-function figureMeta(sceneImg: BudgetImage): string {
-    const w = Number(sceneImg.width ?? 0);
-    const h = Number(sceneImg.height ?? 0);
-    const size = w > 0 && h > 0 ? `${Math.round(w)} × ${Math.round(h)}px` : '';
-    const hasAnnotations = (sceneImg.annotations?.length ?? 0) > 0;
-    return [size, hasAnnotations ? 'com anotações' : 'sem anotações'].filter(Boolean).join(' · ');
+function figureObservation(sceneImg: BudgetImage): string {
+    const row = sceneImg as unknown as Record<string, unknown>;
+    const raw =
+        row.observation_text ??
+        row.observation ??
+        row.notes ??
+        row.note ??
+        '';
+    return stripHtmlToText(String(raw)).replace(/\s+/g, ' ').trim();
 }
 
-const SCENE_TITLE_KEEP_WITH_NEXT_PT = 176;
+const SCENE_TITLE_KEEP_WITH_NEXT_PT = 210;
+const SECTION_TABLE_TITLE_KEEP_WITH_NEXT_PT = 88;
+const TABLE_HEADER_KEEP_WITH_NEXT_PT = 46;
+const TABLE_TAIL_KEEP_TOGETHER_PT = 58;
 
 function chunkPairs<T>(items: T[]): Array<[T, T | undefined]> {
     const out: Array<[T, T | undefined]> = [];
@@ -538,6 +585,7 @@ function SceneImageCard({
     pdfImagePublicBase,
     pdfEmbeddedImages,
     figurePageCollector,
+    fullWidth = false,
 }: {
     sceneImg: BudgetImage;
     imageKey: string;
@@ -545,15 +593,21 @@ function SceneImageCard({
     pdfImagePublicBase?: string;
     pdfEmbeddedImages?: PdfEmbeddedImages;
     figurePageCollector?: { segmentStartPages: Record<string, number> };
+    fullWidth?: boolean;
 }) {
-    // Prioriza imagem composta (com anotações), com fallback para a original.
+    // Prioriza a imagem composta, com fallback para a original.
     const raw = sceneImg?.composed_url || sceneImg?.url;
     if (!raw) return null;
     const src = proxyPdfImageSrc(raw, pdfImagePublicBase, pdfEmbeddedImages) ?? raw;
     const figureId = sceneImg?.id ? String(sceneImg.id) : undefined;
+    const observation = figureObservation(sceneImg);
 
     return (
-        <View key={imageKey} style={styles.sceneCard} wrap={false}>
+        <View
+            key={imageKey}
+            style={[styles.sceneCard, ...(fullWidth ? [styles.sceneCardFull] : [])]}
+            wrap={false}
+        >
             {figurePageCollector && figureId ? (
                 <View
                     render={({ pageNumber }: { pageNumber: number }) => {
@@ -585,16 +639,25 @@ function SceneImageCard({
                 />
             ) : null}
             <View wrap={false}>
-                <View style={styles.sceneImageFrame}>
+                <View
+                    style={[
+                        styles.sceneImageFrame,
+                        ...(fullWidth ? [styles.sceneImageFrameFull] : []),
+                    ]}
+                >
                     {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt prop */}
                     <Image src={src} style={styles.sceneImage} />
                 </View>
-                <Text style={styles.sceneCaptionNumber}>{sanitizeTextForPdf(figureLabel)}</Text>
+                <View style={styles.sceneCaptionRow}>
+                    <Text style={styles.sceneCaptionLabel}>{sanitizeTextForPdf(figureLabel)}</Text>
+                    <Text style={styles.sceneCaption}>{sanitizeTextForPdf(figureCaption(sceneImg))}</Text>
+                </View>
             </View>
-            <Text style={styles.sceneCaption}>
-                {sanitizeTextForPdf(figureCaption(sceneImg))}
-            </Text>
-            <Text style={styles.sceneMeta}>{sanitizeTextForPdf(figureMeta(sceneImg))}</Text>
+            {observation ? (
+                <Text style={styles.sceneObservation}>
+                    {sanitizeTextForPdf(`Obs: ${observation}`)}
+                </Text>
+            ) : null}
         </View>
     );
 }
@@ -615,6 +678,7 @@ function SceneImagesGrid({
     lead?: React.ReactNode;
 }) {
     const rows = chunkPairs(images);
+    const singleImage = images.length === 1;
     const renderRow = ([left, right]: [BudgetImage, BudgetImage | undefined], rowIdx: number) => (
         <View key={`scene-row-${rowIdx}`} style={styles.sceneGridRow} wrap={false}>
             <SceneImageCard
@@ -624,6 +688,7 @@ function SceneImagesGrid({
                 pdfImagePublicBase={pdfImagePublicBase}
                 pdfEmbeddedImages={pdfEmbeddedImages}
                 figurePageCollector={figurePageCollector}
+                fullWidth={singleImage}
             />
             {right ? (
                 <SceneImageCard
@@ -634,7 +699,7 @@ function SceneImagesGrid({
                     pdfEmbeddedImages={pdfEmbeddedImages}
                     figurePageCollector={figurePageCollector}
                 />
-            ) : (
+            ) : singleImage ? null : (
                 <View style={styles.sceneCardSpacer} />
             )}
         </View>
@@ -742,6 +807,8 @@ export function BudgetTable({
         );
     };
 
+    let printedSectionCount = 0;
+
     for (const [locIdx, loc] of locations.entries()) {
         const locNum = `${sectionNumber}.${locIdx + 1}`;
         const locLabel = singleLinePdfLabel(loc.name);
@@ -796,11 +863,6 @@ export function BudgetTable({
                     </View>
                 </View>
             );
-        } else if (sections.length > 0) {
-            pushPdfPage(
-                `${locId}-loc-header`,
-                <View style={styles.locationBlock}>{locationHeader}</View>
-            );
         }
 
         for (const [secIdx, sec] of sections.entries()) {
@@ -812,7 +874,11 @@ export function BudgetTable({
             const sectionTitleLead = (
                 <View
                     style={styles.sectionHeaderWrap}
-                    minPresenceAhead={SCENE_TITLE_KEEP_WITH_NEXT_PT}
+                    minPresenceAhead={
+                        sceneList.length > 0
+                            ? SCENE_TITLE_KEEP_WITH_NEXT_PT
+                            : SECTION_TABLE_TITLE_KEEP_WITH_NEXT_PT
+                    }
                 >
                     <Text style={styles.sectionHeaderText}>
                         {sanitizeTextForPdf(`${secNum} — ${secLabel}`)}
@@ -820,11 +886,17 @@ export function BudgetTable({
                 </View>
             );
 
+            const sectionBreakBefore = printedSectionCount > 0 || locHasPhotos;
+
             if (sceneList.length > 0) {
                 const hasItems = (sec.items?.length ?? 0) > 0;
-                pushPdfPage(
-                    `${locId}-${secId}-scenes`,
-                    <View style={[styles.sectionBlock, styles.sectionPageBlock]}>
+                pushFlowBlock(
+                    `${locId}-${secId}-content`,
+                    <View
+                        style={[styles.sectionBlock, styles.sectionPageBlock]}
+                        minPresenceAhead={SCENE_TITLE_KEEP_WITH_NEXT_PT}
+                        break={sectionBreakBefore}
+                    >
                         <SceneImagesGrid
                             images={sceneList}
                             figureLabelFor={(_image, index) => `Figura ${index + 1}`}
@@ -833,13 +905,7 @@ export function BudgetTable({
                             figurePageCollector={figurePageCollector}
                             lead={sectionTitleLead}
                         />
-                    </View>
-                );
-
-                if (hasItems) {
-                    pushFlowBlock(
-                        `${locId}-${secId}-items`,
-                        <View style={styles.sectionBlock}>
+                        {hasItems ? (
                             <SectionItemsTable
                                 sec={sec}
                                 showCosts={showCosts}
@@ -847,17 +913,18 @@ export function BudgetTable({
                                 costsDisplayMode={costsDisplayMode}
                                 itemFinalValue={itemFinalValue}
                             />
-                        </View>
-                    );
-                }
-            } else {
-                pushPdfPage(
-                    `${locId}-${secId}-table-head`,
-                    <View style={styles.sectionBlock}>{sectionTitleLead}</View>
+                        ) : null}
+                    </View>
                 );
+            } else {
                 pushFlowBlock(
-                    `${locId}-${secId}-table`,
-                    <View style={styles.sectionBlock}>
+                    `${locId}-${secId}-content`,
+                    <View
+                        style={styles.sectionBlock}
+                        minPresenceAhead={SECTION_TABLE_TITLE_KEEP_WITH_NEXT_PT}
+                        break={sectionBreakBefore}
+                    >
+                        {sectionTitleLead}
                         <SectionItemsTable
                             sec={sec}
                             showCosts={showCosts}
@@ -868,6 +935,7 @@ export function BudgetTable({
                     </View>
                 );
             }
+            printedSectionCount += 1;
         }
 
         if (sections.length === 0) {
