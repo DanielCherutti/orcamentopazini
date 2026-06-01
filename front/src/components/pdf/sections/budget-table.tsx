@@ -95,8 +95,6 @@ const styles = StyleSheet.create({
     sceneCard: {
         flex: 1,
         height: 228,
-        borderWidth: 0,
-        borderColor: '#ffffff',
         borderRadius: 4,
         backgroundColor: '#ffffff',
         padding: 2,
@@ -118,8 +116,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#ffffff',
-        borderWidth: 0,
-        borderColor: '#ffffff',
         borderRadius: 0,
         marginBottom: 1,
     },
