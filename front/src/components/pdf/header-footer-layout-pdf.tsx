@@ -354,7 +354,7 @@ export function renderTextWithPageNumbers(
 function elementBoxStyle(element: HeaderFooterCanvasElement, width: number, height: number): Style {
   const boxWidth = (clamp(element.width_pct, 1, 100) / 100) * width;
   const boxHeight = (clamp(element.height_pct, 1, 100) / 100) * height;
-  return {
+  return compactPdfStyle({
     position: "absolute" as const,
     left: (clamp(element.x_pct, 0, 100) / 100) * width,
     top: (clamp(element.y_pct, 0, 100) / 100) * height,
@@ -370,13 +370,13 @@ function elementBoxStyle(element: HeaderFooterCanvasElement, width: number, heig
       : {}),
     padding: editorPxToPt(element.padding ?? 4),
     transform: element.rotate_deg ? `rotate(${element.rotate_deg}deg)` : undefined,
-  };
+  });
 }
 
 function imageBoxStyle(element: HeaderFooterCanvasElement, width: number, height: number): Style {
   const boxWidth = (clamp(element.width_pct, 1, 100) / 100) * width;
   const boxHeight = (clamp(element.height_pct, 1, 100) / 100) * height;
-  return {
+  return compactPdfStyle({
     position: "absolute" as const,
     left: (clamp(element.x_pct, 0, 100) / 100) * width,
     top: (clamp(element.y_pct, 0, 100) / 100) * height,
@@ -386,7 +386,7 @@ function imageBoxStyle(element: HeaderFooterCanvasElement, width: number, height
     objectPosition: "center",
     opacity: clamp(element.opacity ?? 1, 0, 1),
     transform: element.rotate_deg ? `rotate(${element.rotate_deg}deg)` : undefined,
-  };
+  });
 }
 
 function textBoxStyle(element: HeaderFooterCanvasElement): Style {
@@ -408,6 +408,12 @@ function editorPxToPt(value: unknown): number {
 function textStyleWithoutLineHeight(style: Style): Style {
   const { lineHeight: _lineHeight, ...rest } = style;
   return rest;
+}
+
+function compactPdfStyle(style: Style): Style {
+  return Object.fromEntries(
+    Object.entries(style).filter(([, value]) => value !== undefined)
+  ) as Style;
 }
 
 function formatManualPageNumber(template: string, pageNumber: number, totalPages: number): string {
