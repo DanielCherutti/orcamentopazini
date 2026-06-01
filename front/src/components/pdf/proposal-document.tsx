@@ -305,7 +305,10 @@ const styles = StyleSheet.create({
     quoteCard: {
         borderWidth: 1,
         borderColor: '#e5e7eb',
-        borderRadius: 8,
+        borderTopLeftRadius: 8,
+        borderTopRightRadius: 8,
+        borderBottomRightRadius: 8,
+        borderBottomLeftRadius: 8,
         overflow: 'hidden',
         marginTop: 8,
     },
