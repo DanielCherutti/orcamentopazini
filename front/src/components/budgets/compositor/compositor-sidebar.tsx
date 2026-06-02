@@ -165,7 +165,6 @@ const BLOCK_ICONS: Record<string, React.ReactNode> = {
   toc:      <ListOrdered className="h-3.5 w-3.5 shrink-0 text-primary" />,
   figures:  <ImageIcon className="h-3.5 w-3.5 shrink-0 text-primary" />,
   quote:    <Table2 className="h-3.5 w-3.5 shrink-0 text-primary" />,
-  terms:    <FileText className="h-3.5 w-3.5 shrink-0 text-primary" />,
   session:  <FolderOpen className="h-3.5 w-3.5 shrink-0" />,
   location: <MapPin className="h-3.5 w-3.5 shrink-0" />,
   section:  <Layers className="h-3.5 w-3.5 shrink-0" />,
@@ -185,21 +184,19 @@ const ALL_OPTIONS: { type: BlockType; label: string; short: string }[] = [
   { type: "text",     label: "Texto livre",      short: "Texto"   },
   { type: "scope",    label: "Bloco Detalhamento do projeto", short: COMPOSITOR_SCOPE_BLOCK_DEFAULT_LABEL },
   { type: "quote",    label: "Bloco Orçamento",  short: "ORÇAMENTO"  },
-  { type: "terms",    label: "Condições gerais", short: "CONDIÇÕES"  },
 ];
 
-function getAddOptions(parentType: string | null, hasScopeBlock: boolean, hasQuoteBlock: boolean, hasTermsBlock: boolean): typeof ALL_OPTIONS {
+function getAddOptions(parentType: string | null, hasScopeBlock: boolean, hasQuoteBlock: boolean): typeof ALL_OPTIONS {
   if (parentType === null) {
     return ALL_OPTIONS.filter((o) => {
       if (o.type === "scope") return !hasScopeBlock; // só se ainda não existe
       if (o.type === "quote") return !hasQuoteBlock; // só se ainda não existe
-      if (o.type === "terms") return !hasTermsBlock; // só se ainda não existe
       return o.type === "session";
     });
   }
   if (parentType === "location") return ALL_OPTIONS.filter((o) => o.type === "section" || o.type === "text");
   // session (e qualquer outro contêiner futuro): session, location, text
-  return ALL_OPTIONS.filter((o) => o.type !== "section" && o.type !== "scope" && o.type !== "quote" && o.type !== "terms");
+  return ALL_OPTIONS.filter((o) => o.type !== "section" && o.type !== "scope" && o.type !== "quote");
 }
 
 /** Pré-visualização no portal: segue o ponteiro com o offset do clique (simétrico pra cima/baixo). */
@@ -247,10 +244,10 @@ function SidebarDragPreview({
       <span
         className={cn(
           "min-w-0 flex-1 truncate text-xs font-medium leading-none",
-          (block.type === "session" || isScope || isHeaderFooter || isQuote || block.type === "terms" || block.type === "toc" || block.type === "figures") && "uppercase"
+          (block.type === "session" || isScope || isHeaderFooter || isQuote || block.type === "toc" || block.type === "figures") && "uppercase"
         )}
       >
-        {isScope ? getScopeBlockLabel(block.label) : isHeaderFooter ? "CABEÇALHO E RODAPÉ" : isQuote ? "ORÇAMENTO" : block.type === "terms" ? (block.label || "CONDIÇÕES GERAIS") : block.type === "toc" ? "SUMÁRIO" : block.type === "figures" ? "LISTA DE FIGURAS" : (block.label || `(${block.type})`)}
+        {isScope ? getScopeBlockLabel(block.label) : isHeaderFooter ? "CABEÇALHO E RODAPÉ" : isQuote ? "ORÇAMENTO" : block.type === "toc" ? "SUMÁRIO" : block.type === "figures" ? "LISTA DE FIGURAS" : (block.label || `(${block.type})`)}
       </span>
     </div>
   );
@@ -266,17 +263,16 @@ interface InlineAdderProps {
   depth: number;
   hasScopeBlock?: boolean;
   hasQuoteBlock?: boolean;
-  hasTermsBlock?: boolean;
   onSuccess: () => void;
   onCancel: () => void;
 }
 
-function InlineAdder({ budgetId, parentId, parentType, depth, hasScopeBlock = false, hasQuoteBlock = false, hasTermsBlock = false, onSuccess, onCancel }: InlineAdderProps) {
+function InlineAdder({ budgetId, parentId, parentType, depth, hasScopeBlock = false, hasQuoteBlock = false, onSuccess, onCancel }: InlineAdderProps) {
   const [selectedType, setSelectedType] = useState<BlockType | null>(null);
   const [label, setLabel] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const options = getAddOptions(parentType, hasScopeBlock, hasQuoteBlock, hasTermsBlock);
+  const options = getAddOptions(parentType, hasScopeBlock, hasQuoteBlock);
   const indentPx = (depth + 1) * 12 + 8;
 
   const handleCreate = async (overrideType?: BlockType, overrideLabel?: string) => {
@@ -298,7 +294,6 @@ function InlineAdder({ budgetId, parentId, parentType, depth, hasScopeBlock = fa
       scope: COMPOSITOR_SCOPE_BLOCK_DEFAULT_LABEL,
       header_footer: "CABEÇALHO E RODAPÉ",
       quote: "ORÇAMENTO",
-      terms: "CONDIÇÕES GERAIS",
       session: "Seção",
     };
     if (type in directCreate) {
@@ -706,7 +701,6 @@ export function CompositorSidebar({
   isReadOnly = false,
 }: CompositorSidebarProps) {
   const [addingRootSession, setAddingRootSession] = useState(false);
-  const [addingRootTerms, setAddingRootTerms] = useState(false);
   const [autoEditId, setAutoEditId] = useState<string | null>(null);
   const [childrenReg, setChildrenReg] = useState<ChildrenReg>(() => buildChildrenReg(roots));
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
@@ -734,7 +728,6 @@ export function CompositorSidebar({
   };
 
   const localRoots = childrenReg[ROOT_KEY] ?? [];
-  const hasTermsRoot = localRoots.some((b) => b.type === "terms");
 
   const collisionDetection = useMemo(() => {
     const map = new Map<string, string | null>();
@@ -964,37 +957,6 @@ export function CompositorSidebar({
               <Plus className="h-3.5 w-3.5" />
               {addingRootSession ? "Criando..." : "Adicionar Seção"}
             </Button>
-            {!hasTermsRoot ? (
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full text-xs gap-1.5"
-                disabled={addingRootTerms}
-                onClick={async () => {
-                  setAddingRootTerms(true);
-                  const result = await addBlockAction({
-                    budgetId,
-                    parentId: null,
-                    type: "terms",
-                    label: "CONDIÇÕES GERAIS",
-                    props: {
-                      description:
-                        "<p>Termos Gerais:</p><p>1. Validade da Proposta: 15 dias.</p><p>2. Prazo de Entrega: 45 dias úteis após medição final.</p><p>3. Garantia: 5 anos contra defeitos de fabricação.</p>",
-                    },
-                  });
-                  setAddingRootTerms(false);
-                  if (result.success) {
-                    if (result.blockId) setAutoEditId(result.blockId);
-                    onRefresh();
-                  } else {
-                    toast.error(result.error || "Erro ao criar condições gerais");
-                  }
-                }}
-              >
-                <FileText className="h-3.5 w-3.5" />
-                {addingRootTerms ? "Criando..." : "Adicionar Condições"}
-              </Button>
-            ) : null}
           </div>
         )}
       </div>

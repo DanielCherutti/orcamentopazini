@@ -11,7 +11,6 @@ import {
     ensureCompositorCoverBlockAction,
     ensureCompositorHeaderFooterBlockAction,
     ensureCompositorQuoteBlockAction,
-    ensureCompositorTermsBlockAction,
     ensureCompositorTocBlockAction,
 } from "@/actions/budget-compositor-block-actions";
 
@@ -37,7 +36,6 @@ async function loadCompositorTreeData(
             await ensureCompositorHeaderFooterBlockAction(budgetId);
             await ensureCompositorTocBlockAction(budgetId);
             await ensureCompositorQuoteBlockAction(budgetId);
-            await ensureCompositorTermsBlockAction(budgetId);
         }
 
         const blocksRes = await db.query<[BudgetBlockFlat[]]>(
@@ -45,12 +43,14 @@ async function loadCompositorTreeData(
             { budgetId: budgetRecordId }
         );
 
-        const blocks = (blocksRes[0] || []).map((b) => ({
-            ...b,
-            id: String(b.id),
-            budget_id: String(b.budget_id),
-            parent_id: b.parent_id ? String(b.parent_id) : null,
-        })) as BudgetBlockFlat[];
+        const blocks = (blocksRes[0] || [])
+            .filter((b) => b.type !== "terms")
+            .map((b) => ({
+                ...b,
+                id: String(b.id),
+                budget_id: String(b.budget_id),
+                parent_id: b.parent_id ? String(b.parent_id) : null,
+            })) as BudgetBlockFlat[];
 
         const itemsByBlock: Record<string, BudgetItem[]> = {};
         if (blocks.length > 0) {

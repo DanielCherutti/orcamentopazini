@@ -823,6 +823,7 @@ export function BudgetTable({
     };
 
     let hasPrintedDetailBlock = false;
+    let nextFigureNumber = 1;
 
     for (const [locIdx, loc] of locations.entries()) {
         const locNum = `${sectionNumber}.${locIdx + 1}`;
@@ -858,6 +859,8 @@ export function BudgetTable({
         );
 
         if (locPhotoList.length > 0) {
+            const firstLocationFigureNumber = nextFigureNumber;
+            nextFigureNumber += locPhotoList.length;
             pushPdfPage(
                 `${locId}-loc-photos`,
                 <View style={styles.locationBlock}>
@@ -865,7 +868,7 @@ export function BudgetTable({
                     <View style={styles.locationPhotosBlock}>
                         <SceneImagesGrid
                             images={locPhotoList}
-                            figureLabelFor={(_image, index) => `Figura ${index + 1}`}
+                            figureLabelFor={(_image, index) => `Figura ${firstLocationFigureNumber + index} -`}
                             pdfImagePublicBase={pdfImagePublicBase}
                             pdfEmbeddedImages={pdfEmbeddedImages}
                             figurePageCollector={figurePageCollector}
@@ -910,6 +913,8 @@ export function BudgetTable({
 
             if (sceneList.length > 0) {
                 const hasItems = (sec.items?.length ?? 0) > 0;
+                const firstSectionFigureNumber = nextFigureNumber;
+                nextFigureNumber += sceneList.length;
                 pushFlowBlock(
                     `${locId}-${secId}-content`,
                     <View
@@ -918,7 +923,7 @@ export function BudgetTable({
                     >
                         <SceneImagesGrid
                             images={sceneList}
-                            figureLabelFor={(_image, index) => `Figura ${index + 1}`}
+                            figureLabelFor={(_image, index) => `Figura ${firstSectionFigureNumber + index} -`}
                             pdfImagePublicBase={pdfImagePublicBase}
                             pdfEmbeddedImages={pdfEmbeddedImages}
                             figurePageCollector={figurePageCollector}

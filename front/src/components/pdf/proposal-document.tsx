@@ -623,22 +623,33 @@ function collectScopeQuoteLocations(locations: BudgetLocation[] | undefined): Co
     return out;
 }
 
-/** Mesma origem de imagens exibidas no detalhamento (`BudgetTable`): 1ª imagem de cada trecho. */
+/** Mesma origem e ordem das imagens exibidas no detalhamento (`BudgetTable`). */
 function collectRenderedPdfFigureEntries(locations: BudgetLocation[] | undefined): PdfFigureEntry[] {
     const out: PdfFigureEntry[] = [];
     const seen = new Set<string>();
+    const pushImage = (img: unknown) => {
+        const image = img as { id?: unknown; caption?: unknown; url?: unknown; composed_url?: unknown } | undefined;
+        if (!image?.id) return;
+        const raw = image.composed_url || image.url;
+        if (typeof raw !== "string" || raw.trim().length === 0) return;
+        const id = String(image.id);
+        if (seen.has(id)) return;
+        seen.add(id);
+        const caption =
+            typeof image.caption === "string" && image.caption.trim()
+                ? image.caption.trim()
+                : "Sem descrição";
+        out.push({ id, caption });
+    };
+
     for (const loc of locations ?? []) {
+        for (const img of loc.images ?? []) {
+            pushImage(img);
+        }
         for (const sec of loc.sections ?? []) {
-            const firstImg = (sec.images ?? [])[0];
-            if (!firstImg?.id) continue;
-            const id = String(firstImg.id);
-            if (seen.has(id)) continue;
-            seen.add(id);
-            const rawCaption =
-                typeof firstImg.caption === "string" && firstImg.caption.trim()
-                    ? firstImg.caption.trim()
-                    : `Imagem padrão — ${(sec.name || "Trecho").trim() || "Trecho"}`;
-            out.push({ id, caption: rawCaption });
+            for (const img of sec.images ?? []) {
+                pushImage(img);
+            }
         }
     }
     return out;
@@ -894,8 +905,7 @@ type PdfSegment =
     | { kind: "figures" }
     | { kind: "quote" }
     | { kind: "detail" }
-    | { kind: "session"; block: BudgetBlock }
-    | { kind: "terms"; block: BudgetBlock };
+    | { kind: "session"; block: BudgetBlock };
 
 type SessionPdfContentPart = {
     row: SessionPrintRow;
@@ -977,8 +987,6 @@ function buildPdfSegmentsFromCompositorRoots(
         } else if (b.type === "quote" && !placedQuote) {
             segments.push({ kind: "quote" });
             placedQuote = true;
-        } else if (b.type === "terms" && hasPrintableBlockContent(b, itemsByBlock, imagesByBlock)) {
-            segments.push({ kind: "terms", block: b });
         } else if (b.type === "scope" && !placedDetail) {
             segments.push({ kind: "detail" });
             placedDetail = true;
@@ -1020,8 +1028,6 @@ function assignPdfSegmentPages(segments: PdfSegment[]): {
             p += 1;
         } else if (seg.kind === "session") {
             sessionPages.set(seg.block.id, p);
-            p += 1;
-        } else if (seg.kind === "terms") {
             p += 1;
         }
     }
@@ -1800,9 +1806,6 @@ export const ProposalDocument = ({
             case "toc":
                 return (
                     <InnerPdfPage pageKey={keyBase} title="Sumário" paginationProbeKey="toc" {...innerCommon}>
-                        <Text style={{ fontSize: 9, color: theme.colors.textLight, marginBottom: 14 }}>
-                            Páginas calculadas conforme a impressão atual do documento.
-                        </Text>
                         {tocRows.length === 0 ? (
                             <Text style={{ fontSize: 10, fontStyle: "italic", color: theme.colors.textLight }}>
                                 Nenhuma seção numerada no documento. Inclua blocos do tipo &quot;Seção&quot; no
@@ -1832,7 +1835,7 @@ export const ProposalDocument = ({
                         {figureRows.map((row) => (
                             <View key={`fig-${row.n}`} style={styles.tocRow}>
                                 <Text style={styles.tocTitle}>
-                                    {sanitizeTextForPdf(`Figura ${row.n} — ${row.caption}`)}
+                                    {sanitizeTextForPdf(`Figura ${row.n} - ${row.caption}`)}
                                 </Text>
                                 <View style={styles.tocDots} />
                                 <Text style={styles.tocPage}>
@@ -2179,36 +2182,6 @@ export const ProposalDocument = ({
                                         );
                                     })
                                 )}
-                            </InnerPdfPage>
-                        ))}
-                    </React.Fragment>
-                );
-            }
-            case "terms": {
-                const termsTitle = sanitizeTextForPdf((seg.block.label || "CONDIÇÕES GERAIS").trim());
-                const rawParts = splitSessionHtmlIntoPdfParts(String(seg.block.props?.description ?? ""));
-                const pages: CoverPdfBlock[][] = [[]];
-                const currentPage = () => pages[pages.length - 1];
-                rawParts.forEach((part) => {
-                    if (part.type === "pageBreak") {
-                        if (currentPage().length > 0) pages.push([]);
-                        return;
-                    }
-                    currentPage().push(...part.blocks);
-                });
-                const contentPages = pages.filter((page) => page.length > 0);
-                return (
-                    <React.Fragment key={`terms-fragment-${seg.block.id}`}>
-                        {(contentPages.length > 0 ? contentPages : [[]]).map((blocks, pageIdx) => (
-                            <InnerPdfPage
-                                key={`terms-page-${seg.block.id}-${pageIdx}`}
-                                pageKey={`terms-page-${seg.block.id}-${pageIdx}`}
-                                title={pageIdx === 0 ? termsTitle : ""}
-                                pageStyleExtra={{ flexDirection: "column" }}
-                                paginationProbeKey={pageIdx === 0 ? "terms" : undefined}
-                                {...innerCommon}
-                            >
-                                {renderSessionPdfBlocks(blocks, `terms-${seg.block.id}-${pageIdx}`).nodes}
                             </InnerPdfPage>
                         ))}
                     </React.Fragment>

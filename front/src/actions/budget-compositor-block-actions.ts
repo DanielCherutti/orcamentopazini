@@ -12,9 +12,6 @@ import { DEFAULT_HEADER_FOOTER_PROPS } from "@/types/budget-compositor-types";
 
 type RootBlockRow = { id: unknown; order_index: number; type: string; props?: Record<string, unknown> };
 
-const DEFAULT_TERMS_HTML =
-    "<p>Termos Gerais:</p><p>1. Validade da Proposta: 15 dias.</p><p>2. Prazo de Entrega: 45 dias úteis após medição final.</p><p>3. Garantia: 5 anos contra defeitos de fabricação.</p>";
-
 async function listRootBlocks(
     db: Awaited<ReturnType<typeof getDb>>,
     budgetRecordId: ReturnType<typeof requireRecordId>
@@ -337,51 +334,6 @@ export async function ensureCompositorQuoteBlockAction(
     }
 }
 
-/**
- * Garante um bloco opcional `terms` para orçamentos antigos.
- * Se o usuário remover o bloco, ele permanece removido porque consideramos também registros com deleted_at.
- */
-export async function ensureCompositorTermsBlockAction(
-    budgetId: string,
-    options?: { skipRevalidate?: boolean }
-): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertActionSession();
-    if (!auth.ok) return { success: false, error: auth.error };
-
-    const db = await getDb();
-    try {
-        const budgetRecordId = requireRecordId("budget", budgetId);
-        const existingRes = await db.query<[Array<{ id: unknown; deleted_at?: unknown }>]>(
-            "SELECT id, deleted_at FROM budget_block WHERE budget_id = $budgetId AND parent_id IS NONE AND type = 'terms' LIMIT 1",
-            { budgetId: budgetRecordId }
-        );
-        const existing = existingRes[0] || [];
-        if (existing.length > 0) return { success: true };
-
-        const roots = await listRootBlocks(db, budgetRecordId);
-        const maxOrder = roots.reduce((max, r) => Math.max(max, Number(r.order_index ?? 0)), -1);
-        await db.create(new Table("budget_block")).content({
-            budget_id: budgetRecordId,
-            type: "terms",
-            label: "CONDIÇÕES GERAIS",
-            order_index: maxOrder + 1,
-            props: { description: DEFAULT_TERMS_HTML },
-        });
-
-        if (!options?.skipRevalidate) {
-            revalidatePath(budgetRevalidatePath(budgetId));
-        }
-        return { success: true };
-    } catch (error) {
-        if (error instanceof InvalidRecordIdError) {
-            return { success: false, error: error.message };
-        }
-        console.error("ensureCompositorTermsBlockAction error:", error);
-        if (isTokenExpiredError(error)) resetDb();
-        return { success: false, error: "Erro ao garantir bloco de condições gerais" };
-    }
-}
-
 async function deleteBlockCascade(db: Awaited<ReturnType<typeof getDb>>, blockId: string) {
     const blockRecordId = requireRecordId("budget_block", blockId);
 
@@ -416,6 +368,10 @@ export async function addBlockAction(params: {
     const db = await getDb();
     try {
         const { budgetId, parentId, type, label, props = {} } = params;
+        if (type === "terms") {
+            return { success: false, error: "A seção Condições Gerais foi removida do documento." };
+        }
+
         const budgetRecordId = requireRecordId("budget", budgetId);
 
         let orderIndex = 0;

@@ -12,7 +12,7 @@ export type BlockType =
   | "toc"       // Sumário automático (sempre após a capa) — conteúdo derivado da árvore
   | "figures"   // Lista de figuras (após sumário) — imagens do Escopo, automático
   | "quote"     // Orçamento (tabela/valores) — bloco raiz que referencia a aba Orçamento
-  | "terms"     // Condições gerais editáveis (opcional)
+  | "terms"     // Legado: não é mais criado, exibido ou impresso
   | "session"   // Contêiner: seção / subseção (qualquer profundidade)
   | "text"      // Texto rico (Tiptap HTML)
   | "location"  // Local / Ambiente (com descrição + galeria + trechos)
