@@ -797,24 +797,32 @@ export function BudgetTable({
 }) {
     // Sem hooks: BudgetTable é renderizado pelo @react-pdf/renderer (fora do React DOM).
     const pdfPages: React.ReactNode[] = [];
-    const pushPdfPage = (pageKey: string, content: React.ReactNode) => {
+    const pushPdfPage = (
+        pageKey: string,
+        content: React.ReactNode,
+        opts?: { breakBefore?: boolean }
+    ) => {
         pdfPages.push(
-            <View key={pageKey} style={styles.pdfPageRoot}>
+            <View key={pageKey} style={styles.pdfPageRoot} break={opts?.breakBefore || undefined}>
                 {content}
             </View>
         );
     };
 
     /** Continua no fluxo da página — tabela longa pode quebrar em várias folhas. */
-    const pushFlowBlock = (blockKey: string, content: React.ReactNode) => {
+    const pushFlowBlock = (
+        blockKey: string,
+        content: React.ReactNode,
+        opts?: { breakBefore?: boolean }
+    ) => {
         pdfPages.push(
-            <View key={blockKey} style={styles.pdfFlowRoot}>
+            <View key={blockKey} style={styles.pdfFlowRoot} break={opts?.breakBefore || undefined}>
                 {content}
             </View>
         );
     };
 
-    let printedSectionCount = 0;
+    let hasPrintedDetailBlock = false;
 
     for (const [locIdx, loc] of locations.entries()) {
         const locNum = `${sectionNumber}.${locIdx + 1}`;
@@ -871,8 +879,10 @@ export function BudgetTable({
                             }
                         />
                     </View>
-                </View>
+                </View>,
+                { breakBefore: hasPrintedDetailBlock }
             );
+            hasPrintedDetailBlock = true;
         }
 
         for (const [secIdx, sec] of sections.entries()) {
@@ -896,7 +906,7 @@ export function BudgetTable({
                 </View>
             );
 
-            const sectionBreakBefore = printedSectionCount > 0 || locHasPhotos;
+            const sectionBreakBefore = hasPrintedDetailBlock;
 
             if (sceneList.length > 0) {
                 const hasItems = (sec.items?.length ?? 0) > 0;
@@ -905,7 +915,6 @@ export function BudgetTable({
                     <View
                         style={[styles.sectionBlock, styles.sectionPageBlock]}
                         minPresenceAhead={SCENE_TITLE_KEEP_WITH_NEXT_PT}
-                        break={sectionBreakBefore}
                     >
                         <SceneImagesGrid
                             images={sceneList}
@@ -924,7 +933,8 @@ export function BudgetTable({
                                 itemFinalValue={itemFinalValue}
                             />
                         ) : null}
-                    </View>
+                    </View>,
+                    { breakBefore: sectionBreakBefore }
                 );
             } else {
                 pushFlowBlock(
@@ -932,7 +942,6 @@ export function BudgetTable({
                     <View
                         style={styles.sectionBlock}
                         minPresenceAhead={SECTION_TABLE_TITLE_KEEP_WITH_NEXT_PT}
-                        break={sectionBreakBefore}
                     >
                         {sectionTitleLead}
                         <SectionItemsTable
@@ -942,10 +951,11 @@ export function BudgetTable({
                             costsDisplayMode={costsDisplayMode}
                             itemFinalValue={itemFinalValue}
                         />
-                    </View>
+                    </View>,
+                    { breakBefore: sectionBreakBefore }
                 );
             }
-            printedSectionCount += 1;
+            hasPrintedDetailBlock = true;
         }
 
         if (sections.length === 0) {
@@ -958,8 +968,10 @@ export function BudgetTable({
                             Sem trechos neste local
                         </Text>
                     </View>
-                </View>
+                </View>,
+                { breakBefore: hasPrintedDetailBlock && !locHasPhotos }
             );
+            hasPrintedDetailBlock = true;
         } else if (showCosts && costsDisplayMode === 'location') {
             pushPdfPage(
                 `${locId}-subtotal`,
