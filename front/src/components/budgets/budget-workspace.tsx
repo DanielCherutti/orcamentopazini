@@ -196,6 +196,7 @@ export function BudgetWorkspace({
                                 <div className={cn("flex-1 flex min-h-0 overflow-hidden bg-white", activeTab !== 'budget' && "hidden")}>
                                     <BudgetCompositor
                                         budgetId={budgetId}
+                                        budgetCode={budget.code}
                                         compositorLabel={getCompositorPanelLabel(budget.compositor_label)}
                                         onCompositorLabelChange={
                                             isReadOnly ? undefined : handleCompositorLabelChange

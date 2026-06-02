@@ -352,6 +352,7 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
             };
         });
     }, [tableRows]);
+    const budgetCodeLabel = budget?.code?.trim() || "—";
 
     if (loading && !budget) {
         return (
@@ -528,14 +529,18 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
 
                     <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-lg shadow-black/[0.04] ring-1 ring-black/[0.02] dark:bg-card dark:shadow-black/20 dark:ring-white/[0.04]">
                         <div className="relative border-b border-border/50 bg-gradient-to-r from-primary/[0.08] via-primary/[0.04] to-transparent px-5 py-4">
-                            <div className="flex items-center justify-center gap-2 sm:absolute sm:left-5 sm:top-1/2 sm:-translate-y-1/2 sm:justify-start">
-                                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 text-primary">
+                            <div className="grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+                                <span className="flex h-9 w-9 items-center justify-center justify-self-center rounded-xl bg-primary/15 text-primary sm:justify-self-start">
                                     <TableProperties className="h-4 w-4" />
                                 </span>
+                                <h2 className="text-center text-sm font-bold uppercase tracking-[0.12em] text-foreground/90">
+                                    Custos de equipamentos — Pazini
+                                </h2>
+                                <p className="text-center text-[11px] font-semibold text-muted-foreground sm:justify-self-end sm:text-right">
+                                    Código do Orçamento:{" "}
+                                    <span className="font-bold text-foreground">{budgetCodeLabel}</span>
+                                </p>
                             </div>
-                            <h2 className="text-center text-sm font-bold uppercase tracking-[0.12em] text-foreground/90 sm:pl-12">
-                                Custos de equipamentos — Pazini
-                            </h2>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full min-w-[640px] text-[13px]">

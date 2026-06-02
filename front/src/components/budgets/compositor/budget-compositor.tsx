@@ -17,6 +17,7 @@ import { useLiveCompositor } from "@/hooks/use-live-compositor";
 
 interface BudgetCompositorProps {
   budgetId: string;
+  budgetCode?: string | null;
   compositorLabel: string;
   onCompositorLabelChange?: (label: string) => void | Promise<void>;
   isReadOnly?: boolean;
@@ -24,6 +25,7 @@ interface BudgetCompositorProps {
 
 export function BudgetCompositor({
   budgetId,
+  budgetCode,
   compositorLabel,
   onCompositorLabelChange,
   isReadOnly = false,
@@ -128,6 +130,7 @@ export function BudgetCompositor({
         <CompositorContent
           roots={roots}
           budgetId={budgetId}
+          budgetCode={budgetCode}
           items={items}
           imagesByBlock={imagesByBlock}
           scopeFigures={scopeFigures}

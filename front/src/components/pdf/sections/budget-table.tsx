@@ -571,7 +571,8 @@ function figureObservation(sceneImg: BudgetImage): string {
     return stripHtmlToText(String(raw)).replace(/\s+/g, ' ').trim();
 }
 
-const SCENE_TITLE_KEEP_WITH_NEXT_PT = 210;
+const SCENE_TITLE_KEEP_WITH_NEXT_PT = 270;
+const LOCATION_PHOTOS_KEEP_WITH_NEXT_PT = SCENE_TITLE_KEEP_WITH_NEXT_PT + 42;
 const SECTION_TABLE_TITLE_KEEP_WITH_NEXT_PT = 88;
 const TABLE_HEADER_KEEP_WITH_NEXT_PT = 46;
 const TABLE_TAIL_KEEP_TOGETHER_PT = 58;
@@ -833,7 +834,10 @@ export function BudgetTable({
         const locId = String(loc.id ?? `loc-${locIdx}`);
 
         const locationHeader = (
-            <View style={styles.locationHeaderWrap}>
+            <View
+                style={styles.locationHeaderWrap}
+                minPresenceAhead={locHasPhotos ? LOCATION_PHOTOS_KEEP_WITH_NEXT_PT : undefined}
+            >
                 <Text style={styles.locationHeaderText}>
                     {sanitizeTextForPdf(`${locNum} — ${locLabel}`)}
                 </Text>

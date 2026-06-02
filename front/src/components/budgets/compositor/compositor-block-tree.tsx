@@ -84,6 +84,7 @@ function FiguresRenderer({ block, isReadOnly }: CompositorRendererProps) {
 export interface CompositorRendererProps {
     block: BudgetBlock;
     budgetId: string;
+    budgetCode?: string | null;
     items: Record<string, BudgetItem[]>;
     imagesByBlock: Record<string, BudgetImage[]>;
     onRefresh: () => void;
@@ -656,13 +657,14 @@ function ScopeRenderer({
     );
 }
 
-function QuoteRenderer({ block, budgetId }: CompositorRendererProps) {
+function QuoteRenderer({ block, budgetId, budgetCode }: CompositorRendererProps) {
     const [stats, setStats] = useState<{
         locations: number;
         sections: number;
         items: number;
     } | null>(null);
     const { setActiveTab } = useWorkspaceTab();
+    const budgetCodeLabel = budgetCode?.trim() || "—";
 
     useEffect(() => {
         void getScopeStatsAction(budgetId).then((r) => {
@@ -675,18 +677,24 @@ function QuoteRenderer({ block, budgetId }: CompositorRendererProps) {
             id={`block-${block.id}`}
             className="rounded-lg border-2 border-dashed border-primary/30 bg-primary/5 p-5 space-y-3"
         >
-            <div className="flex items-baseline gap-3 pb-2 border-b-2 border-primary/50">
-                {block.number && (
-                    <span className="shrink-0 font-mono font-bold text-2xl text-primary">
-                        {block.number}.
-                    </span>
-                )}
-                <div className="flex items-center gap-2 min-w-0">
-                    <Table2 className="h-5 w-5 text-primary shrink-0" />
-                    <span className="font-bold text-sm text-primary uppercase tracking-wide">
-                        ORÇAMENTO
-                    </span>
+            <div className="flex flex-col gap-2 pb-2 border-b-2 border-primary/50 sm:flex-row sm:items-baseline sm:justify-between">
+                <div className="flex items-baseline gap-3">
+                    {block.number && (
+                        <span className="shrink-0 font-mono font-bold text-2xl text-primary">
+                            {block.number}.
+                        </span>
+                    )}
+                    <div className="flex items-center gap-2 min-w-0">
+                        <Table2 className="h-5 w-5 text-primary shrink-0" />
+                        <span className="font-bold text-sm text-primary uppercase tracking-wide">
+                            ORÇAMENTO
+                        </span>
+                    </div>
                 </div>
+                <span className="text-[11px] font-semibold text-muted-foreground">
+                    Código do Orçamento:{" "}
+                    <span className="font-bold text-foreground">{budgetCodeLabel}</span>
+                </span>
             </div>
             <p className="text-sm text-muted-foreground">
                 Este bloco representa o detalhamento financeiro (itens, valores e totais)
@@ -1326,6 +1334,7 @@ const RENDERERS: Record<string, ComponentType<CompositorRendererProps>> = {
 interface BlockDocumentProps {
     block: BudgetBlock;
     budgetId: string;
+    budgetCode?: string | null;
     items: Record<string, BudgetItem[]>;
     imagesByBlock: Record<string, BudgetImage[]>;
     onRefresh: () => void;
@@ -1335,6 +1344,7 @@ interface BlockDocumentProps {
 function BlockDocument({
     block,
     budgetId,
+    budgetCode,
     items,
     imagesByBlock,
     onRefresh,
@@ -1379,6 +1389,7 @@ function BlockDocument({
                     <Renderer
                         block={block}
                         budgetId={budgetId}
+                        budgetCode={budgetCode}
                         items={items}
                         imagesByBlock={imagesByBlock}
                         onRefresh={onRefresh}
@@ -1404,6 +1415,7 @@ function BlockDocument({
                             key={child.id}
                             block={child}
                             budgetId={budgetId}
+                            budgetCode={budgetCode}
                             items={items}
                             imagesByBlock={imagesByBlock}
                             onRefresh={onRefresh}
@@ -1419,6 +1431,7 @@ function BlockDocument({
 export interface CompositorContentProps {
     roots: BudgetBlock[];
     budgetId: string;
+    budgetCode?: string | null;
     items: Record<string, BudgetItem[]>;
     imagesByBlock: Record<string, BudgetImage[]>;
     /** Imagens do Escopo (ordem da lista de figuras). */
@@ -1439,6 +1452,7 @@ export interface CompositorContentProps {
 export function CompositorContent({
     roots,
     budgetId,
+    budgetCode,
     items,
     imagesByBlock,
     scopeFigures,
@@ -1488,6 +1502,7 @@ export function CompositorContent({
                             key={block.id}
                             block={block}
                             budgetId={budgetId}
+                            budgetCode={budgetCode}
                             items={items}
                             imagesByBlock={imagesByBlock}
                             onRefresh={onRefresh}
