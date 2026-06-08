@@ -43,7 +43,11 @@ import {
 } from '@/lib/compositor/header-footer-layout';
 import type { BudgetItem } from '@/types/budget-types';
 import type { BudgetLocation } from '@/types/budget-types';
-import { applyQuoteRowAdjustments } from '@/lib/budgets/scope-pricing';
+import {
+    applyQuoteRowAdjustments,
+    computeLocationQuoteBreakdown,
+    type LocationAssemblyMode,
+} from '@/lib/budgets/scope-pricing';
 import { getScopeBlockLabel } from '@/components/budgets/compositor/compositor-content-utils';
 import {
     filterIntroTocEntries,
@@ -119,12 +123,16 @@ type CompositorQuoteSection = {
     id: string;
     title: string;
     items: BudgetItem[];
+    assembly_mode?: LocationAssemblyMode;
+    assembly_value?: number;
 };
 
 type CompositorQuoteLocation = {
     id: string;
     title: string;
     sections: CompositorQuoteSection[];
+    assembly_mode?: LocationAssemblyMode;
+    assembly_value?: number;
 };
 
 type PdfFigureEntry = {
@@ -548,30 +556,6 @@ function readQuoteSplitPercents(b: Budget): {
     };
 }
 
-function computeSectionEquipAssembly(items: BudgetItem[]): { equipment: number; assembly: number } {
-    let equipment = 0;
-    let assembly = 0;
-    for (const item of items) {
-        const qty = Number(item.quantity ?? 0);
-        const unit = Number(item.unit_price ?? 0);
-        const labor = Number(item.labor_cost ?? 0);
-        const baseEquip = qty * unit;
-        const baseAssembly = qty * labor;
-        const base = baseEquip + baseAssembly;
-        const explicitTotal = Number(item.total ?? 0);
-        if (Number.isFinite(explicitTotal) && explicitTotal > 0 && base > 0) {
-            const ratioEquip = baseEquip / base;
-            const ratioAssembly = baseAssembly / base;
-            equipment += explicitTotal * ratioEquip;
-            assembly += explicitTotal * ratioAssembly;
-        } else {
-            equipment += Number.isFinite(baseEquip) ? baseEquip : 0;
-            assembly += Number.isFinite(baseAssembly) ? baseAssembly : 0;
-        }
-    }
-    return { equipment, assembly };
-}
-
 function collectCompositorQuoteLocations(
     roots: BudgetBlock[],
     itemsByBlock: Record<string, BudgetItem[]>
@@ -613,14 +597,58 @@ function collectScopeQuoteLocations(locations: BudgetLocation[] | undefined): Co
             id: String(sec.id ?? `${loc.id}-sec-${sec.order_index ?? 0}`),
             title: (sec.name || "Trecho").trim() || "Trecho",
             items: sec.items ?? [],
+            assembly_mode: sec.assembly_mode,
+            assembly_value: sec.assembly_value,
         }));
         out.push({
             id: String(loc.id ?? `loc-${loc.order_index ?? 0}`),
             title: (loc.name || "Local").trim() || "Local",
             sections,
+            assembly_mode: loc.assembly_mode,
+            assembly_value: loc.assembly_value,
         });
     }
     return out;
+}
+
+function computeQuoteLocationBase(loc: CompositorQuoteLocation): {
+    equipment: number;
+    assembly: number;
+    sections: Array<{ id: string; equipment: number; assembly: number }>;
+} {
+    const breakdown = computeLocationQuoteBreakdown({
+        location: {
+            assembly_mode: loc.assembly_mode,
+            assembly_value: loc.assembly_value,
+        },
+        sections: loc.sections.map((sec) => ({
+            id: sec.id,
+            assembly_mode: sec.assembly_mode,
+            assembly_value: sec.assembly_value,
+        })),
+        items: loc.sections.flatMap((sec) =>
+            sec.items.map((item) => ({
+                id: item.id,
+                section_id: sec.id,
+                quantity: item.quantity,
+                unit_price: item.unit_price,
+                labor_cost: item.labor_cost,
+                price_adjustment_mode: item.price_adjustment_mode ?? null,
+                price_adjustment_value: item.price_adjustment_value,
+                observation_extra_value: item.observation_extra_value,
+                assembly_manual_value: item.assembly_manual_value,
+            }))
+        ),
+    });
+    return {
+        equipment: breakdown.collapsedEquipment,
+        assembly: breakdown.collapsedAssembly,
+        sections: breakdown.sectionRows.map((row) => ({
+            id: row.sectionId,
+            equipment: row.equipment,
+            assembly: row.assembly,
+        })),
+    };
 }
 
 /** Mesma origem e ordem das imagens exibidas no detalhamento (`BudgetTable`). */
@@ -1570,8 +1598,9 @@ export const ProposalDocument = ({
         hasCompositorStructure && hasQuoteRoot
             ? collectCompositorQuoteLocations(compositorPdf!.roots, compositorPdf!.items || {})
             : [];
+    const scopeQuoteLocations = collectScopeQuoteLocations(locations);
     const quoteLocationsForPdf = hasQuoteRoot
-        ? (compositorQuoteLocations.length > 0 ? compositorQuoteLocations : collectScopeQuoteLocations(locations))
+        ? (scopeQuoteLocations.length > 0 ? scopeQuoteLocations : compositorQuoteLocations)
         : [];
 
     const coverBlock = compositorPdf
@@ -1875,16 +1904,7 @@ export const ProposalDocument = ({
                                     </Text>
                                 </View>
                                 {quoteLocationsForPdf.map((loc, locIdx) => {
-                                    const locationBase = loc.sections.reduce(
-                                        (sum, sec) => {
-                                            const calc = computeSectionEquipAssembly(sec.items);
-                                            return {
-                                                equipment: sum.equipment + calc.equipment,
-                                                assembly: sum.assembly + calc.assembly,
-                                            };
-                                        },
-                                        { equipment: 0, assembly: 0 }
-                                    );
+                                    const locationBase = computeQuoteLocationBase(loc);
                                     const locationAdjusted = applyQuoteRowAdjustments(
                                         locationBase.equipment,
                                         locationBase.assembly,
@@ -1923,7 +1943,11 @@ export const ProposalDocument = ({
                                             </View>
                                             {quoteShowSections && loc.sections.map((sec, secIdx) => {
                                                 const secNumber = `${locIdx + 1}.${secIdx + 1}`;
-                                                const sectionBase = computeSectionEquipAssembly(sec.items);
+                                                const sectionBase =
+                                                    locationBase.sections.find((row) => row.id === sec.id) ?? {
+                                                        equipment: 0,
+                                                        assembly: 0,
+                                                    };
                                                 const sectionAdjusted = applyQuoteRowAdjustments(
                                                     sectionBase.equipment,
                                                     sectionBase.assembly,
@@ -1967,16 +1991,7 @@ export const ProposalDocument = ({
                                 {(() => {
                                     const totals = quoteLocationsForPdf.reduce(
                                         (sum, loc) => {
-                                            const locBase = loc.sections.reduce(
-                                                (inner, sec) => {
-                                                    const calc = computeSectionEquipAssembly(sec.items);
-                                                    return {
-                                                        equipment: inner.equipment + calc.equipment,
-                                                        assembly: inner.assembly + calc.assembly,
-                                                    };
-                                                },
-                                                { equipment: 0, assembly: 0 }
-                                            );
+                                            const locBase = computeQuoteLocationBase(loc);
                                             const adj = applyQuoteRowAdjustments(
                                                 locBase.equipment,
                                                 locBase.assembly,
