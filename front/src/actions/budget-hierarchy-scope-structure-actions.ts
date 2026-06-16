@@ -137,8 +137,6 @@ export async function addSectionAction(locationId: string, budgetId: string, nam
             costs_display_mode: "section",
             price_adjustment_enabled: false,
             price_adjustment_input_mode: "fixed",
-            assembly_mode: "percent",
-            assembly_value: 0,
             created_at: new Date().toISOString(),
         });
         const created = Array.isArray(raw) ? raw[0] : raw;

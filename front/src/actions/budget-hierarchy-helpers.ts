@@ -3,6 +3,7 @@ import { recordIdToString, safeStringRecordId } from "@/lib/surreal-record-ids";
 import {
     computeItemSubtotal,
     computeLocationAssemblyTotal,
+    sectionHasOwnAssembly,
     type LocationAssemblyMode,
     type ScopePricingItem,
 } from "@/lib/budgets/scope-pricing";
@@ -193,7 +194,18 @@ export async function recalculateBudgetTotal(budgetId: string) {
             const mode: LocationAssemblyMode =
                 modeRaw === "fixed" || modeRaw === "manual" ? modeRaw : "percent";
             const value = Number(row.assembly_value ?? 0);
-            const hasOwnAssembly = row.assembly_mode != null || row.assembly_value != null;
+            const hasOwnAssembly = sectionHasOwnAssembly({
+                assembly_mode:
+                    row.assembly_mode === "percent" ||
+                    row.assembly_mode === "fixed" ||
+                    row.assembly_mode === "manual"
+                        ? row.assembly_mode
+                        : row.assembly_mode != null
+                          ? String(row.assembly_mode)
+                          : undefined,
+                assembly_value:
+                    row.assembly_value != null ? Number(row.assembly_value) : undefined,
+            });
             sectionConfig.set(sectionId, {
                 locationId,
                 mode,

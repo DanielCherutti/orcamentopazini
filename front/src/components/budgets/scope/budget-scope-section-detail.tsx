@@ -42,6 +42,7 @@ import {
     computeItemSubtotal,
     computeLocationAssemblyTotal,
     distributeProportional,
+    sectionHasOwnAssembly,
 } from "@/lib/budgets/scope-pricing";
 
 /** True se o HTML do editor estiver vazio (só tags/brancos). */
@@ -88,8 +89,6 @@ export function SectionDetail({
     isReadOnly,
     onRefresh,
     locations = [],
-    assemblyMode,
-    assemblyValue,
     assemblyByItemId = {},
     priceAdjustmentEnabled,
     priceAdjustmentInputMode,
@@ -245,11 +244,22 @@ export function SectionDetail({
         locationAssemblyModeRaw === "fixed" || locationAssemblyModeRaw === "manual"
             ? locationAssemblyModeRaw
             : "percent";
-    const effectiveAssemblyMode = assemblyMode ?? locationAssemblyMode;
-    const effectiveAssemblyValue =
-        assemblyValue ??
-        Number((currentLocation as unknown as Record<string, unknown> | null)?.assembly_value ?? 0);
-    const sectionScopedAssembly = assemblyMode !== undefined || assemblyValue !== undefined;
+    const sectionRow = section as unknown as Record<string, unknown> | null;
+    const sectionScopedAssembly = sectionHasOwnAssembly({
+        assembly_mode: sectionRow?.assembly_mode as LocationAssemblyMode | undefined,
+        assembly_value: sectionRow?.assembly_value as number | undefined,
+    });
+    const sectionAssemblyModeRaw = String(sectionRow?.assembly_mode ?? "percent");
+    const sectionAssemblyMode: LocationAssemblyMode =
+        sectionAssemblyModeRaw === "fixed" || sectionAssemblyModeRaw === "manual"
+            ? sectionAssemblyModeRaw
+            : "percent";
+    const effectiveAssemblyMode = sectionScopedAssembly
+        ? sectionAssemblyMode
+        : locationAssemblyMode;
+    const effectiveAssemblyValue = sectionScopedAssembly
+        ? Number(sectionRow?.assembly_value ?? 0)
+        : Number((currentLocation as unknown as Record<string, unknown> | null)?.assembly_value ?? 0);
 
     const effectiveAssemblyByItemId = useMemo(() => {
         if (Object.keys(assemblyByItemId).length > 0) return assemblyByItemId;

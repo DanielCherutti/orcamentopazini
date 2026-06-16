@@ -49,6 +49,24 @@ export function computeItemSubtotal(item: ScopePricingItem): number {
     return base + adjustment + observationExtra;
 }
 
+/**
+ * Trecho só possui montagem própria quando há configuração efetiva.
+ * Defaults persistidos no banco (`percent` + `0`) devem herdar a montagem do local.
+ */
+export function sectionHasOwnAssembly(row: {
+    assembly_mode?: LocationAssemblyMode | string | null;
+    assembly_value?: number | null;
+}): boolean {
+    const mode = row.assembly_mode;
+    const value = row.assembly_value;
+    if (mode == null && value == null) return false;
+    if (mode === "manual") return true;
+    const n = normalizeMoney(value);
+    if (mode === "fixed" || mode === "percent") return n !== 0;
+    if (mode == null && value != null) return n !== 0;
+    return false;
+}
+
 export function computeLocationAssemblyTotal(
     mode: LocationAssemblyMode,
     assemblyValue: number,
@@ -94,7 +112,7 @@ export function computeLocationScopeTotal(params: {
     for (const row of params.sections) {
         const sectionId = canonicalTableRecordId("budget_section", row.id);
         sectionIds.push(sectionId);
-        const hasOwnAssembly = row.assembly_mode != null || row.assembly_value != null;
+        const hasOwnAssembly = sectionHasOwnAssembly(row);
         const modeRaw = String(row.assembly_mode ?? "percent");
         const mode: LocationAssemblyMode =
             modeRaw === "fixed" || modeRaw === "manual" ? modeRaw : "percent";
@@ -193,7 +211,7 @@ export function computeLocationQuoteBreakdown(params: {
     >();
     for (const row of params.sections) {
         const sectionId = row.id;
-        const hasOwnAssembly = row.assembly_mode != null || row.assembly_value != null;
+        const hasOwnAssembly = sectionHasOwnAssembly(row);
         const modeRaw = String(row.assembly_mode ?? "percent");
         const mode: LocationAssemblyMode =
             modeRaw === "fixed" || modeRaw === "manual" ? modeRaw : "percent";

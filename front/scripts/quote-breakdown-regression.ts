@@ -66,4 +66,11 @@ const totalEq = sub + sub2;
 assertApprox(twoSections.collapsedEquipment, totalEq, "2 trechos / equipamento total");
 assertApprox(twoSections.collapsedAssembly, totalEq * 0.1, "2 trechos / montagem total");
 
+const inheritsLocationAssembly = computeLocationQuoteBreakdown({
+    location: { assembly_mode: "percent", assembly_value: 30 },
+    sections: [{ id: "sec1", assembly_mode: "percent", assembly_value: 0 }],
+    items: [item],
+});
+assertApprox(inheritsLocationAssembly.collapsedAssembly, sub * 0.3, "trecho default 0% herda local 30%");
+
 console.log("quote-breakdown-regression: OK");
