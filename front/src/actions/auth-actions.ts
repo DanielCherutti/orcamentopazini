@@ -14,8 +14,7 @@ import {
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
 import { verifyPassword } from "@/lib/password";
 import { passwordHashLooksValid } from "@/lib/password-hash-present";
-import { resolvePlatformPostLoginRedirect } from "@/actions/platform-actions";
-import { resolvePostLoginRedirect } from "@/actions/tenant-actions";
+import { resolveLoginRedirect } from "@/actions/login-routing-actions";
 
 const SESSION_MAX_AGE = 60 * 60 * 8;
 
@@ -78,12 +77,7 @@ export async function loginAction(formData: FormData) {
         redirect("/?error=invalid");
     }
 
-    const platformPath = await resolvePlatformPostLoginRedirect(email);
-    if (platformPath) {
-        redirect(platformPath);
-    }
-
-    const nextPath = await resolvePostLoginRedirect(email);
+    const nextPath = await resolveLoginRedirect(email);
     redirect(nextPath);
 }
 

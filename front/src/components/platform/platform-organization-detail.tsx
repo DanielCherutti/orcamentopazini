@@ -2,19 +2,18 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import type { OrganizationListItem } from "@/actions/platform-actions";
-import type { ProposalSettings } from "@/actions/settings-actions";
-import type { TenantLicensePlan } from "@/types/tenant-types";
+import type { OrganizationListItem, PlatformOrgMember, PlatformOrganizationMetrics } from "@/actions/platform-actions";
 import {
     updatePlatformOrganizationAction,
     updatePlatformOrganizationBrandingAction,
     updateTenantSubdomainAction,
     setCustomDomainAction,
     verifyCustomDomainAction,
-    type PlatformOrganizationMetrics,
 } from "@/actions/platform-actions";
+import type { ProposalSettings } from "@/actions/settings-actions";
 import type { ImpersonationAuditItem } from "@/actions/platform-impersonation-actions";
 import { ImpersonateOrganizationDialog } from "@/components/platform/impersonate-organization-dialog";
+import { PlatformOrgUsersSection } from "@/components/platform/platform-org-users-section";
 import { getTenantPublicOrigin } from "@/lib/tenant-public-origin";
 import { getAppTenantDomain } from "@/lib/tenant-host";
 import { PlatformBrandPreview } from "@/components/platform/platform-brand-preview";
@@ -41,6 +40,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar, CreditCard, Globe, Loader2, Palette, Save, Users } from "lucide-react";
 import { usePlatformPermissions } from "@/components/platform/platform-permissions-context";
 import { toast } from "@/lib/toast";
+import type { TenantLicensePlan } from "@/types/tenant-types";
 
 function ColorField({
     id,
@@ -87,7 +87,7 @@ function ColorField({
 type Props = {
     organization: OrganizationListItem & { branding: ProposalSettings | null };
     metrics?: PlatformOrganizationMetrics;
-    members?: Array<{ email: string; role: string; active: boolean; pending_setup: boolean }>;
+    members?: PlatformOrgMember[];
     auditLog?: ImpersonationAuditItem[];
 };
 
@@ -423,28 +423,11 @@ export function PlatformOrganizationDetail({ organization, metrics, members = []
                     </TabsContent>
 
                     <TabsContent value="users" className="mt-2 space-y-4">
-                        <Card className="border-border/70 shadow-sm">
-                            <CardHeader>
-                                <CardTitle className="text-base">Usuários (somente leitura)</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                {members.length === 0 ? (
-                                    <p className="text-sm text-muted-foreground">Nenhum usuário vinculado.</p>
-                                ) : (
-                                    <ul className="divide-y text-sm">
-                                        {members.map((m) => (
-                                            <li key={m.email} className="flex justify-between gap-2 py-2">
-                                                <span>{m.email}</span>
-                                                <span className="text-muted-foreground">
-                                                    {m.role}
-                                                    {m.pending_setup ? " · pendente" : ""}
-                                                </span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </CardContent>
-                        </Card>
+                        <PlatformOrgUsersSection
+                            tenantRef={organization.slug}
+                            members={members}
+                            canWrite={canWrite}
+                        />
                         {auditLog.length > 0 && (
                             <Card className="border-border/70 shadow-sm">
                                 <CardHeader>

@@ -10,8 +10,8 @@ export default async function PlatformTeamPage() {
             <div>
                 <h1 className="text-2xl font-bold tracking-tight">Equipe da plataforma</h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                    Gerencie quem acessa o painel de revenda. Crie usuários pelo e-mail, defina a senha
-                    e repasse as credenciais — contas independentes das organizações clientes.
+                    Gerencie quem acessa o painel de revenda. É a mesma conta do login — quem já
+                    usa uma empresa pode também ter acesso à plataforma.
                 </p>
             </div>
             {!res.success && (

@@ -1,18 +1,23 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { Table, StringRecordId } from "surrealdb";
 import { assertPlatformSession, setPlatformSession } from "@/lib/tenant-context";
 import { countActiveTenantMembers, getPlatformRoleForEmail } from "@/lib/platform-user";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { InvalidRecordIdError, recordIdToString, requireRecordId } from "@/lib/surreal-record-ids";
 import { tenantRecordId } from "@/lib/tenant-query";
+import { hashPassword } from "@/lib/password";
+import { assertPasswordPolicy } from "@/lib/password-pwned";
+import { PASSWORD_MAX_LENGTH } from "@/lib/password-strength";
+import { createUserInTenant, userHasTenantMembership } from "@/lib/portal-user-invite";
 import {
     BRAND_DEFAULT_PRIMARY,
     BRAND_DEFAULT_SECONDARY,
     normalizeHex,
 } from "@/lib/branding-theme";
-import type { Tenant, TenantLicensePlan } from "@/types/tenant-types";
+import type { Tenant, TenantLicensePlan, OrganizationMemberRole } from "@/types/tenant-types";
 import type { ProposalSettings } from "@/actions/settings-actions";
 import type { Surreal } from "surrealdb";
 import {
@@ -25,7 +30,6 @@ import { loadPlatformPlans } from "@/actions/platform-license-actions";
 import { getTenantPublicOrigin } from "@/lib/tenant-public-origin";
 import { RESERVED_SUBDOMAINS } from "@/lib/tenant-host";
 import { passwordHashLooksValid } from "@/lib/password-hash-present";
-import { getTenantAccessBlockReason } from "@/lib/tenant-license";
 import { resolveTenantRef } from "@/actions/platform-helpers";
 
 function slugify(input: string): string {
@@ -580,14 +584,55 @@ export async function getPlatformOrganizationMetricsAction(tenantRef: string): P
     }
 }
 
+export type PlatformOrgMember = {
+    userId: string;
+    email: string;
+    role: string;
+    active: boolean;
+    pending_setup: boolean;
+};
+
+function isSafePortalUserRecordId(id: string): boolean {
+    if (!id.startsWith("portal_user:")) return false;
+    const rest = id.slice("portal_user:".length);
+    return (
+        rest.length > 0 &&
+        rest.length <= 128 &&
+        /^[A-Za-z0-9_-]+$/.test(rest)
+    );
+}
+
+function platformOrgUsersPath(tenantRef: string): string {
+    return `/platform/organizations/${encodeURIComponent(tenantRef)}`;
+}
+
+const createOrgUserSchema = z.object({
+    email: z.string().trim().email("E-mail inválido"),
+    role: z.enum(["user", "admin"]).optional(),
+    password: z
+        .string()
+        .max(PASSWORD_MAX_LENGTH, "Senha muito longa")
+        .optional(),
+    passwordConfirm: z.string().optional(),
+});
+
+const setOrgUserPasswordSchema = z
+    .object({
+        userId: z.string().min(1),
+        password: z
+            .string()
+            .min(1, "Informe a senha")
+            .max(PASSWORD_MAX_LENGTH, "Senha muito longa"),
+        passwordConfirm: z.string().min(1, "Confirme a senha"),
+    })
+    .refine((d) => d.password === d.passwordConfirm, {
+        message: "As senhas não coincidem",
+        path: ["passwordConfirm"],
+    });
+
 export async function listOrgMembersForPlatformAction(tenantRef: string): Promise<{
     success: boolean;
-    data?: Array<{
-        email: string;
-        role: string;
-        active: boolean;
-        pending_setup: boolean;
-    }>;
+    data?: PlatformOrgMember[];
     error?: string;
 }> {
     const auth = await assertPlatformSession("orgs.view");
@@ -602,7 +647,7 @@ export async function listOrgMembersForPlatformAction(tenantRef: string): Promis
             [
                 Array<{
                     role?: string;
-                    user_id?: { email?: string; active?: boolean; password_hash?: string };
+                    user_id?: { id?: unknown; email?: string; active?: boolean; password_hash?: string };
                 }>,
             ]
         >(
@@ -613,21 +658,131 @@ export async function listOrgMembersForPlatformAction(tenantRef: string): Promis
         const data = (rows[0] ?? [])
             .map((row) => {
                 const email = row.user_id?.email;
-                if (!email) return null;
+                const userId = recordIdToString(row.user_id?.id ?? row.user_id);
+                if (!email || !userId) return null;
                 return {
+                    userId,
                     email: String(email),
                     role: String(row.role ?? "user"),
                     active: row.user_id?.active !== false,
                     pending_setup: !passwordHashLooksValid(row.user_id?.password_hash),
                 };
             })
-            .filter((r): r is NonNullable<typeof r> => r !== null);
+            .filter((r): r is PlatformOrgMember => r !== null);
 
         return { success: true, data: toPlain(data) };
     } catch (error) {
         console.error("listOrgMembersForPlatformAction:", error);
         if (isTokenExpiredError(error)) resetDb();
         return { success: false, error: "Erro ao listar usuários" };
+    }
+}
+
+export async function createPlatformOrganizationUserAction(
+    tenantRef: string,
+    formData: FormData,
+): Promise<{
+    success: boolean;
+    error?: string;
+    message?: string;
+    fieldErrors?: Record<string, string[]>;
+}> {
+    const auth = await assertPlatformSession("orgs.write");
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const roleRaw = formData.get("role")?.toString().trim() || "user";
+    const inviteRole: OrganizationMemberRole = roleRaw === "admin" ? "admin" : "user";
+
+    const parsed = createOrgUserSchema.safeParse({
+        email: formData.get("email"),
+        role: inviteRole,
+        password: formData.get("password"),
+        passwordConfirm: formData.get("passwordConfirm"),
+    });
+
+    if (!parsed.success) {
+        const fieldErrors = parsed.error.flatten().fieldErrors as Record<
+            string,
+            string[] | undefined
+        >;
+        return { success: false, fieldErrors: fieldErrors as Record<string, string[]> };
+    }
+
+    const db = await getDb();
+    try {
+        const rid = await resolveTenantRef(db, tenantRef);
+        const tenantId = recordIdToString(rid)!;
+
+        return createUserInTenant({
+            tenantId,
+            email: parsed.data.email,
+            role: inviteRole,
+            password: parsed.data.password?.trim() ?? "",
+            passwordConfirm: parsed.data.passwordConfirm?.trim() ?? "",
+            revalidatePaths: [platformOrgUsersPath(tenantRef)],
+        });
+    } catch (error) {
+        console.error("createPlatformOrganizationUserAction:", error);
+        if (isTokenExpiredError(error)) resetDb();
+        return { success: false, error: "Erro ao criar usuário" };
+    }
+}
+
+export async function setPlatformOrganizationUserPasswordAction(input: {
+    tenantRef: string;
+    userId: string;
+    password: string;
+    passwordConfirm: string;
+}): Promise<{
+    success: boolean;
+    error?: string;
+    fieldErrors?: Record<string, string[]>;
+}> {
+    const auth = await assertPlatformSession("orgs.write");
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const parsed = setOrgUserPasswordSchema.safeParse(input);
+    if (!parsed.success) {
+        const fe = parsed.error.flatten().fieldErrors as Record<string, string[] | undefined>;
+        return { success: false, fieldErrors: fe as Record<string, string[]> };
+    }
+
+    const { userId, password } = parsed.data;
+    if (!isSafePortalUserRecordId(userId)) {
+        return { success: false, error: "Identificador de usuário inválido" };
+    }
+
+    const db = await getDb();
+    try {
+        const rid = await resolveTenantRef(db, input.tenantRef);
+        const tenantId = recordIdToString(rid)!;
+
+        if (!(await userHasTenantMembership(userId, tenantId))) {
+            return { success: false, error: "Usuário não encontrado nesta organização" };
+        }
+
+        const policy = await assertPasswordPolicy(password);
+        if (!policy.ok) {
+            return { success: false, fieldErrors: { password: policy.errors } };
+        }
+
+        const userRid = new StringRecordId(userId);
+        const password_hash = await hashPassword(password);
+        await db.query(
+            "UPDATE $rid SET password_hash = $ph, updated_at = $u, invite_token = NONE, invite_expires_at = NONE",
+            {
+                rid: userRid,
+                ph: password_hash,
+                u: new Date().toISOString(),
+            },
+        );
+
+        revalidatePath(platformOrgUsersPath(input.tenantRef));
+        return { success: true };
+    } catch (error) {
+        console.error("setPlatformOrganizationUserPasswordAction:", error);
+        if (isTokenExpiredError(error)) resetDb();
+        return { success: false, error: "Erro ao definir senha" };
     }
 }
 
@@ -779,21 +934,4 @@ export async function verifyCustomDomainAction(tenantRef: string): Promise<{
         if (isTokenExpiredError(error)) resetDb();
         return { success: false, error: "Erro ao verificar DNS" };
     }
-}
-
-export async function assertTenantOperationalForInvite(tenantId: string): Promise<string | null> {
-    const db = await getDb();
-    const rows = await db.query<[Array<{ active?: boolean; license_expires_at?: string | null }>]>(
-        "SELECT active, license_expires_at FROM tenant WHERE id = $id LIMIT 1",
-        { id: new StringRecordId(tenantId) },
-    );
-    const row = rows[0]?.[0];
-    if (!row) return "Organização não encontrada";
-    const block = getTenantAccessBlockReason({
-        active: row.active !== false,
-        license_expires_at: row.license_expires_at ?? null,
-    });
-    if (block === "inactive") return "Organização desativada — convites bloqueados";
-    if (block === "expired") return "Licença expirada — convites bloqueados";
-    return null;
 }

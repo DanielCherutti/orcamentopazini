@@ -85,7 +85,7 @@ export function PortalUsersTable({
             <div className="rounded-lg border border-dashed border-border bg-muted/20 px-6 py-10 text-center">
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
                     Nenhum usuário cadastrado. Use{" "}
-                    <strong className="text-foreground">Convidar usuário</strong>{" "}
+                    <strong className="text-foreground">Criar usuário</strong>{" "}
                     ou rode no terminal{" "}
                     <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
                         bun run seed:portal-user

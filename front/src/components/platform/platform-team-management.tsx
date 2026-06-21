@@ -206,10 +206,10 @@ export function PlatformTeamManagement({ initialMembers }: { initialMembers: Pla
                         <Shield className="h-5 w-5 text-violet-600" />
                         Equipe da plataforma
                     </CardTitle>
-                    <CardDescription>
-                        Contas separadas das organizações clientes. Crie o usuário pelo e-mail, defina
-                        a senha e informe as credenciais — sem convite por e-mail.
-                    </CardDescription>
+                <CardDescription>
+                    Mesma conta do login — adicione acesso ao painel /platform pelo e-mail e defina
+                    a senha. Quem já usa uma empresa pode ter os dois destinos após entrar.
+                </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-end">

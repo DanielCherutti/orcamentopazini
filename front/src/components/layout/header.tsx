@@ -2,6 +2,7 @@
 
 import { PanelLeft, PanelLeftClose } from "lucide-react";
 import { BudgetEmailNotificationsBell } from "@/components/layout/budget-email-notifications-bell";
+import { PlatformAccessLink } from "@/components/platform/platform-access-link";
 import { TenantSwitcher } from "@/components/tenant/tenant-switcher";
 import { useSidebar } from "./sidebar-context";
 
@@ -21,6 +22,7 @@ export function Header() {
                 <h1 className="text-lg font-semibold text-foreground">Pazini Engenharia</h1>
             </div>
             <div className="flex items-center gap-2">
+                <PlatformAccessLink />
                 <TenantSwitcher />
                 <BudgetEmailNotificationsBell />
             </div>

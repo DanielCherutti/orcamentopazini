@@ -41,7 +41,7 @@ export function PortalUsersForm({
                         className="shrink-0"
                     >
                         <UserPlus className="size-4" />
-                        Convidar usuário
+                        Criar usuário
                     </Button>
                 </div>
                 <div className="p-5">

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Building2, CreditCard, LayoutDashboard, LogOut, Shield, Users } from "lucide-react";
 import { logoutAction } from "@/actions/auth-actions";
+import { PlatformOrgAccessButton } from "@/components/platform/platform-org-access-button";
 import { cn } from "@/lib/utils";
 import { initialsFromEmail } from "@/components/platform/platform-utils";
 import { usePlatformPermissions } from "@/components/platform/platform-permissions-context";
@@ -125,6 +126,7 @@ export function PlatformShell({
                             </p>
                         </div>
                     </div>
+                    <PlatformOrgAccessButton />
                     <form action={logoutAction}>
                         <button
                             type="submit"

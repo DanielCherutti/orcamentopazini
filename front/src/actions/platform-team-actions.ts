@@ -13,9 +13,7 @@ import { assertPasswordPolicy } from "@/lib/password-pwned";
 import { PASSWORD_MAX_LENGTH } from "@/lib/password-strength";
 import { passwordHashLooksValid } from "@/lib/password-hash-present";
 import {
-    assertEmailAvailableForPlatformInvite,
     countPlatformUsersByRole,
-    emailHasOrgMembership,
     getPlatformRoleForEmail,
 } from "@/lib/platform-user";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
@@ -116,9 +114,6 @@ export async function createPlatformTeamMemberAction(input: {
 
     const db = await getDb();
     try {
-        const exclusive = await assertEmailAvailableForPlatformInvite(email, db);
-        if (!exclusive.ok) return { success: false, error: exclusive.error };
-
         const existing = await db.query<
             [Array<{ id: unknown; password_hash?: string; platform_role?: unknown }>]
         >("SELECT id, password_hash, platform_role FROM portal_user WHERE email = $email LIMIT 1", {
@@ -400,4 +395,4 @@ export async function assertNotPlatformUserEmail(
     return { ok: true };
 }
 
-export { emailHasOrgMembership, assertEmailAvailableForPlatformInvite };
+export { getPlatformRoleForEmail };

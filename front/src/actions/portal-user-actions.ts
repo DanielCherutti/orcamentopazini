@@ -1,8 +1,7 @@
 "use server";
 
-import { randomBytes } from "node:crypto";
 import { z } from "zod";
-import { StringRecordId, Table } from "surrealdb";
+import { StringRecordId } from "surrealdb";
 import { revalidatePath } from "next/cache";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { hashPassword } from "@/lib/password";
@@ -13,27 +12,25 @@ import {
     assertTenantSession,
 } from "@/lib/tenant-context";
 import {
-    assertEmailAvailableForOrgInvite,
-    tenantHasUserCapacity,
-} from "@/lib/platform-user";
-import { assertTenantOperationalForInvite } from "@/actions/platform-actions";
+    createUserInTenant,
+    userHasTenantMembership,
+} from "@/lib/portal-user-invite";
 import {
     listTenantMembersAction,
     removeTenantMemberAction,
     updateTenantMemberRoleAction,
 } from "@/actions/tenant-actions";
-import { passwordHashLooksValid } from "@/lib/password-hash-present";
-import { sendPortalInviteEmail } from "@/lib/portal-invite-mail";
-import { resolveInviteAppBaseUrl } from "@/lib/proposal-mail-settings";
-import { recordIdToString, requireRecordId } from "@/lib/surreal-record-ids";
 import type { OrganizationMemberRole, TenantRole } from "@/types/tenant-types";
 import { tenantRecordId } from "@/lib/tenant-query";
-
-const INVITE_TTL_MS = 48 * 60 * 60 * 1000;
 
 const createUserSchema = z.object({
     email: z.string().trim().email("E-mail inválido"),
     role: z.enum(["user", "admin"]).optional(),
+    password: z
+        .string()
+        .max(PASSWORD_MAX_LENGTH, "Senha muito longa")
+        .optional(),
+    passwordConfirm: z.string().optional(),
 });
 
 export type PortalUserPublic = {
@@ -69,21 +66,6 @@ const resetPasswordSchema = z
         message: "As senhas não coincidem",
         path: ["passwordConfirm"],
     });
-
-async function userHasTenantMembership(
-    userId: string,
-    tenantId: string,
-): Promise<boolean> {
-    const db = await getDb();
-    const rows = await db.query<[unknown[]]>(
-        "SELECT id FROM portal_user_tenant WHERE user_id = $userId AND tenant_id = $tenantId LIMIT 1",
-        {
-            userId: requireRecordId("portal_user", userId),
-            tenantId: tenantRecordId(tenantId),
-        },
-    );
-    return (rows[0]?.length ?? 0) > 0;
-}
 
 export async function listPortalUsersAction(): Promise<{
     success: boolean;
@@ -125,6 +107,8 @@ export async function createPortalUserAction(
     const parsed = createUserSchema.safeParse({
         email: formData.get("email"),
         role: inviteRole,
+        password: formData.get("password"),
+        passwordConfirm: formData.get("passwordConfirm"),
     });
 
     if (!parsed.success) {
@@ -135,114 +119,14 @@ export async function createPortalUserAction(
         return { success: false, fieldErrors: fieldErrors as Record<string, string[]> };
     }
 
-    const baseUrl = await resolveInviteAppBaseUrl();
-    if (!baseUrl) {
-        return {
-            success: false,
-            error:
-                "Defina a URL pública do sistema em Configurações da empresa (E-mail / convites) ou APP_URL / NEXT_PUBLIC_APP_URL no .env.",
-        };
-    }
-
-    const email = parsed.data.email.trim().toLowerCase();
-    const tenantId = auth.ctx.tenantId;
-    const invite_token = randomBytes(32).toString("hex");
-    const invite_expires_at = new Date(Date.now() + INVITE_TTL_MS).toISOString();
-
-    const db = await getDb();
-    try {
-        const licenseBlock = await assertTenantOperationalForInvite(tenantId);
-        if (licenseBlock) {
-            return { success: false, error: licenseBlock };
-        }
-
-        const capacity = await tenantHasUserCapacity(tenantId, db);
-        if (!capacity.ok) {
-            return { success: false, error: capacity.error };
-        }
-
-        const existing = await db.query<[Array<{ id: unknown }>]>(
-            "SELECT id FROM portal_user WHERE email = $email LIMIT 1",
-            { email },
-        );
-        const existingId = recordIdToString(existing[0]?.[0]?.id);
-
-        if (existingId) {
-            const platformBlock = await assertEmailAvailableForOrgInvite(email, db);
-            if (!platformBlock.ok) {
-                return { success: false, fieldErrors: { email: [platformBlock.error] } };
-            }
-
-            const inTenant = await userHasTenantMembership(existingId, tenantId);
-            if (inTenant) {
-                return {
-                    success: false,
-                    fieldErrors: { email: ["Este e-mail já pertence a esta organização"] },
-                };
-            }
-
-            await db.create(new Table("portal_user_tenant")).content({
-                user_id: new StringRecordId(existingId),
-                tenant_id: tenantRecordId(tenantId),
-                role: inviteRole,
-                created_at: new Date().toISOString(),
-            });
-
-            revalidatePath("/settings/users");
-            return {
-                success: true,
-                message: `${email} foi adicionado à organização atual com papel ${inviteRole}.`,
-            };
-        }
-
-        const insertPayload = {
-            email,
-            active: true,
-            invite_kind: "org",
-            invite_token,
-            invite_expires_at,
-            invite_tenant_id: tenantRecordId(tenantId),
-            invite_tenant_role: inviteRole,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-        };
-
-        const insertResult = await db.insert(new Table("portal_user"), insertPayload);
-        const createdRecord = Array.isArray(insertResult) ? insertResult[0] : insertResult;
-        const newId = createdRecord?.id != null ? String(createdRecord.id) : null;
-        if (!newId) {
-            return { success: false, error: "Erro ao criar usuário" };
-        }
-
-        const inviteUrl = `${baseUrl}/convite?token=${encodeURIComponent(invite_token)}`;
-        const mail = await sendPortalInviteEmail({ to: email, inviteUrl });
-
-        if (!mail.ok) {
-            try {
-                await db.delete(new StringRecordId(newId));
-            } catch (delErr) {
-                console.error("createPortalUserAction rollback delete:", delErr);
-            }
-            return { success: false, error: mail.error };
-        }
-
-        revalidatePath("/settings/users");
-        return {
-            success: true,
-            message: `Convite enviado para ${email}. A pessoa deve abrir o link no e-mail para criar a senha.`,
-        };
-    } catch (e) {
-        console.error("createPortalUserAction:", e);
-        if (isTokenExpiredError(e)) resetDb();
-        const msg = e instanceof Error ? e.message : "";
-        if (msg.includes("unique") || msg.includes("IDX")) {
-            return {
-                success: false,
-                fieldErrors: { email: ["Este e-mail já está cadastrado"] },
-            };
-        }
-        return { success: false, error: "Erro ao criar usuário" };
-    }
+    return createUserInTenant({
+        tenantId: auth.ctx.tenantId,
+        email: parsed.data.email,
+        role: inviteRole,
+        password: parsed.data.password?.trim() ?? "",
+        passwordConfirm: parsed.data.passwordConfirm?.trim() ?? "",
+        revalidatePaths: ["/settings/users"],
+    });
 }
 
 export async function submitCreatePortalUser(formData: FormData) {

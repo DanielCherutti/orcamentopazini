@@ -10,7 +10,6 @@ import { config } from "dotenv";
 import { StringRecordId } from "surrealdb";
 import { getDb } from "../src/lib/surreal";
 import { recordIdToString } from "../src/lib/surreal-record-ids";
-import { emailHasOrgMembership } from "../src/lib/platform-user";
 import { ensurePlatformRoleField } from "../src/actions/platform-team-actions";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -35,13 +34,6 @@ if (!userId) {
     process.exit(1);
 }
 
-if (await emailHasOrgMembership(email, db)) {
-    console.error(
-        "Este e-mail tem membership em org cliente. Contas de plataforma e de empresa são separadas.",
-    );
-    process.exit(1);
-}
-
 await db.query(
     `UPDATE $id SET
         platform_role = 'super_admin',
@@ -53,7 +45,7 @@ await db.query(
     },
 );
 
-await db.query("DELETE portal_user_tenant WHERE user_id = $userId", {
+await db.query("DELETE portal_user_tenant WHERE user_id = $userId AND role = 'master'", {
     userId: new StringRecordId(userId),
 });
 

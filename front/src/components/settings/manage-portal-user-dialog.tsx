@@ -155,9 +155,8 @@ function ManagePortalUserPanel({
             <div className="space-y-4">
                 {user.pending_setup && (
                     <p className="text-sm rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-amber-950 dark:text-amber-50">
-                        Esta conta ainda não criou a senha pelo link do e-mail.
-                        Você pode definir uma senha abaixo para liberar o acesso
-                        sem depender do convite.
+                        Esta conta ainda não tem senha definida. Informe uma senha
+                        abaixo para liberar o acesso ao portal.
                     </p>
                 )}
 

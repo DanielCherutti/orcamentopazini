@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { submitCreatePortalUser } from "@/actions/portal-user-actions";
+import { PasswordRequirementsHint } from "@/components/settings/password-requirements-hint";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -35,12 +36,14 @@ export function CreatePortalUserDialog({ open, onOpenChange }: Props) {
     const [error, setError] = useState<string | null>(null);
     const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
     const [role, setRole] = useState<OrganizationMemberRole>("user");
+    const [password, setPassword] = useState("");
 
     function handleOpenChange(next: boolean) {
         if (!next) {
             setError(null);
             setFieldErrors({});
             setRole("user");
+            setPassword("");
         }
         onOpenChange(next);
     }
@@ -59,10 +62,7 @@ export function CreatePortalUserDialog({ open, onOpenChange }: Props) {
                 form.reset();
                 handleOpenChange(false);
                 router.refresh();
-                toast.success(
-                    r.message ??
-                        "Convite enviado. A pessoa deve abrir o link no e-mail para criar a senha.",
-                );
+                toast.success(r.message ?? "Usuário criado com sucesso.");
                 return;
             }
             if (r.error) setError(r.error);
@@ -74,10 +74,10 @@ export function CreatePortalUserDialog({ open, onOpenChange }: Props) {
         <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto" showCloseButton>
                 <DialogHeader>
-                    <DialogTitle>Convidar usuário</DialogTitle>
+                    <DialogTitle>Criar usuário</DialogTitle>
                     <DialogDescription>
-                        O convite vincula a pessoa à organização ativa. Ela receberá um link
-                        para criar a senha (válido por 48 horas).
+                        Informe e-mail, senha e papel. Se o e-mail já existir no sistema, a pessoa
+                        será apenas vinculada a esta organização.
                     </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -114,6 +114,41 @@ export function CreatePortalUserDialog({ open, onOpenChange }: Props) {
                             </SelectContent>
                         </Select>
                     </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="portal-new-password">Senha inicial</Label>
+                        <Input
+                            id="portal-new-password"
+                            name="password"
+                            type="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            required
+                            autoComplete="new-password"
+                            disabled={pending}
+                        />
+                        <PasswordRequirementsHint password={password} />
+                        {fieldErrors.password?.map((msg) => (
+                            <p key={msg} className="text-sm text-destructive">
+                                {msg}
+                            </p>
+                        ))}
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="portal-new-password-confirm">Confirmar senha</Label>
+                        <Input
+                            id="portal-new-password-confirm"
+                            name="passwordConfirm"
+                            type="password"
+                            required
+                            autoComplete="new-password"
+                            disabled={pending}
+                        />
+                        {fieldErrors.passwordConfirm?.[0] && (
+                            <p className="text-sm text-destructive">
+                                {fieldErrors.passwordConfirm[0]}
+                            </p>
+                        )}
+                    </div>
                     {error && <p className="text-sm text-destructive">{error}</p>}
                     <DialogFooter className="gap-2 sm:gap-0">
                         <Button
@@ -125,7 +160,7 @@ export function CreatePortalUserDialog({ open, onOpenChange }: Props) {
                             Cancelar
                         </Button>
                         <Button type="submit" disabled={pending}>
-                            {pending ? "Enviando…" : "Enviar convite"}
+                            {pending ? "Criando…" : "Criar usuário"}
                         </Button>
                     </DialogFooter>
                 </form>

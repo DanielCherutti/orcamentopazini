@@ -175,7 +175,7 @@ Mensagens sugeridas (login):
 
 - **RF-120:** No detalhe da org (`/platform/organizations/[slug]`), aba ou seção **Usuários**: listar memberships (email, role, ativo, pending_setup).
 - **RF-121:** Métricas read-only por org: total usuários, orçamentos, clientes, última atividade (se disponível).
-- **RF-122:** Platform admin **não** pode editar senha nem convidar em nome da org (somente visualização) — convites permanecem com admin da org.
+- **RF-122:** Quem tem permissão `orgs.write` (Super Admin e Comercial) pode **criar usuários** (e-mail + senha) e **definir senha** para contas pendentes no detalhe da org. Suporte e leitura permanecem somente visualização. O admin da org usa o mesmo fluxo em Configurações → Usuários. Respeita licença ativa e limite de usuários.
 - **RF-123:** Link “Entrar como suporte” **não** incluído nesta fase — ver **PAZINI-102** (`20260620140000000-pazini-102-impersonate-custom-domain.spec.md`).
 
 ### 4.4 Admins da plataforma (Fase D)
