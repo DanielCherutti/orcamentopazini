@@ -5,6 +5,7 @@
  */
 
 import type { TenantRole } from "@/types/tenant-types";
+import { isPlatformRole, type PlatformRole } from "@/types/platform-types";
 
 const encoder = new TextEncoder();
 
@@ -28,6 +29,8 @@ export type SessionPayloadV2 = {
     pending?: boolean;
     /** Admin da plataforma (SaaS) — sem tenant operacional. */
     platformMode?: boolean;
+    /** Papel dentro do painel /platform. */
+    platformRole?: PlatformRole;
     /** Modo suporte (PAZINI-102). */
     impersonation?: ImpersonationPayload;
 };
@@ -121,6 +124,7 @@ function parsePayload(data: {
     role?: TenantRole;
     pending?: boolean;
     platformMode?: boolean;
+    platformRole?: PlatformRole;
     impersonation?: unknown;
 }): SessionPayload | null {
     if (data.v === 2 && typeof data.sub === "string" && typeof data.exp === "number") {
@@ -130,6 +134,7 @@ function parsePayload(data: {
                 : undefined;
         const impersonation = parseImpersonation(data.impersonation);
         if (data.platformMode && impersonation) return null;
+        const platformRole = isPlatformRole(data.platformRole) ? data.platformRole : undefined;
         return {
             v: 2,
             sub: data.sub,
@@ -138,6 +143,7 @@ function parsePayload(data: {
             role,
             pending: data.pending === true,
             platformMode: data.platformMode === true,
+            platformRole,
             impersonation,
         };
     }
@@ -180,6 +186,7 @@ export async function verifySessionToken(
         role?: TenantRole;
         pending?: boolean;
         platformMode?: boolean;
+        platformRole?: PlatformRole;
         impersonation?: unknown;
     };
     try {

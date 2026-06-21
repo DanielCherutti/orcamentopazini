@@ -12,7 +12,10 @@ import {
     assertPortalAdminSession,
     assertTenantSession,
 } from "@/lib/tenant-context";
-import { tenantHasUserCapacity } from "@/lib/platform-user";
+import {
+    assertEmailAvailableForOrgInvite,
+    tenantHasUserCapacity,
+} from "@/lib/platform-user";
 import { assertTenantOperationalForInvite } from "@/actions/platform-actions";
 import {
     listTenantMembersAction,
@@ -165,6 +168,11 @@ export async function createPortalUserAction(
         const existingId = recordIdToString(existing[0]?.[0]?.id);
 
         if (existingId) {
+            const platformBlock = await assertEmailAvailableForOrgInvite(email, db);
+            if (!platformBlock.ok) {
+                return { success: false, fieldErrors: { email: [platformBlock.error] } };
+            }
+
             const inTenant = await userHasTenantMembership(existingId, tenantId);
             if (inTenant) {
                 return {
@@ -190,6 +198,7 @@ export async function createPortalUserAction(
         const insertPayload = {
             email,
             active: true,
+            invite_kind: "org",
             invite_token,
             invite_expires_at,
             invite_tenant_id: tenantRecordId(tenantId),

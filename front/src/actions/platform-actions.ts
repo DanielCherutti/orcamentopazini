@@ -2,11 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { Table, StringRecordId } from "surrealdb";
-import {
-    assertPlatformMasterSession,
-    setPlatformMasterSession,
-} from "@/lib/tenant-context";
-import { countActiveTenantMembers, isPlatformMasterEmail } from "@/lib/platform-user";
+import { assertPlatformSession, setPlatformSession } from "@/lib/tenant-context";
+import { countActiveTenantMembers, getPlatformRoleForEmail } from "@/lib/platform-user";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { InvalidRecordIdError, recordIdToString, requireRecordId } from "@/lib/surreal-record-ids";
 import { tenantRecordId } from "@/lib/tenant-query";
@@ -76,8 +73,9 @@ export type OrganizationListItem = Tenant & {
 export async function resolvePlatformPostLoginRedirect(
     email: string,
 ): Promise<"/platform" | null> {
-    if (!(await isPlatformMasterEmail(email))) return null;
-    await setPlatformMasterSession(email);
+    const role = await getPlatformRoleForEmail(email);
+    if (!role) return null;
+    await setPlatformSession(email, role);
     return "/platform";
 }
 
@@ -136,7 +134,7 @@ export async function getPlatformDashboardAction(): Promise<{
     data?: PlatformDashboardData;
     error?: string;
 }> {
-    const auth = await assertPlatformMasterSession();
+    const auth = await assertPlatformSession("dashboard.view");
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();
@@ -271,7 +269,7 @@ export async function listPlatformOrganizationsAction(): Promise<{
     data?: OrganizationListItem[];
     error?: string;
 }> {
-    const auth = await assertPlatformMasterSession();
+    const auth = await assertPlatformSession("orgs.view");
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();
@@ -292,7 +290,7 @@ export async function createPlatformOrganizationAction(input: {
     license_plan?: TenantLicensePlan;
     license_expires_at?: string;
 }): Promise<{ success: boolean; data?: Tenant; error?: string }> {
-    const auth = await assertPlatformMasterSession();
+    const auth = await assertPlatformSession("orgs.write");
     if (!auth.ok) return { success: false, error: auth.error };
 
     const name = input.name?.trim();
@@ -363,7 +361,7 @@ export async function updatePlatformOrganizationAction(input: {
     license_plan?: TenantLicensePlan;
     license_expires_at?: string | null;
 }): Promise<{ success: boolean; data?: Tenant; error?: string }> {
-    const auth = await assertPlatformMasterSession();
+    const auth = await assertPlatformSession("orgs.write");
     if (!auth.ok) return { success: false, error: auth.error };
 
     const tenantId = input.tenantId?.trim();
@@ -422,7 +420,7 @@ export async function getPlatformOrganizationAction(tenantId: string): Promise<{
     data?: OrganizationListItem & { branding: ProposalSettings | null };
     error?: string;
 }> {
-    const auth = await assertPlatformMasterSession();
+    const auth = await assertPlatformSession("orgs.view");
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();
@@ -468,7 +466,7 @@ export async function updatePlatformOrganizationBrandingAction(
         app_public_url?: string;
     },
 ): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertPlatformMasterSession();
+    const auth = await assertPlatformSession("orgs.write");
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();
@@ -547,7 +545,7 @@ export async function getPlatformOrganizationMetricsAction(tenantRef: string): P
     data?: PlatformOrganizationMetrics;
     error?: string;
 }> {
-    const auth = await assertPlatformMasterSession();
+    const auth = await assertPlatformSession("orgs.view");
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();
@@ -592,7 +590,7 @@ export async function listOrgMembersForPlatformAction(tenantRef: string): Promis
     }>;
     error?: string;
 }> {
-    const auth = await assertPlatformMasterSession();
+    const auth = await assertPlatformSession("orgs.view");
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();
@@ -638,7 +636,7 @@ export async function exportPlatformOrganizationsCsvAction(): Promise<{
     data?: string;
     error?: string;
 }> {
-    const auth = await assertPlatformMasterSession();
+    const auth = await assertPlatformSession("orgs.export_csv");
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();
@@ -678,7 +676,7 @@ export async function updateTenantSubdomainAction(
     tenantRef: string,
     subdomain: string,
 ): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertPlatformMasterSession();
+    const auth = await assertPlatformSession("orgs.write");
     if (!auth.ok) return { success: false, error: auth.error };
 
     const sub = subdomain.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
@@ -711,7 +709,7 @@ export async function setCustomDomainAction(
     tenantRef: string,
     domain: string,
 ): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertPlatformMasterSession();
+    const auth = await assertPlatformSession("orgs.write");
     if (!auth.ok) return { success: false, error: auth.error };
 
     const custom = domain.trim().toLowerCase().replace(/^https?:\/\//, "").split("/")[0] ?? "";
@@ -741,7 +739,7 @@ export async function verifyCustomDomainAction(tenantRef: string): Promise<{
     verified?: boolean;
     error?: string;
 }> {
-    const auth = await assertPlatformMasterSession();
+    const auth = await assertPlatformSession("orgs.write");
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();

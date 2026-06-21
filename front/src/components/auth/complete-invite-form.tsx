@@ -33,7 +33,7 @@ export function CompleteInviteForm({ token }: Props) {
         startTransition(async () => {
             const r = await completePortalInviteAction(fd);
             if (r.success) {
-                router.push("/?success=invite");
+                router.push(r.redirect === "platform" ? "/?success=platform_invite" : "/?success=invite");
                 return;
             }
             if (r.error) setError(r.error);

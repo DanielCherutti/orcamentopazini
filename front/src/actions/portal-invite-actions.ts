@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { Table, StringRecordId } from "surrealdb";
+import { StringRecordId, Table } from "surrealdb";
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
 import { hashPassword } from "@/lib/password";
 import { assertPasswordPolicy } from "@/lib/password-pwned";
@@ -10,6 +10,7 @@ import { passwordHashLooksValid } from "@/lib/password-hash-present";
 import { recordIdToString } from "@/lib/surreal-record-ids";
 import { tenantRecordId } from "@/lib/tenant-query";
 import { tenantHasUserCapacity } from "@/lib/platform-user";
+import { isPlatformRole } from "@/types/platform-types";
 import type { OrganizationMemberRole } from "@/types/tenant-types";
 
 const completeInviteSchema = z
@@ -30,6 +31,7 @@ export async function completePortalInviteAction(formData: FormData): Promise<{
     success: boolean;
     error?: string;
     fieldErrors?: Record<string, string[]>;
+    redirect?: "platform" | "login";
 }> {
     const parsed = completeInviteSchema.safeParse({
         token: formData.get("token"),
@@ -68,12 +70,16 @@ export async function completePortalInviteAction(formData: FormData): Promise<{
                     invite_expires_at?: string;
                     password_hash?: string;
                     active?: boolean;
+                    invite_kind?: string;
                     invite_tenant_id?: unknown;
                     invite_tenant_role?: string;
+                    invite_platform_role?: unknown;
                 }[],
             ]
         >(
-            "SELECT id, invite_token, invite_expires_at, password_hash, active, invite_tenant_id, invite_tenant_role FROM portal_user WHERE invite_token = $invite_link_token LIMIT 1",
+            `SELECT id, invite_token, invite_expires_at, password_hash, active,
+                    invite_kind, invite_tenant_id, invite_tenant_role, invite_platform_role
+             FROM portal_user WHERE invite_token = $invite_link_token LIMIT 1`,
             { invite_link_token: token },
         );
         const row = rows[0]?.[0];
@@ -120,9 +126,52 @@ export async function completePortalInviteAction(formData: FormData): Promise<{
         }
         const rid = new StringRecordId(idStr);
 
-        // SurrealDB 3: NONE em MERGE pode falhar; o projeto usa SET … = NONE em outros fluxos.
+        const isPlatformInvite =
+            row.invite_kind === "platform" ||
+            (isPlatformRole(row.invite_platform_role) && !row.invite_tenant_id);
+
+        if (isPlatformInvite) {
+            const platformRole = isPlatformRole(row.invite_platform_role)
+                ? row.invite_platform_role
+                : null;
+            if (!platformRole) {
+                return { success: false, error: "Convite da plataforma inválido." };
+            }
+
+            await db.query(
+                `UPDATE $rid SET
+                    password_hash = $ph,
+                    platform_role = $role,
+                    is_platform_master = $isMaster,
+                    updated_at = $u,
+                    invite_kind = NONE,
+                    invite_platform_role = NONE,
+                    invite_token = NONE,
+                    invite_expires_at = NONE,
+                    invite_tenant_id = NONE,
+                    invite_tenant_role = NONE`,
+                {
+                    rid,
+                    ph: password_hash,
+                    role: platformRole,
+                    isMaster: platformRole === "super_admin",
+                    u: new Date().toISOString(),
+                },
+            );
+
+            return { success: true, redirect: "platform" };
+        }
+
         await db.query(
-            "UPDATE $rid SET password_hash = $ph, updated_at = $u, invite_token = NONE, invite_expires_at = NONE, invite_tenant_id = NONE, invite_tenant_role = NONE",
+            `UPDATE $rid SET
+                password_hash = $ph,
+                updated_at = $u,
+                invite_kind = NONE,
+                invite_platform_role = NONE,
+                invite_token = NONE,
+                invite_expires_at = NONE,
+                invite_tenant_id = NONE,
+                invite_tenant_role = NONE`,
             {
                 rid,
                 ph: password_hash,
@@ -156,7 +205,7 @@ export async function completePortalInviteAction(formData: FormData): Promise<{
             }
         }
 
-        return { success: true };
+        return { success: true, redirect: "login" };
     } catch (e) {
         console.error("completePortalInviteAction:", e);
         if (isTokenExpiredError(e)) resetDb();

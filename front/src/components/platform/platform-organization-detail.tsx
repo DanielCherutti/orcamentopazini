@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar, CreditCard, Globe, Loader2, Palette, Save, Users } from "lucide-react";
+import { usePlatformPermissions } from "@/components/platform/platform-permissions-context";
 import { toast } from "@/lib/toast";
 
 function ColorField({
@@ -93,6 +94,8 @@ type Props = {
 export function PlatformOrganizationDetail({ organization, metrics, members = [], auditLog = [] }: Props) {
     const router = useRouter();
     const [pending, startTransition] = useTransition();
+    const { can } = usePlatformPermissions();
+    const canWrite = can("orgs.write");
     const [tab, setTab] = useState("license");
 
     const [name, setName] = useState(organization.name);
@@ -249,7 +252,7 @@ export function PlatformOrganizationDetail({ organization, metrics, members = []
                                             value={name}
                                             onChange={(e) => setName(e.target.value)}
                                             required
-                                            disabled={pending}
+                                            disabled={pending || !canWrite}
                                             className="h-10"
                                         />
                                     </div>
@@ -259,7 +262,7 @@ export function PlatformOrganizationDetail({ organization, metrics, members = []
                                             id="edit-slug"
                                             value={slug}
                                             onChange={(e) => setSlug(e.target.value)}
-                                            disabled={pending}
+                                            disabled={pending || !canWrite}
                                             className="h-10 font-mono text-sm"
                                         />
                                     </div>
@@ -272,7 +275,7 @@ export function PlatformOrganizationDetail({ organization, metrics, members = []
                                             value={maxUsers}
                                             onChange={(e) => setMaxUsers(e.target.value)}
                                             placeholder="Sem limite"
-                                            disabled={pending}
+                                            disabled={pending || !canWrite}
                                             className="h-10"
                                         />
                                     </div>
@@ -283,7 +286,7 @@ export function PlatformOrganizationDetail({ organization, metrics, members = []
                                             onValueChange={(v) =>
                                                 setLicensePlan(v as TenantLicensePlan)
                                             }
-                                            disabled={pending}
+                                            disabled={pending || !canWrite}
                                         >
                                             <SelectTrigger id="edit-plan" className="h-10">
                                                 <SelectValue />
@@ -307,12 +310,12 @@ export function PlatformOrganizationDetail({ organization, metrics, members = []
                                             type="date"
                                             value={licenseExpires}
                                             onChange={(e) => setLicenseExpires(e.target.value)}
-                                            disabled={pending}
+                                            disabled={pending || !canWrite}
                                             className="h-10 max-w-xs"
                                         />
                                     </div>
                                     <div className="sm:col-span-2 pt-2">
-                                        <Button type="submit" disabled={pending}>
+                                        <Button type="submit" disabled={pending || !canWrite}>
                                             {pending ? (
                                                 <>
                                                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -351,7 +354,7 @@ export function PlatformOrganizationDetail({ organization, metrics, members = []
                                             <Input value={subdomain} onChange={(e) => setSubdomain(e.target.value)} className="font-mono" />
                                             <Button
                                                 type="button"
-                                                disabled={pending}
+                                                disabled={pending || !canWrite}
                                                 onClick={() =>
                                                     startTransition(async () => {
                                                         const res = await updateTenantSubdomainAction(organization.slug, subdomain);
@@ -379,7 +382,7 @@ export function PlatformOrganizationDetail({ organization, metrics, members = []
                                             <Button
                                                 type="button"
                                                 variant="outline"
-                                                disabled={pending}
+                                                disabled={pending || !canWrite}
                                                 onClick={() =>
                                                     startTransition(async () => {
                                                         const res = await setCustomDomainAction(organization.slug, customDomain);
@@ -480,7 +483,7 @@ export function PlatformOrganizationDetail({ organization, metrics, members = []
                                             id="brand-name"
                                             value={companyName}
                                             onChange={(e) => setCompanyName(e.target.value)}
-                                            disabled={pending}
+                                            disabled={pending || !canWrite}
                                             className="h-10"
                                         />
                                     </div>
@@ -491,7 +494,7 @@ export function PlatformOrganizationDetail({ organization, metrics, members = []
                                             value={logoUrl}
                                             onChange={(e) => setLogoUrl(e.target.value)}
                                             placeholder="https://…"
-                                            disabled={pending}
+                                            disabled={pending || !canWrite}
                                             className="h-10"
                                         />
                                     </div>
@@ -500,14 +503,14 @@ export function PlatformOrganizationDetail({ organization, metrics, members = []
                                         label="Cor primária"
                                         value={primaryColor}
                                         onChange={setPrimaryColor}
-                                        disabled={pending}
+                                        disabled={pending || !canWrite}
                                     />
                                     <ColorField
                                         id="brand-secondary"
                                         label="Cor secundária"
                                         value={secondaryColor}
                                         onChange={setSecondaryColor}
-                                        disabled={pending}
+                                        disabled={pending || !canWrite}
                                     />
                                     <div className="space-y-2 sm:col-span-2">
                                         <Label htmlFor="brand-url">URL pública do app</Label>
@@ -516,7 +519,7 @@ export function PlatformOrganizationDetail({ organization, metrics, members = []
                                             value={appPublicUrl}
                                             onChange={(e) => setAppPublicUrl(e.target.value)}
                                             placeholder="https://cliente.exemplo.com"
-                                            disabled={pending}
+                                            disabled={pending || !canWrite}
                                             className="h-10"
                                         />
                                         <p className="text-xs text-muted-foreground">
@@ -524,7 +527,7 @@ export function PlatformOrganizationDetail({ organization, metrics, members = []
                                         </p>
                                     </div>
                                     <div className="sm:col-span-2 pt-2">
-                                        <Button type="submit" disabled={pending}>
+                                        <Button type="submit" disabled={pending || !canWrite}>
                                             {pending ? (
                                                 <>
                                                     <Loader2 className="h-4 w-4 animate-spin" />

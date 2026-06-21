@@ -26,6 +26,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, RotateCcw, Save } from "lucide-react";
 import { toast } from "@/lib/toast";
+import { usePlatformPermissions } from "@/components/platform/platform-permissions-context";
 
 type Props = {
     initialForm: Record<TenantLicensePlan, PlanFormState>;
@@ -34,6 +35,8 @@ type Props = {
 
 export function PlatformLicensesForm({ initialForm, updatedAt }: Props) {
     const router = useRouter();
+    const { can } = usePlatformPermissions();
+    const canEdit = can("licenses.write");
     const [form, setForm] = useState(initialForm);
     const [pending, startTransition] = useTransition();
     const [resetPending, startResetTransition] = useTransition();
@@ -70,6 +73,11 @@ export function PlatformLicensesForm({ initialForm, updatedAt }: Props) {
 
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
+            {!canEdit && (
+                <p className="rounded-lg border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+                    Você tem acesso somente leitura aos planos e preços.
+                </p>
+            )}
             {updatedAt && (
                 <p className="text-xs text-muted-foreground">
                     Última alteração:{" "}
@@ -107,7 +115,7 @@ export function PlatformLicensesForm({ initialForm, updatedAt }: Props) {
                                         onChange={(e) =>
                                             patchPlan(id, { label: e.target.value })
                                         }
-                                        disabled={pending}
+                                        disabled={pending || !canEdit}
                                         className="h-10"
                                     />
                                 </div>
@@ -122,7 +130,7 @@ export function PlatformLicensesForm({ initialForm, updatedAt }: Props) {
                                         onChange={(e) =>
                                             patchPlan(id, { monthlyPriceBrl: e.target.value })
                                         }
-                                        disabled={pending}
+                                        disabled={pending || !canEdit}
                                         className="h-10"
                                     />
                                 </div>
@@ -136,7 +144,7 @@ export function PlatformLicensesForm({ initialForm, updatedAt }: Props) {
                                         onChange={(e) =>
                                             patchPlan(id, { defaultMaxUsers: e.target.value })
                                         }
-                                        disabled={pending}
+                                        disabled={pending || !canEdit}
                                         className="h-10"
                                     />
                                 </div>
@@ -148,7 +156,7 @@ export function PlatformLicensesForm({ initialForm, updatedAt }: Props) {
                                         onChange={(e) =>
                                             patchPlan(id, { description: e.target.value })
                                         }
-                                        disabled={pending}
+                                        disabled={pending || !canEdit}
                                         className="h-10"
                                     />
                                 </div>
@@ -162,7 +170,7 @@ export function PlatformLicensesForm({ initialForm, updatedAt }: Props) {
                                         onChange={(e) =>
                                             patchPlan(id, { featuresText: e.target.value })
                                         }
-                                        disabled={pending}
+                                        disabled={pending || !canEdit}
                                         rows={4}
                                         className="resize-y text-sm"
                                     />
@@ -173,43 +181,45 @@ export function PlatformLicensesForm({ initialForm, updatedAt }: Props) {
                 })}
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/70 bg-card p-4">
-                <Button type="submit" disabled={pending || resetPending}>
-                    {pending ? (
-                        <>
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Salvando…
-                        </>
-                    ) : (
-                        <>
-                            <Save className="h-4 w-4" />
-                            Salvar planos
-                        </>
-                    )}
-                </Button>
-                <Button
-                    type="button"
-                    variant="outline"
-                    disabled={pending || resetPending}
-                    onClick={handleReset}
-                >
-                    {resetPending ? (
-                        <>
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Restaurando…
-                        </>
-                    ) : (
-                        <>
-                            <RotateCcw className="h-4 w-4" />
-                            Restaurar padrões
-                        </>
-                    )}
-                </Button>
-                <p className="text-sm text-muted-foreground">
-                    O MRR do dashboard recalcula automaticamente. Organizações já criadas
-                    mantêm o limite de usuários atual até você editar cada uma.
-                </p>
-            </div>
+            {canEdit && (
+                <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/70 bg-card p-4">
+                    <Button type="submit" disabled={pending || resetPending}>
+                        {pending ? (
+                            <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Salvando…
+                            </>
+                        ) : (
+                            <>
+                                <Save className="h-4 w-4" />
+                                Salvar planos
+                            </>
+                        )}
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        disabled={pending || resetPending}
+                        onClick={handleReset}
+                    >
+                        {resetPending ? (
+                            <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Restaurando…
+                            </>
+                        ) : (
+                            <>
+                                <RotateCcw className="h-4 w-4" />
+                                Restaurar padrões
+                            </>
+                        )}
+                    </Button>
+                    <p className="text-sm text-muted-foreground">
+                        O MRR do dashboard recalcula automaticamente. Organizações já criadas
+                        mantêm o limite de usuários atual até você editar cada uma.
+                    </p>
+                </div>
+            )}
         </form>
     );
 }

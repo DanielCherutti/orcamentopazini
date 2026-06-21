@@ -20,6 +20,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { usePlatformPermissions } from "@/components/platform/platform-permissions-context";
 import { toast } from "@/lib/toast";
 import { Headphones } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -32,6 +33,7 @@ export function ImpersonateOrganizationDialog({
     orgName: string;
 }) {
     const router = useRouter();
+    const { can } = usePlatformPermissions();
     const [open, setOpen] = useState(false);
     const [reason, setReason] = useState("");
     const [mode, setMode] = useState<"readonly" | "full">("readonly");
@@ -54,6 +56,10 @@ export function ImpersonateOrganizationDialog({
             router.push("/dashboard");
             router.refresh();
         });
+    }
+
+    if (!can("impersonate.readonly") && !can("impersonate.full")) {
+        return null;
     }
 
     return (
@@ -88,7 +94,9 @@ export function ImpersonateOrganizationDialog({
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="readonly">Somente leitura (recomendado)</SelectItem>
-                                    <SelectItem value="full">Acesso completo (auditado)</SelectItem>
+                                    {can("impersonate.full") && (
+                                        <SelectItem value="full">Acesso completo (auditado)</SelectItem>
+                                    )}
                                 </SelectContent>
                             </Select>
                         </div>

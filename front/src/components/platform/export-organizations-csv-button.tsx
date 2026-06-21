@@ -2,12 +2,16 @@
 
 import { useTransition } from "react";
 import { exportPlatformOrganizationsCsvAction } from "@/actions/platform-actions";
+import { usePlatformPermissions } from "@/components/platform/platform-permissions-context";
 import { Button } from "@/components/ui/button";
 import { FileSpreadsheet } from "lucide-react";
 import { toast } from "@/lib/toast";
 
 export function ExportOrganizationsCsvButton() {
+    const { can } = usePlatformPermissions();
     const [pending, startTransition] = useTransition();
+
+    if (!can("orgs.export_csv")) return null;
 
     return (
         <Button

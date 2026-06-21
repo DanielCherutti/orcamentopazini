@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { StringRecordId } from "surrealdb";
-import { assertPlatformMasterSession } from "@/lib/tenant-context";
+import { assertPlatformSession } from "@/lib/tenant-context";
 import {
     DEFAULT_PLATFORM_PLANS,
     formStateToPlans,
@@ -55,7 +55,7 @@ export async function getPlatformLicenseSettingsAction(): Promise<{
     };
     error?: string;
 }> {
-    const auth = await assertPlatformMasterSession();
+    const auth = await assertPlatformSession("licenses.view");
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();
@@ -89,7 +89,7 @@ export async function getPlatformLicenseSettingsAction(): Promise<{
 export async function updatePlatformLicenseSettingsAction(
     form: Record<TenantLicensePlan, PlanFormState>,
 ): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertPlatformMasterSession();
+    const auth = await assertPlatformSession("licenses.write");
     if (!auth.ok) return { success: false, error: auth.error };
 
     const plans = formStateToPlans(form);
@@ -154,7 +154,7 @@ export async function resetPlatformLicenseSettingsAction(): Promise<{
     success: boolean;
     error?: string;
 }> {
-    const auth = await assertPlatformMasterSession();
+    const auth = await assertPlatformSession("licenses.write");
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();

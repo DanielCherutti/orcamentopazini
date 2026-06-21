@@ -37,6 +37,7 @@ import {
     XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { usePlatformPermissions } from "@/components/platform/platform-permissions-context";
 
 function KpiCard({
     label,
@@ -91,6 +92,7 @@ function AlertIcon({ type }: { type: PlatformDashboardData["alerts"][0]["type"] 
 
 export function PlatformDashboard({ data }: { data: PlatformDashboardData }) {
     const [createOpen, setCreateOpen] = useState(false);
+    const { can } = usePlatformPermissions();
     const { summary, planBreakdown, alerts, topByUsers, recentOrganizations } = data;
 
     return (
@@ -114,10 +116,12 @@ export function PlatformDashboard({ data }: { data: PlatformDashboardData }) {
                     <Button variant="outline" asChild>
                         <Link href="/platform/organizations">Ver organizações</Link>
                     </Button>
-                    <Button onClick={() => setCreateOpen(true)}>
-                        <Plus className="h-4 w-4" />
-                        Nova organização
-                    </Button>
+                    {can("orgs.write") && (
+                        <Button onClick={() => setCreateOpen(true)}>
+                            <Plus className="h-4 w-4" />
+                            Nova organização
+                        </Button>
+                    )}
                 </div>
             </div>
 
@@ -293,7 +297,9 @@ export function PlatformDashboard({ data }: { data: PlatformDashboardData }) {
                 </CardContent>
             </Card>
 
-            <CreateOrganizationDialog open={createOpen} onOpenChange={setCreateOpen} />
+            {can("orgs.write") && (
+                <CreateOrganizationDialog open={createOpen} onOpenChange={setCreateOpen} />
+            )}
         </>
     );
 }

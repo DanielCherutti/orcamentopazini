@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Promove um usuário a admin da plataforma SaaS (sem membership em orgs clientes).
+ * Promove um usuário a Super Admin da plataforma (conta separada de orgs clientes).
  * Uso: bun scripts/promote-master.ts henrico@pazini.com
  */
 
@@ -10,9 +10,13 @@ import { config } from "dotenv";
 import { StringRecordId } from "surrealdb";
 import { getDb } from "../src/lib/surreal";
 import { recordIdToString } from "../src/lib/surreal-record-ids";
+import { emailHasOrgMembership } from "../src/lib/platform-user";
+import { ensurePlatformRoleField } from "../src/actions/platform-team-actions";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 config({ path: path.join(__dirname, "../.env") });
+
+await ensurePlatformRoleField();
 
 const email = process.argv[2]?.trim().toLowerCase();
 if (!email) {
@@ -31,19 +35,28 @@ if (!userId) {
     process.exit(1);
 }
 
+if (await emailHasOrgMembership(email, db)) {
+    console.error(
+        "Este e-mail tem membership em org cliente. Contas de plataforma e de empresa são separadas.",
+    );
+    process.exit(1);
+}
+
 await db.query(
-    "UPDATE $id SET is_platform_master = true, updated_at = $u",
+    `UPDATE $id SET
+        platform_role = 'super_admin',
+        is_platform_master = true,
+        updated_at = $u`,
     {
         id: new StringRecordId(userId),
         u: new Date().toISOString(),
     },
 );
 
-await db.query(
-    "DELETE portal_user_tenant WHERE user_id = $userId",
-    { userId: new StringRecordId(userId) },
-);
+await db.query("DELETE portal_user_tenant WHERE user_id = $userId", {
+    userId: new StringRecordId(userId),
+});
 
-console.log(`OK: ${email} → admin da plataforma (is_platform_master=true, memberships removidas)`);
+console.log(`OK: ${email} → Super Admin da plataforma (platform_role=super_admin)`);
 console.log("Faça logout/login para entrar em /platform");
 process.exit(0);

@@ -41,6 +41,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Building2, ChevronRight, Plus, Search } from "lucide-react";
+import { usePlatformPermissions } from "@/components/platform/platform-permissions-context";
 import { toast } from "@/lib/toast";
 import type { TenantLicensePlan } from "@/types/tenant-types";
 
@@ -58,6 +59,8 @@ export function PlatformOrganizationsManagement({
     const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
     const [createOpen, setCreateOpen] = useState(false);
     const [pending, startTransition] = useTransition();
+    const { can } = usePlatformPermissions();
+    const canWrite = can("orgs.write");
 
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
@@ -130,10 +133,12 @@ export function PlatformOrganizationsManagement({
                                 Licenças, limites e identidade visual por organização.
                             </CardDescription>
                         </div>
-                        <Button onClick={() => setCreateOpen(true)} className="shrink-0">
-                            <Plus className="h-4 w-4" />
-                            Nova organização
-                        </Button>
+                        {canWrite && (
+                            <Button onClick={() => setCreateOpen(true)} className="shrink-0">
+                                <Plus className="h-4 w-4" />
+                                Nova organização
+                            </Button>
+                        )}
                     </div>
                     <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                         <div className="relative max-w-sm flex-1">
@@ -243,7 +248,7 @@ export function PlatformOrganizationsManagement({
                                         </TableCell>
                                         <TableCell className="pr-6 text-right">
                                             <div className="flex items-center justify-end gap-1">
-                                                {org.active !== false ? (
+                                                {canWrite && org.active !== false ? (
                                                     <Button
                                                         type="button"
                                                         variant="ghost"
@@ -254,7 +259,7 @@ export function PlatformOrganizationsManagement({
                                                     >
                                                         Desativar
                                                     </Button>
-                                                ) : (
+                                                ) : canWrite ? (
                                                     <Button
                                                         type="button"
                                                         variant="ghost"
@@ -265,7 +270,7 @@ export function PlatformOrganizationsManagement({
                                                     >
                                                         Reativar
                                                     </Button>
-                                                )}
+                                                ) : null}
                                                 <ChevronRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-foreground" />
                                             </div>
                                         </TableCell>
@@ -277,7 +282,9 @@ export function PlatformOrganizationsManagement({
                 </CardContent>
             </Card>
 
-            <CreateOrganizationDialog open={createOpen} onOpenChange={setCreateOpen} />
+            {canWrite && (
+                <CreateOrganizationDialog open={createOpen} onOpenChange={setCreateOpen} />
+            )}
         </>
     );
 }

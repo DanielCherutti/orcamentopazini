@@ -9,10 +9,12 @@ import { resolveTenantRef } from "@/actions/platform-helpers";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { recordIdToString, requireRecordId } from "@/lib/surreal-record-ids";
 import type { ImpersonationPayload } from "@/lib/session-token";
+import { platformRoleCanImpersonate } from "@/lib/platform-permissions";
+import { getPlatformRoleForEmail } from "@/lib/platform-user";
 import {
-    assertPlatformMasterSession,
+    assertPlatformSession,
     getSessionContext,
-    setPlatformMasterSession,
+    setPlatformSession,
     setSessionContext,
 } from "@/lib/tenant-context";
 
@@ -37,8 +39,13 @@ export async function startImpersonationAction(input: {
     mode: "readonly" | "full";
     ttlMinutes?: number;
 }): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertPlatformMasterSession();
+    const permission = input.mode === "full" ? "impersonate.full" : "impersonate.readonly";
+    const auth = await assertPlatformSession(permission);
     if (!auth.ok) return { success: false, error: auth.error };
+
+    if (!platformRoleCanImpersonate(auth.ctx.platformRole, input.mode)) {
+        return { success: false, error: "Sem permissão para este modo de suporte" };
+    }
 
     const reason = input.reason.trim();
     if (reason.length < 10) {
@@ -67,6 +74,7 @@ export async function startImpersonationAction(input: {
         const audit = await db.create(new Table("platform_audit_log")).content({
             action: "impersonation_start",
             actor_email: auth.ctx.email,
+            actor_platform_role: auth.ctx.platformRole,
             tenant_id: canonicalId,
             tenant_slug: slug,
             reason,
@@ -141,7 +149,7 @@ export async function endImpersonationAction(): Promise<{ success: boolean; erro
         console.error("endImpersonationAction audit:", error);
     }
 
-    await setPlatformMasterSession(ctx.email);
+    await setPlatformSession(ctx.email, (await getPlatformRoleForEmail(ctx.email)) ?? "super_admin");
     revalidatePath("/platform");
     return { success: true };
 }
@@ -156,7 +164,7 @@ export async function listImpersonationAuditAction(tenantRef: string): Promise<{
     data?: ImpersonationAuditItem[];
     error?: string;
 }> {
-    const auth = await assertPlatformMasterSession();
+    const auth = await assertPlatformSession("orgs.view");
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();

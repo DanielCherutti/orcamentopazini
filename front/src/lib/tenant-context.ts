@@ -2,7 +2,8 @@ import { cookies } from "next/headers";
 import { StringRecordId } from "surrealdb";
 
 import { SESSION_COOKIE } from "@/lib/auth-constants";
-import { isPlatformMasterEmail } from "@/lib/platform-user";
+import { platformRoleHasPermission } from "@/lib/platform-permissions";
+import { getPlatformRoleForEmail } from "@/lib/platform-user";
 import {
     getTenantAccessBlockReason,
     tenantAccessErrorMessage,
@@ -15,6 +16,7 @@ import {
 } from "@/lib/session-token";
 import { getDb } from "@/lib/surreal";
 
+import type { PlatformPermission, PlatformRole } from "@/types/platform-types";
 import type { TenantRole } from "@/types/tenant-types";
 
 const SESSION_MAX_AGE = 60 * 60 * 8;
@@ -25,6 +27,7 @@ export type SessionContext = {
     role: TenantRole | null;
     pending: boolean;
     platformMode: boolean;
+    platformRole: PlatformRole | null;
     impersonation: ImpersonationPayload | null;
 };
 
@@ -39,6 +42,7 @@ function payloadToContext(payload: {
     role?: TenantRole;
     pending?: boolean;
     platformMode?: boolean;
+    platformRole?: PlatformRole;
     impersonation?: ImpersonationPayload;
 }): SessionContext {
     return {
@@ -47,6 +51,7 @@ function payloadToContext(payload: {
         role: payload.role ?? null,
         pending: payload.pending === true,
         platformMode: payload.platformMode === true,
+        platformRole: payload.platformRole ?? null,
         impersonation: payload.impersonation ?? null,
     };
 }
@@ -67,10 +72,17 @@ export async function getSessionContext(): Promise<SessionContext | null> {
     const payload = await verifySessionToken(raw, secret);
     if (!payload) return null;
 
-    const ctx = payloadToContext(payload);
+    let ctx = payloadToContext(payload);
     if (ctx.impersonation && isImpersonationExpired(ctx.impersonation)) {
-        return { ...ctx, impersonation: null, tenantId: null, role: null };
+        ctx = { ...ctx, impersonation: null, tenantId: null, role: null };
     }
+
+    if (ctx.platformMode && !ctx.platformRole) {
+        const role = await getPlatformRoleForEmail(ctx.email);
+        if (!role) return null;
+        ctx = { ...ctx, platformRole: role };
+    }
+
     return ctx;
 }
 
@@ -81,6 +93,7 @@ export async function setSessionContext(
         role?: TenantRole;
         pending?: boolean;
         platformMode?: boolean;
+        platformRole?: PlatformRole;
         impersonation?: ImpersonationPayload | null;
     },
     maxAgeSec = SESSION_MAX_AGE,
@@ -98,6 +111,7 @@ export async function setSessionContext(
             role: platformMode ? undefined : ctx.role,
             pending: ctx.pending,
             platformMode,
+            platformRole: platformMode ? ctx.platformRole : undefined,
             impersonation,
         },
         secret,
@@ -114,13 +128,23 @@ export async function setSessionContext(
     });
 }
 
-export async function setPlatformMasterSession(email: string): Promise<void> {
+export async function setPlatformSession(
+    email: string,
+    platformRole: PlatformRole,
+): Promise<void> {
     await setSessionContext({
         email,
         platformMode: true,
+        platformRole,
         pending: false,
         impersonation: null,
     });
+}
+
+/** @deprecated Use setPlatformSession */
+export async function setPlatformMasterSession(email: string): Promise<void> {
+    const role = (await getPlatformRoleForEmail(email)) ?? "super_admin";
+    await setPlatformSession(email, role);
 }
 
 async function loadTenantLicenseBlock(tenantId: string): Promise<TenantAccessBlockReason | null> {
@@ -150,19 +174,40 @@ export async function assertAuthenticatedSession(): Promise<
     return { ok: true, ctx };
 }
 
-/** Admin da plataforma SaaS — gestão de organizações, sem dados operacionais. */
+export type PlatformSessionContext = {
+    email: string;
+    platformRole: PlatformRole;
+};
+
+export async function assertPlatformSession(
+    permission?: PlatformPermission,
+): Promise<
+    { ok: true; ctx: PlatformSessionContext } | { ok: false; error: string }
+> {
+    const ctx = await getSessionContext();
+    if (!ctx?.platformMode || !ctx.platformRole) {
+        return { ok: false, error: "Não autorizado" };
+    }
+
+    const role = await getPlatformRoleForEmail(ctx.email);
+    if (!role) {
+        return { ok: false, error: "Não autorizado" };
+    }
+
+    if (permission && !platformRoleHasPermission(role, permission)) {
+        return { ok: false, error: "Sem permissão para esta ação" };
+    }
+
+    return { ok: true, ctx: { email: ctx.email, platformRole: role } };
+}
+
+/** @deprecated Use assertPlatformSession */
 export async function assertPlatformMasterSession(): Promise<
     { ok: true; ctx: { email: string } } | { ok: false; error: string }
 > {
-    const ctx = await getSessionContext();
-    if (!ctx || !ctx.platformMode) {
-        return { ok: false, error: "Não autorizado" };
-    }
-    const allowed = await isPlatformMasterEmail(ctx.email);
-    if (!allowed) {
-        return { ok: false, error: "Não autorizado" };
-    }
-    return { ok: true, ctx: { email: ctx.email } };
+    const auth = await assertPlatformSession();
+    if (!auth.ok) return auth;
+    return { ok: true, ctx: { email: auth.ctx.email } };
 }
 
 /** Exige tenant ativo na sessão (app operacional — orçamentos, produtos). */
@@ -217,7 +262,7 @@ export async function getActiveTenantId(): Promise<string | null> {
     return ctx.tenantId;
 }
 
-/** @deprecated Master agora é platformMode — use assertPlatformMasterSession. */
+/** @deprecated Master agora é platformMode — use assertPlatformSession. */
 export function isMasterRole(role: TenantRole | null | undefined): boolean {
     return role === "master";
 }

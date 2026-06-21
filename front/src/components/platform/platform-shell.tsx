@@ -6,6 +6,8 @@ import { Building2, CreditCard, LayoutDashboard, LogOut, Shield, Users } from "l
 import { logoutAction } from "@/actions/auth-actions";
 import { cn } from "@/lib/utils";
 import { initialsFromEmail } from "@/components/platform/platform-utils";
+import { usePlatformPermissions } from "@/components/platform/platform-permissions-context";
+import { PLATFORM_ROLE_LABELS, type PlatformRole } from "@/types/platform-types";
 
 function NavLink({
     href,
@@ -42,10 +44,13 @@ function NavLink({
 export function PlatformShell({
     children,
     sessionEmail,
+    platformRole,
 }: {
     children: React.ReactNode;
     sessionEmail: string | null;
+    platformRole: PlatformRole;
 }) {
+    const { can } = usePlatformPermissions();
     const pathname = usePathname() ?? "";
     const isDashboard =
         pathname === "/platform" || pathname === "/platform/";
@@ -54,8 +59,10 @@ export function PlatformShell({
         pathname.startsWith("/platform/organizations/");
     const isLicenses =
         pathname === "/platform/licenses" || pathname.startsWith("/platform/licenses/");
-    const isAdmins =
-        pathname === "/platform/admins" || pathname.startsWith("/platform/admins/");
+    const isTeam =
+        pathname === "/platform/team" ||
+        pathname.startsWith("/platform/team/") ||
+        pathname === "/platform/admins";
 
     return (
         <div className="min-h-dvh bg-slate-50 dark:bg-background">
@@ -94,9 +101,11 @@ export function PlatformShell({
                     <NavLink href="/platform/licenses" icon={CreditCard} active={isLicenses}>
                         Planos e preços
                     </NavLink>
-                    <NavLink href="/platform/admins" icon={Users} active={isAdmins}>
-                        Admins
-                    </NavLink>
+                    {can("team.manage") && (
+                        <NavLink href="/platform/team" icon={Users} active={isTeam}>
+                            Equipe
+                        </NavLink>
+                    )}
                 </nav>
 
                 <div className="border-t border-slate-800/80 bg-slate-900/50 p-3">
@@ -111,7 +120,9 @@ export function PlatformShell({
                             <p className="truncate text-xs font-medium text-slate-200">
                                 {sessionEmail ?? "—"}
                             </p>
-                            <p className="text-[10px] text-slate-500">Admin da plataforma</p>
+                            <p className="text-[10px] text-slate-500">
+                                {PLATFORM_ROLE_LABELS[platformRole]}
+                            </p>
                         </div>
                     </div>
                     <form action={logoutAction}>
