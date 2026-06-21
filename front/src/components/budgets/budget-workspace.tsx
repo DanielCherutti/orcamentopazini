@@ -207,15 +207,19 @@ export function BudgetWorkspace({
                                     />
                                 </div>
 
-                                {/* Aba Escopo */}
-                                {activeTab === 'scope' && (
-                                    <div className="flex-1 flex min-h-0 overflow-hidden bg-white">
-                                        <BudgetScope
-                                            budgetId={budgetId}
-                                            isReadOnly={isReadOnly}
-                                        />
-                                    </div>
-                                )}
+                                {/* Aba Escopo — mantém montado para reutilizar cache ao voltar */}
+                                <div
+                                    className={cn(
+                                        "flex-1 flex min-h-0 overflow-hidden bg-white",
+                                        activeTab !== "scope" && "hidden",
+                                    )}
+                                >
+                                    <BudgetScope
+                                        key={budgetId}
+                                        budgetId={budgetId}
+                                        isReadOnly={isReadOnly}
+                                    />
+                                </div>
 
                                 {activeTab === 'quote' && (
                                     <div className="flex-1 flex min-h-0 overflow-hidden bg-white">

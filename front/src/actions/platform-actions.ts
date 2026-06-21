@@ -28,6 +28,7 @@ import {
 } from "@/lib/platform-license";
 import { loadPlatformPlans } from "@/actions/platform-license-actions";
 import { getTenantPublicOrigin } from "@/lib/tenant-public-origin";
+import { invalidateTenantHostCacheForTenant } from "@/lib/tenant-host-cache";
 import { RESERVED_SUBDOMAINS } from "@/lib/tenant-host";
 import { passwordHashLooksValid } from "@/lib/password-hash-present";
 import { resolveTenantRef } from "@/actions/platform-helpers";
@@ -1003,6 +1004,12 @@ export async function updateTenantSubdomainAction(
     const db = await getDb();
     try {
         const rid = await resolveTenantRef(db, tenantRef);
+        const beforeRaw = await db.select<Record<string, unknown>>(rid);
+        const beforeRow = Array.isArray(beforeRaw) ? beforeRaw[0] : beforeRaw;
+        if (beforeRow) {
+            invalidateTenantHostCacheForTenant(serializeTenant(beforeRow));
+        }
+
         const dup = await db.query<[unknown[]]>(
             `SELECT id FROM tenant WHERE (subdomain = $sub OR slug = $sub) AND id != $id AND deleted_at IS NONE LIMIT 1`,
             { sub, id: rid },
@@ -1012,6 +1019,11 @@ export async function updateTenantSubdomainAction(
         }
 
         await db.update(rid).merge({ subdomain: sub, updated_at: new Date().toISOString() });
+        invalidateTenantHostCacheForTenant({
+            slug: beforeRow ? String(beforeRow.slug ?? "") : undefined,
+            subdomain: sub,
+            custom_domain: beforeRow?.custom_domain != null ? String(beforeRow.custom_domain) : null,
+        });
         const tenantId = recordIdToString(rid)!;
         await auditPlatformAction({
             action: "org.subdomain_update",
@@ -1045,10 +1057,21 @@ export async function setCustomDomainAction(
     const db = await getDb();
     try {
         const rid = await resolveTenantRef(db, tenantRef);
+        const beforeRaw = await db.select<Record<string, unknown>>(rid);
+        const beforeRow = Array.isArray(beforeRaw) ? beforeRaw[0] : beforeRaw;
+        if (beforeRow) {
+            invalidateTenantHostCacheForTenant(serializeTenant(beforeRow));
+        }
+
         await db.update(rid).merge({
             custom_domain: custom,
             custom_domain_verified_at: null,
             updated_at: new Date().toISOString(),
+        });
+        invalidateTenantHostCacheForTenant({
+            slug: beforeRow ? String(beforeRow.slug ?? "") : undefined,
+            subdomain: beforeRow?.subdomain != null ? String(beforeRow.subdomain) : null,
+            custom_domain: custom,
         });
         const tenantId = recordIdToString(rid)!;
         await auditPlatformAction({
@@ -1105,6 +1128,7 @@ export async function verifyCustomDomainAction(tenantRef: string): Promise<{
                 custom_domain_verified_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
             });
+            invalidateTenantHostCacheForTenant(tenant);
             const tenantId = recordIdToString(rid)!;
             await auditPlatformAction({
                 action: "org.domain_verify",

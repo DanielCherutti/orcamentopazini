@@ -34,10 +34,15 @@ export function getAppTenantDomain(): string {
     );
 }
 
-function normalizeHost(host: string | null | undefined): string | null {
+/** Host normalizado (sem porta, lowercase) — usado em cache e resolução. */
+export function normalizeHostHeader(host: string | null | undefined): string | null {
     if (!host) return null;
     const h = host.split(":")[0]?.trim().toLowerCase();
     return h || null;
+}
+
+function normalizeHost(host: string | null | undefined): string | null {
+    return normalizeHostHeader(host);
 }
 
 export type HostTenantResolution =
@@ -45,6 +50,11 @@ export type HostTenantResolution =
     | { kind: "subdomain"; host: string; subdomain: string }
     | { kind: "custom"; host: string; customDomain: string }
     | { kind: "unknown"; host: string };
+
+export type ResolvedHostTenant = {
+    resolution: HostTenantResolution;
+    tenant: Tenant | null;
+};
 
 /** Resolve tipo de host sem consultar banco. */
 export function resolveHostKind(hostHeader: string | null | undefined): HostTenantResolution {

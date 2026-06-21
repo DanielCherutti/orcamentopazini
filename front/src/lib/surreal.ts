@@ -80,6 +80,24 @@ export function resetDb() {
     dbInitialized = false;
 }
 
+/** Erros de token expirado, auth HTTP ou socket inativo — candidatos a reconexão */
+export function isRecoverableDbError(error: unknown): boolean {
+    return isTokenExpiredError(error) || isDbConnectionError(error);
+}
+
+/** Executa operação no SurrealDB; em falha recuperável, reconecta e tenta uma vez */
+export async function withDbRetry<T>(operation: (db: Surreal) => Promise<T>): Promise<T> {
+    try {
+        const db = await getDb();
+        return await operation(db);
+    } catch (error) {
+        if (!isRecoverableDbError(error)) throw error;
+        resetDb();
+        const db = await getDb();
+        return await operation(db);
+    }
+}
+
 async function ensureLiveConnection(instance: Surreal): Promise<boolean> {
     try {
         await instance.query("RETURN 1");
