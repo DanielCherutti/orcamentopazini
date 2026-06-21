@@ -25,7 +25,8 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: validationError }, { status: 400 });
         }
 
-        const url = await saveUploadBuffer(buffer, "library", file.name);
+        const tenantFolder = session.ctx.tenantId.replace(":", "_");
+        const url = await saveUploadBuffer(buffer, `library/${tenantFolder}`, file.name);
 
         return NextResponse.json({ url });
     } catch (error) {

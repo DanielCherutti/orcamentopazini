@@ -14,7 +14,7 @@ export function LayoutShell({
     const { collapsed } = useSidebar();
 
     return (
-        <div className="min-h-screen bg-background">
+        <div className="min-h-screen bg-background flex flex-col flex-1 min-h-0">
             <Sidebar sessionEmail={sessionEmail} />
             <div
                 className={`transition-[padding-left] duration-300 ease-in-out ${

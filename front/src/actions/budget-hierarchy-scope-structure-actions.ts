@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { StringRecordId, Table } from "surrealdb";
-import { assertActionSession } from "@/actions/auth-actions";
+import { assertWriteActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
 import { serializeBudgetEntity } from "@/actions/budget-shared";
@@ -13,6 +13,10 @@ import {
 } from "@/lib/surreal-record-ids";
 import { buildDuplicatedBudgetItemContent, recalculateBudgetTotal } from "@/actions/budget-hierarchy-helpers";
 import type { CostDisplayMode, LocationAssemblyMode, PriceAdjustmentMode } from "@/lib/budgets/scope-pricing";
+import {
+    assertBudgetChildInActiveTenant,
+    assertBudgetInActiveTenant,
+} from "@/lib/budget-tenant";
 
 export async function updateLocationAction(
     locationId: string,
@@ -28,8 +32,11 @@ export async function updateLocationAction(
         assembly_value?: number;
     }
 ) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_location", locationId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -53,13 +60,16 @@ export async function updateLocationAction(
 }
 
 export async function addLocationAction(budgetId: string, name: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
         const raw = await db.create(new Table("budget_location")).content({
-            budget_id: requireRecordId("budget", budgetId),
+            budget_id: gate.budgetRecordId,
             name,
             order_index: Date.now(),
             show_costs_on_print: false,
@@ -98,8 +108,11 @@ export async function updateSectionAction(
         assembly_value?: number;
     }
 ) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_section", sectionId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -123,14 +136,17 @@ export async function updateSectionAction(
 }
 
 export async function addSectionAction(locationId: string, budgetId: string, name: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const locGate = await assertBudgetChildInActiveTenant("budget_location", locationId, budgetId);
+    if (!locGate.ok) return { success: false, error: locGate.error };
 
     const db = await getDb();
     try {
         const raw = await db.create(new Table("budget_section")).content({
             location_id: requireRecordId("budget_location", locationId),
-            budget_id: requireRecordId("budget", budgetId),
+            budget_id: locGate.budgetRecordId,
             name,
             order_index: Date.now(),
             show_costs_on_print: false,
@@ -154,8 +170,11 @@ export async function addSectionAction(locationId: string, budgetId: string, nam
 }
 
 export async function deleteLocationAction(locationId: string, budgetId: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_location", locationId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -203,8 +222,11 @@ export async function deleteLocationAction(locationId: string, budgetId: string)
 }
 
 export async function deleteSectionAction(sectionId: string, budgetId: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_section", sectionId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -234,8 +256,11 @@ export async function deleteSectionAction(sectionId: string, budgetId: string) {
 }
 
 export async function duplicateSectionAction(sectionId: string, budgetId: string, newName?: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_section", sectionId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -299,12 +324,15 @@ export async function duplicateSectionAction(sectionId: string, budgetId: string
 }
 
 export async function reorderLocationsAction(orderedLocationIds: string[], budgetId: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
-        const budgetRecordId = requireRecordId("budget", budgetId);
+        const budgetRecordId = gate.budgetRecordId;
         const [rows] = await db.query<[Array<{ id: unknown }>]>(
             "SELECT id FROM budget_location WHERE budget_id = $bid AND deleted_at IS NONE",
             { bid: budgetRecordId }
@@ -337,8 +365,11 @@ export async function reorderLocationsAction(orderedLocationIds: string[], budge
 }
 
 export async function reorderSectionsAction(orderedSectionIds: string[], budgetId: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -360,8 +391,13 @@ export async function reorderSectionsAction(orderedSectionIds: string[], budgetI
 }
 
 export async function moveSectionAction(sectionId: string, newLocationId: string, budgetId: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const sectionGate = await assertBudgetChildInActiveTenant("budget_section", sectionId, budgetId);
+    if (!sectionGate.ok) return { success: false, error: sectionGate.error };
+    const locGate = await assertBudgetChildInActiveTenant("budget_location", newLocationId, budgetId);
+    if (!locGate.ok) return { success: false, error: locGate.error };
 
     const db = await getDb();
     try {
@@ -382,8 +418,11 @@ export async function moveSectionAction(sectionId: string, newLocationId: string
 }
 
 export async function duplicateLocationAction(locationId: string, budgetId: string, newName?: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_location", locationId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -396,7 +435,7 @@ export async function duplicateLocationAction(locationId: string, budgetId: stri
         if (!original) return { success: false, error: "Local não encontrado" };
 
         const newLocation = await db.create(new Table("budget_location")).content({
-            budget_id: requireRecordId("budget", budgetId),
+            budget_id: gate.budgetRecordId,
             name: newName || `${original.name} - Cópia`,
             description: original.description,
             order_index: Date.now(),

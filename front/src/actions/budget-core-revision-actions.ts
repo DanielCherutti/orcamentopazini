@@ -3,7 +3,7 @@
 import { Table } from "surrealdb";
 import { revalidatePath } from "next/cache";
 import { StringRecordId } from "surrealdb";
-import { assertActionSession } from "@/actions/auth-actions";
+import { assertWriteActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
 import { InvalidRecordIdError, recordIdToString, requireRecordId } from "@/lib/surreal-record-ids";
 import {
@@ -16,6 +16,8 @@ import {
     formatBudgetRevisionLabel,
     stripBudgetRevisionTitleSuffix,
 } from "@/lib/budgets/budget-revision";
+import { assertBudgetInActiveTenant } from "@/lib/budget-tenant";
+import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
 
 function resolveRelationId(value: unknown): string {
     if (!value) return "";
@@ -124,12 +126,15 @@ async function familyHasDraftRevision(
 export async function canCreateBudgetRevisionForBudgetAction(
     budgetId: string
 ): Promise<{ success: boolean; canCreate?: boolean; hint?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, hint: auth.error };
+
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) return { success: false, hint: gate.error };
 
     const db = await getDb();
     try {
-        const budgetRecordId = requireRecordId("budget", budgetId);
+        const budgetRecordId = gate.budgetRecordId;
         const res = await db.query<
             [Array<{ status?: string; parent_budget_id?: unknown; root_budget_id?: unknown; id?: unknown }>]
         >("SELECT status, parent_budget_id, root_budget_id, id FROM $id", {
@@ -183,12 +188,16 @@ export async function canCreateBudgetRevisionForBudgetAction(
 export async function createBudgetRevisionAction(
     budgetId: string
 ): Promise<{ success: boolean; newBudgetId?: string; revisionNumber?: number; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
-        const budgetRecordId = requireRecordId("budget", budgetId);
+        const budgetRecordId = gate.budgetRecordId;
+        const tenantId = await requireActiveTenantId();
 
         const originalRes = await db.query<[Array<Record<string, unknown>>]>("SELECT * FROM $id", {
             id: budgetRecordId,
@@ -240,6 +249,7 @@ export async function createBudgetRevisionAction(
             status: "draft",
             total_value: 0,
             client_id: clientId,
+            tenant_id: tenantRecordId(tenantId),
             use_compositor: useCompositor,
             compositor_label: source.compositor_label,
             description: source.description,

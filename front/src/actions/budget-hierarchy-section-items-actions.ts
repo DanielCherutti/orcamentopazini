@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { Table } from "surrealdb";
-import { assertActionSession } from "@/actions/auth-actions";
+import { assertWriteActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
 import type { BudgetItem, BudgetLocation } from "@/types/budget-types";
@@ -18,6 +18,11 @@ import {
 import { extractProductId, recalculateBudgetTotal } from "@/actions/budget-hierarchy-helpers";
 import { budgetItemsFromGroupedBySectionId } from "@/lib/budgets/budget-section-items-grouped";
 import { computeItemSubtotal, type PriceAdjustmentMode } from "@/lib/budgets/scope-pricing";
+import {
+    assertBudgetChildInActiveTenant,
+    assertBudgetInActiveTenant,
+    assertSectionsInActiveTenant,
+} from "@/lib/budget-tenant";
 
 /** Próximo `order_index` na seção (múltiplos de 10, alinhado a `reorderSectionItemsAction`). */
 async function nextSectionItemOrderIndex(
@@ -401,12 +406,15 @@ export async function getBudgetItemsBySectionIdsLightAction(sectionIds: string[]
     data?: Record<string, BudgetItem[]>;
     error?: string;
 }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     if (sectionIds.length === 0) {
         return { success: true, data: {} };
     }
+
+    const sectionsGate = await assertSectionsInActiveTenant(sectionIds);
+    if (!sectionsGate.ok) return { success: false, error: sectionsGate.error };
 
     const db = await getDb();
     try {
@@ -473,8 +481,11 @@ export async function getItemsBySectionLightAction(sectionId: string): Promise<{
 }
 
 export async function getItemsBySectionAction(sectionId: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_section", sectionId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -504,12 +515,15 @@ export async function getBudgetItemsGroupedByBudgetIdAction(budgetId: string): P
     data?: Record<string, BudgetItem[]>;
     error?: string;
 }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
-        const budgetRecordId = requireRecordId("budget", budgetId);
+        const budgetRecordId = gate.budgetRecordId;
         /**
          * Em bases legadas/migradas parcialmente, há mistura de linhas com e sem `budget_id`
          * denormalizado. Precisamos unir os três caminhos para não perder itens no agrupamento.
@@ -579,12 +593,15 @@ export async function getBudgetItemsGroupedByBudgetIdLightAction(budgetId: strin
     data?: Record<string, BudgetItem[]>;
     error?: string;
 }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
-        const budgetRecordId = requireRecordId("budget", budgetId);
+        const budgetRecordId = gate.budgetRecordId;
         const mergedById = new Map<string, Record<string, unknown>>();
         const mergeRows = (rows: Array<Record<string, unknown>>) => {
             for (const row of rows) {
@@ -642,8 +659,11 @@ export async function getBudgetItemsGroupedByBudgetIdLightAction(budgetId: strin
 }
 
 export async function addItemAction(sectionId: string, budgetId: string, productId: string, quantity: number) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_section", sectionId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -692,7 +712,7 @@ export async function addGroupToSectionAction(
     productQuantities: Record<string, number>,
     selectedProductIds: string[]
 ) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error, addedCount: 0 };
 
     const groupRecordId = safeStringRecordId("product_group", groupId);
@@ -704,6 +724,9 @@ export async function addGroupToSectionAction(
     if (!productsRes.success || !productsRes.data?.length) {
         return { success: false, error: "Este grupo não possui produtos cadastrados.", addedCount: 0 };
     }
+
+    const gate = await assertBudgetChildInActiveTenant("budget_section", sectionId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error, addedCount: 0 };
 
     const db = await getDb();
     try {
@@ -789,8 +812,11 @@ export async function addGroupToSectionAction(
 }
 
 export async function deleteItemAction(itemId: string, budgetId: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_item", itemId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -814,15 +840,18 @@ export async function deleteBudgetItemsBulkAction(
     itemIds: string[],
     budgetId: string
 ): Promise<{ success: boolean; error?: string; deletedCount: number }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error, deletedCount: 0 };
 
     const unique = [...new Set(itemIds.map((id) => String(id).trim()).filter(Boolean))];
     if (unique.length === 0) return { success: true, deletedCount: 0 };
 
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) return { success: false, error: gate.error, deletedCount: 0 };
+
     const db = await getDb();
     try {
-        const budgetRecordId = requireRecordId("budget", budgetId);
+        const budgetRecordId = gate.budgetRecordId;
         let itemRecordIds;
         try {
             itemRecordIds = unique.map((id) => requireRecordId("budget_item", id));
@@ -861,8 +890,11 @@ export async function deleteBudgetItemsBulkAction(
 }
 
 export async function updateItemQuantityAction(itemId: string, budgetId: string, quantity: number) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_item", itemId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -909,8 +941,11 @@ export async function updateItemQuantityAction(itemId: string, budgetId: string,
 }
 
 export async function updateItemLaborCostAction(itemId: string, budgetId: string, laborCost: number) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_item", itemId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -963,8 +998,11 @@ export async function updateItemGroupInSectionAction(
     groupId: string | null,
     groupName?: string
 ) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_item", itemId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -995,8 +1033,11 @@ export async function updateItemGroupInSectionAction(
 }
 
 export async function reorderSectionItemsAction(orderedItemIds: string[], budgetId: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -1030,8 +1071,11 @@ export async function updateItemCommercialSettingsAction(
         labor_show_on_print?: boolean;
     }
 ) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_item", itemId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -1114,8 +1158,11 @@ export async function clearScopeItemPriceAdjustmentsAction(
     budgetId: string,
     scope: { type: "section"; sectionId: string } | { type: "location"; locationId: string }
 ): Promise<{ success: boolean; error?: string; clearedCount?: number }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -1201,12 +1248,15 @@ export async function clearScopeItemPriceAdjustmentsAction(
 export async function getBudgetUsedProductGroupIdsAction(
     budgetId: string
 ): Promise<{ success: boolean; data?: string[]; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
-        const budgetRecordId = requireRecordId("budget", budgetId);
+        const budgetRecordId = gate.budgetRecordId;
         const set = new Set<string>();
 
         const mergeGroupRows = (rows: Array<{ group_id: unknown }> | undefined) => {

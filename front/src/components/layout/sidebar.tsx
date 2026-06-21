@@ -100,7 +100,7 @@ export function Sidebar({
     return (
         <aside
             className={cn(
-                "fixed left-0 top-0 z-20 flex h-screen flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[4px_0_24px_-8px_rgba(0,0,0,0.25)] transition-all duration-300 ease-in-out",
+                "fixed left-0 z-20 flex flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[4px_0_24px_-8px_rgba(0,0,0,0.25)] transition-all duration-300 ease-in-out top-[var(--support-banner-height,0px)] h-[calc(100vh-var(--support-banner-height,0px))]",
                 collapsed ? "w-0 overflow-hidden opacity-0 pointer-events-none" : "w-64 opacity-100"
             )}
             aria-label="Menu principal"

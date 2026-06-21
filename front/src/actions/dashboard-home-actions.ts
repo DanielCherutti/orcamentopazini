@@ -2,6 +2,7 @@
 
 import { assertActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
+import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
 import { budgetEditUrl } from "@/lib/budgets/budget-path";
 
 const DEFAULT_COMPANY_ID = 0;
@@ -55,6 +56,7 @@ export async function getDashboardHomeSummaryAction(): Promise<{
   const auth = await assertActionSession();
   if (!auth.ok) return { success: false, error: auth.error };
 
+  const tenantId = await requireActiveTenantId();
   const db = await getDb();
 
   try {
@@ -66,18 +68,24 @@ export async function getDashboardHomeSummaryAction(): Promise<{
       recentRes,
     ] = await Promise.all([
       db.query<[{ count: number }]>(
-        `SELECT count() FROM product WHERE company_id = $company_id GROUP ALL`,
-        { company_id: DEFAULT_COMPANY_ID }
+        `SELECT count() FROM product WHERE company_id = $company_id AND tenant_id = $tenantId GROUP ALL`,
+        { company_id: DEFAULT_COMPANY_ID, tenantId: tenantRecordId(tenantId) }
       ),
       db.query<[{ count: number }]>(
-        `SELECT count() FROM product_group WHERE company_id = $company_id GROUP ALL`,
-        { company_id: DEFAULT_COMPANY_ID }
+        `SELECT count() FROM product_group WHERE company_id = $company_id AND tenant_id = $tenantId GROUP ALL`,
+        { company_id: DEFAULT_COMPANY_ID, tenantId: tenantRecordId(tenantId) }
       ),
-      db.query<[{ count: number }]>(`SELECT count() FROM budget GROUP ALL`),
-      db.query<[{ count: number }]>(`SELECT count() FROM client GROUP ALL`),
+      db.query<[{ count: number }]>(
+        `SELECT count() FROM budget WHERE tenant_id = $tenantId GROUP ALL`,
+        { tenantId: tenantRecordId(tenantId) },
+      ),
+      db.query<[{ count: number }]>(
+        `SELECT count() FROM client WHERE tenant_id = $tenantId GROUP ALL`,
+        { tenantId: tenantRecordId(tenantId) },
+      ),
       db.query<[Record<string, unknown>[]]>(
-        `SELECT id, code, title, created_at FROM budget ORDER BY created_at DESC LIMIT $limit`,
-        { limit: RECENT_BUDGETS_LIMIT }
+        `SELECT id, code, title, created_at FROM budget WHERE tenant_id = $tenantId ORDER BY created_at DESC LIMIT $limit`,
+        { tenantId: tenantRecordId(tenantId), limit: RECENT_BUDGETS_LIMIT }
       ),
     ]);
 

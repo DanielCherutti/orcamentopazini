@@ -459,6 +459,7 @@ export function CompositorCoverBlock({
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white dark:bg-neutral-950">
         <CompositorRichTextEditor
+          budgetId={budgetId}
           variant="word"
           readOnly={Boolean(isReadOnly)}
           value={props.cover_document_html ?? ""}

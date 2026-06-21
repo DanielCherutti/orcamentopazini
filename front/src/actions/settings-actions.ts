@@ -1,12 +1,14 @@
 "use server";
 
 import { Table } from "surrealdb";
-import { assertActionSession } from "@/actions/auth-actions";
+import { assertActionSession, assertWriteActionSession } from "@/actions/auth-actions";
 import {
   BRAND_DEFAULT_PRIMARY,
   BRAND_DEFAULT_SECONDARY,
   normalizeHex,
 } from "@/lib/branding-theme";
+import { DEFAULT_TENANT_RECORD_ID } from "@/lib/tenant-constants";
+import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { revalidatePath } from "next/cache";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
@@ -89,7 +91,8 @@ export async function getPublicProposalBrandingAction(): Promise<PublicProposalB
         }[],
       ]
     >(
-      "SELECT primary_color, secondary_color, company_name, company_logo_url FROM proposal_settings LIMIT 1"
+      "SELECT primary_color, secondary_color, company_name, company_logo_url FROM proposal_settings WHERE tenant_id = $tenantId LIMIT 1",
+      { tenantId: tenantRecordId(DEFAULT_TENANT_RECORD_ID) },
     );
     const row = result[0]?.[0];
     const primary =
@@ -127,7 +130,11 @@ export async function getProposalSettingsAction() {
 
     const db = await getDb();
     try {
-        const result = await db.query<[ProposalSettings[]]>("SELECT * FROM proposal_settings LIMIT 1");
+        const tenantId = await requireActiveTenantId();
+        const result = await db.query<[ProposalSettings[]]>(
+            "SELECT * FROM proposal_settings WHERE tenant_id = $tenantId LIMIT 1",
+            { tenantId: tenantRecordId(tenantId) },
+        );
 
         const raw = result[0]?.[0] || { ...PROPOSAL_SETTINGS_DEFAULTS };
         const plain = toPlain(raw) as Record<string, unknown>;
@@ -165,11 +172,12 @@ export async function getProposalSettingsAction() {
 }
 
 export async function updateProposalSettingsAction(data: UpdateProposalSettingsInput) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();
     try {
+        const tenantId = await requireActiveTenantId();
         const {
             smtp_pass_new,
             imap_pass_new,
@@ -200,13 +208,19 @@ export async function updateProposalSettingsAction(data: UpdateProposalSettingsI
             cleanData.smtp_secure = cleanData.smtp_secure === "true";
         }
 
-        const result = await db.query<[ProposalSettings[]]>("SELECT * FROM proposal_settings LIMIT 1");
+        const result = await db.query<[ProposalSettings[]]>(
+            "SELECT * FROM proposal_settings WHERE tenant_id = $tenantId LIMIT 1",
+            { tenantId: tenantRecordId(tenantId) },
+        );
 
         if (result[0] && result[0].length > 0) {
-            const id = result[0][0].id; // SurrealDB ID
+            const id = result[0][0].id;
             await db.update(requireRecordId("proposal_settings", String(id!))).merge(cleanData);
         } else {
-            await db.create(new Table("proposal_settings")).content(cleanData);
+            await db.create(new Table("proposal_settings")).content({
+                ...cleanData,
+                tenant_id: tenantRecordId(tenantId),
+            });
         }
 
         revalidatePath("/settings");
@@ -229,7 +243,7 @@ export async function testImapConnectionAction(): Promise<{
     imapHost?: string;
     imapUser?: string;
 }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     const { resolveImapConfig } = await import("@/lib/imap-config");

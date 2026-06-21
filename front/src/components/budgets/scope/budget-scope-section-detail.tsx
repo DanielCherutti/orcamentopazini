@@ -571,6 +571,7 @@ export function SectionDetail({
                 >
                     <CompositorRichTextEditor
                     key={sectionId}
+                    budgetId={budgetId}
                     value={description}
                     onChange={handleDescChange}
                     placeholder="Descreva o trecho..."

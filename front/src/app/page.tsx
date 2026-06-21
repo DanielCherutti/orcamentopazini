@@ -87,6 +87,17 @@ export default async function LoginPage({
                                 </Alert>
                             )}
 
+                            {error === "no_tenant" && (
+                                <Alert variant="destructive" className="rounded-xl border-destructive/40">
+                                    <AlertCircle className="h-4 w-4" />
+                                    <AlertTitle>Sem organização</AlertTitle>
+                                    <AlertDescription>
+                                        Sua conta não está vinculada a nenhuma organização. Peça ao
+                                        administrador para liberar o acesso.
+                                    </AlertDescription>
+                                </Alert>
+                            )}
+
                             {error === "invalid" && (
                                 <Alert variant="destructive" className="rounded-xl border-destructive/40">
                                     <AlertCircle className="h-4 w-4" />
@@ -129,6 +140,36 @@ export default async function LoginPage({
                                     <AlertCircle className="h-4 w-4" />
                                     <AlertTitle>Sessão encerrada</AlertTitle>
                                     <AlertDescription>Faça login novamente para continuar.</AlertDescription>
+                                </Alert>
+                            )}
+
+                            {error === "org_inactive" && (
+                                <Alert variant="destructive" className="rounded-xl border-destructive/40">
+                                    <AlertCircle className="h-4 w-4" />
+                                    <AlertTitle>Organização desativada</AlertTitle>
+                                    <AlertDescription>
+                                        Esta organização está desativada. Contate o suporte da plataforma.
+                                    </AlertDescription>
+                                </Alert>
+                            )}
+
+                            {error === "license_expired" && (
+                                <Alert variant="destructive" className="rounded-xl border-destructive/40">
+                                    <AlertCircle className="h-4 w-4" />
+                                    <AlertTitle>Licença expirada</AlertTitle>
+                                    <AlertDescription>
+                                        A licença desta organização expirou. Contate o suporte para renovar.
+                                    </AlertDescription>
+                                </Alert>
+                            )}
+
+                            {error === "host_mismatch" && (
+                                <Alert variant="destructive" className="rounded-xl border-destructive/40">
+                                    <AlertCircle className="h-4 w-4" />
+                                    <AlertTitle>Endereço incorreto</AlertTitle>
+                                    <AlertDescription>
+                                        Sua sessão não corresponde a esta organização. Faça login neste endereço.
+                                    </AlertDescription>
                                 </Alert>
                             )}
 

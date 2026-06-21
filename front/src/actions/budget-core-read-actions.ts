@@ -5,6 +5,8 @@ import { getDb, resetDb, isTokenExpiredError, isDbConnectionError, toPlain } fro
 import type { Budget } from "@/types/budget-types";
 import { serializeBudgetEntity } from "@/actions/budget-shared";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
+import { assertBudgetInActiveTenant } from "@/lib/budget-tenant";
+import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
 import { getLocationsAction } from "@/actions/budget-scope-actions";
 import {
     computeLocationQuoteBreakdown,
@@ -32,7 +34,10 @@ export async function getBudgetShellAction(
     const retryCount = options?._retryCount ?? 0;
     const db = await getDb();
     try {
-        const budgetRecordId = requireRecordId("budget", id);
+        const gate = await assertBudgetInActiveTenant(id, db);
+        if (!gate.ok) return { success: false, error: gate.error };
+
+        const budgetRecordId = gate.budgetRecordId;
         const result = await db.query<[Budget[]]>(`SELECT * FROM $id FETCH client_id`, {
             id: budgetRecordId,
         });
@@ -41,7 +46,7 @@ export async function getBudgetShellAction(
 
         const serialized = serializeBudgetEntity(data) as Budget;
         const out = { ...serialized, locations: [] as Budget["locations"] };
-        return { success: true, data: out };
+        return { success: true, data: toPlain(out) };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
             return { success: false, error: error.message };
@@ -264,7 +269,10 @@ export async function getBudgetPdfScopeAction(
     const retryCount = options?._retryCount ?? 0;
     const db = await getDb();
     try {
-        const budgetRecordId = requireRecordId("budget", id);
+        const gate = await assertBudgetInActiveTenant(id, db);
+        if (!gate.ok) return { success: false, error: gate.error };
+
+        const budgetRecordId = gate.budgetRecordId;
         const result = await db.query<[Budget[]]>(BUDGET_HIERARCHY_SQL_PDF_SCOPE, {
             id: budgetRecordId,
         });
@@ -276,7 +284,7 @@ export async function getBudgetPdfScopeAction(
             await enrichBudgetLocationsProductCodes(db, rawLocations);
         }
         const serialized = serializeBudgetEntity(data);
-        return { success: true, data: serialized };
+        return { success: true, data: toPlain(serialized) };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
             return { success: false, error: error.message };
@@ -318,14 +326,17 @@ export async function getBudgetAction(
 
     const db = await getDb();
     try {
-        const budgetRecordId = requireRecordId("budget", id);
+        const gate = await assertBudgetInActiveTenant(id, db);
+        if (!gate.ok) return { success: false, error: gate.error };
+
+        const budgetRecordId = gate.budgetRecordId;
 
         const result = await db.query<[Budget[]]>(BUDGET_HIERARCHY_SQL_FULL, { id: budgetRecordId });
         const data = result[0]?.[0];
         if (!data) return { success: false, error: "Orçamento não encontrado" };
 
         const serialized = serializeBudgetEntity(data);
-        return { success: true, data: serialized };
+        return { success: true, data: toPlain(serialized) };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
             return { success: false, error: error.message };
@@ -368,7 +379,11 @@ export async function getNextBudgetNumberAction() {
 
     const db = await getDb();
     try {
-        const codesRes = await db.query<[Array<{ code: unknown }>]>("SELECT code FROM budget");
+        const tenantId = await requireActiveTenantId();
+        const codesRes = await db.query<[Array<{ code: unknown }>]>(
+            "SELECT code FROM budget WHERE tenant_id = $tenantId",
+            { tenantId: tenantRecordId(tenantId) },
+        );
         const rows = codesRes[0] ?? [];
         const sequence = maxNumericBudgetCode(rows) + 1;
         const nextNumber = sequence.toString().padStart(5, "0");

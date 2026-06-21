@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { assertActionSession } from "@/actions/auth-actions";
+import { assertWriteActionSession } from "@/actions/auth-actions";
 import { getProposalSettingsAction } from "@/actions/settings-actions";
 import { sendBudgetProposalEmail } from "@/lib/budget-proposal-mail";
 import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
@@ -34,7 +34,7 @@ import {
 } from "@/lib/budgets/budget-email-recipients";
 import { canUseBudgetEmail } from "@/lib/budgets/budget-status";
 import { getDb } from "@/lib/surreal";
-import { requireRecordId } from "@/lib/surreal-record-ids";
+import { assertBudgetInActiveTenant } from "@/lib/budget-tenant";
 
 const EMAIL_LOCKED_ERROR =
     "Envio de e-mail disponível apenas após finalizar o orçamento.";
@@ -42,11 +42,15 @@ const EMAIL_LOCKED_ERROR =
 async function assertBudgetEmailAllowed(
     budgetId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+    const tenantGate = await assertBudgetInActiveTenant(budgetId);
+    if (!tenantGate.ok) {
+        return { ok: false, error: tenantGate.error };
+    }
     try {
         const db = await getDb();
         const res = await db.query<[Array<{ status?: string }>]>(
             `SELECT status FROM budget WHERE id = $id LIMIT 1`,
-            { id: requireRecordId("budget", budgetId) }
+            { id: tenantGate.budgetRecordId }
         );
         const status = res[0]?.[0]?.status;
         if (!canUseBudgetEmail(status != null ? String(status) : null)) {
@@ -76,7 +80,7 @@ export async function getBudgetEmailConversationAction(budgetId: string): Promis
     participant_email?: string;
     error?: string;
 }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     const allowed = await assertBudgetEmailAllowed(budgetId);
@@ -119,7 +123,7 @@ export async function getBudgetEmailMailboxInfoAction(): Promise<{
     isNoReplyFrom?: boolean;
     error?: string;
 }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     const info = await resolveBudgetEmailMailboxInfo();
@@ -135,7 +139,7 @@ export async function getBudgetEmailMailboxInfoAction(): Promise<{
 export async function syncBudgetEmailRepliesAction(
     budgetId: string
 ): Promise<{ success: boolean; imported?: number; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     const allowed = await assertBudgetEmailAllowed(budgetId);
@@ -161,7 +165,7 @@ export async function hasActiveBudgetEmailSyncAction(): Promise<{
     active?: boolean;
     error?: string;
 }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     try {
@@ -179,7 +183,7 @@ export async function syncAllBudgetEmailRepliesAction(): Promise<{
     imports?: BudgetEmailSyncImportDto[];
     error?: string;
 }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     const active = await hasAnyOutboundBudgetEmail();
@@ -319,7 +323,7 @@ export async function sendBudgetProposalByEmailAction(
         includePdf?: boolean;
     }
 ): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     const allowed = await assertBudgetEmailAllowed(budgetId);
@@ -362,7 +366,7 @@ export async function sendBudgetEmailReplyAction(
         includePdf?: boolean;
     }
 ): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     const allowed = await assertBudgetEmailAllowed(budgetId);

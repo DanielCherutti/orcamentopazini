@@ -1,7 +1,7 @@
 "use server";
 
 import { Table } from "surrealdb";
-import { assertActionSession } from "@/actions/auth-actions";
+import { assertWriteActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
 import { revalidatePath } from "next/cache";
 import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
@@ -9,6 +9,10 @@ import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids"
 import { mergeCoverDocumentProps } from "@/lib/budgets/cover-document";
 import { sanitizeCompositorBlockPropsForPersistence } from "@/lib/pdf/sanitize-inline-styles-for-pdf";
 import { DEFAULT_HEADER_FOOTER_PROPS } from "@/types/budget-compositor-types";
+import {
+    assertBudgetChildInActiveTenant,
+    assertBudgetInActiveTenant,
+} from "@/lib/budget-tenant";
 
 type RootBlockRow = { id: unknown; order_index: number; type: string; props?: Record<string, unknown> };
 
@@ -94,12 +98,15 @@ function headerFooterLegacyPropsFromCover(coverProps: Record<string, unknown> | 
 export async function ensureCompositorCoverBlockAction(
     budgetId: string
 ): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
-        const budgetRecordId = requireRecordId("budget", budgetId);
+        const budgetRecordId = gate.budgetRecordId;
 
         const rootsRes = await db.query<[Array<{ id: unknown; order_index: number; type: string }>]>(
             "SELECT id, order_index, type FROM budget_block WHERE budget_id = $budgetId AND parent_id IS NONE AND deleted_at IS NONE ORDER BY order_index ASC",
@@ -143,12 +150,15 @@ export async function ensureCompositorHeaderFooterBlockAction(
     budgetId: string,
     options?: { skipRevalidate?: boolean }
 ): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
-        const budgetRecordId = requireRecordId("budget", budgetId);
+        const budgetRecordId = gate.budgetRecordId;
         let roots = await listRootBlocks(db, budgetRecordId);
 
         const dupes = roots.filter((r) => r.type === "header_footer");
@@ -194,12 +204,15 @@ export async function ensureCompositorHeaderFooterBlockAction(
 export async function ensureCompositorTocBlockAction(
     budgetId: string
 ): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
-        const budgetRecordId = requireRecordId("budget", budgetId);
+        const budgetRecordId = gate.budgetRecordId;
         let roots = await listRootBlocks(db, budgetRecordId);
         let createdTocOrFigures = false;
 
@@ -285,12 +298,15 @@ export async function ensureCompositorQuoteBlockAction(
     budgetId: string,
     options?: { skipRevalidate?: boolean }
 ): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
-        const budgetRecordId = requireRecordId("budget", budgetId);
+        const budgetRecordId = gate.budgetRecordId;
         const rootsRes = await db.query<[Array<{ id: unknown; order_index: number; type: string }>]>(
             "SELECT id, order_index, type FROM budget_block WHERE budget_id = $budgetId AND parent_id IS NONE AND deleted_at IS NONE ORDER BY order_index ASC",
             { budgetId: budgetRecordId }
@@ -362,8 +378,11 @@ export async function addBlockAction(params: {
     label: string;
     props?: Record<string, unknown>;
 }): Promise<{ success: boolean; blockId?: string; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetInActiveTenant(params.budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -372,7 +391,17 @@ export async function addBlockAction(params: {
             return { success: false, error: "A seção Condições Gerais foi removida do documento." };
         }
 
-        const budgetRecordId = requireRecordId("budget", budgetId);
+        if (parentId) {
+            const parentGate = await assertBudgetChildInActiveTenant(
+                "budget_block",
+                parentId,
+                budgetId,
+                db
+            );
+            if (!parentGate.ok) return { success: false, error: parentGate.error };
+        }
+
+        const budgetRecordId = gate.budgetRecordId;
 
         let orderIndex = 0;
         try {
@@ -417,8 +446,11 @@ export async function updateBlockAction(
     budgetId: string,
     patch: { label?: string; props?: Record<string, unknown> }
 ): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_block", blockId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -458,8 +490,11 @@ export async function deleteBlockAction(
     blockId: string,
     budgetId: string
 ): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_block", blockId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -509,8 +544,11 @@ export async function moveBlockToParentAction(
     newParentId: string | null,
     budgetId: string
 ): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_block", blockId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -592,8 +630,11 @@ export async function reorderBlocksAction(
     blockIds: string[],
     budgetId: string
 ): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {

@@ -1,12 +1,13 @@
 "use server";
 
-import { assertActionSession } from "@/actions/auth-actions";
+import { assertWriteActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import type { BudgetBlockFlat } from "@/types/budget-compositor-types";
 import type { BudgetItem } from "@/types/budget-types";
 import { serializeBudgetEntity } from "@/actions/budget-shared";
 import { getBudgetImagesByBlocks } from "@/actions/budget-annotations";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
+import { assertBudgetInActiveTenant } from "@/lib/budget-tenant";
 import {
     ensureCompositorCoverBlockAction,
     ensureCompositorHeaderFooterBlockAction,
@@ -24,12 +25,15 @@ async function loadCompositorTreeData(
     imagesByBlock?: Record<string, unknown[]>;
     error?: string;
 }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
-        const budgetRecordId = requireRecordId("budget", budgetId);
+        const budgetRecordId = gate.budgetRecordId;
 
         if (options.ensureBlocks) {
             await ensureCompositorCoverBlockAction(budgetId);

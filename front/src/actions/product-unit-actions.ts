@@ -3,8 +3,10 @@
 import { Table } from "surrealdb";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { assertActionSession } from "@/actions/auth-actions";
+import { assertWriteActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
+import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
+import { assertEntityInActiveTenant } from "@/lib/tenant-access";
 
 export type ProductUnit = {
   id: string;
@@ -43,14 +45,15 @@ function serializeUnit(raw: Record<string, unknown>): ProductUnit {
 }
 
 export async function listProductUnitsAction() {
-  const auth = await assertActionSession();
+  const auth = await assertWriteActionSession();
   if (!auth.ok) return { success: false, error: auth.error, data: [] };
 
   const db = await getDb();
   try {
+    const tenantId = await requireActiveTenantId();
     const result = await db.query<[ProductUnit[]]>(
-      `SELECT * FROM ${TABLE_NAME} WHERE company_id = $company_id ORDER BY name ASC`,
-      { company_id: DEFAULT_COMPANY_ID }
+      `SELECT * FROM ${TABLE_NAME} WHERE company_id = $company_id AND tenant_id = $tenantId ORDER BY name ASC`,
+      { company_id: DEFAULT_COMPANY_ID, tenantId: tenantRecordId(tenantId) }
     );
     const rows = result[0] ?? [];
     return { success: true, data: rows.map(serializeUnit) };
@@ -62,7 +65,7 @@ export async function listProductUnitsAction() {
 }
 
 export async function createProductUnitAction(data: { name: string }) {
-  const auth = await assertActionSession();
+  const auth = await assertWriteActionSession();
   if (!auth.ok) return { success: false, error: auth.error };
 
   const db = await getDb();
@@ -72,10 +75,10 @@ export async function createProductUnitAction(data: { name: string }) {
   }
 
   try {
-    // Check if unit with same name already exists
+    const tenantId = await requireActiveTenantId();
     const existing = await db.query<[ProductUnit[]]>(
-      `SELECT * FROM ${TABLE_NAME} WHERE company_id = $company_id AND string::uppercase(name) = string::uppercase($name)`,
-      { company_id: DEFAULT_COMPANY_ID, name: validated.data.name }
+      `SELECT * FROM ${TABLE_NAME} WHERE company_id = $company_id AND tenant_id = $tenantId AND string::uppercase(name) = string::uppercase($name)`,
+      { company_id: DEFAULT_COMPANY_ID, tenantId: tenantRecordId(tenantId), name: validated.data.name }
     );
     if (existing[0] && existing[0].length > 0) {
       return { success: true, data: serializeUnit(existing[0][0]) };
@@ -83,6 +86,7 @@ export async function createProductUnitAction(data: { name: string }) {
 
     const created = await db.create(new Table(TABLE_NAME)).content({
       company_id: DEFAULT_COMPANY_ID,
+      tenant_id: tenantRecordId(tenantId),
       name: validated.data.name.toUpperCase(),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),

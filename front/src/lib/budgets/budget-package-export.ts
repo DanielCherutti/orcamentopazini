@@ -3,6 +3,7 @@ import path from "node:path";
 import { StringRecordId } from "surrealdb";
 import { getDb, toPlain } from "@/lib/surreal";
 import { requireRecordId } from "@/lib/surreal-record-ids";
+import { assertBudgetInActiveTenant } from "@/lib/budget-tenant";
 import { getUploadsRoot } from "@/lib/upload";
 import { extractProductId } from "@/actions/budget-hierarchy-helpers";
 import {
@@ -35,8 +36,13 @@ export async function exportBudgetPackage(
     budgetId: string,
     mode: BudgetPackageExportMode = DEFAULT_BUDGET_PACKAGE_EXPORT_MODE,
 ): Promise<ExportBudgetPackageResult> {
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) {
+        return { ok: false, error: gate.error, status: 404 };
+    }
+
     const db = await getDb();
-    const budgetRecordId = requireRecordId("budget", budgetId);
+    const budgetRecordId = gate.budgetRecordId;
 
     const budgetRes = await db.query<[Array<Record<string, unknown>>]>(
         "SELECT * FROM $id FETCH client_id",

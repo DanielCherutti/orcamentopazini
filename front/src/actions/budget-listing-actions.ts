@@ -1,7 +1,8 @@
 "use server";
 
 import { assertActionSession } from "@/actions/auth-actions";
-import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
+import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
+import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
 import type { Budget } from "@/types/budget-types";
 import { serializeBudgetEntity } from "@/actions/budget-shared";
 import { filterAndPaginateBudgetFamilies } from "@/lib/budgets/budget-list-tree";
@@ -16,6 +17,7 @@ export async function getBudgetsAction(params?: {
   const auth = await assertActionSession();
   if (!auth.ok) return { success: false, error: auth.error };
 
+  const tenantId = await requireActiveTenantId();
   const db = await getDb();
   const page = params?.page || 1;
   const limit = params?.limit || 10;
@@ -24,7 +26,10 @@ export async function getBudgetsAction(params?: {
   const sortOrder = params?.sortOrder || "desc";
 
   try {
-    const budgetsResult = await db.query<[Budget[]]>("SELECT * FROM budget FETCH client_id");
+    const budgetsResult = await db.query<[Budget[]]>(
+      "SELECT * FROM budget WHERE tenant_id = $tenantId FETCH client_id",
+      { tenantId: tenantRecordId(tenantId) },
+    );
     let allBudgets = (budgetsResult[0] || []).map(serializeBudgetEntity);
 
     const { rows, meta } = filterAndPaginateBudgetFamilies(allBudgets, {
@@ -37,8 +42,8 @@ export async function getBudgetsAction(params?: {
 
     return {
       success: true,
-      data: rows,
-      meta,
+      data: toPlain(rows),
+      meta: toPlain(meta),
     };
   } catch (error) {
     console.error("Error fetching budgets:", error);

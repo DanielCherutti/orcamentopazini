@@ -1,6 +1,6 @@
 "use server";
 
-import { assertActionSession } from "@/actions/auth-actions";
+import { assertWriteActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { serializeBudgetEntity } from "@/actions/budget-shared";
 import {
@@ -8,6 +8,7 @@ import {
   recordIdToString,
   requireRecordId,
 } from "@/lib/surreal-record-ids";
+import { assertBudgetInActiveTenant } from "@/lib/budget-tenant";
 import {
   getBudgetImagesByBlocks,
   getBudgetImagesByLocation,
@@ -58,12 +59,15 @@ export async function getLocationsAction(budgetId: string): Promise<{
   data?: ScopeLocation[];
   error?: string;
 }> {
-  const auth = await assertActionSession();
+  const auth = await assertWriteActionSession();
   if (!auth.ok) return { success: false, error: auth.error };
+
+  const gate = await assertBudgetInActiveTenant(budgetId);
+  if (!gate.ok) return { success: false, error: gate.error };
 
   const db = await getDb();
   try {
-    const budgetRecordId = requireRecordId("budget", budgetId);
+    const budgetRecordId = gate.budgetRecordId;
 
     const locResult = await db.query<[Array<Record<string, unknown>>]>(
       `SELECT * FROM budget_location WHERE budget_id = $budgetId AND deleted_at IS NONE ORDER BY order_index ASC`,
@@ -109,12 +113,15 @@ export async function getScopeStatsAction(budgetId: string): Promise<{
   data?: { locations: number; sections: number; items: number };
   error?: string;
 }> {
-  const auth = await assertActionSession();
+  const auth = await assertWriteActionSession();
   if (!auth.ok) return { success: false, error: auth.error };
+
+  const gate = await assertBudgetInActiveTenant(budgetId);
+  if (!gate.ok) return { success: false, error: gate.error };
 
   const db = await getDb();
   try {
-    const budgetRecordId = requireRecordId("budget", budgetId);
+    const budgetRecordId = gate.budgetRecordId;
 
     const [locRes, itemResBudget, itemResChain] = await Promise.all([
       db.query<[Array<{ count: number }>]>(
@@ -229,7 +236,7 @@ export async function getScopeFiguresListAction(budgetId: string): Promise<{
   entries?: ScopeFigureListEntry[];
   error?: string;
 }> {
-  const auth = await assertActionSession();
+  const auth = await assertWriteActionSession();
   if (!auth.ok) return { success: false, error: auth.error };
 
   const locRes = await getLocationsAction(budgetId);
@@ -240,9 +247,12 @@ export async function getScopeFiguresListAction(budgetId: string): Promise<{
   const entries: ScopeFigureListEntry[] = [];
   const seen = new Set<string>();
 
+  const gate = await assertBudgetInActiveTenant(budgetId);
+  if (!gate.ok) return { success: false, error: gate.error };
+
   const db = await getDb();
   try {
-    const budgetRecordId = requireRecordId("budget", budgetId);
+    const budgetRecordId = gate.budgetRecordId;
     const blocksRes = await db.query<[BudgetBlockFlat[]]>(
       "SELECT * FROM budget_block WHERE budget_id = $budgetId AND deleted_at IS NONE ORDER BY order_index ASC",
       { budgetId: budgetRecordId }

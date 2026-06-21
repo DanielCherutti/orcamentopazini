@@ -273,6 +273,7 @@ export function BudgetPhotoAnnotatorDialog({
         const file = new File([blob], filename, { type: blob.type || "image/jpeg" });
         const fd = new FormData();
         fd.append("file", file);
+        fd.append("budgetId", budgetId);
         const res = await fetch("/api/upload/budget/image", { method: "POST", body: fd });
         const json = await res.json() as { url?: string; error?: string };
         if (!res.ok || !json.url) throw new Error(json.error || `Upload falhou: ${res.statusText}`);

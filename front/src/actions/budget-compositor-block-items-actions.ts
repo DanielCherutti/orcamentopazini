@@ -1,7 +1,7 @@
 "use server";
 
 import { Table } from "surrealdb";
-import { assertActionSession } from "@/actions/auth-actions";
+import { assertWriteActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
 import { revalidatePath } from "next/cache";
 import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
@@ -11,6 +11,7 @@ import {
     requireRecordId,
     safeStringRecordId,
 } from "@/lib/surreal-record-ids";
+import { assertBudgetChildInActiveTenant } from "@/lib/budget-tenant";
 
 async function recalculateCompositorTotal(db: Awaited<ReturnType<typeof getDb>>, budgetId: string) {
     const budgetRecordId = requireRecordId("budget", budgetId);
@@ -44,8 +45,11 @@ export async function addItemToBlockAction(
     productId: string,
     quantity: number
 ): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_block", blockId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -94,13 +98,16 @@ export async function addGroupToBlockAction(
     productQuantities: Record<string, number>,
     selectedProductIds: string[]
 ): Promise<{ success: boolean; error?: string; addedCount?: number }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error, addedCount: 0 };
 
     const groupRecordId = safeStringRecordId("product_group", groupId);
     if (!groupRecordId) {
         return { success: false, error: "Identificador inválido", addedCount: 0 };
     }
+
+    const gate = await assertBudgetChildInActiveTenant("budget_block", blockId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error, addedCount: 0 };
 
     const db = await getDb();
     try {
@@ -173,8 +180,11 @@ export async function deleteItemFromBlockAction(
     itemId: string,
     budgetId: string
 ): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_item", itemId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -197,8 +207,11 @@ export async function updateItemQuantityInBlockAction(
     budgetId: string,
     quantity: number
 ): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_item", itemId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -230,8 +243,11 @@ export async function updateItemGroupInBlockAction(
     groupId: string | null,
     groupName?: string
 ): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_item", itemId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -265,8 +281,11 @@ export async function reorderItemsInBlockAction(
     _blockId: string,
     itemIds: string[]
 ): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_block", _blockId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {

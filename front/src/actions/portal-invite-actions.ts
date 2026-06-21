@@ -1,13 +1,16 @@
 "use server";
 
 import { z } from "zod";
-import { StringRecordId } from "surrealdb";
+import { Table, StringRecordId } from "surrealdb";
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
 import { hashPassword } from "@/lib/password";
 import { assertPasswordPolicy } from "@/lib/password-pwned";
 import { PASSWORD_MAX_LENGTH } from "@/lib/password-strength";
 import { passwordHashLooksValid } from "@/lib/password-hash-present";
 import { recordIdToString } from "@/lib/surreal-record-ids";
+import { tenantRecordId } from "@/lib/tenant-query";
+import { tenantHasUserCapacity } from "@/lib/platform-user";
+import type { OrganizationMemberRole } from "@/types/tenant-types";
 
 const completeInviteSchema = z
     .object({
@@ -65,10 +68,12 @@ export async function completePortalInviteAction(formData: FormData): Promise<{
                     invite_expires_at?: string;
                     password_hash?: string;
                     active?: boolean;
+                    invite_tenant_id?: unknown;
+                    invite_tenant_role?: string;
                 }[],
             ]
         >(
-            "SELECT id, invite_token, invite_expires_at, password_hash, active FROM portal_user WHERE invite_token = $invite_link_token LIMIT 1",
+            "SELECT id, invite_token, invite_expires_at, password_hash, active, invite_tenant_id, invite_tenant_role FROM portal_user WHERE invite_token = $invite_link_token LIMIT 1",
             { invite_link_token: token },
         );
         const row = rows[0]?.[0];
@@ -117,13 +122,39 @@ export async function completePortalInviteAction(formData: FormData): Promise<{
 
         // SurrealDB 3: NONE em MERGE pode falhar; o projeto usa SET … = NONE em outros fluxos.
         await db.query(
-            "UPDATE $rid SET password_hash = $ph, updated_at = $u, invite_token = NONE, invite_expires_at = NONE",
+            "UPDATE $rid SET password_hash = $ph, updated_at = $u, invite_token = NONE, invite_expires_at = NONE, invite_tenant_id = NONE, invite_tenant_role = NONE",
             {
                 rid,
                 ph: password_hash,
                 u: new Date().toISOString(),
             },
         );
+
+        const inviteTenantId = recordIdToString(row.invite_tenant_id);
+        if (inviteTenantId) {
+            const roleRaw = String(row.invite_tenant_role ?? "user");
+            const role: OrganizationMemberRole =
+                roleRaw === "admin" ? "admin" : "user";
+            const existingLink = await db.query<[unknown[]]>(
+                "SELECT id FROM portal_user_tenant WHERE user_id = $userId AND tenant_id = $tenantId LIMIT 1",
+                {
+                    userId: rid,
+                    tenantId: tenantRecordId(inviteTenantId),
+                },
+            );
+            if ((existingLink[0]?.length ?? 0) === 0) {
+                const capacity = await tenantHasUserCapacity(inviteTenantId, db);
+                if (!capacity.ok) {
+                    return { success: false, error: capacity.error };
+                }
+                await db.create(new Table("portal_user_tenant")).content({
+                    user_id: rid,
+                    tenant_id: tenantRecordId(inviteTenantId),
+                    role,
+                    created_at: new Date().toISOString(),
+                });
+            }
+        }
 
         return { success: true };
     } catch (e) {

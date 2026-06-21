@@ -131,6 +131,7 @@ function SessionRenderer({
             <CollapsibleEditorSection label="Descrição">
                 <CompositorRichTextEditor
                     key={block.id}
+                    budgetId={budgetId}
                     value={description}
                     onChange={handleChange}
                     placeholder="Descrição da seção..."
@@ -185,6 +186,7 @@ function LocationRenderer({
             <CollapsibleEditorSection label="Descrição" defaultOpen={false}>
                 <CompositorRichTextEditor
                     key={block.id}
+                    budgetId={budgetId}
                     value={description}
                     onChange={handleChange}
                     placeholder="Descreva o local..."
@@ -363,6 +365,7 @@ function SectionRenderer({
             <CollapsibleEditorSection label="Observações do trecho">
                 <CompositorRichTextEditor
                     key={block.id}
+                    budgetId={budgetId}
                     value={description}
                     onChange={handleChange}
                     placeholder="Observações, especificações técnicas..."
@@ -556,6 +559,7 @@ function TextRenderer({ block, budgetId, onRefresh }: CompositorRendererProps) {
             <CollapsibleEditorSection label="Texto">
                 <CompositorRichTextEditor
                     key={block.id}
+                    budgetId={budgetId}
                     value={description}
                     onChange={handleChange}
                     placeholder="Digite o conteúdo aqui..."

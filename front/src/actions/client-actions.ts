@@ -3,8 +3,10 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { Table } from "surrealdb";
-import { assertActionSession } from "@/actions/auth-actions";
+import { assertActionSession, assertWriteActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
+import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
+import { assertEntityInActiveTenant } from "@/lib/tenant-access";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
 
 // Basic type for client selector (kept for backward compatibility)
@@ -165,14 +167,17 @@ export async function listCustomersAction(params?: {
     const sortOrder = params?.sortOrder || "asc";
 
     try {
-        let sql = "SELECT * FROM client";
-        const queryParams: Record<string, string> = {};
+        const tenantId = await requireActiveTenantId();
+        let sql = "SELECT * FROM client WHERE tenant_id = $tenantId";
+        const queryParams: Record<string, string | ReturnType<typeof tenantRecordId>> = {
+            tenantId: tenantRecordId(tenantId),
+        };
 
         if (search) {
-            sql += ` WHERE string::lowercase(name) CONTAINS string::lowercase($search)
+            sql += ` AND (string::lowercase(name) CONTAINS string::lowercase($search)
                 OR string::lowercase(cnpj) CONTAINS string::lowercase($search)
                 OR string::lowercase(city) CONTAINS string::lowercase($search)
-                OR string::lowercase(email) CONTAINS string::lowercase($search)`;
+                OR string::lowercase(email) CONTAINS string::lowercase($search))`;
             queryParams.search = search;
         }
 
@@ -208,6 +213,9 @@ export async function listCustomersAction(params?: {
 export async function getCustomerAction(id: string) {
     const auth = await assertActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const entityGate = await assertEntityInActiveTenant("client", id, "Cliente não encontrado");
+    if (!entityGate.ok) return { success: false, error: entityGate.error };
 
     const db = await getDb();
     try {
@@ -412,7 +420,7 @@ export async function lookupCnpjAction(cnpj: string): Promise<
 }
 
 export async function createCustomerAction(data: CustomerFormInput) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();
@@ -426,10 +434,11 @@ export async function createCustomerAction(data: CustomerFormInput) {
     const d = validated.data;
 
     try {
+        const tenantId = await requireActiveTenantId();
         if (d.cnpj) {
             const existing = await db.query<[{ id: unknown }[]]>(
-                "SELECT id FROM client WHERE cnpj = $cnpj",
-                { cnpj: d.cnpj }
+                "SELECT id FROM client WHERE cnpj = $cnpj AND tenant_id = $tenantId",
+                { cnpj: d.cnpj, tenantId: tenantRecordId(tenantId) },
             );
             if (existing[0] && existing[0].length > 0) {
                 return {
@@ -449,6 +458,7 @@ export async function createCustomerAction(data: CustomerFormInput) {
             email: d.email || null,
             city: d.address?.city || null,
             address: d.address || null,
+            tenant_id: tenantRecordId(tenantId),
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
         });
@@ -463,8 +473,11 @@ export async function createCustomerAction(data: CustomerFormInput) {
 }
 
 export async function updateCustomerAction(id: string, data: CustomerFormInput) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const entityGate = await assertEntityInActiveTenant("client", id, "Cliente não encontrado");
+    if (!entityGate.ok) return { success: false, error: entityGate.error };
 
     const db = await getDb();
 
@@ -479,9 +492,10 @@ export async function updateCustomerAction(id: string, data: CustomerFormInput) 
     try {
         const recordId = requireRecordId("client", id);
         if (d.cnpj) {
+            const tenantId = entityGate.tenantId;
             const existing = await db.query<[{ id: unknown }[]]>(
-                "SELECT id FROM client WHERE cnpj = $cnpj AND id != $id",
-                { cnpj: d.cnpj, id: recordId }
+                "SELECT id FROM client WHERE cnpj = $cnpj AND id != $id AND tenant_id = $tenantId",
+                { cnpj: d.cnpj, id: recordId, tenantId: tenantRecordId(tenantId) }
             );
             if (existing[0] && existing[0].length > 0) {
                 return {
@@ -517,8 +531,11 @@ export async function updateCustomerAction(id: string, data: CustomerFormInput) 
 }
 
 export async function deleteCustomerAction(id: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const entityGate = await assertEntityInActiveTenant("client", id, "Cliente não encontrado");
+    if (!entityGate.ok) return { success: false, error: entityGate.error };
 
     const db = await getDb();
     try {

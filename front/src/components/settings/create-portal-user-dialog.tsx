@@ -14,7 +14,15 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { toast } from "@/lib/toast";
+import type { OrganizationMemberRole } from "@/types/tenant-types";
 
 type Props = {
     open: boolean;
@@ -25,14 +33,14 @@ export function CreatePortalUserDialog({ open, onOpenChange }: Props) {
     const router = useRouter();
     const [pending, startTransition] = useTransition();
     const [error, setError] = useState<string | null>(null);
-    const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>(
-        {},
-    );
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+    const [role, setRole] = useState<OrganizationMemberRole>("user");
 
     function handleOpenChange(next: boolean) {
         if (!next) {
             setError(null);
             setFieldErrors({});
+            setRole("user");
         }
         onOpenChange(next);
     }
@@ -41,6 +49,7 @@ export function CreatePortalUserDialog({ open, onOpenChange }: Props) {
         e.preventDefault();
         const form = e.currentTarget;
         const fd = new FormData(form);
+        fd.set("role", role);
         setError(null);
         setFieldErrors({});
 
@@ -65,10 +74,10 @@ export function CreatePortalUserDialog({ open, onOpenChange }: Props) {
         <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto" showCloseButton>
                 <DialogHeader>
-                    <DialogTitle>Novo usuário</DialogTitle>
+                    <DialogTitle>Convidar usuário</DialogTitle>
                     <DialogDescription>
-                        Informe apenas o e-mail. Enviaremos um link para a pessoa
-                        criar a senha e acessar o portal (válido por 48 horas).
+                        O convite vincula a pessoa à organização ativa. Ela receberá um link
+                        para criar a senha (válido por 48 horas).
                     </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -84,14 +93,28 @@ export function CreatePortalUserDialog({ open, onOpenChange }: Props) {
                             disabled={pending}
                         />
                         {fieldErrors.email?.[0] && (
-                            <p className="text-sm text-destructive">
-                                {fieldErrors.email[0]}
-                            </p>
+                            <p className="text-sm text-destructive">{fieldErrors.email[0]}</p>
                         )}
                     </div>
-                    {error && (
-                        <p className="text-sm text-destructive">{error}</p>
-                    )}
+                    <div className="space-y-2">
+                        <Label htmlFor="portal-new-role">Papel nesta organização</Label>
+                        <Select
+                            value={role}
+                            onValueChange={(v) =>
+                                setRole(v as OrganizationMemberRole)
+                            }
+                            disabled={pending}
+                        >
+                            <SelectTrigger id="portal-new-role">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="user">Usuário</SelectItem>
+                                <SelectItem value="admin">Administrador</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    {error && <p className="text-sm text-destructive">{error}</p>}
                     <DialogFooter className="gap-2 sm:gap-0">
                         <Button
                             type="button"

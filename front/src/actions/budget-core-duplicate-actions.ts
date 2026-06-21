@@ -3,8 +3,10 @@
 import { Table } from "surrealdb";
 import { revalidatePath } from "next/cache";
 import { StringRecordId } from "surrealdb";
-import { assertActionSession } from "@/actions/auth-actions";
+import { assertWriteActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
+import { assertBudgetInActiveTenant } from "@/lib/budget-tenant";
+import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
 import { getNextBudgetNumberAction } from "@/actions/budget-core-read-actions";
 import {
@@ -24,12 +26,16 @@ export async function duplicateBudgetAction(
     budgetId: string,
     newTitle?: string
 ): Promise<{ success: boolean; newBudgetId?: string; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();
     try {
-        const budgetRecordId = requireRecordId("budget", budgetId);
+        const gate = await assertBudgetInActiveTenant(budgetId, db);
+        if (!gate.ok) return { success: false, error: gate.error };
+
+        const budgetRecordId = gate.budgetRecordId;
+        const tenantId = await requireActiveTenantId();
 
         const originalRes = await db.query<[Array<Record<string, unknown>>]>("SELECT * FROM $id", {
             id: budgetRecordId,
@@ -47,6 +53,7 @@ export async function duplicateBudgetAction(
             status: "draft",
             total_value: 0,
             client_id: resolveRelationId(original.client_id),
+            tenant_id: tenantRecordId(tenantId),
             use_compositor: useCompositor,
             description: original.description,
             payment_terms: original.payment_terms,

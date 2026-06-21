@@ -58,12 +58,19 @@ export function serializeBudgetEntity<T extends DbEntity>(item: T): T {
     if (typeof value === "object" && value !== null) {
       const cloned = { ...value } as Record<string, unknown>;
       if (cloned.id) cloned.id = String(cloned.id);
+      if (cloned.tenant_id != null) {
+        cloned.tenant_id = serializeRelationAsId(cloned.tenant_id);
+      }
+      if (cloned.created_at) cloned.created_at = String(cloned.created_at);
+      if (cloned.updated_at) cloned.updated_at = String(cloned.updated_at);
       // Serializa arrays aninhados (ex: group_ids no produto contém RecordId objects)
       for (const key of Object.keys(cloned)) {
         if (Array.isArray(cloned[key])) {
           cloned[key] = (cloned[key] as unknown[]).map((item) =>
             typeof item === "object" && item !== null ? String(item) : item
           );
+        } else if (key.endsWith("_id") && key !== "client_id" && cloned[key] && typeof cloned[key] === "object") {
+          cloned[key] = serializeRelationAsId(cloned[key]);
         }
       }
       return cloned;
@@ -113,6 +120,9 @@ export function serializeBudgetEntity<T extends DbEntity>(item: T): T {
   }
   if (newItem.group_id) newItem.group_id = String(newItem.group_id);
   if (newItem.group_instance_id) newItem.group_instance_id = String(newItem.group_instance_id);
+  if (newItem.tenant_id != null) {
+    newItem.tenant_id = serializeRelationAsId(newItem.tenant_id);
+  }
 
   return newItem as T;
 }

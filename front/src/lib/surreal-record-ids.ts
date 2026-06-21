@@ -18,6 +18,8 @@ const ALLOWED_TABLES = new Set([
     "product",
     "product_group",
     "portal_user",
+    "portal_user_tenant",
+    "tenant",
     "budget_location",
     "budget_section",
     "budget_item",

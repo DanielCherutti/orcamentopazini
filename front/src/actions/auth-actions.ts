@@ -4,12 +4,20 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { SESSION_COOKIE } from "@/lib/auth-constants";
 import { checkLoginRateLimitFromHeaders } from "@/lib/rate-limit";
-import { signSessionToken, verifySessionToken } from "@/lib/session-token";
+import { verifySessionToken } from "@/lib/session-token";
+import {
+    assertTenantSession,
+    getSessionContext,
+    isImpersonationReadonly,
+    setSessionContext,
+} from "@/lib/tenant-context";
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
 import { verifyPassword } from "@/lib/password";
 import { passwordHashLooksValid } from "@/lib/password-hash-present";
+import { resolvePlatformPostLoginRedirect } from "@/actions/platform-actions";
+import { resolvePostLoginRedirect } from "@/actions/tenant-actions";
 
-const SESSION_MAX_AGE = 60 * 60 * 8; // 8 hours
+const SESSION_MAX_AGE = 60 * 60 * 8;
 
 function getSessionSecret(): string | undefined {
     const s = process.env.JWT_SECRET?.trim();
@@ -70,18 +78,13 @@ export async function loginAction(formData: FormData) {
         redirect("/?error=invalid");
     }
 
-    const token = await signSessionToken(email, secret, SESSION_MAX_AGE);
+    const platformPath = await resolvePlatformPostLoginRedirect(email);
+    if (platformPath) {
+        redirect(platformPath);
+    }
 
-    const cookieStore = await cookies();
-    cookieStore.set(SESSION_COOKIE, token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: SESSION_MAX_AGE,
-        path: "/",
-    });
-
-    redirect("/dashboard");
+    const nextPath = await resolvePostLoginRedirect(email);
+    redirect(nextPath);
 }
 
 export async function logoutAction() {
@@ -91,38 +94,40 @@ export async function logoutAction() {
 }
 
 export async function getSession(): Promise<boolean> {
-    const secret = getSessionSecret();
-    if (!secret) return false;
-
-    const cookieStore = await cookies();
-    const raw = cookieStore.get(SESSION_COOKIE)?.value;
-    if (!raw) return false;
-
-    const sub = await verifySessionToken(raw, secret);
-    return sub !== null;
+    const ctx = await getSessionContext();
+    if (!ctx) return false;
+    if (ctx.platformMode && !ctx.impersonation) return true;
+    if (ctx.pending) return true;
+    if (ctx.impersonation) return Boolean(ctx.tenantId && ctx.role);
+    return Boolean(ctx.tenantId && ctx.role);
 }
 
-/** E-mail do usuário logado (claim `sub` do token), ou null. */
 export async function getSessionEmail(): Promise<string | null> {
-    const secret = getSessionSecret();
-    if (!secret) return null;
-
-    const cookieStore = await cookies();
-    const raw = cookieStore.get(SESSION_COOKIE)?.value;
-    if (!raw) return null;
-
-    return verifySessionToken(raw, secret);
+    const ctx = await getSessionContext();
+    return ctx?.email ?? null;
 }
 
 /**
- * Uso em Server Actions mutáveis/consulta de dados: exige sessão válida (mitigação IDOR item 4).
- * Escopo v1: qualquer usuário autenticado acessa todos os recursos da instância (sem tenant por linha).
+ * Server Actions de dados: exige sessão com tenant ativo (multi-tenant PAZINI-100).
+ * Leituras em modo suporte readonly são permitidas.
  */
 export async function assertActionSession(): Promise<
     { ok: true } | { ok: false; error: string }
 > {
-    if (!(await getSession())) {
-        return { ok: false, error: "Não autorizado" };
+    const auth = await assertTenantSession();
+    if (!auth.ok) return auth;
+    return { ok: true };
+}
+
+/** Mutations — bloqueadas em impersonate readonly. */
+export async function assertWriteActionSession(): Promise<
+    { ok: true } | { ok: false; error: string }
+> {
+    const auth = await assertTenantSession();
+    if (!auth.ok) return auth;
+    const ctx = await getSessionContext();
+    if (isImpersonationReadonly(ctx)) {
+        return { ok: false, error: "Modo suporte (somente leitura)" };
     }
     return { ok: true };
 }

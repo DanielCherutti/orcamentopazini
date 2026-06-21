@@ -3,8 +3,10 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { Table } from "surrealdb";
-import { assertActionSession } from "@/actions/auth-actions";
+import { assertWriteActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
+import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
+import { assertEntityInActiveTenant } from "@/lib/tenant-access";
 import { saveFile, deleteFile } from "@/lib/upload";
 import { InvalidRecordIdError, recordIdToString, requireRecordId } from "@/lib/surreal-record-ids";
 
@@ -49,14 +51,15 @@ function serializeGroup(raw: Record<string, unknown>): ProductGroup {
 }
 
 export async function listProductGroupsAction() {
-  const auth = await assertActionSession();
+  const auth = await assertWriteActionSession();
   if (!auth.ok) return { success: false, error: auth.error, data: [] };
 
   const db = await getDb();
   try {
+    const tenantId = await requireActiveTenantId();
     const result = await db.query<[ProductGroup[]]>(
-      `SELECT * FROM ${TABLE_NAME} WHERE company_id = $company_id ORDER BY name ASC`,
-      { company_id: DEFAULT_COMPANY_ID }
+      `SELECT * FROM ${TABLE_NAME} WHERE company_id = $company_id AND tenant_id = $tenantId ORDER BY name ASC`,
+      { company_id: DEFAULT_COMPANY_ID, tenantId: tenantRecordId(tenantId) },
     );
     const rows = result[0] ?? [];
     return { success: true, data: rows.map(serializeGroup) };
@@ -68,8 +71,11 @@ export async function listProductGroupsAction() {
 }
 
 export async function getProductGroupAction(id: string) {
-  const auth = await assertActionSession();
+  const auth = await assertWriteActionSession();
   if (!auth.ok) return { success: false, error: auth.error };
+
+  const entityGate = await assertEntityInActiveTenant(TABLE_NAME, id, "Grupo não encontrado");
+  if (!entityGate.ok) return { success: false, error: entityGate.error };
 
   const db = await getDb();
   try {
@@ -89,7 +95,7 @@ export async function getProductGroupAction(id: string) {
 }
 
 export async function createProductGroupAction(formData: FormData) {
-  const auth = await assertActionSession();
+  const auth = await assertWriteActionSession();
   if (!auth.ok) return { success: false, error: auth.error };
 
   const db = await getDb();
@@ -113,8 +119,10 @@ export async function createProductGroupAction(formData: FormData) {
   }
 
   try {
+    const tenantId = await requireActiveTenantId();
     const created = await db.create(new Table(TABLE_NAME)).content({
       company_id: DEFAULT_COMPANY_ID,
+      tenant_id: tenantRecordId(tenantId),
       name: validated.data.name,
       image_url,
       created_at: new Date().toISOString(),
@@ -135,8 +143,11 @@ export async function createProductGroupAction(formData: FormData) {
 }
 
 export async function updateProductGroupAction(id: string, formData: FormData) {
-  const auth = await assertActionSession();
+  const auth = await assertWriteActionSession();
   if (!auth.ok) return { success: false, error: auth.error };
+
+  const entityGate = await assertEntityInActiveTenant(TABLE_NAME, id, "Grupo não encontrado");
+  if (!entityGate.ok) return { success: false, error: entityGate.error };
 
   const db = await getDb();
   const name = formData.get("name") as string;
@@ -203,8 +214,11 @@ export async function updateProductGroupAction(id: string, formData: FormData) {
 }
 
 export async function deleteProductGroupAction(id: string) {
-  const auth = await assertActionSession();
+  const auth = await assertWriteActionSession();
   if (!auth.ok) return { success: false, error: auth.error };
+
+  const entityGate = await assertEntityInActiveTenant(TABLE_NAME, id, "Grupo não encontrado");
+  if (!entityGate.ok) return { success: false, error: entityGate.error };
 
   const db = await getDb();
   try {
@@ -244,7 +258,7 @@ export async function deleteProductGroupAction(id: string) {
 
 /** Retorna apenas grupos que possuem pelo menos 1 produto (para seletor no orçamento). */
 export async function listProductGroupsWithProductsAction() {
-  const auth = await assertActionSession();
+  const auth = await assertWriteActionSession();
   if (!auth.ok) return { success: false, error: auth.error, data: [] };
 
   const listRes = await listProductGroupsAction();
@@ -264,7 +278,7 @@ export async function listProductGroupsWithProductsAction() {
 }
 
 export async function getProductGroupProductsAction(groupId: string) {
-  const auth = await assertActionSession();
+  const auth = await assertWriteActionSession();
   if (!auth.ok) return { success: false, error: auth.error, data: [] };
 
   const db = await getDb();

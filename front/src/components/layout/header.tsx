@@ -2,13 +2,14 @@
 
 import { PanelLeft, PanelLeftClose } from "lucide-react";
 import { BudgetEmailNotificationsBell } from "@/components/layout/budget-email-notifications-bell";
+import { TenantSwitcher } from "@/components/tenant/tenant-switcher";
 import { useSidebar } from "./sidebar-context";
 
 export function Header() {
     const { collapsed, toggleSidebar } = useSidebar();
 
     return (
-        <header className="h-16 border-b border-border bg-background px-6 flex items-center justify-between sticky top-0 z-10 w-full">
+        <header className="h-16 border-b border-border bg-background px-6 flex items-center justify-between sticky top-[var(--support-banner-height,0px)] z-10 w-full">
             <div className="flex items-center gap-3">
                 <button
                     onClick={toggleSidebar}
@@ -20,6 +21,7 @@ export function Header() {
                 <h1 className="text-lg font-semibold text-foreground">Pazini Engenharia</h1>
             </div>
             <div className="flex items-center gap-2">
+                <TenantSwitcher />
                 <BudgetEmailNotificationsBell />
             </div>
         </header>

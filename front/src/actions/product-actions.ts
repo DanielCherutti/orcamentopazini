@@ -4,11 +4,13 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { Table } from "surrealdb";
-import { assertActionSession } from "@/actions/auth-actions";
+import { assertActionSession, assertWriteActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError, isDbConnectionError } from "@/lib/surreal";
+import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
+import { assertEntityInActiveTenant } from "@/lib/tenant-access";
+import { InvalidRecordIdError, recordIdToString, requireRecordId } from "@/lib/surreal-record-ids";
 import { Attachment } from "@/components/products/attachment-manager";
 import { saveFile } from "@/lib/upload";
-import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
 import { syncProductCatalogToDraftBudgetItemsAction } from "@/actions/budget-core-write-actions";
 
 // Type definition based on V1 Spec
@@ -114,8 +116,12 @@ export async function getProductsAction(params?: {
 
     try {
         const db = await getDb();
-        let sql = `SELECT * FROM ${TABLE_NAME} WHERE company_id = $company_id`;
-        const queryParams: Record<string, string | number> = { company_id: DEFAULT_COMPANY_ID };
+        const tenantId = await requireActiveTenantId();
+        let sql = `SELECT * FROM ${TABLE_NAME} WHERE company_id = $company_id AND tenant_id = $tenantId`;
+        const queryParams: Record<string, string | number | ReturnType<typeof tenantRecordId>> = {
+            company_id: DEFAULT_COMPANY_ID,
+            tenantId: tenantRecordId(tenantId),
+        };
 
 
 
@@ -186,13 +192,18 @@ export async function getProductAction(id: string) {
 
     const db = await getDb();
     try {
+        const tenantId = await requireActiveTenantId();
         const recordId = requireRecordId(TABLE_NAME, id);
 
-        // db.select precisa de RecordId; string é interpretada como nome de tabela
         const result = await db.select<Product>(recordId);
         const data = Array.isArray(result) ? result[0] : result;
 
         if (!data) return { success: false, error: "Produto não encontrado" };
+
+        const rowTenant = recordIdToString((data as unknown as Record<string, unknown>).tenant_id);
+        if (rowTenant && rowTenant !== tenantId) {
+            return { success: false, error: "Produto não encontrado" };
+        }
 
         return { success: true, data: serializeProduct(data) };
     } catch (error) {
@@ -217,7 +228,7 @@ const parsePrice = (value: string | number) => {
 };
 
 export async function createProductAction(formData: FormData) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();
@@ -259,10 +270,15 @@ export async function createProductAction(formData: FormData) {
     const data = validated.data;
 
     try {
+        const tenantId = await requireActiveTenantId();
         // Check uniqueness
         const existing = await db.query<[Product[]]>(
-            `SELECT id FROM ${TABLE_NAME} WHERE code = $code AND company_id = $company_id`,
-            { code: data.code, company_id: DEFAULT_COMPANY_ID }
+            `SELECT id FROM ${TABLE_NAME} WHERE code = $code AND company_id = $company_id AND tenant_id = $tenantId`,
+            {
+                code: data.code,
+                company_id: DEFAULT_COMPANY_ID,
+                tenantId: tenantRecordId(tenantId),
+            },
         );
 
         if (existing[0] && existing[0].length > 0) {
@@ -280,6 +296,7 @@ export async function createProductAction(formData: FormData) {
             imageUrl: data.imageUrl || undefined,
             group_ids: groupRecordIds,
             company_id: DEFAULT_COMPANY_ID,
+            tenant_id: tenantRecordId(tenantId),
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
         });
@@ -328,8 +345,11 @@ export async function createProductAction(formData: FormData) {
 }
 
 export async function updateProductAction(id: string, formData: FormData) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const entityGate = await assertEntityInActiveTenant("product", id, "Produto não encontrado");
+    if (!entityGate.ok) return { success: false, error: entityGate.error };
 
     const db = await getDb();
 
@@ -417,8 +437,11 @@ export async function updateProductAction(id: string, formData: FormData) {
 }
 
 export async function updateProductImageUrlAction(productId: string, imageUrl: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const entityGate = await assertEntityInActiveTenant("product", productId, "Produto não encontrado");
+    if (!entityGate.ok) return { success: false, error: entityGate.error };
 
     const db = await getDb();
     try {
@@ -479,8 +502,11 @@ export async function getNextProductCodeAction() {
 }
 
 export async function deleteProductAction(id: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const entityGate = await assertEntityInActiveTenant("product", id, "Produto não encontrado");
+    if (!entityGate.ok) return { success: false, error: entityGate.error };
 
     const db = await getDb();
     try {

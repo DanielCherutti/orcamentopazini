@@ -8,15 +8,29 @@ import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { hashPassword } from "@/lib/password";
 import { assertPasswordPolicy } from "@/lib/password-pwned";
 import { PASSWORD_MAX_LENGTH } from "@/lib/password-strength";
-import { getSession, getSessionEmail } from "@/actions/auth-actions";
+import {
+    assertPortalAdminSession,
+    assertTenantSession,
+} from "@/lib/tenant-context";
+import { tenantHasUserCapacity } from "@/lib/platform-user";
+import { assertTenantOperationalForInvite } from "@/actions/platform-actions";
+import {
+    listTenantMembersAction,
+    removeTenantMemberAction,
+    updateTenantMemberRoleAction,
+} from "@/actions/tenant-actions";
 import { passwordHashLooksValid } from "@/lib/password-hash-present";
 import { sendPortalInviteEmail } from "@/lib/portal-invite-mail";
 import { resolveInviteAppBaseUrl } from "@/lib/proposal-mail-settings";
+import { recordIdToString, requireRecordId } from "@/lib/surreal-record-ids";
+import type { OrganizationMemberRole, TenantRole } from "@/types/tenant-types";
+import { tenantRecordId } from "@/lib/tenant-query";
 
 const INVITE_TTL_MS = 48 * 60 * 60 * 1000;
 
 const createUserSchema = z.object({
     email: z.string().trim().email("E-mail inválido"),
+    role: z.enum(["user", "admin"]).optional(),
 });
 
 export type PortalUserPublic = {
@@ -24,15 +38,11 @@ export type PortalUserPublic = {
     email: string;
     created_at?: string;
     active?: boolean;
-    /** Ainda não definiu senha pelo link enviado ao e-mail */
     pending_setup?: boolean;
+    tenant_role?: TenantRole;
+    membership_id?: string;
 };
 
-async function requireLoggedIn(): Promise<boolean> {
-    return getSession();
-}
-
-/** Evita injection em UPDATE por id vindo do cliente. */
 function isSafePortalUserRecordId(id: string): boolean {
     if (!id.startsWith("portal_user:")) return false;
     const rest = id.slice("portal_user:".length);
@@ -57,39 +67,41 @@ const resetPasswordSchema = z
         path: ["passwordConfirm"],
     });
 
+async function userHasTenantMembership(
+    userId: string,
+    tenantId: string,
+): Promise<boolean> {
+    const db = await getDb();
+    const rows = await db.query<[unknown[]]>(
+        "SELECT id FROM portal_user_tenant WHERE user_id = $userId AND tenant_id = $tenantId LIMIT 1",
+        {
+            userId: requireRecordId("portal_user", userId),
+            tenantId: tenantRecordId(tenantId),
+        },
+    );
+    return (rows[0]?.length ?? 0) > 0;
+}
+
 export async function listPortalUsersAction(): Promise<{
     success: boolean;
     users?: PortalUserPublic[];
     error?: string;
 }> {
-    if (!(await requireLoggedIn())) {
-        return { success: false, error: "Não autorizado" };
+    const members = await listTenantMembersAction();
+    if (!members.success || !members.data) {
+        return { success: false, error: members.error ?? "Erro ao listar usuários" };
     }
 
-    const db = await getDb();
-    try {
-        const result = await db.query<
-            [
-                (PortalUserPublic & {
-                    password_hash?: string;
-                })[],
-            ]
-        >(`SELECT id, email, created_at, active, password_hash FROM portal_user ORDER BY email`);
-        const rows = result[0] ?? [];
-        const users = toPlain(rows).map((u) => {
-            const { password_hash: _ph, ...rest } = u;
-            return {
-                ...rest,
-                id: String(u.id),
-                pending_setup: !passwordHashLooksValid(u.password_hash),
-            };
-        });
-        return { success: true, users };
-    } catch (e) {
-        console.error("listPortalUsersAction:", e);
-        if (isTokenExpiredError(e)) resetDb();
-        return { success: false, error: "Erro ao listar usuários" };
-    }
+    const users: PortalUserPublic[] = members.data.map((m) => ({
+        id: m.userId,
+        email: m.email,
+        active: m.active,
+        pending_setup: m.pending_setup,
+        tenant_role: m.role,
+        membership_id: m.membershipId,
+    }));
+
+    return { success: true, users: toPlain(users) };
 }
 
 export async function createPortalUserAction(
@@ -101,12 +113,15 @@ export async function createPortalUserAction(
     message?: string;
     fieldErrors?: Record<string, string[]>;
 }> {
-    if (!(await requireLoggedIn())) {
-        return { success: false, error: "Não autorizado" };
-    }
+    const auth = await assertPortalAdminSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const roleRaw = formData.get("role")?.toString().trim() || "user";
+    const inviteRole: OrganizationMemberRole = roleRaw === "admin" ? "admin" : "user";
 
     const parsed = createUserSchema.safeParse({
         email: formData.get("email"),
+        role: inviteRole,
     });
 
     if (!parsed.success) {
@@ -127,19 +142,48 @@ export async function createPortalUserAction(
     }
 
     const email = parsed.data.email.trim().toLowerCase();
+    const tenantId = auth.ctx.tenantId;
     const invite_token = randomBytes(32).toString("hex");
     const invite_expires_at = new Date(Date.now() + INVITE_TTL_MS).toISOString();
 
     const db = await getDb();
     try {
-        const existing = await db.query<[unknown[]]>(
+        const licenseBlock = await assertTenantOperationalForInvite(tenantId);
+        if (licenseBlock) {
+            return { success: false, error: licenseBlock };
+        }
+
+        const capacity = await tenantHasUserCapacity(tenantId, db);
+        if (!capacity.ok) {
+            return { success: false, error: capacity.error };
+        }
+
+        const existing = await db.query<[Array<{ id: unknown }>]>(
             "SELECT id FROM portal_user WHERE email = $email LIMIT 1",
             { email },
         );
-        if ((existing[0]?.length ?? 0) > 0) {
+        const existingId = recordIdToString(existing[0]?.[0]?.id);
+
+        if (existingId) {
+            const inTenant = await userHasTenantMembership(existingId, tenantId);
+            if (inTenant) {
+                return {
+                    success: false,
+                    fieldErrors: { email: ["Este e-mail já pertence a esta organização"] },
+                };
+            }
+
+            await db.create(new Table("portal_user_tenant")).content({
+                user_id: new StringRecordId(existingId),
+                tenant_id: tenantRecordId(tenantId),
+                role: inviteRole,
+                created_at: new Date().toISOString(),
+            });
+
+            revalidatePath("/settings/users");
             return {
-                success: false,
-                fieldErrors: { email: ["Este e-mail já está cadastrado"] },
+                success: true,
+                message: `${email} foi adicionado à organização atual com papel ${inviteRole}.`,
             };
         }
 
@@ -148,6 +192,8 @@ export async function createPortalUserAction(
             active: true,
             invite_token,
             invite_expires_at,
+            invite_tenant_id: tenantRecordId(tenantId),
+            invite_tenant_role: inviteRole,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
         };
@@ -190,7 +236,6 @@ export async function createPortalUserAction(
     }
 }
 
-/** Para formulários/modais que chamam a action sem `useActionState`. */
 export async function submitCreatePortalUser(formData: FormData) {
     return createPortalUserAction(null, formData);
 }
@@ -199,9 +244,8 @@ export async function setPortalUserActiveAction(formData: FormData): Promise<{
     success: boolean;
     error?: string;
 }> {
-    if (!(await requireLoggedIn())) {
-        return { success: false, error: "Não autorizado" };
-    }
+    const auth = await assertPortalAdminSession();
+    if (!auth.ok) return { success: false, error: auth.error };
 
     const userId = formData.get("userId")?.toString().trim() ?? "";
     const wantActive = formData.get("active")?.toString() === "true";
@@ -210,11 +254,11 @@ export async function setPortalUserActiveAction(formData: FormData): Promise<{
         return { success: false, error: "Identificador de usuário inválido" };
     }
 
-    const sessionEmail = await getSessionEmail();
-    if (!sessionEmail) {
-        return { success: false, error: "Sessão inválida" };
+    if (!(await userHasTenantMembership(userId, auth.ctx.tenantId))) {
+        return { success: false, error: "Usuário não encontrado nesta organização" };
     }
 
+    const sessionEmail = auth.ctx.email;
     const db = await getDb();
     const rid = new StringRecordId(userId);
     try {
@@ -236,23 +280,14 @@ export async function setPortalUserActiveAction(formData: FormData): Promise<{
         }
 
         if (!wantActive) {
-            const allRaw = await db.select(new Table("portal_user"));
-            const list = toPlain(
-                (Array.isArray(allRaw) ? allRaw : []) as Array<{
-                    id: unknown;
-                    email: string;
-                    active?: boolean;
-                }>,
+            const members = await listTenantMembersAction(auth.ctx.tenantId);
+            const activeInTenant = (members.data ?? []).filter(
+                (m) => m.userId !== userId && m.active !== false,
             );
-            const wouldRemainActive = list.filter((u) => {
-                const id = String(u.id);
-                if (id === userId) return false;
-                return u.active !== false;
-            });
-            if (wouldRemainActive.length === 0) {
+            if (activeInTenant.length === 0) {
                 return {
                     success: false,
-                    error: "Deve existir pelo menos um usuário ativo.",
+                    error: "Deve existir pelo menos um usuário ativo nesta organização.",
                 };
             }
         }
@@ -276,9 +311,8 @@ export async function resetPortalUserPasswordAction(formData: FormData): Promise
     error?: string;
     fieldErrors?: Record<string, string[]>;
 }> {
-    if (!(await requireLoggedIn())) {
-        return { success: false, error: "Não autorizado" };
-    }
+    const auth = await assertPortalAdminSession();
+    if (!auth.ok) return { success: false, error: auth.error };
 
     const parsed = resetPasswordSchema.safeParse({
         userId: formData.get("userId"),
@@ -302,6 +336,10 @@ export async function resetPortalUserPasswordAction(formData: FormData): Promise
         return { success: false, error: "Identificador de usuário inválido" };
     }
 
+    if (!(await userHasTenantMembership(userId, auth.ctx.tenantId))) {
+        return { success: false, error: "Usuário não encontrado nesta organização" };
+    }
+
     const policy = await assertPasswordPolicy(password);
     if (!policy.ok) {
         return {
@@ -313,14 +351,6 @@ export async function resetPortalUserPasswordAction(formData: FormData): Promise
     const db = await getDb();
     const rid = new StringRecordId(userId);
     try {
-        const raw = await db.select<{ email: string }>(rid);
-        const row = (Array.isArray(raw) ? raw[0] : raw) as
-            | { email: string }
-            | undefined;
-        if (!row?.email) {
-            return { success: false, error: "Usuário não encontrado" };
-        }
-
         const password_hash = await hashPassword(password);
         await db.query(
             "UPDATE $rid SET password_hash = $ph, updated_at = $u, invite_token = NONE, invite_expires_at = NONE",
@@ -344,71 +374,63 @@ export async function deletePortalUserAction(formData: FormData): Promise<{
     success: boolean;
     error?: string;
 }> {
-    if (!(await requireLoggedIn())) {
-        return { success: false, error: "Não autorizado" };
-    }
+    const auth = await assertPortalAdminSession();
+    if (!auth.ok) return { success: false, error: auth.error };
 
     const userId = formData.get("userId")?.toString().trim() ?? "";
     if (!isSafePortalUserRecordId(userId)) {
         return { success: false, error: "Identificador de usuário inválido" };
     }
 
-    const sessionEmail = await getSessionEmail();
-    if (!sessionEmail) {
-        return { success: false, error: "Sessão inválida" };
+    return removeTenantMemberAction({ userId, tenantId: auth.ctx.tenantId });
+}
+
+export async function updatePortalUserTenantRoleAction(formData: FormData): Promise<{
+    success: boolean;
+    error?: string;
+}> {
+    const auth = await assertPortalAdminSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const userId = formData.get("userId")?.toString().trim() ?? "";
+    const roleRaw = formData.get("role")?.toString().trim() ?? "user";
+    const role: OrganizationMemberRole = roleRaw === "admin" ? "admin" : "user";
+
+    if (!isSafePortalUserRecordId(userId)) {
+        return { success: false, error: "Identificador de usuário inválido" };
     }
+
+    return updateTenantMemberRoleAction({
+        userId,
+        tenantId: auth.ctx.tenantId,
+        role,
+    });
+}
+
+export async function getPortalAdminCapabilitiesAction(): Promise<{
+    success: boolean;
+    data?: { tenantName: string | null };
+    error?: string;
+}> {
+    const auth = await assertTenantSession();
+    if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();
-    const rid = new StringRecordId(userId);
+    let tenantName: string | null = null;
     try {
-        const raw = await db.select<{ email: string; active?: boolean }>(rid);
-        const row = (Array.isArray(raw) ? raw[0] : raw) as
-            | { email: string; active?: boolean }
-            | undefined;
-        if (!row?.email) {
-            return { success: false, error: "Usuário não encontrado" };
-        }
-
-        const targetEmail = row.email.trim().toLowerCase();
-        if (targetEmail === sessionEmail.trim().toLowerCase()) {
-            return {
-                success: false,
-                error: "Você não pode remover a sua própria conta.",
-            };
-        }
-
-        const allRaw = await db.select(new Table("portal_user"));
-        const list = toPlain(
-            (Array.isArray(allRaw) ? allRaw : []) as Array<{
-                id: unknown;
-                email: string;
-                active?: boolean;
-            }>,
+        const rows = await db.query<[Array<{ name?: string }>]>(
+            "SELECT name FROM tenant WHERE id = $id LIMIT 1",
+            { id: tenantRecordId(auth.ctx.tenantId) },
         );
-
-        const others = list.filter((u) => String(u.id) !== userId);
-        if (others.length === 0) {
-            return {
-                success: false,
-                error: "Não é possível remover o único usuário do portal.",
-            };
-        }
-
-        const activeOthers = others.filter((u) => u.active !== false);
-        if (activeOthers.length === 0) {
-            return {
-                success: false,
-                error: "Deve existir pelo menos um usuário ativo.",
-            };
-        }
-
-        await db.delete(rid);
-
-        revalidatePath("/settings/users");
-        return { success: true };
-    } catch (e) {
-        console.error("deletePortalUserAction:", e);
-        if (isTokenExpiredError(e)) resetDb();
-        return { success: false, error: "Erro ao remover usuário" };
+        tenantName = rows[0]?.[0]?.name ? String(rows[0][0].name) : null;
+    } catch {
+        tenantName = null;
     }
+
+    return {
+        success: true,
+        data: {
+            tenantName,
+        },
+    };
 }

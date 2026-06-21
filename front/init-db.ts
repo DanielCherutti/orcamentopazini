@@ -47,6 +47,7 @@ const BASE_SCHEMA_QL = `
             DEFINE TABLE IF NOT EXISTS image_annotation SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS proposal_settings SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS portal_user SCHEMALESS;
+            DEFINE TABLE IF NOT EXISTS platform_license_settings SCHEMALESS;
             DEFINE INDEX IF NOT EXISTS idx_portal_user_email ON portal_user FIELDS email UNIQUE;
             DEFINE INDEX IF NOT EXISTS idx_budget_item_budget_id ON budget_item FIELDS budget_id;
             DEFINE INDEX IF NOT EXISTS idx_budget_item_section_id ON budget_item FIELDS section_id;
