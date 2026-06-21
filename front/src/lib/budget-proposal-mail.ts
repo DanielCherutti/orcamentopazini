@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer";
 import type SMTPTransport from "nodemailer/lib/smtp-transport";
 import { resolveSmtpConfigForInvite } from "@/lib/proposal-mail-settings";
+import { PRODUCT_NAME } from "@/lib/product-brand";
 
 function formatSmtpFailure(e: unknown): string {
     const base =
@@ -71,7 +72,7 @@ export async function sendBudgetProposalEmail(options: {
         };
 
         const transporter = nodemailer.createTransport(transportOptions);
-        const company = options.companyName?.trim() || "Pazini";
+        const company = options.companyName?.trim() || PRODUCT_NAME;
         const personal = options.message?.trim() || "";
         const intro =
             personal ||

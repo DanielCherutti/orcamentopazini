@@ -79,8 +79,12 @@ function NavItem({
 
 export function Sidebar({
     sessionEmail,
+    companyName,
+    companySubtitle,
 }: {
     sessionEmail: string | null;
+    companyName: string;
+    companySubtitle?: string;
 }) {
     const { collapsed } = useSidebar();
     const pathname = usePathname() ?? "";
@@ -114,8 +118,10 @@ export function Sidebar({
                         boxShadow: "0 0 12px rgb(var(--brand-secondary-rgb) / 0.45)",
                     }}
                 />
-                <h2 className="text-lg font-bold tracking-tight text-white">PAZINI</h2>
-                <p className="text-[11px] font-medium text-sidebar-foreground/55">Engenharia</p>
+                <h2 className="text-lg font-bold tracking-tight text-white">{companyName}</h2>
+                {companySubtitle ? (
+                    <p className="text-[11px] font-medium text-sidebar-foreground/55">{companySubtitle}</p>
+                ) : null}
             </div>
 
             <nav className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-2 pb-3 [scrollbar-gutter:stable]">

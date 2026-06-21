@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { LoginHighlightsCard } from "@/components/auth/login-highlights-card";
 import { DashboardWelcomeLogo } from "@/components/dashboard/dashboard-welcome-logo";
 import { brandingCSSProperties } from "@/lib/branding-theme";
+import { PRODUCT_TAGLINE } from "@/lib/product-brand";
 import { AlertCircle, CheckCircle2, Lock, Mail } from "lucide-react";
 
 export const metadata: Metadata = {
@@ -21,6 +22,8 @@ export default async function LoginPage({
 }) {
     const { error, success } = await searchParams;
     const branding = await getPublicProposalBrandingAction();
+    const hostBranding = await getHostDisplayBranding();
+    const loginSubtitle = loginSubtitleForBranding(hostBranding);
     const themeStyle = brandingCSSProperties(branding.primary_color, branding.secondary_color);
 
     const envLogo = process.env.NEXT_PUBLIC_BRAND_LOGO_URL?.trim();
@@ -69,7 +72,7 @@ export default async function LoginPage({
                                     {branding.company_name}
                                 </h1>
                                 <p className="text-sm text-muted-foreground">
-                                    Sistema de gestão — entre com sua conta do portal
+                                    {loginSubtitle}
                                 </p>
                             </div>
                         </div>

@@ -23,6 +23,7 @@ import {
     listBudgetCodesByIds,
 } from "@/lib/budgets/budget-email-store";
 import { generateBudgetPdfBuffer } from "@/lib/pdf/generate-budget-pdf-buffer";
+import { PRODUCT_NAME } from "@/lib/product-brand";
 import { resolveInviteAppBaseUrl } from "@/lib/proposal-mail-settings";
 import { resolveSmtpConfigForInvite } from "@/lib/proposal-mail-settings";
 import { smtpFromAddress } from "@/lib/imap-config";
@@ -288,7 +289,7 @@ async function sendAndRecordMessage(
     const companyName =
         settingsRes.success && settingsRes.data?.company_name
             ? String(settingsRes.data.company_name)
-            : "Pazini";
+            : PRODUCT_NAME;
 
     const smtpCfg = await resolveSmtpConfigForInvite();
     const fromEmail = smtpCfg ? smtpFromAddress(smtpCfg).toLowerCase() : "";

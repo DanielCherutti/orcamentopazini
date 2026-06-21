@@ -37,6 +37,7 @@ import {
     XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PRODUCT_NAME } from "@/lib/product-brand";
 import { usePlatformPermissions } from "@/components/platform/platform-permissions-context";
 
 function KpiCard({
@@ -106,7 +107,7 @@ export function PlatformDashboard({
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.14em] text-violet-600 dark:text-violet-400">
-                        Revenda · Painel comercial
+                        {PRODUCT_NAME} · Painel comercial
                     </p>
                     <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
                     <p className="mt-1 max-w-xl text-muted-foreground">

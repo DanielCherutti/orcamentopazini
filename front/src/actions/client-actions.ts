@@ -9,6 +9,7 @@ import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
 import { assertEntityInActiveTenant } from "@/lib/tenant-access";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
 import { auditTenantAction } from "@/lib/audit-log";
+import { PRODUCT_USER_AGENT } from "@/lib/product-brand";
 
 // Basic type for client selector (kept for backward compatibility)
 export type Client = {
@@ -364,7 +365,7 @@ export async function lookupCnpjAction(cnpj: string): Promise<
                 signal: controller.signal,
                 headers: {
                     Accept: "application/json",
-                    "User-Agent": "Pazini/1.0 (client-form)",
+                    "User-Agent": `${PRODUCT_USER_AGENT} (client-form)`,
                 },
                 cache: "no-store",
             },

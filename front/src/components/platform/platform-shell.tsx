@@ -7,6 +7,7 @@ import { logoutAction } from "@/actions/auth-actions";
 import { PlatformOrgAccessButton } from "@/components/platform/platform-org-access-button";
 import { cn } from "@/lib/utils";
 import { initialsFromEmail } from "@/components/platform/platform-utils";
+import { PRODUCT_NAME, PRODUCT_TAGLINE } from "@/lib/product-brand";
 import { usePlatformPermissions } from "@/components/platform/platform-permissions-context";
 import { PLATFORM_ROLE_LABELS, type PlatformRole } from "@/types/platform-types";
 
@@ -83,9 +84,9 @@ export function PlatformShell({
                             <Shield className="h-4 w-4 text-violet-300" />
                         </div>
                         <div>
-                            <p className="text-sm font-bold tracking-tight text-white">PAZINI</p>
-                            <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500">
-                                Plataforma SaaS
+                            <p className="text-sm font-bold tracking-tight text-white">{PRODUCT_NAME}</p>
+                            <p className="text-[10px] leading-snug text-slate-500">
+                                {PRODUCT_TAGLINE}
                             </p>
                         </div>
                     </div>

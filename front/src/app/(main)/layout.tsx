@@ -5,9 +5,7 @@ import { LayoutShell } from "@/components/layout/layout-shell";
 import { SidebarProvider } from "@/components/layout/sidebar-context";
 import { MainAppProviders } from "@/components/providers/main-app-providers";
 import { brandingCSSProperties } from "@/lib/branding-theme";
-import { getSessionContext } from "@/lib/tenant-context";
-import { SupportModeBanner } from "@/components/platform/support-mode-banner";
-import { SupportModeLayoutProvider } from "@/components/platform/support-mode-layout-provider";
+import { getHostDisplayBranding } from "@/lib/host-branding";
 
 export default async function DashboardLayout({
     children,
@@ -21,14 +19,18 @@ export default async function DashboardLayout({
 
     const impersonation = ctx?.impersonation;
 
-    const [sessionEmail, settings] = await Promise.all([
+    const [sessionEmail, settings, hostBranding] = await Promise.all([
         getSessionEmail(),
         getProposalSettingsAction(),
+        getHostDisplayBranding(),
     ]);
     const themeStyle = brandingCSSProperties(
-        settings.success ? settings.data?.primary_color : null,
-        settings.success ? settings.data?.secondary_color : null
+        hostBranding.primary_color,
+        hostBranding.secondary_color,
     );
+
+    const companyName = hostBranding.company_name;
+    const companySubtitle = hostBranding.company_header_subtitle;
 
     return (
         <div className="min-h-screen flex flex-col" style={themeStyle}>
@@ -52,7 +54,11 @@ export default async function DashboardLayout({
             >
                 <MainAppProviders>
                     <SidebarProvider>
-                        <LayoutShell sessionEmail={sessionEmail}>
+                        <LayoutShell
+                            sessionEmail={sessionEmail}
+                            companyName={companyName}
+                            companySubtitle={companySubtitle}
+                        >
                             {children}
                         </LayoutShell>
                     </SidebarProvider>

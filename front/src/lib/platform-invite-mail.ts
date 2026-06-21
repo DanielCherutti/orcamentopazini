@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer";
 import type SMTPTransport from "nodemailer/lib/smtp-transport";
 import { getPlatformSmtpConfig } from "@/lib/platform-smtp";
+import { PRODUCT_NAME, PRODUCT_TAGLINE } from "@/lib/product-brand";
 import { PLATFORM_ROLE_LABELS, type PlatformRole } from "@/types/platform-types";
 
 function formatSmtpFailure(e: unknown): string {
@@ -45,9 +46,10 @@ export async function sendPlatformTeamInviteEmail(options: {
 
         const transporter = nodemailer.createTransport(transportOptions);
         const roleLabel = PLATFORM_ROLE_LABELS[options.role];
-        const subject = "Convite — equipe da plataforma Pazini";
+        const subject = `Convite — equipe ${PRODUCT_NAME}`;
         const text = [
-            `Você foi convidado para a equipe da plataforma Pazini (${roleLabel}).`,
+            `Você foi convidado para a equipe da plataforma ${PRODUCT_NAME} (${roleLabel}).`,
+            PRODUCT_TAGLINE,
             "",
             "Crie sua senha pelo link abaixo (válido por tempo limitado):",
             options.inviteUrl,
@@ -58,7 +60,8 @@ export async function sendPlatformTeamInviteEmail(options: {
         ].join("\n");
 
         const html = `
-<p>Você foi convidado para a equipe da plataforma Pazini (<strong>${roleLabel}</strong>).</p>
+<p>Você foi convidado para a equipe da plataforma ${PRODUCT_NAME} (<strong>${roleLabel}</strong>).</p>
+<p style="font-size:12px;color:#666">${PRODUCT_TAGLINE}</p>
 <p><a href="${options.inviteUrl.replace(/"/g, "&quot;")}">Criar senha e ativar acesso</a></p>
 <p style="font-size:12px;color:#666">Depois do cadastro, entre em /platform com e-mail e senha.</p>
 <p style="font-size:12px;color:#666">Se você não esperava este e-mail, ignore esta mensagem.</p>

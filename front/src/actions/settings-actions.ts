@@ -62,67 +62,32 @@ export type PublicProposalBranding = {
 };
 
 const PROPOSAL_SETTINGS_DEFAULTS: ProposalSettings = {
-  company_name: "Pazini - Móveis Planejados",
+  company_name: "Minha empresa de engenharia",
+  company_header_subtitle: "Engenharia",
   introduction_text: `Prezado Cliente,
 
-É com satisfação que apresentamos nossa proposta comercial para execução do seu projeto de móveis planejados.
+É com satisfação que apresentamos nossa proposta comercial para execução do seu projeto de engenharia.
 
-Nossa proposta contempla materiais de altíssima qualidade, acabamento impecável e garantia estendida.`,
+Nossa proposta contempla escopo técnico detalhado, materiais conforme normas aplicáveis e prazos acordados.`,
   closing_text: `Termos Gerais:
 1. Validade da Proposta: 15 dias.
-2. Prazo de Entrega: 45 dias úteis após medição final.
-3. Garantia: 5 anos contra defeitos de fabricação.`,
+2. Prazo de execução: conforme cronograma aprovado após aceite.
+3. Garantia: conforme especificações técnicas do escopo.`,
   primary_color: BRAND_DEFAULT_PRIMARY,
   secondary_color: BRAND_DEFAULT_SECONDARY,
 };
 
 /**
- * Cores e nome exibidos no login. Sem autenticação — apenas campos não sensíveis.
+ * Cores e nome exibidos no login. Sem autenticação — host principal = EngHub; subdomínio = org.
  */
 export async function getPublicProposalBrandingAction(): Promise<PublicProposalBranding> {
-  try {
-    const db = await getDb();
-    const result = await db.query<
-      [
-        {
-          primary_color?: string;
-          secondary_color?: string;
-          company_name?: string;
-          company_logo_url?: string;
-        }[],
-      ]
-    >(
-      "SELECT primary_color, secondary_color, company_name, company_logo_url FROM proposal_settings WHERE tenant_id = $tenantId LIMIT 1",
-      { tenantId: tenantRecordId(DEFAULT_TENANT_RECORD_ID) },
-    );
-    const row = result[0]?.[0];
-    const primary =
-      normalizeHex(row?.primary_color != null ? String(row.primary_color) : undefined) ??
-      BRAND_DEFAULT_PRIMARY;
-    const secondary =
-      normalizeHex(row?.secondary_color != null ? String(row.secondary_color) : undefined) ??
-      BRAND_DEFAULT_SECONDARY;
-    return {
-      company_name:
-        row?.company_name != null && String(row.company_name).trim() !== ""
-          ? String(row.company_name).trim()
-          : PROPOSAL_SETTINGS_DEFAULTS.company_name!,
-      company_logo_url:
-        row?.company_logo_url != null && String(row.company_logo_url).trim() !== ""
-          ? String(row.company_logo_url).trim()
-          : undefined,
-      primary_color: primary,
-      secondary_color: secondary,
-    };
-  } catch (e) {
-    console.error("getPublicProposalBrandingAction:", e);
-    if (isTokenExpiredError(e)) resetDb();
-    return {
-      company_name: PROPOSAL_SETTINGS_DEFAULTS.company_name!,
-      primary_color: BRAND_DEFAULT_PRIMARY,
-      secondary_color: BRAND_DEFAULT_SECONDARY,
-    };
-  }
+  const branding = await getHostDisplayBranding();
+  return {
+    company_name: branding.company_name,
+    company_logo_url: branding.company_logo_url,
+    primary_color: branding.primary_color,
+    secondary_color: branding.secondary_color,
+  };
 }
 
 export async function getProposalSettingsAction() {
