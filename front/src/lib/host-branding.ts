@@ -16,6 +16,7 @@ export type HostDisplayBranding = {
     company_name: string;
     company_header_subtitle?: string;
     company_logo_url?: string;
+    company_favicon_url?: string;
     primary_color: string;
     secondary_color: string;
     /** Host principal do produto (localhost / app.enghub…) — marca EngHub, não org cliente. */
@@ -55,11 +56,12 @@ async function loadTenantPublicBranding(
                     secondary_color?: string;
                     company_name?: string;
                     company_logo_url?: string;
+                    company_favicon_url?: string;
                     company_header_subtitle?: string;
                 }[],
             ]
         >(
-            `SELECT primary_color, secondary_color, company_name, company_logo_url, company_header_subtitle
+            `SELECT primary_color, secondary_color, company_name, company_logo_url, company_favicon_url, company_header_subtitle
              FROM proposal_settings WHERE tenant_id = $tenantId LIMIT 1`,
             { tenantId: tenantRecordId(tenantId) },
         );
@@ -85,6 +87,10 @@ async function loadTenantPublicBranding(
             company_logo_url:
                 row?.company_logo_url != null && String(row.company_logo_url).trim() !== ""
                     ? String(row.company_logo_url).trim()
+                    : undefined,
+            company_favicon_url:
+                row?.company_favicon_url != null && String(row.company_favicon_url).trim() !== ""
+                    ? String(row.company_favicon_url).trim()
                     : undefined,
             primary_color: primary,
             secondary_color: secondary,
@@ -154,7 +160,7 @@ export function loginSubtitleForBranding(branding: HostDisplayBranding): string 
 export async function buildHostPageMetadata(pageTitle?: string): Promise<Metadata> {
     const branding = await getHostDisplayBranding();
     const title = pageTitle ?? (branding.isProductHost ? "Entrar" : branding.company_name);
-    return {
+    const metadata: Metadata = {
         title: {
             default: title,
             template: `%s | ${branding.company_name}`,
@@ -163,4 +169,11 @@ export async function buildHostPageMetadata(pageTitle?: string): Promise<Metadat
             ? PRODUCT_TAGLINE
             : `${branding.company_name} — portal comercial`,
     };
+    if (branding.company_favicon_url) {
+        metadata.icons = {
+            icon: branding.company_favicon_url,
+            shortcut: branding.company_favicon_url,
+        };
+    }
+    return metadata;
 }

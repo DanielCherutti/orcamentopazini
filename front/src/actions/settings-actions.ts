@@ -20,6 +20,7 @@ export interface ProposalSettings {
     closing_text?: string;
     company_name?: string;
     company_logo_url?: string;
+    company_favicon_url?: string;
     /** Linha abaixo do nome quando dados da empresa forem usados em um cabeçalho do PDF. */
     company_header_subtitle?: string;
     /** Contatos disponíveis para o bloco cabeçalho/rodapé do compositor. */
@@ -57,6 +58,7 @@ export type UpdateProposalSettingsInput = ProposalSettings & {
 export type PublicProposalBranding = {
   company_name: string;
   company_logo_url?: string;
+  company_favicon_url?: string;
   primary_color: string;
   secondary_color: string;
 };
@@ -85,6 +87,7 @@ export async function getPublicProposalBrandingAction(): Promise<PublicProposalB
   return {
     company_name: branding.company_name,
     company_logo_url: branding.company_logo_url,
+    company_favicon_url: branding.company_favicon_url,
     primary_color: branding.primary_color,
     secondary_color: branding.secondary_color,
   };

@@ -2,12 +2,13 @@ import Image from "next/image";
 
 const DEFAULT_LOGO = "/logo.jpeg";
 
-function isRemoteOrDataUrl(src: string): boolean {
+function shouldUsePlainImg(src: string): boolean {
   const s = src.toLowerCase();
   return (
     s.startsWith("http://") ||
     s.startsWith("https://") ||
-    s.startsWith("data:image/")
+    s.startsWith("data:image/") ||
+    s.startsWith("/api/uploads/")
   );
 }
 
@@ -28,8 +29,8 @@ export function DashboardWelcomeLogo({
 
   return (
     <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-border/60 bg-muted/40">
-      {isRemoteOrDataUrl(src) ? (
-        // eslint-disable-next-line @next/next/no-img-element -- URL externa/Data URI da configuração
+      {shouldUsePlainImg(src) ? (
+        // eslint-disable-next-line @next/next/no-img-element -- URL externa, upload ou Data URI da configuração
         <img src={src} alt={alt} className="h-full w-full object-contain p-1.5" />
       ) : (
         <Image

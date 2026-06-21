@@ -24,6 +24,7 @@ import { getTenantPublicOrigin } from "@/lib/tenant-public-origin";
 import { organizationCompanyFromTenant } from "@/lib/organization-company";
 import { getAppTenantDomain } from "@/lib/tenant-host";
 import { PlatformBrandPreview } from "@/components/platform/platform-brand-preview";
+import { BrandAssetUploadField } from "@/components/platform/brand-asset-upload-field";
 import { PlanBadge, UsageBar } from "@/components/platform/platform-utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -134,6 +135,7 @@ export function PlatformOrganizationDetail({
     const branding = organization.branding;
     const [companyName, setCompanyName] = useState(branding?.company_name ?? organization.name);
     const [logoUrl, setLogoUrl] = useState(branding?.company_logo_url ?? "");
+    const [faviconUrl, setFaviconUrl] = useState(branding?.company_favicon_url ?? "");
     const [primaryColor, setPrimaryColor] = useState(branding?.primary_color ?? "#1e3a5f");
     const [secondaryColor, setSecondaryColor] = useState(branding?.secondary_color ?? "#c9a227");
     const [appPublicUrl, setAppPublicUrl] = useState(branding?.app_public_url ?? "");
@@ -187,6 +189,7 @@ export function PlatformOrganizationDetail({
             const res = await updatePlatformOrganizationBrandingAction(organization.id, {
                 company_name: companyName,
                 company_logo_url: logoUrl,
+                company_favicon_url: faviconUrl,
                 primary_color: primaryColor,
                 secondary_color: secondaryColor,
                 app_public_url: appPublicUrl,
@@ -577,14 +580,29 @@ export function PlatformOrganizationDetail({
                                         />
                                     </div>
                                     <div className="space-y-2 sm:col-span-2">
-                                        <Label htmlFor="brand-logo">URL do logo</Label>
-                                        <Input
+                                        <BrandAssetUploadField
                                             id="brand-logo"
+                                            label="Logo"
                                             value={logoUrl}
-                                            onChange={(e) => setLogoUrl(e.target.value)}
-                                            placeholder="https://…"
+                                            onChange={setLogoUrl}
                                             disabled={pending || !canWrite}
-                                            className="h-10"
+                                            asset="logo"
+                                            uploadUrl="/api/upload/platform-brand"
+                                            uploadExtraFields={{ tenantId: organization.id }}
+                                            hint="JPG, PNG, GIF ou WEBP (até 5 MB). Exibido no login, menu e propostas."
+                                        />
+                                    </div>
+                                    <div className="space-y-2 sm:col-span-2">
+                                        <BrandAssetUploadField
+                                            id="brand-favicon"
+                                            label="Favicon (opcional)"
+                                            value={faviconUrl}
+                                            onChange={setFaviconUrl}
+                                            disabled={pending || !canWrite}
+                                            asset="favicon"
+                                            uploadUrl="/api/upload/platform-brand"
+                                            uploadExtraFields={{ tenantId: organization.id }}
+                                            hint="PNG ou ICO recomendado (até 512 KB). Ícone da aba do navegador neste domínio da org."
                                         />
                                     </div>
                                     <ColorField

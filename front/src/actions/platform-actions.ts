@@ -596,6 +596,7 @@ export async function updatePlatformOrganizationBrandingAction(
     input: {
         company_name?: string;
         company_logo_url?: string;
+        company_favicon_url?: string;
         primary_color?: string;
         secondary_color?: string;
         app_public_url?: string;
@@ -614,6 +615,9 @@ export async function updatePlatformOrganizationBrandingAction(
         if (input.company_name !== undefined) patch.company_name = input.company_name.trim();
         if (input.company_logo_url !== undefined) {
             patch.company_logo_url = input.company_logo_url.trim() || null;
+        }
+        if (input.company_favicon_url !== undefined) {
+            patch.company_favicon_url = input.company_favicon_url.trim() || null;
         }
         if (input.primary_color !== undefined) {
             patch.primary_color =
@@ -646,6 +650,7 @@ export async function updatePlatformOrganizationBrandingAction(
         const slugRow = await db.select<{ slug?: string }>(rid);
         const slugRec = Array.isArray(slugRow) ? slugRow[0] : slugRow;
         revalidatePath(`/platform/organizations/${String(slugRec?.slug ?? canonicalId)}`);
+        revalidatePath("/");
         await auditPlatformAction({
             action: "org.branding_update",
             resourceType: "org",

@@ -103,6 +103,14 @@ export async function proxy(request: NextRequest) {
     }
 
     if (pathname.startsWith("/api")) {
+        // Logos, favicons e mídia de orçamentos — leitura pública (login, favicon, PDF, canvas).
+        if (
+            pathname.startsWith("/api/uploads") &&
+            (request.method === "GET" || request.method === "HEAD" || request.method === "OPTIONS")
+        ) {
+            return NextResponse.next();
+        }
+
         const ip = getClientIpFromHeaders(request.headers);
 
         if (pathname.startsWith("/api/upload") && request.method === "POST") {

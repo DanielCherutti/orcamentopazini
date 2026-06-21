@@ -5,7 +5,7 @@ export const IMAGE_UPLOAD_MAX_BYTES = 5 * 1024 * 1024; // 5MB — produto penden
 export const BUDGET_IMAGE_MAX_BYTES = 20 * 1024 * 1024; // 20MB — foto de orçamento
 export const ATTACHMENT_MAX_BYTES = 15 * 1024 * 1024; // 15MB — anexos de produto (PDF + imagens)
 
-export type SniffedKind = "jpeg" | "png" | "gif" | "webp" | "pdf";
+export type SniffedKind = "jpeg" | "png" | "gif" | "webp" | "pdf" | "ico";
 
 const IMAGE_KINDS = new Set<SniffedKind>(["jpeg", "png", "gif", "webp"]);
 
@@ -65,6 +65,16 @@ export function sniffUploadKind(header: Uint8Array): SniffedKind | null {
     }
 
     if (
+        header.length >= 4 &&
+        header[0] === 0 &&
+        header[1] === 0 &&
+        header[2] === 1 &&
+        header[3] === 0
+    ) {
+        return "ico";
+    }
+
+    if (
         header[0] === 0x25 &&
         header[1] === 0x50 &&
         header[2] === 0x44 &&
@@ -78,6 +88,24 @@ export function sniffUploadKind(header: Uint8Array): SniffedKind | null {
 
 function mbLabel(maxBytes: number): string {
     return String(Math.round(maxBytes / 1024 / 1024));
+}
+
+const FAVICON_KINDS = new Set<SniffedKind>(["jpeg", "png", "gif", "webp", "ico"]);
+
+export const FAVICON_UPLOAD_MAX_BYTES = 512 * 1024;
+
+export function validateFaviconBuffer(buffer: Buffer): string | null {
+    if (buffer.length > FAVICON_UPLOAD_MAX_BYTES) {
+        return "Favicon excede o limite de 512KB";
+    }
+    if (buffer.length < 4) {
+        return "Arquivo inválido ou corrompido";
+    }
+    const kind = sniffUploadKind(headerSlice(buffer));
+    if (!kind || !FAVICON_KINDS.has(kind)) {
+        return "Use PNG, ICO, WEBP, GIF ou JPG para o favicon.";
+    }
+    return null;
 }
 
 export function validateImageBuffer(
