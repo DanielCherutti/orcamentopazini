@@ -143,12 +143,12 @@ export function CustomersTable({ initialCustomers, initialMeta }: CustomersTable
             )}
 
             {/* Table */}
-            <div className="rounded-md border border-border overflow-hidden">
+            <div className="app-table overflow-hidden rounded-md">
                 <table className="w-full text-sm">
-                    <thead className="bg-muted/30 border-b border-border">
+                    <thead>
                         <tr>
                             <th
-                                className="h-10 px-4 text-left font-medium text-muted-foreground cursor-pointer hover:bg-muted/50 transition-colors group"
+                                className="group h-10 cursor-pointer px-4 text-left transition-colors hover:bg-[rgb(var(--primary-rgb)/0.08)]"
                                 onClick={() => handleSort("name")}
                             >
                                 <div className="flex items-center">

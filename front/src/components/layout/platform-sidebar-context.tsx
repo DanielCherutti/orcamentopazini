@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 
 interface PlatformSidebarContextValue {
     collapsed: boolean;
@@ -12,23 +12,39 @@ const PlatformSidebarContext = createContext<PlatformSidebarContextValue | null>
 
 const STORAGE_KEY = "platform-sidebar-collapsed";
 
-function getInitialCollapsed(): boolean {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem(STORAGE_KEY) === "true";
-}
+const SSR_COLLAPSED_DEFAULT = true;
 
 export function PlatformSidebarProvider({ children }: { children: ReactNode }) {
-    const [collapsed, setCollapsedState] = useState(getInitialCollapsed);
+    const [collapsed, setCollapsedState] = useState(SSR_COLLAPSED_DEFAULT);
+
+    useEffect(() => {
+        try {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored !== null) {
+                setCollapsedState(stored === "true");
+            }
+        } catch {
+            /* ignore private mode */
+        }
+    }, []);
 
     const setCollapsed = useCallback((value: boolean) => {
         setCollapsedState(value);
-        localStorage.setItem(STORAGE_KEY, String(value));
+        try {
+            localStorage.setItem(STORAGE_KEY, String(value));
+        } catch {
+            /* ignore */
+        }
     }, []);
 
     const toggleSidebar = useCallback(() => {
         setCollapsedState((prev) => {
             const next = !prev;
-            localStorage.setItem(STORAGE_KEY, String(next));
+            try {
+                localStorage.setItem(STORAGE_KEY, String(next));
+            } catch {
+                /* ignore */
+            }
             return next;
         });
     }, []);

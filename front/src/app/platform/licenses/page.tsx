@@ -28,9 +28,11 @@ export default async function PlatformLicensesPage() {
 
     return (
         <PlatformPageShell
-            eyebrow="Revenda"
+            eyebrow="Monetização"
             title="Planos e preços"
-            description="Configure valores mensais, limites sugeridos de usuários e textos exibidos no dashboard comercial e ao criar novas organizações."
+            description="Valores mensais, limites de usuários e textos do dashboard comercial."
+            maxWidth="full"
+            tone="emerald"
         >
             <div className="space-y-8">
                 <PlatformLicensesForm

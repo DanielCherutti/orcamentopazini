@@ -10,6 +10,7 @@ import { buildHostPageMetadata, getHostDisplayBranding } from "@/lib/host-brandi
 import { getSessionContext } from "@/lib/tenant-context";
 import { SupportModeBanner } from "@/components/platform/support-mode-banner";
 import { SupportModeLayoutProvider } from "@/components/platform/support-mode-layout-provider";
+import { TenantThemeScript } from "@/components/theme/tenant-theme-script";
 
 export async function generateMetadata(): Promise<Metadata> {
     return buildHostPageMetadata();
@@ -41,7 +42,8 @@ export default async function DashboardLayout({
     const companySubtitle = hostBranding.company_header_subtitle;
 
     return (
-        <div className="min-h-screen flex flex-col" style={themeStyle}>
+        <div className="min-h-dvh flex flex-col bg-transparent" style={themeStyle}>
+            <TenantThemeScript />
             <SupportModeLayoutProvider
                 active={Boolean(impersonation)}
                 banner={

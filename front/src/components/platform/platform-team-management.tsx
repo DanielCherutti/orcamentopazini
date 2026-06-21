@@ -202,11 +202,11 @@ export function PlatformTeamManagement({ initialMembers }: { initialMembers: Pla
         <>
             <PlatformContentCard className="p-6">
                 <div className="mb-6">
-                    <h2 className="flex items-center gap-2 text-base font-semibold tracking-tight">
-                        <Shield className="h-5 w-5 text-violet-600" />
-                        Equipe da plataforma
+                    <h2 className="flex items-center gap-2 text-base font-black uppercase tracking-[0.14em] text-violet-200">
+                        <Shield className="h-5 w-5 text-violet-400" />
+                        Equipe
                     </h2>
-                    <p className="mt-1 text-sm text-muted-foreground">
+                    <p className="mt-1 text-sm text-violet-300/50">
                         Mesma conta do login — adicione acesso ao painel /platform pelo e-mail e defina
                         a senha. Quem já usa uma empresa pode ter os dois destinos após entrar.
                     </p>
@@ -262,7 +262,7 @@ export function PlatformTeamManagement({ initialMembers }: { initialMembers: Pla
                         <TableBody>
                             {members.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={4} className="text-muted-foreground">
+                                    <TableCell colSpan={4} className="text-violet-300/50">
                                         Nenhum membro cadastrado.
                                     </TableCell>
                                 </TableRow>

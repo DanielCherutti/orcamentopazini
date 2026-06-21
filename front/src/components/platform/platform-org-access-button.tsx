@@ -22,7 +22,7 @@ export function PlatformOrgAccessButton({ variant = "sidebar" }: { variant?: "si
             <form action={exitPlatformToOrgPickerAction}>
                 <button
                     type="submit"
-                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-violet-500/20 bg-violet-500/10 px-4 text-sm font-medium text-violet-800 transition-colors hover:bg-violet-500/15 dark:text-violet-200"
+                    className="inline-flex h-10 items-center gap-2 rounded-lg border border-violet-400/40 bg-violet-500/20 px-4 text-sm font-bold text-violet-100 transition-colors hover:bg-violet-500/35 hover:text-white"
                 >
                     <Building2 className="h-4 w-4" />
                     <span className="hidden sm:inline">Ir para empresa</span>

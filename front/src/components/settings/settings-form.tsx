@@ -8,6 +8,7 @@ import {
     updateProposalSettingsAction,
 } from "@/actions/settings-actions";
 import { BrandAssetUploadField } from "@/components/platform/brand-asset-upload-field";
+import { TenantAppearanceSettings } from "@/components/settings/tenant-appearance-settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -79,6 +80,8 @@ export function SettingsForm({ initialSettings }: { initialSettings: ProposalSet
                     Salvar Alterações
                 </Button>
             </div>
+
+            <TenantAppearanceSettings />
 
             {/* Identidade Visual */}
             <Card>

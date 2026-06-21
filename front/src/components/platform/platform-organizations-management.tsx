@@ -118,11 +118,13 @@ export function PlatformOrganizationsManagement({
     return (
         <>
             <PlatformContentCard>
-                <div className="border-b border-black/[0.04] px-6 py-5 dark:border-white/[0.06]">
+                <div className="border-b border-violet-500/15 px-6 py-5">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                            <h2 className="text-base font-semibold tracking-tight">Empresas clientes</h2>
-                            <p className="mt-1 text-sm text-muted-foreground">
+                            <h2 className="text-sm font-black uppercase tracking-[0.14em] text-violet-200">
+                                Empresas clientes
+                            </h2>
+                            <p className="mt-1 text-sm text-violet-300/50">
                                 Licenças, limites e identidade visual por organização.
                             </p>
                         </div>
@@ -135,16 +137,16 @@ export function PlatformOrganizationsManagement({
                     </div>
                     <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                         <div className="relative max-w-sm flex-1">
-                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-violet-400/60" />
                             <Input
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
                                 placeholder="Buscar por nome ou slug…"
-                                className="h-10 rounded-xl border-black/[0.06] bg-white/80 pl-9 dark:bg-white/[0.04]"
+                                className="h-10 rounded-lg border-violet-500/25 bg-violet-500/10 pl-9 text-violet-50 placeholder:text-violet-300/40"
                             />
                         </div>
                         <Select value={planFilter} onValueChange={setPlanFilter}>
-                            <SelectTrigger className="w-full rounded-xl border-black/[0.06] bg-white/80 sm:w-40 dark:bg-white/[0.04]">
+                            <SelectTrigger className="w-full rounded-lg border-violet-500/25 bg-violet-500/10 text-violet-50 sm:w-40">
                                 <SelectValue placeholder="Plano" />
                             </SelectTrigger>
                             <SelectContent>
@@ -162,7 +164,7 @@ export function PlatformOrganizationsManagement({
                             value={statusFilter}
                             onValueChange={(v) => setStatusFilter(v as StatusFilter)}
                         >
-                            <SelectTrigger className="w-full rounded-xl border-black/[0.06] bg-white/80 sm:w-44 dark:bg-white/[0.04]">
+                            <SelectTrigger className="w-full rounded-lg border-violet-500/25 bg-violet-500/10 text-violet-50 sm:w-44">
                                 <SelectValue placeholder="Status" />
                             </SelectTrigger>
                             <SelectContent>
@@ -186,7 +188,7 @@ export function PlatformOrganizationsManagement({
                                 <p className="font-medium">
                                     {query ? "Nenhum resultado" : "Nenhuma organização ainda"}
                                 </p>
-                                <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                                <p className="mt-1 max-w-sm text-sm text-violet-300/50">
                                     {query
                                         ? "Tente outro termo ou filtro."
                                         : "Crie a primeira empresa cliente para começar."}
@@ -203,7 +205,7 @@ export function PlatformOrganizationsManagement({
                         <div className="app-table">
                         <Table>
                             <TableHeader>
-                                <TableRow className="border-black/[0.04] hover:bg-transparent dark:border-white/[0.06]">
+                                <TableRow className="border-violet-500/10 hover:bg-transparent">
                                     <TableHead className="pl-6">Organização</TableHead>
                                     <TableHead>Plano</TableHead>
                                     <TableHead>Uso de usuários</TableHead>
@@ -225,7 +227,7 @@ export function PlatformOrganizationsManagement({
                                                 <OrgAvatar name={org.name} />
                                                 <div className="min-w-0">
                                                     <p className="font-medium truncate">{org.name}</p>
-                                                    <p className="text-xs text-muted-foreground font-mono truncate">
+                                                    <p className="text-xs font-mono text-violet-300/45 truncate">
                                                         {org.slug}
                                                     </p>
                                                 </div>

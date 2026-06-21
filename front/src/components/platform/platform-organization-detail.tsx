@@ -294,7 +294,7 @@ export function PlatformOrganizationDetail({
                     </TabsList>
 
                     <TabsContent value="license" className="mt-2">
-                        <Card className="platform-panel border-0 shadow-none">
+                        <Card className="platform-ops-surface border-0 shadow-none">
                             <CardHeader>
                                 <CardTitle className="text-base">Licença e limites</CardTitle>
                                 <CardDescription>
@@ -403,7 +403,7 @@ export function PlatformOrganizationDetail({
                     </TabsContent>
 
                     <TabsContent value="company" className="mt-2">
-                        <Card className="platform-panel border-0 shadow-none">
+                        <Card className="platform-ops-surface border-0 shadow-none">
                             <CardHeader>
                                 <CardTitle className="text-base">Cadastro da empresa</CardTitle>
                                 <CardDescription>
@@ -437,7 +437,7 @@ export function PlatformOrganizationDetail({
                     </TabsContent>
 
                     <TabsContent value="access" className="mt-2">
-                        <Card className="platform-panel border-0 shadow-none">
+                        <Card className="platform-ops-surface border-0 shadow-none">
                             <CardHeader>
                                 <CardTitle className="text-base">URL e domínio</CardTitle>
                                 <CardDescription>
@@ -545,7 +545,7 @@ export function PlatformOrganizationDetail({
 
                     {canAudit && (
                         <TabsContent value="audit" className="mt-2">
-                            <Card className="platform-panel border-0 shadow-none">
+                            <Card className="platform-ops-surface border-0 shadow-none">
                                 <CardHeader>
                                     <CardTitle className="text-base">Auditoria desta organização</CardTitle>
                                     <CardDescription>
@@ -560,7 +560,7 @@ export function PlatformOrganizationDetail({
                     )}
 
                     <TabsContent value="brand" className="mt-2">
-                        <Card className="platform-panel border-0 shadow-none">
+                        <Card className="platform-ops-surface border-0 shadow-none">
                             <CardHeader>
                                 <CardTitle className="text-base">Identidade visual</CardTitle>
                                 <CardDescription>

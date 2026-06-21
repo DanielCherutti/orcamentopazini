@@ -300,7 +300,7 @@ export function PlatformOrgUsersSection({ tenantRef, members, canWrite }: Props)
 
     return (
         <>
-            <Card className="platform-panel border-0 shadow-none">
+            <Card className="platform-ops-surface border-0 shadow-none">
                 <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
                     <div className="space-y-1">
                         <CardTitle className="text-base">Usuários</CardTitle>

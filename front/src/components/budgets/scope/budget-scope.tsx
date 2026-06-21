@@ -806,8 +806,8 @@ export function BudgetScope({
                     )}
                     {!selected ? (
                         <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
-                            <MapIcon className="h-12 w-12 mb-4 opacity-20" />
-                            <p className="text-sm">Selecione um local ou adicione um novo para começar</p>
+                            <MapIcon className="mb-4 h-12 w-12 text-muted-foreground/40" />
+                            <p className="text-sm text-foreground/75">Selecione um local ou adicione um novo para começar</p>
                         </div>
                     ) : selected.type === "location" ? (
                         <LocationDetail

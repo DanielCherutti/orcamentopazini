@@ -38,7 +38,8 @@ export default async function PlatformAuditPage({ searchParams }: Props) {
         <PlatformPageShell
             eyebrow="Compliance"
             title="Auditoria"
-            description="Histórico de ações no painel da plataforma e nas organizações clientes."
+            description="Histórico de ações no EngHub e nas organizações clientes."
+            maxWidth="full"
             action={<ExportAuditCsvButton search={sp.search} action={sp.action} />}
         >
             <AuditLogTable

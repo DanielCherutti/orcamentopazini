@@ -90,8 +90,8 @@ export function PlatformLicensesForm({ initialForm, updatedAt }: Props) {
                     const row = form[id];
                     const pricePreview = Number(row.monthlyPriceBrl.replace(",", "."));
                     return (
-                        <Card key={id} className="platform-panel border-0 shadow-none">
-                            <CardHeader className="border-b border-black/[0.04] bg-gradient-to-br from-violet-500/[0.04] to-transparent dark:border-white/[0.06]">
+                        <Card key={id} className="platform-ops-surface border-0 shadow-none">
+                            <CardHeader className="border-b border-violet-500/15 bg-violet-500/[0.06]">
                                 <div className="flex items-center justify-between gap-2">
                                     <PlanBadge plan={id} />
                                     <span className="text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
@@ -182,7 +182,7 @@ export function PlatformLicensesForm({ initialForm, updatedAt }: Props) {
             </div>
 
             {canEdit && (
-                <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-black/[0.04] bg-white/60 p-4 dark:border-white/[0.06] dark:bg-white/[0.03]">
+                <div className="flex flex-wrap items-center gap-3 rounded-lg border border-violet-500/15 bg-violet-500/[0.06] p-4">
                     <Button type="submit" disabled={pending || resetPending}>
                         {pending ? (
                             <>

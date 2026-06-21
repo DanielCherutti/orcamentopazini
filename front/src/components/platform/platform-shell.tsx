@@ -9,27 +9,21 @@ import {
     LogOut,
     ScrollText,
     Shield,
-    Sparkles,
     Users,
 } from "lucide-react";
 import { logoutAction } from "@/actions/auth-actions";
 import { PlatformBreadcrumbProvider } from "@/components/layout/platform-breadcrumb-context";
-import {
-    PlatformSidebarProvider,
-    usePlatformSidebar,
-} from "@/components/layout/platform-sidebar-context";
-import { PlatformHeader } from "@/components/platform/platform-header";
-import { PlatformOrgAccessButton } from "@/components/platform/platform-org-access-button";
+import { PlatformSidebarProvider, usePlatformSidebar } from "@/components/layout/platform-sidebar-context";
+import { PlatformCommandBar } from "@/components/platform/platform-command-bar";
 import { cn } from "@/lib/utils";
-import { initialsFromEmail } from "@/components/platform/platform-utils";
-import { PRODUCT_NAME, PRODUCT_TAGLINE } from "@/lib/product-brand";
 import { usePlatformPermissions } from "@/components/platform/platform-permissions-context";
-import { PLATFORM_ROLE_LABELS, type PlatformRole } from "@/types/platform-types";
+import type { PlatformRole } from "@/types/platform-types";
+import { PRODUCT_NAME } from "@/lib/product-brand";
 
-const SIDEBAR_EXPANDED = "17rem";
-const SIDEBAR_COLLAPSED = "4.75rem";
+const SIDEBAR_COLLAPSED = "5rem";
+const SIDEBAR_EXPANDED = "16rem";
 
-function NavLink({
+function NavItem({
     href,
     icon: Icon,
     label,
@@ -42,36 +36,52 @@ function NavLink({
     active: boolean;
     collapsed: boolean;
 }) {
+    if (collapsed) {
+        return (
+            <Link
+                href={href}
+                title={label}
+                className={cn(
+                    "platform-ops-rail-link group relative flex h-12 w-12 items-center justify-center rounded-xl transition-all duration-200",
+                    active
+                        ? "bg-violet-500/25 text-white shadow-[0_0_28px_-4px_rgba(139,92,246,0.9)] ring-1 ring-violet-400/50"
+                        : "text-violet-300/45 hover:bg-white/[0.06] hover:text-violet-100",
+                )}
+            >
+                {active ? (
+                    <span
+                        className="absolute -left-3 top-1/2 h-8 w-1 -translate-y-1/2 rounded-r-full bg-violet-400 shadow-[0_0_12px_rgba(167,139,250,0.9)]"
+                        aria-hidden
+                    />
+                ) : null}
+                <Icon className="h-5 w-5" />
+            </Link>
+        );
+    }
+
     return (
         <Link
             href={href}
-            title={collapsed ? label : undefined}
             className={cn(
-                "group relative flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-200",
-                collapsed ? "justify-center px-0 py-3" : "px-3 py-2.5",
+                "platform-ops-nav-link relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200",
                 active
-                    ? "platform-nav-active text-white"
-                    : "text-slate-300 hover:bg-white/[0.1] hover:text-white",
+                    ? "bg-violet-500/25 text-white shadow-[0_0_28px_-4px_rgba(139,92,246,0.5)] ring-1 ring-violet-400/40"
+                    : "text-violet-300/70 hover:bg-white/[0.06] hover:text-violet-100",
             )}
         >
-            <Icon
-                className={cn(
-                    "h-[1.125rem] w-[1.125rem] shrink-0 transition-colors",
-                    active ? "text-white" : "text-slate-400 group-hover:text-violet-300",
-                )}
-            />
-            {!collapsed ? <span className="truncate">{label}</span> : null}
-            {active && !collapsed ? (
+            {active ? (
                 <span
-                    className="absolute right-2 h-1.5 w-1.5 rounded-full bg-white/90"
+                    className="absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full bg-violet-400 shadow-[0_0_12px_rgba(167,139,250,0.9)]"
                     aria-hidden
                 />
             ) : null}
+            <Icon className="h-5 w-5 shrink-0" />
+            <span className="truncate">{label}</span>
         </Link>
     );
 }
 
-function PlatformShellInner({
+function PlatformOpsLayout({
     children,
     sessionEmail,
     platformRole,
@@ -83,6 +93,7 @@ function PlatformShellInner({
     const { can } = usePlatformPermissions();
     const { collapsed } = usePlatformSidebar();
     const pathname = usePathname() ?? "";
+
     const isDashboard = pathname === "/platform" || pathname === "/platform/";
     const isOrgs =
         pathname === "/platform/organizations" ||
@@ -95,20 +106,10 @@ function PlatformShellInner({
         pathname === "/platform/admins";
     const isAudit = pathname === "/platform/audit" || pathname.startsWith("/platform/audit/");
 
-    const navItems = [
-        { href: "/platform", icon: LayoutDashboard, label: "Dashboard", active: isDashboard },
-        {
-            href: "/platform/organizations",
-            icon: Building2,
-            label: "Organizações",
-            active: isOrgs,
-        },
-        {
-            href: "/platform/licenses",
-            icon: CreditCard,
-            label: "Planos e preços",
-            active: isLicenses,
-        },
+    const nav = [
+        { href: "/platform", icon: LayoutDashboard, label: "Mission Control", active: isDashboard },
+        { href: "/platform/organizations", icon: Building2, label: "Organizações", active: isOrgs },
+        { href: "/platform/licenses", icon: CreditCard, label: "Planos", active: isLicenses },
         ...(can("audit.view")
             ? [{ href: "/platform/audit", icon: ScrollText, label: "Auditoria", active: isAudit }]
             : []),
@@ -118,111 +119,72 @@ function PlatformShellInner({
     ] as const;
 
     return (
-        <div
-            className="platform-app min-h-dvh"
-            style={
-                {
-                    "--platform-sidebar-width": collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED,
-                } as React.CSSProperties
-            }
-        >
+        <div className="platform-app platform-ops min-h-dvh bg-[#07060d]">
             <aside
                 className={cn(
-                    "platform-sidebar-surface fixed inset-y-0 left-0 z-30 flex flex-col bg-[#110f1a] text-slate-100 transition-[width] duration-300 ease-in-out",
-                    collapsed ? "w-[4.75rem]" : "w-[17rem]",
+                    "platform-ops-rail fixed inset-y-0 left-0 z-30 flex flex-col border-r border-violet-500/15 py-4 transition-[width] duration-300 ease-in-out",
+                    collapsed ? "w-20 items-center" : "w-64 items-stretch px-3",
                 )}
-                aria-label="Admin da plataforma"
+                aria-label="Navegação EngHub"
+                aria-expanded={!collapsed}
             >
-                <div
+                {collapsed ? (
+                    <Link
+                        href="/platform"
+                        className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 via-indigo-500 to-violet-700 shadow-[0_0_32px_-4px_rgba(139,92,246,0.85)] ring-1 ring-violet-300/30"
+                        title={PRODUCT_NAME}
+                    >
+                        <Shield className="h-6 w-6 text-white" />
+                    </Link>
+                ) : (
+                    <Link
+                        href="/platform"
+                        className="mb-6 flex items-center gap-3 rounded-2xl border border-violet-500/20 bg-violet-500/10 px-3 py-3 transition-colors hover:border-violet-400/40 hover:bg-violet-500/15"
+                    >
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 via-indigo-500 to-violet-700 shadow-[0_0_24px_-4px_rgba(139,92,246,0.85)] ring-1 ring-violet-300/30">
+                            <Shield className="h-5 w-5 text-white" />
+                        </div>
+                        <div className="min-w-0">
+                            <p className="truncate text-[10px] font-black uppercase tracking-[0.22em] text-violet-400/80">
+                                {PRODUCT_NAME}
+                            </p>
+                            <p className="truncate text-sm font-bold text-white">Mission Control</p>
+                        </div>
+                    </Link>
+                )}
+
+                <nav
                     className={cn(
-                        "border-b border-white/[0.06] px-4 py-5",
-                        collapsed ? "flex justify-center" : "px-5",
+                        "flex flex-1 flex-col gap-1",
+                        collapsed ? "items-center" : "min-h-0 overflow-y-auto",
                     )}
                 >
-                    <div className={cn("flex items-center gap-3", collapsed && "justify-center")}>
-                        <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-lg shadow-violet-900/40">
-                            <Shield className="h-5 w-5 text-white" />
-                            <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-400 ring-2 ring-[#110f1a]">
-                                <Sparkles className="h-2.5 w-2.5 text-emerald-950" />
-                            </span>
-                        </div>
-                        {!collapsed ? (
-                            <div className="min-w-0">
-                                <p className="text-base font-bold tracking-tight text-white">
-                                    {PRODUCT_NAME}
-                                </p>
-                                <p className="text-[11px] leading-snug text-slate-500">
-                                    {PRODUCT_TAGLINE}
-                                </p>
-                            </div>
-                        ) : null}
-                    </div>
-                </div>
-
-                <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-                    {!collapsed ? (
-                        <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
-                            Operação
-                        </p>
-                    ) : null}
-                    {navItems.map((item) => (
-                        <NavLink
-                            key={item.href}
-                            href={item.href}
-                            icon={item.icon}
-                            label={item.label}
-                            active={item.active}
-                            collapsed={collapsed}
-                        />
+                    {nav.map((item) => (
+                        <NavItem key={item.href} {...item} collapsed={collapsed} />
                     ))}
                 </nav>
 
-                <div className="border-t border-white/[0.06] p-3">
-                    {!collapsed ? (
-                        <>
-                            <div className="mb-3 flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.04] p-3">
-                                <div
-                                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 text-xs font-bold text-white"
-                                    aria-hidden
-                                >
-                                    {initialsFromEmail(sessionEmail)}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                    <p className="truncate text-xs font-medium text-slate-200">
-                                        {sessionEmail ?? "—"}
-                                    </p>
-                                    <p className="text-[10px] text-slate-500">
-                                        {PLATFORM_ROLE_LABELS[platformRole]}
-                                    </p>
-                                </div>
-                            </div>
-                            <PlatformOrgAccessButton />
-                        </>
-                    ) : null}
-                    <form action={logoutAction} className={collapsed ? "flex justify-center" : undefined}>
-                        <button
-                            type="submit"
-                            title={collapsed ? "Sair" : undefined}
-                            className={cn(
-                                "flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] text-sm text-slate-300 transition-colors hover:border-white/20 hover:bg-white/[0.08] hover:text-white",
-                                collapsed ? "h-11 w-11 p-0" : "w-full px-3 py-2.5",
-                            )}
-                        >
-                            <LogOut className="h-4 w-4 shrink-0" />
-                            {!collapsed ? "Sair" : null}
-                        </button>
-                    </form>
-                </div>
+                <form action={logoutAction} className={cn("mt-auto pt-4", !collapsed && "px-0")}>
+                    <button
+                        type="submit"
+                        title="Sair"
+                        className={cn(
+                            "flex items-center justify-center rounded-xl border border-white/10 text-violet-300/50 transition-colors hover:border-red-400/40 hover:bg-red-500/10 hover:text-red-300",
+                            collapsed ? "h-11 w-11" : "w-full gap-3 px-3 py-2.5 text-sm font-medium",
+                        )}
+                    >
+                        <LogOut className="h-4 w-4 shrink-0" />
+                        {!collapsed ? <span>Sair</span> : null}
+                    </button>
+                </form>
             </aside>
 
             <div
-                className="min-h-dvh transition-[padding-left] duration-300 ease-in-out"
+                className="flex min-h-dvh flex-col transition-[padding-left] duration-300 ease-in-out"
                 style={{ paddingLeft: collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED }}
             >
-                <div className="platform-mesh-bg relative flex min-h-dvh flex-col">
-                    <PlatformHeader />
-                    <main className="relative flex-1">{children}</main>
-                </div>
+                <PlatformCommandBar sessionEmail={sessionEmail} platformRole={platformRole} />
+                <main className="platform-ops-main relative flex-1">{children}</main>
             </div>
         </div>
     );
@@ -240,9 +202,9 @@ export function PlatformShell({
     return (
         <PlatformSidebarProvider>
             <PlatformBreadcrumbProvider>
-                <PlatformShellInner sessionEmail={sessionEmail} platformRole={platformRole}>
+                <PlatformOpsLayout sessionEmail={sessionEmail} platformRole={platformRole}>
                     {children}
-                </PlatformShellInner>
+                </PlatformOpsLayout>
             </PlatformBreadcrumbProvider>
         </PlatformSidebarProvider>
     );

@@ -612,7 +612,7 @@ export function ScopeSidebar({
 
     return (
         <aside
-            className="relative shrink-0 flex flex-col border-r border-primary/10 bg-gradient-to-b from-card via-card to-primary/[0.02] shadow-[inset_-1px_0_0_0_hsl(var(--border))]"
+            className="budget-scope-sidebar relative shrink-0 flex flex-col border-r border-primary/10 bg-gradient-to-b from-card via-card to-primary/[0.02] shadow-[inset_-1px_0_0_0_hsl(var(--border))]"
             style={{ width: sidebarWidthPx }}
         >
             <div
@@ -954,7 +954,7 @@ function SortableSectionRow({
                     {scopeNumber}.{locationIndex}.{sectionIndex}.
                 </span>
             )}
-            <span className="flex-1 truncate text-[12.5px] leading-snug">{sec.name}</span>
+            <span className="flex-1 truncate text-[12.5px] leading-snug text-foreground">{sec.name}</span>
             {!isReadOnly && (
                 <>
                     <button
@@ -1194,7 +1194,7 @@ function LocationNode({
                         {scopeNumber}.{locIndex}.
                     </span>
                 )}
-                <span className="flex-1 truncate text-[13px] font-semibold leading-tight">{location.name}</span>
+                <span className="flex-1 truncate text-[13px] font-semibold leading-tight text-foreground">{location.name}</span>
                 {!isReadOnly && (
                     <>
                         <button

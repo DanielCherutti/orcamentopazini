@@ -22,9 +22,14 @@ export default async function PlatformOrganizationsPage() {
 
     return (
         <PlatformPageShell
-            eyebrow="Revenda"
+            eyebrow="Revenda · Clientes"
             title="Organizações"
-            description="Cadastro e gestão de empresas clientes — licenças, limites e identidade visual."
+            description="Cadastro e gestão de empresas — licenças, limites e identidade visual."
+            maxWidth="full"
+            breadcrumbs={[
+                { href: "/platform", label: "Mission Control" },
+                { label: "Organizações" },
+            ]}
         >
             <PlatformOrganizationsManagement initialOrganizations={list.data} />
         </PlatformPageShell>

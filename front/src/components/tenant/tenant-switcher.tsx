@@ -42,7 +42,7 @@ export function TenantSwitcher() {
                 <Button
                     variant="outline"
                     size="sm"
-                    className="gap-2 max-w-[220px] truncate"
+                    className="shell-chrome-btn h-9 max-w-[220px] gap-2 truncate rounded-lg border"
                     disabled={pending}
                 >
                     <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />

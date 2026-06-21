@@ -106,7 +106,7 @@ export function PlatformAsaasSettingsForm({ initial }: Props) {
               : "Não configurada";
 
     return (
-        <Card className="platform-panel border-0 shadow-none">
+        <Card className="platform-ops-surface border-0 shadow-none">
             <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
                     <PlugZap className="size-4" />

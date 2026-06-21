@@ -160,7 +160,7 @@ export function BudgetWorkspace({
     return (
         <WorkspaceContext.Provider value={{ activeTab, setActiveTab }}>
             <EnvironmentsContext.Provider value={{ environmentsExpanded, toggleEnvironmentsExpanded }}>
-                <div className="flex flex-col fixed inset-x-0 bottom-0 top-[var(--support-banner-height,0px)] z-40 bg-background animate-in fade-in-0 duration-200">
+                <div className="flex flex-col fixed inset-x-0 bottom-0 top-[var(--support-banner-height,0px)] z-40 bg-background animate-in fade-in-0 duration-200 budget-ops-panel">
                     <BudgetWorkspaceFocusMode />
                     {/* Barra unificada: back + título + abas + ações */}
                     <BudgetWorkspaceHeader

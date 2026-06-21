@@ -41,7 +41,7 @@ export function AuditLogTable({ entries, total, basePath = "" }: Props) {
             <div className="space-y-4">
             <div className="flex flex-wrap items-end gap-3">
                 <div className="space-y-1">
-                    <Label htmlFor="audit-search" className="text-xs">
+                    <Label htmlFor="audit-search" className="text-xs text-violet-300/70">
                         Buscar
                     </Label>
                     <Input
@@ -49,11 +49,11 @@ export function AuditLogTable({ entries, total, basePath = "" }: Props) {
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Resumo…"
-                        className="h-9 w-48 rounded-xl"
+                        className="h-9 w-48 rounded-lg border-violet-500/25 bg-violet-500/10 text-violet-50 placeholder:text-violet-300/40"
                     />
                 </div>
                 <div className="space-y-1">
-                    <Label htmlFor="audit-action" className="text-xs">
+                    <Label htmlFor="audit-action" className="text-xs text-violet-300/70">
                         Ação
                     </Label>
                     <Input
@@ -61,13 +61,19 @@ export function AuditLogTable({ entries, total, basePath = "" }: Props) {
                         value={action}
                         onChange={(e) => setAction(e.target.value)}
                         placeholder="product.create"
-                        className="h-9 w-40 rounded-xl"
+                        className="h-9 w-40 rounded-lg border-violet-500/25 bg-violet-500/10 text-violet-50 placeholder:text-violet-300/40"
                     />
                 </div>
-                <Button type="button" size="sm" variant="secondary" className="rounded-xl" onClick={applyFilters}>
+                <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="rounded-lg border-violet-500/25 bg-violet-500/15 text-violet-100 hover:bg-violet-500/25"
+                    onClick={applyFilters}
+                >
                     Filtrar
                 </Button>
-                <p className="ml-auto text-xs text-muted-foreground">{total} registro(s)</p>
+                <p className="ml-auto text-xs text-violet-300/55">{total} registro(s)</p>
             </div>
 
             <div className="overflow-x-auto app-table">
@@ -84,7 +90,7 @@ export function AuditLogTable({ entries, total, basePath = "" }: Props) {
                     <TableBody>
                         {entries.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                                <TableCell colSpan={5} className="py-8 text-center text-violet-300/50">
                                     Nenhum registro encontrado.
                                 </TableCell>
                             </TableRow>
@@ -103,7 +109,7 @@ export function AuditLogTable({ entries, total, basePath = "" }: Props) {
                                         </div>
                                     </TableCell>
                                     <TableCell className="font-mono text-xs">{e.action}</TableCell>
-                                    <TableCell className="text-xs text-muted-foreground">
+                                    <TableCell className="text-xs text-violet-300/55">
                                         {e.resource_type}
                                         {e.resource_id ? ` · ${e.resource_id.slice(0, 20)}…` : ""}
                                     </TableCell>

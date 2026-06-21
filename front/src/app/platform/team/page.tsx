@@ -14,10 +14,10 @@ export default async function PlatformTeamPage() {
 
     return (
         <PlatformPageShell
-            eyebrow="Revenda"
-            title="Equipe da plataforma"
-            description="Gerencie quem acessa o painel de revenda. É a mesma conta do login — quem já usa uma empresa pode também ter acesso à plataforma."
-            maxWidth="4xl"
+            eyebrow="Acesso"
+            title="Equipe"
+            description="Quem administra o EngHub — mesma conta do login."
+            maxWidth="5xl"
         >
             {!res.success ? (
                 <PageErrorAlert message={res.error ?? "Erro ao carregar equipe."} />

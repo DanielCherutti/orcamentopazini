@@ -115,7 +115,7 @@ export function BudgetWorkspaceHeader({
     };
 
     return (
-        <header className="tenant-glass-header flex h-12 shrink-0 items-stretch overflow-hidden">
+        <header className="tenant-ops-command-bar flex h-12 shrink-0 items-stretch overflow-hidden">
             {/* Left: back + title + status + total */}
             <div className="flex items-center gap-2 px-3 shrink-0 min-w-0 max-w-[45%]">
                 <Button variant="ghost" size="sm" className="h-8 shrink-0 gap-1.5 px-2" asChild>
@@ -170,7 +170,7 @@ export function BudgetWorkspaceHeader({
                 {budget.status && getStatusBadge(budget.status)}
 
                 {revisionBadge ? (
-                    <span className="px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 text-xs font-medium shrink-0">
+                    <span className="budget-revision-badge shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold">
                         {revisionBadge}
                     </span>
                 ) : null}

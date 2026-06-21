@@ -40,40 +40,40 @@ export function SetPlatformBreadcrumbs({ items }: { items: BreadcrumbItem[] }) {
 
 function breadcrumbsFromPathname(pathname: string): BreadcrumbItem[] {
     if (pathname === "/platform" || pathname === "/platform/") {
-        return [{ label: "Dashboard" }];
+        return [{ label: "Mission Control" }];
     }
     if (pathname === "/platform/organizations") {
         return [
-            { href: "/platform", label: "Dashboard" },
+            { href: "/platform", label: "Mission Control" },
             { label: "Organizações" },
         ];
     }
     if (pathname.startsWith("/platform/organizations/")) {
         return [
-            { href: "/platform", label: "Dashboard" },
+            { href: "/platform", label: "Mission Control" },
             { href: "/platform/organizations", label: "Organizações" },
             { label: "Detalhe" },
         ];
     }
     if (pathname.startsWith("/platform/licenses")) {
         return [
-            { href: "/platform", label: "Dashboard" },
+            { href: "/platform", label: "Mission Control" },
             { label: "Planos e preços" },
         ];
     }
     if (pathname.startsWith("/platform/audit")) {
         return [
-            { href: "/platform", label: "Dashboard" },
+            { href: "/platform", label: "Mission Control" },
             { label: "Auditoria" },
         ];
     }
     if (pathname.startsWith("/platform/team") || pathname.startsWith("/platform/admins")) {
         return [
-            { href: "/platform", label: "Dashboard" },
+            { href: "/platform", label: "Mission Control" },
             { label: "Equipe" },
         ];
     }
-    return [{ href: "/platform", label: "Dashboard" }];
+    return [{ href: "/platform", label: "Mission Control" }];
 }
 
 export function PlatformBreadcrumbs({ className }: { className?: string }) {

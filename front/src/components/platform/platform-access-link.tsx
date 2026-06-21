@@ -16,8 +16,8 @@ export function PlatformAccessLink() {
 
     return (
         <form action={switchToPlatformAndRedirectAction}>
-            <Button type="submit" variant="outline" size="sm" className="gap-2">
-                <Shield className="h-4 w-4 text-violet-600" />
+            <Button type="submit" variant="outline" size="sm" className="shell-chrome-btn h-9 gap-2 rounded-lg border font-semibold">
+                <Shield className="h-4 w-4 text-[color:rgb(var(--brand-secondary-rgb)/0.9)]" />
                 Plataforma
             </Button>
         </form>

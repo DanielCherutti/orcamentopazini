@@ -126,15 +126,13 @@ export function ProductsTable({ initialProducts, initialMeta }: ProductsTablePro
             )}
 
             {/* Desktop Table */}
-            <div className="hidden md:block overflow-hidden rounded-xl border border-border/80 shadow-sm">
+      <div className="hidden md:block app-table overflow-hidden">
                 <table className="w-full text-sm">
-                    <thead className="border-b border-border bg-gradient-to-r from-primary/[0.08] via-muted/60 to-muted/40">
+                    <thead>
                         <tr>
-                            <th className="h-11 w-16 px-4 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                Foto
-                            </th>
+                            <th className="h-11 w-16 px-4 text-left">Foto</th>
                             <th
-                                className="h-11 w-[120px] cursor-pointer px-4 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.04] group"
+                                className="group h-11 w-[120px] cursor-pointer px-4 text-left transition-colors hover:bg-[rgb(var(--primary-rgb)/0.08)]"
                                 onClick={() => handleSort("code")}
                             >
                                 <div className="flex items-center">
@@ -143,7 +141,7 @@ export function ProductsTable({ initialProducts, initialMeta }: ProductsTablePro
                                 </div>
                             </th>
                             <th
-                                className="h-11 cursor-pointer px-4 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.04] group"
+                                className="h-11 cursor-pointer px-4 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-[rgb(var(--primary-rgb)/0.08)] group"
                                 onClick={() => handleSort("description")}
                             >
                                 <div className="flex items-center">
@@ -152,7 +150,7 @@ export function ProductsTable({ initialProducts, initialMeta }: ProductsTablePro
                                 </div>
                             </th>
                             <th
-                                className="h-11 w-[88px] cursor-pointer px-4 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.04] group"
+                                className="h-11 w-[88px] cursor-pointer px-4 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-[rgb(var(--primary-rgb)/0.08)] group"
                                 onClick={() => handleSort("unit")}
                             >
                                 <div className="flex items-center justify-center whitespace-nowrap">
@@ -161,7 +159,7 @@ export function ProductsTable({ initialProducts, initialMeta }: ProductsTablePro
                                 </div>
                             </th>
                             <th
-                                className="h-11 min-w-[7.5rem] cursor-pointer px-4 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.04] group"
+                                className="h-11 min-w-[7.5rem] cursor-pointer px-4 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-[rgb(var(--primary-rgb)/0.08)] group"
                                 onClick={() => handleSort("equipmentPrice")}
                             >
                                 <div className="flex items-center whitespace-nowrap">
@@ -170,7 +168,7 @@ export function ProductsTable({ initialProducts, initialMeta }: ProductsTablePro
                                 </div>
                             </th>
                             <th
-                                className="h-11 min-w-[7.5rem] cursor-pointer px-4 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.04] group"
+                                className="h-11 min-w-[7.5rem] cursor-pointer px-4 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-[rgb(var(--primary-rgb)/0.08)] group"
                                 onClick={() => handleSort("assemblyPrice")}
                             >
                                 <div className="flex items-center whitespace-nowrap">

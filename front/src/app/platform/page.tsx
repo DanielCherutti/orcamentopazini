@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 import { getPlatformDashboardAction } from "@/actions/platform-actions";
 import { getConfirmedRevenueThisMonthAction } from "@/actions/platform-billing-actions";
-import { PlatformPageShell } from "@/components/layout/platform-page-shell";
+import { SetPlatformBreadcrumbs } from "@/components/layout/platform-breadcrumb-context";
 import { PlatformPageError } from "@/components/layout/page-error-alert";
 import { PlatformDashboard } from "@/components/platform/platform-dashboard";
 import { PlatformDashboardHeaderActions } from "@/components/platform/platform-dashboard-header-actions";
-import { PRODUCT_NAME } from "@/lib/product-brand";
+import { PlatformMissionHero } from "@/components/platform/platform-mission-hero";
 
 export const metadata: Metadata = {
-    title: "Dashboard",
+    title: "Mission Control",
 };
 
 export default async function PlatformHomePage() {
@@ -20,23 +20,32 @@ export default async function PlatformHomePage() {
     if (!dash.success || !dash.data) {
         return (
             <PlatformPageError
-                pageTitle="Dashboard"
+                pageTitle="Mission Control"
                 message={dash.error ?? "Erro ao carregar dashboard."}
             />
         );
     }
 
+    const { summary } = dash.data;
+
     return (
-        <PlatformPageShell
-            eyebrow={`${PRODUCT_NAME} · Painel comercial`}
-            title="Dashboard"
-            description="Visão geral da operação SaaS: clientes, receita estimada, alertas e crescimento."
-            action={<PlatformDashboardHeaderActions />}
-        >
-            <PlatformDashboard
-                data={dash.data}
-                confirmedRevenueCents={revenue.success ? revenue.amountCents ?? 0 : 0}
+        <>
+            <SetPlatformBreadcrumbs items={[{ label: "Mission Control" }]} />
+            <PlatformMissionHero
+                mrrBrl={summary.estimatedMrrBrl}
+                activeOrgs={summary.activeOrganizations}
+                totalUsers={summary.totalUsers}
+                paidCount={summary.paidCount}
+                action={<PlatformDashboardHeaderActions />}
             />
-        </PlatformPageShell>
+            <div className="platform-ops-page-body">
+                <div className="mx-auto max-w-[1600px] space-y-6 px-5 py-8 lg:px-8 lg:py-10">
+                    <PlatformDashboard
+                        data={dash.data}
+                        confirmedRevenueCents={revenue.success ? revenue.amountCents ?? 0 : 0}
+                    />
+                </div>
+            </div>
+        </>
     );
 }

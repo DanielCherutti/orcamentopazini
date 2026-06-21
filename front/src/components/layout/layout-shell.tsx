@@ -4,8 +4,8 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { useSidebar } from "./sidebar-context";
 
+const SIDEBAR_COLLAPSED = "5rem";
 const SIDEBAR_EXPANDED = "16rem";
-const SIDEBAR_COLLAPSED = "4.75rem";
 
 export function LayoutShell({
     children,
@@ -21,27 +21,14 @@ export function LayoutShell({
     const { collapsed } = useSidebar();
 
     return (
-        <div
-            className="tenant-app flex min-h-screen flex-1 flex-col"
-            style={
-                {
-                    "--tenant-sidebar-width": collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED,
-                } as React.CSSProperties
-            }
-        >
-            <Sidebar
-                sessionEmail={sessionEmail}
-                companyName={companyName}
-                companySubtitle={companySubtitle}
-            />
+        <div className="tenant-app tenant-ops min-h-dvh bg-[#07060d]">
+            <Sidebar companyName={companyName} companySubtitle={companySubtitle} />
             <div
-                className="min-h-screen transition-[padding-left] duration-300 ease-in-out"
+                className="flex min-h-dvh flex-col transition-[padding-left] duration-300 ease-in-out"
                 style={{ paddingLeft: collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED }}
             >
-                <div className="tenant-mesh-bg relative flex min-h-screen flex-col">
-                    <Header companyName={companyName} />
-                    <main className="relative flex-1">{children}</main>
-                </div>
+                <Header companyName={companyName} sessionEmail={sessionEmail} />
+                <main className="tenant-ops-main relative flex-1">{children}</main>
             </div>
         </div>
     );

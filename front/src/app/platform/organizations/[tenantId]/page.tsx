@@ -63,10 +63,11 @@ export default async function PlatformOrganizationPage({ params }: Props) {
             description="Configure licença, cobrança, acesso e aparência desta empresa cliente."
             titleLeading={<OrgAvatar name={org.data.name} size="lg" className="shrink-0" />}
             breadcrumbs={[
-                { href: "/platform", label: "Dashboard" },
+                { href: "/platform", label: "Mission Control" },
                 { href: "/platform/organizations", label: "Organizações" },
                 { label: org.data.name },
             ]}
+            maxWidth="full"
         >
             <PlatformOrganizationDetail
                 organization={org.data}
