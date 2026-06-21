@@ -17,6 +17,7 @@ import {
     assertBudgetChildInActiveTenant,
     assertBudgetInActiveTenant,
 } from "@/lib/budget-tenant";
+import { auditTenantAction } from "@/lib/audit-log";
 
 export async function updateLocationAction(
     locationId: string,
@@ -48,6 +49,13 @@ export async function updateLocationAction(
             await recalculateBudgetTotal(budgetId);
         }
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_location.update",
+            resourceType: "budget_location",
+            resourceId: locationId,
+            summary: "Local do escopo atualizado",
+            metadata: { budgetId },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -81,9 +89,17 @@ export async function addLocationAction(budgetId: string, name: string) {
             created_at: new Date().toISOString(),
         });
         const created = Array.isArray(raw) ? raw[0] : raw;
+        const serialized = toPlain(serializeBudgetEntity(created));
 
         revalidatePath(budgetRevalidatePath(budgetId));
-        return { success: true, data: toPlain(serializeBudgetEntity(created)) };
+        await auditTenantAction({
+            action: "budget_location.create",
+            resourceType: "budget_location",
+            resourceId: String((created as { id: unknown }).id),
+            summary: `Local adicionado: ${name}`,
+            metadata: { budgetId },
+        });
+        return { success: true, data: serialized };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
             return { success: false, error: error.message };
@@ -124,6 +140,13 @@ export async function updateSectionAction(
             await recalculateBudgetTotal(budgetId);
         }
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_section.update",
+            resourceType: "budget_section",
+            resourceId: sectionId,
+            summary: "Trecho do escopo atualizado",
+            metadata: { budgetId },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -158,6 +181,13 @@ export async function addSectionAction(locationId: string, budgetId: string, nam
         const created = Array.isArray(raw) ? raw[0] : raw;
 
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_section.create",
+            resourceType: "budget_section",
+            resourceId: String((created as { id: unknown }).id),
+            summary: `Trecho adicionado: ${name}`,
+            metadata: { budgetId, locationId },
+        });
         return { success: true, data: toPlain(serializeBudgetEntity(created)) };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -210,6 +240,13 @@ export async function deleteLocationAction(locationId: string, budgetId: string)
         await recalculateBudgetTotal(budgetId);
 
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_location.delete",
+            resourceType: "budget_location",
+            resourceId: locationId,
+            summary: "Local removido do escopo",
+            metadata: { budgetId },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -244,6 +281,13 @@ export async function deleteSectionAction(sectionId: string, budgetId: string) {
         await recalculateBudgetTotal(budgetId);
 
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_section.delete",
+            resourceType: "budget_section",
+            resourceId: sectionId,
+            summary: "Trecho removido do escopo",
+            metadata: { budgetId },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -312,6 +356,13 @@ export async function duplicateSectionAction(sectionId: string, budgetId: string
 
         await recalculateBudgetTotal(budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_section.duplicate",
+            resourceType: "budget_section",
+            resourceId: newSectionId,
+            summary: "Trecho duplicado no escopo",
+            metadata: { budgetId, sourceSectionId: sectionId },
+        });
         return { success: true, newSectionId };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -353,6 +404,13 @@ export async function reorderLocationsAction(orderedLocationIds: string[], budge
                 .merge({ order_index: i * 10 });
         }
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_location.reorder",
+            resourceType: "budget",
+            resourceId: budgetId,
+            summary: "Locais reordenados no escopo",
+            metadata: { count: normalized.length },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -379,6 +437,13 @@ export async function reorderSectionsAction(orderedSectionIds: string[], budgetI
                 .merge({ order_index: i * 10 });
         }
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_section.reorder",
+            resourceType: "budget",
+            resourceId: budgetId,
+            summary: "Trechos reordenados no escopo",
+            metadata: { count: orderedSectionIds.length },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -406,6 +471,13 @@ export async function moveSectionAction(sectionId: string, newLocationId: string
             updated_at: new Date().toISOString(),
         });
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_section.move",
+            resourceType: "budget_section",
+            resourceId: sectionId,
+            summary: "Trecho movido para outro local",
+            metadata: { budgetId, newLocationId },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -503,6 +575,13 @@ export async function duplicateLocationAction(locationId: string, budgetId: stri
 
         await recalculateBudgetTotal(budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_location.duplicate",
+            resourceType: "budget_location",
+            resourceId: newLocationId,
+            summary: "Local duplicado no escopo",
+            metadata: { budgetId, sourceLocationId: locationId },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {

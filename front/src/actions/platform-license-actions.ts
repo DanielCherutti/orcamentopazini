@@ -14,6 +14,7 @@ import {
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import type { Surreal } from "surrealdb";
 import type { TenantLicensePlan } from "@/types/tenant-types";
+import { auditPlatformAction } from "@/lib/audit-log";
 
 const SETTINGS_ID = "platform_license_settings:singleton";
 
@@ -142,6 +143,12 @@ export async function updatePlatformLicenseSettingsAction(
         revalidatePath("/platform");
         revalidatePath("/platform/licenses");
         revalidatePath("/platform/organizations");
+        await auditPlatformAction({
+            action: "license.update",
+            resourceType: "platform_license_settings",
+            resourceId: SETTINGS_ID,
+            summary: "Planos de licença da plataforma atualizados",
+        });
         return { success: true };
     } catch (error) {
         console.error("updatePlatformLicenseSettingsAction:", error);
@@ -181,6 +188,12 @@ export async function resetPlatformLicenseSettingsAction(): Promise<{
         }
         revalidatePath("/platform");
         revalidatePath("/platform/licenses");
+        await auditPlatformAction({
+            action: "license.reset",
+            resourceType: "platform_license_settings",
+            resourceId: SETTINGS_ID,
+            summary: "Planos de licença restaurados ao padrão",
+        });
         return { success: true };
     } catch (error) {
         console.error("resetPlatformLicenseSettingsAction:", error);

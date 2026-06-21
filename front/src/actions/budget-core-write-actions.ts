@@ -25,6 +25,7 @@ import { recalculateBudgetTotal } from "@/actions/budget-hierarchy-helpers";
 import { assertBudgetInActiveTenant, budgetBelongsToActiveTenant } from "@/lib/budget-tenant";
 import { assertClientInActiveTenant } from "@/lib/tenant-access";
 import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
+import { auditTenantAction } from "@/lib/audit-log";
 
 export async function createBudgetAction(title: string, code: string) {
     const auth = await assertWriteActionSession();
@@ -91,6 +92,13 @@ export async function createBudgetAction(title: string, code: string) {
         await addBlockAction({ budgetId: createdBudget.id!, parentId: null, type: "scope", label: COMPOSITOR_SCOPE_BLOCK_DEFAULT_LABEL });
 
         revalidatePath("/budgets");
+
+        await auditTenantAction({
+            action: "budget.create",
+            resourceType: "budget",
+            resourceId: createdBudget.id!,
+            summary: `Orçamento criado: ${createdBudget.title ?? createdBudget.code}`,
+        });
 
         return { success: true, data: toPlain(createdBudget) };
     } catch (error) {
@@ -190,6 +198,14 @@ export async function updateBudgetAction(budgetId: string, updates: Partial<Budg
         revalidatePath(budgetRevalidatePath(budgetId));
         revalidatePath("/budgets");
 
+        await auditTenantAction({
+            action: "budget.update",
+            resourceType: "budget",
+            resourceId: budgetId,
+            summary: "Orçamento atualizado",
+            metadata: { fields: Object.keys(safeUpdates).filter((k) => k !== "updated_at") },
+        });
+
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -230,6 +246,12 @@ export async function deleteBudgetAction(budgetId: string) {
         await db.delete(budgetRecordId);
         revalidatePath("/budgets");
         revalidatePath("/dashboard");
+        await auditTenantAction({
+            action: "budget.delete",
+            resourceType: "budget",
+            resourceId: budgetId,
+            summary: "Orçamento excluído",
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -304,6 +326,15 @@ export async function syncDraftPricesAction(
 
     try {
         const updatedCount = await runSync();
+        if (updatedCount > 0) {
+            await auditTenantAction({
+                action: "budget.sync_prices",
+                resourceType: "budget",
+                resourceId: budgetId,
+                summary: `Preços sincronizados em ${updatedCount} item(ns)`,
+                metadata: { updatedCount },
+            });
+        }
         return { success: true, updatedCount };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -630,6 +661,13 @@ export async function syncProductCatalogToDraftBudgetItemsAction(
 
         if (updatedItems > 0 || updatedStickers > 0) {
             revalidatePath("/budgets");
+            await auditTenantAction({
+                action: "budget.sync_catalog",
+                resourceType: "product",
+                resourceId: productId,
+                summary: `Cadastro propagado para orçamentos (${updatedItems} itens, ${updatedStickers} figurinhas)`,
+                metadata: { updatedItems, updatedStickers },
+            });
         }
 
         return { success: true, updatedItems, updatedStickers };

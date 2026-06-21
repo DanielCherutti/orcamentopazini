@@ -7,6 +7,7 @@ import { assertWriteActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
 import { assertBudgetInActiveTenant } from "@/lib/budget-tenant";
 import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
+import { auditTenantAction } from "@/lib/audit-log";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
 import { getNextBudgetNumberAction } from "@/actions/budget-core-read-actions";
 import {
@@ -73,6 +74,13 @@ export async function duplicateBudgetAction(
         await recalculateBudgetTotalValue(db, newBudgetRecordId, useCompositor);
 
         revalidatePath("/budgets");
+        await auditTenantAction({
+            action: "budget.duplicate",
+            resourceType: "budget",
+            resourceId: newBudgetId,
+            summary: `Orçamento duplicado a partir de ${budgetId}`,
+            metadata: { sourceBudgetId: budgetId },
+        });
         return { success: true, newBudgetId };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {

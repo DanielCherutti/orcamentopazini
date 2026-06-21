@@ -8,6 +8,10 @@ export type PlatformPermission =
     | "orgs.write"
     | "licenses.view"
     | "licenses.write"
+    | "billing.view"
+    | "billing.write"
+    | "audit.view"
+    | "audit.export"
     | "impersonate.readonly"
     | "impersonate.full"
     | "team.manage";

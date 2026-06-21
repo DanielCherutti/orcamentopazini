@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, CreditCard, LayoutDashboard, LogOut, Shield, Users } from "lucide-react";
+import { Building2, CreditCard, LayoutDashboard, LogOut, ScrollText, Shield, Users } from "lucide-react";
 import { logoutAction } from "@/actions/auth-actions";
 import { PlatformOrgAccessButton } from "@/components/platform/platform-org-access-button";
 import { cn } from "@/lib/utils";
@@ -64,6 +64,8 @@ export function PlatformShell({
         pathname === "/platform/team" ||
         pathname.startsWith("/platform/team/") ||
         pathname === "/platform/admins";
+    const isAudit =
+        pathname === "/platform/audit" || pathname.startsWith("/platform/audit/");
 
     return (
         <div className="min-h-dvh bg-slate-50 dark:bg-background">
@@ -102,6 +104,11 @@ export function PlatformShell({
                     <NavLink href="/platform/licenses" icon={CreditCard} active={isLicenses}>
                         Planos e preços
                     </NavLink>
+                    {can("audit.view") && (
+                        <NavLink href="/platform/audit" icon={ScrollText} active={isAudit}>
+                            Auditoria
+                        </NavLink>
+                    )}
                     {can("team.manage") && (
                         <NavLink href="/platform/team" icon={Users} active={isTeam}>
                             Equipe

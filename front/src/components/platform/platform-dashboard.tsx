@@ -90,7 +90,13 @@ function AlertIcon({ type }: { type: PlatformDashboardData["alerts"][0]["type"] 
     return <AlertTriangle className="h-4 w-4 text-muted-foreground shrink-0" />;
 }
 
-export function PlatformDashboard({ data }: { data: PlatformDashboardData }) {
+export function PlatformDashboard({
+    data,
+    confirmedRevenueCents = 0,
+}: {
+    data: PlatformDashboardData;
+    confirmedRevenueCents?: number;
+}) {
     const [createOpen, setCreateOpen] = useState(false);
     const { can } = usePlatformPermissions();
     const { summary, planBreakdown, alerts, topByUsers, recentOrganizations } = data;
@@ -133,6 +139,15 @@ export function PlatformDashboard({ data }: { data: PlatformDashboardData }) {
                     icon={Wallet}
                     accent="emerald"
                 />
+                {can("billing.view") && (
+                    <KpiCard
+                        label="Receita confirmada (mês)"
+                        value={formatBrl(confirmedRevenueCents / 100)}
+                        hint="Pagamentos Asaas recebidos"
+                        icon={TrendingUp}
+                        accent="emerald"
+                    />
+                )}
                 <KpiCard
                     label="Organizações ativas"
                     value={summary.activeOrganizations}

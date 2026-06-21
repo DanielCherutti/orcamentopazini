@@ -11,8 +11,12 @@ import {
     verifyCustomDomainAction,
 } from "@/actions/platform-actions";
 import type { ProposalSettings } from "@/actions/settings-actions";
-import type { ImpersonationAuditItem } from "@/actions/platform-impersonation-actions";
+import type { AuditLogEntry } from "@/types/audit-types";
+import type { PlatformCharge } from "@/types/billing-types";
+import type { TenantBillingProfileView } from "@/actions/platform-billing-actions";
 import { ImpersonateOrganizationDialog } from "@/components/platform/impersonate-organization-dialog";
+import { AuditLogTable } from "@/components/platform/audit-log-table";
+import { PlatformOrgBillingSection } from "@/components/platform/platform-org-billing-section";
 import { PlatformOrgUsersSection } from "@/components/platform/platform-org-users-section";
 import { getTenantPublicOrigin } from "@/lib/tenant-public-origin";
 import { getAppTenantDomain } from "@/lib/tenant-host";
@@ -37,7 +41,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar, CreditCard, Globe, Loader2, Palette, Save, Users } from "lucide-react";
+import { Calendar, CreditCard, Globe, Loader2, Palette, Receipt, Save, ScrollText, Users } from "lucide-react";
 import { usePlatformPermissions } from "@/components/platform/platform-permissions-context";
 import { toast } from "@/lib/toast";
 import type { TenantLicensePlan } from "@/types/tenant-types";
@@ -88,14 +92,28 @@ type Props = {
     organization: OrganizationListItem & { branding: ProposalSettings | null };
     metrics?: PlatformOrganizationMetrics;
     members?: PlatformOrgMember[];
-    auditLog?: ImpersonationAuditItem[];
+    billingProfile?: TenantBillingProfileView;
+    charges?: PlatformCharge[];
+    auditEntries?: AuditLogEntry[];
+    auditTotal?: number;
 };
 
-export function PlatformOrganizationDetail({ organization, metrics, members = [], auditLog = [] }: Props) {
+export function PlatformOrganizationDetail({
+    organization,
+    metrics,
+    members = [],
+    billingProfile,
+    charges = [],
+    auditEntries = [],
+    auditTotal = 0,
+}: Props) {
     const router = useRouter();
     const [pending, startTransition] = useTransition();
     const { can } = usePlatformPermissions();
     const canWrite = can("orgs.write");
+    const canBilling = can("billing.view");
+    const canBillingWrite = can("billing.write");
+    const canAudit = can("audit.view");
     const [tab, setTab] = useState("license");
 
     const [name, setName] = useState(organization.name);
@@ -216,6 +234,24 @@ export function PlatformOrganizationDetail({ organization, metrics, members = []
                             <Users className="h-4 w-4" />
                             Usuários
                         </TabsTrigger>
+                        {canBilling && (
+                            <TabsTrigger
+                                value="billing"
+                                className="gap-2 rounded-none border-b-2 border-transparent px-4 pb-3 pt-1 data-[state=active]:border-violet-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                            >
+                                <Receipt className="h-4 w-4" />
+                                Cobrança
+                            </TabsTrigger>
+                        )}
+                        {canAudit && (
+                            <TabsTrigger
+                                value="audit"
+                                className="gap-2 rounded-none border-b-2 border-transparent px-4 pb-3 pt-1 data-[state=active]:border-violet-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                            >
+                                <ScrollText className="h-4 w-4" />
+                                Auditoria
+                            </TabsTrigger>
+                        )}
                         <TabsTrigger
                             value="brand"
                             className="gap-2 rounded-none border-b-2 border-transparent px-4 pb-3 pt-1 data-[state=active]:border-violet-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
@@ -428,27 +464,34 @@ export function PlatformOrganizationDetail({ organization, metrics, members = []
                             members={members}
                             canWrite={canWrite}
                         />
-                        {auditLog.length > 0 && (
+                    </TabsContent>
+
+                    {canBilling && billingProfile && (
+                        <TabsContent value="billing" className="mt-2">
+                            <PlatformOrgBillingSection
+                                tenantRef={organization.slug}
+                                profile={billingProfile}
+                                charges={charges}
+                                canWrite={canBillingWrite}
+                            />
+                        </TabsContent>
+                    )}
+
+                    {canAudit && (
+                        <TabsContent value="audit" className="mt-2">
                             <Card className="border-border/70 shadow-sm">
                                 <CardHeader>
-                                    <CardTitle className="text-base">Auditoria — modo suporte</CardTitle>
+                                    <CardTitle className="text-base">Auditoria desta organização</CardTitle>
+                                    <CardDescription>
+                                        Ações da plataforma e operacionais vinculadas a esta empresa.
+                                    </CardDescription>
                                 </CardHeader>
                                 <CardContent>
-                                    <ul className="space-y-2 text-sm">
-                                        {auditLog.slice(0, 10).map((a) => (
-                                            <li key={a.id} className="rounded border p-2">
-                                                <p className="font-medium">{a.action}</p>
-                                                <p className="text-muted-foreground">
-                                                    {a.actor_email} · {a.created_at.slice(0, 16).replace("T", " ")}
-                                                </p>
-                                                {a.reason && <p className="text-xs mt-1">{a.reason}</p>}
-                                            </li>
-                                        ))}
-                                    </ul>
+                                    <AuditLogTable entries={auditEntries} total={auditTotal} />
                                 </CardContent>
                             </Card>
-                        )}
-                    </TabsContent>
+                        </TabsContent>
+                    )}
 
                     <TabsContent value="brand" className="mt-2">
                         <Card className="border-border/70 shadow-sm">

@@ -8,6 +8,7 @@ import { deleteFile } from "@/lib/upload";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
 import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
 import { assertEntityInActiveTenant } from "@/lib/tenant-access";
+import { auditTenantAction } from "@/lib/audit-log";
 
 export type LibraryImage = {
     id: string;
@@ -120,7 +121,14 @@ export async function createLibraryImageAction(data: {
         });
 
         const image = Array.isArray(created) ? created[0] : created;
-        return { success: true, data: toPlain(serializeImage(image)) };
+        const serialized = serializeImage(image);
+        await auditTenantAction({
+            action: "image_library.create",
+            resourceType: "image_library",
+            resourceId: serialized.id,
+            summary: `Imagem adicionada à biblioteca: ${validated.data.name}`,
+        });
+        return { success: true, data: toPlain(serialized) };
     } catch (error) {
         console.error("Error creating library image:", error);
         if (isTokenExpiredError(error)) resetDb();
@@ -151,6 +159,12 @@ export async function deleteLibraryImageAction(id: string) {
 
         await db.delete(recordId);
 
+        await auditTenantAction({
+            action: "image_library.delete",
+            resourceType: "image_library",
+            resourceId: id,
+            summary: "Imagem removida da biblioteca",
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {

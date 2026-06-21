@@ -8,6 +8,7 @@ import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
 import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
 import { assertEntityInActiveTenant } from "@/lib/tenant-access";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
+import { auditTenantAction } from "@/lib/audit-log";
 
 // Basic type for client selector (kept for backward compatibility)
 export type Client = {
@@ -464,6 +465,12 @@ export async function createCustomerAction(data: CustomerFormInput) {
         });
 
         revalidatePath("/customers");
+        await auditTenantAction({
+            action: "client.create",
+            resourceType: "client",
+            summary: `Cliente criado: ${d.name}`,
+            metadata: { name: d.name },
+        });
         return { success: true };
     } catch (error) {
         console.error("Error creating customer:", error);
@@ -519,6 +526,12 @@ export async function updateCustomerAction(id: string, data: CustomerFormInput) 
         });
 
         revalidatePath("/customers");
+        await auditTenantAction({
+            action: "client.update",
+            resourceType: "client",
+            resourceId: id,
+            summary: `Cliente atualizado: ${d.name}`,
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -554,6 +567,12 @@ export async function deleteCustomerAction(id: string) {
 
         await db.delete(recordId);
         revalidatePath("/customers");
+        await auditTenantAction({
+            action: "client.delete",
+            resourceType: "client",
+            resourceId: id,
+            summary: "Cliente excluído",
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {

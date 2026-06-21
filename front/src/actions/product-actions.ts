@@ -12,6 +12,7 @@ import { InvalidRecordIdError, recordIdToString, requireRecordId } from "@/lib/s
 import { Attachment } from "@/components/products/attachment-manager";
 import { saveFile } from "@/lib/upload";
 import { syncProductCatalogToDraftBudgetItemsAction } from "@/actions/budget-core-write-actions";
+import { auditTenantAction } from "@/lib/audit-log";
 
 // Type definition based on V1 Spec
 export type Product = {
@@ -328,10 +329,17 @@ export async function createProductAction(formData: FormData) {
 
         revalidatePath("/dashboard/products");
 
-        // Serialize return data
         const returnData = Array.isArray(created)
             ? created.map(serializeProduct)
             : serializeProduct(product);
+
+        await auditTenantAction({
+            action: "product.create",
+            resourceType: "product",
+            resourceId: newId,
+            summary: `Produto criado: ${data.code}`,
+            metadata: { code: data.code },
+        });
 
         return { success: true, data: returnData };
     } catch (error) {
@@ -425,6 +433,14 @@ export async function updateProductAction(id: string, formData: FormData) {
         const pathId = formattedId.includes(":") ? formattedId.split(":")[1] : formattedId;
         revalidatePath(`/dashboard/products/${pathId}`);
 
+        await auditTenantAction({
+            action: "product.update",
+            resourceType: "product",
+            resourceId: id,
+            summary: `Produto atualizado: ${data.code}`,
+            metadata: { code: data.code },
+        });
+
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -465,6 +481,12 @@ export async function updateProductImageUrlAction(productId: string, imageUrl: s
         const pathId = String(recordId).includes(":") ? String(recordId).split(":")[1] : String(recordId);
         revalidatePath("/dashboard/products");
         revalidatePath(`/dashboard/products/${pathId}`);
+        await auditTenantAction({
+            action: "product.image_update",
+            resourceType: "product",
+            resourceId: productId,
+            summary: "Imagem do produto atualizada",
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -513,6 +535,12 @@ export async function deleteProductAction(id: string) {
         await db.delete(requireRecordId(TABLE_NAME, id));
 
         revalidatePath("/dashboard/products");
+        await auditTenantAction({
+            action: "product.delete",
+            resourceType: "product",
+            resourceId: id,
+            summary: "Produto excluído",
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {

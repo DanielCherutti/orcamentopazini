@@ -22,6 +22,7 @@ import {
 } from "@/lib/tenant-license";
 
 import { InvalidRecordIdError, recordIdToString, requireRecordId } from "@/lib/surreal-record-ids";
+import { auditTenantAction } from "@/lib/audit-log";
 
 const SESSION_MAX_AGE = 60 * 60 * 8;
 
@@ -321,12 +322,20 @@ export async function createTenantAction(input: {
             updated_at: new Date().toISOString(),
         });
         const row = Array.isArray(created) ? created[0] : created;
+        const tenantData = toPlain({
+            ...(row as object),
+            id: recordIdToString((row as { id: unknown }).id),
+        }) as Tenant;
+        await auditTenantAction({
+            action: "tenant.create",
+            resourceType: "tenant",
+            resourceId: tenantData.id,
+            summary: `Organização criada: ${name}`,
+            metadata: { slug },
+        });
         return {
             success: true,
-            data: toPlain({
-                ...(row as object),
-                id: recordIdToString((row as { id: unknown }).id),
-            }) as Tenant,
+            data: tenantData,
         };
     } catch (error) {
         console.error("createTenantAction:", error);
@@ -405,12 +414,19 @@ export async function updateTenantAction(input: {
         await db.update(rid).merge(patch);
         const raw = await db.select(rid);
         const row = Array.isArray(raw) ? raw[0] : raw;
+        const tenantData = toPlain({
+            ...(row as object),
+            id: recordIdToString((row as { id: unknown }).id),
+        }) as Tenant;
+        await auditTenantAction({
+            action: "tenant.update",
+            resourceType: "tenant",
+            resourceId: tenantId,
+            summary: `Organização atualizada: ${tenantData.name ?? tenantId}`,
+        });
         return {
             success: true,
-            data: toPlain({
-                ...(row as object),
-                id: recordIdToString((row as { id: unknown }).id),
-            }) as Tenant,
+            data: tenantData,
         };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -444,6 +460,12 @@ export async function deactivateTenantAction(tenantId: string): Promise<{
             updated_at: new Date().toISOString(),
         });
         revalidatePath("/settings/tenants");
+        await auditTenantAction({
+            action: "tenant.deactivate",
+            resourceType: "tenant",
+            resourceId: tenantId,
+            summary: `Organização desativada: ${tenantId}`,
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -566,6 +588,14 @@ export async function updateTenantMemberRoleAction(input: {
             role,
         });
         revalidatePath("/settings/users");
+        await auditTenantAction({
+            action: "tenant_member.role_update",
+            resourceType: "portal_user",
+            resourceId: input.userId,
+            tenantId: targetTenantId,
+            summary: `Papel do membro alterado para ${role}`,
+            metadata: { role },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -623,6 +653,13 @@ export async function removeTenantMemberAction(input: {
 
         await db.delete(requireRecordId("portal_user_tenant", recordIdToString(membershipId)!));
         revalidatePath("/settings/users");
+        await auditTenantAction({
+            action: "tenant_member.remove",
+            resourceType: "portal_user",
+            resourceId: input.userId,
+            tenantId: targetTenantId,
+            summary: `Membro ${email} removido da organização`,
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -668,6 +705,14 @@ export async function assignUserToTenantAction(input: {
             tenant_id: tenantRid,
             role,
             created_at: new Date().toISOString(),
+        });
+        await auditTenantAction({
+            action: "tenant_member.assign",
+            resourceType: "portal_user",
+            resourceId: input.userId,
+            tenantId: input.tenantId,
+            summary: `Usuário vinculado à organização com papel ${role}`,
+            metadata: { role },
         });
         return { success: true };
     } catch (error) {

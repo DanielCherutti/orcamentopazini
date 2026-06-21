@@ -8,6 +8,10 @@ const ROLE_PERMISSIONS: Record<PlatformRole, ReadonlySet<PlatformPermission>> = 
         "orgs.write",
         "licenses.view",
         "licenses.write",
+        "billing.view",
+        "billing.write",
+        "audit.view",
+        "audit.export",
         "impersonate.readonly",
         "impersonate.full",
         "team.manage",
@@ -19,14 +23,26 @@ const ROLE_PERMISSIONS: Record<PlatformRole, ReadonlySet<PlatformPermission>> = 
         "orgs.write",
         "licenses.view",
         "licenses.write",
+        "billing.view",
+        "billing.write",
+        "audit.view",
+        "audit.export",
     ]),
     support: new Set([
         "dashboard.view",
         "orgs.view",
         "licenses.view",
+        "billing.view",
+        "audit.view",
         "impersonate.readonly",
     ]),
-    readonly: new Set(["dashboard.view", "orgs.view", "licenses.view"]),
+    readonly: new Set([
+        "dashboard.view",
+        "orgs.view",
+        "licenses.view",
+        "billing.view",
+        "audit.view",
+    ]),
 };
 
 export function platformRoleHasPermission(

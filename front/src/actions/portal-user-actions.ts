@@ -22,6 +22,7 @@ import {
 } from "@/actions/tenant-actions";
 import type { OrganizationMemberRole, TenantRole } from "@/types/tenant-types";
 import { tenantRecordId } from "@/lib/tenant-query";
+import { auditTenantAction } from "@/lib/audit-log";
 
 const createUserSchema = z.object({
     email: z.string().trim().email("E-mail inválido"),
@@ -119,7 +120,7 @@ export async function createPortalUserAction(
         return { success: false, fieldErrors: fieldErrors as Record<string, string[]> };
     }
 
-    return createUserInTenant({
+    const result = await createUserInTenant({
         tenantId: auth.ctx.tenantId,
         email: parsed.data.email,
         role: inviteRole,
@@ -127,6 +128,17 @@ export async function createPortalUserAction(
         passwordConfirm: parsed.data.passwordConfirm?.trim() ?? "",
         revalidatePaths: ["/settings/users"],
     });
+    if (result.success) {
+        await auditTenantAction({
+            action: "portal_user.create",
+            resourceType: "portal_user",
+            resourceId: result.userId,
+            tenantId: auth.ctx.tenantId,
+            summary: `Usuário ${parsed.data.email} criado`,
+            metadata: { role: inviteRole },
+        });
+    }
+    return result;
 }
 
 export async function submitCreatePortalUser(formData: FormData) {
@@ -191,6 +203,13 @@ export async function setPortalUserActiveAction(formData: FormData): Promise<{
         });
 
         revalidatePath("/settings/users");
+        await auditTenantAction({
+            action: wantActive ? "portal_user.activate" : "portal_user.deactivate",
+            resourceType: "portal_user",
+            resourceId: userId,
+            tenantId: auth.ctx.tenantId,
+            summary: `Usuário ${targetEmail} ${wantActive ? "ativado" : "desativado"}`,
+        });
         return { success: true };
     } catch (e) {
         console.error("setPortalUserActiveAction:", e);
@@ -255,6 +274,13 @@ export async function resetPortalUserPasswordAction(formData: FormData): Promise
         );
 
         revalidatePath("/settings/users");
+        await auditTenantAction({
+            action: "portal_user.password_reset",
+            resourceType: "portal_user",
+            resourceId: userId,
+            tenantId: auth.ctx.tenantId,
+            summary: "Senha redefinida para usuário do portal",
+        });
         return { success: true };
     } catch (e) {
         console.error("resetPortalUserPasswordAction:", e);

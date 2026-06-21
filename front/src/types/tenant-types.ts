@@ -18,6 +18,12 @@ export type Tenant = {
     custom_domain?: string | null;
     custom_domain_verified_at?: string | null;
     require_custom_host?: boolean;
+    billing_email?: string | null;
+    billing_name?: string | null;
+    billing_cpf_cnpj?: string | null;
+    billing_phone?: string | null;
+    asaas_customer_id?: string | null;
+    billing_enabled?: boolean;
     created_at?: string;
     updated_at?: string;
 };

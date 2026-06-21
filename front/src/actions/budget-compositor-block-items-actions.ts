@@ -12,6 +12,7 @@ import {
     safeStringRecordId,
 } from "@/lib/surreal-record-ids";
 import { assertBudgetChildInActiveTenant } from "@/lib/budget-tenant";
+import { auditTenantAction } from "@/lib/audit-log";
 
 async function recalculateCompositorTotal(db: Awaited<ReturnType<typeof getDb>>, budgetId: string) {
     const budgetRecordId = requireRecordId("budget", budgetId);
@@ -79,6 +80,13 @@ export async function addItemToBlockAction(
 
         await recalculateCompositorTotal(db, budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.add",
+            resourceType: "budget_block",
+            resourceId: blockId,
+            summary: "Item adicionado ao bloco do compositor",
+            metadata: { budgetId, productId },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -165,6 +173,13 @@ export async function addGroupToBlockAction(
 
         await recalculateCompositorTotal(db, budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.add_group",
+            resourceType: "budget_block",
+            resourceId: blockId,
+            summary: `Grupo adicionado ao bloco (${inserted} item(ns))`,
+            metadata: { budgetId, groupId, addedCount: inserted },
+        });
         return { success: true, addedCount: inserted };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -191,6 +206,13 @@ export async function deleteItemFromBlockAction(
         await db.update(requireRecordId("budget_item", itemId)).merge({ deleted_at: new Date().toISOString() });
         await recalculateCompositorTotal(db, budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.delete",
+            resourceType: "budget_item",
+            resourceId: itemId,
+            summary: "Item removido do bloco do compositor",
+            metadata: { budgetId },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -226,6 +248,13 @@ export async function updateItemQuantityInBlockAction(
 
         await recalculateCompositorTotal(db, budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.update_quantity",
+            resourceType: "budget_item",
+            resourceId: itemId,
+            summary: "Quantidade do item atualizada no compositor",
+            metadata: { budgetId, quantity },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -266,6 +295,13 @@ export async function updateItemGroupInBlockAction(
             await db.query("UPDATE $item SET group_instance_id = NONE", { item: itemRecordId });
         }
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.update_group",
+            resourceType: "budget_item",
+            resourceId: itemId,
+            summary: "Grupo do item atualizado no compositor",
+            metadata: { budgetId, groupId },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -292,6 +328,13 @@ export async function reorderItemsInBlockAction(
         for (let i = 0; i < itemIds.length; i++) {
             await db.update(requireRecordId("budget_item", itemIds[i])).merge({ order_index: i });
         }
+        await auditTenantAction({
+            action: "budget_item.reorder",
+            resourceType: "budget_block",
+            resourceId: _blockId,
+            summary: "Itens reordenados no bloco do compositor",
+            metadata: { count: itemIds.length },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {

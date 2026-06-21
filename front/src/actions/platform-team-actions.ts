@@ -18,6 +18,7 @@ import {
 } from "@/lib/platform-user";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { InvalidRecordIdError, recordIdToString, requireRecordId } from "@/lib/surreal-record-ids";
+import { auditPlatformAction } from "@/lib/audit-log";
 import {
     INVITABLE_PLATFORM_ROLES,
     PLATFORM_ROLE_LABELS,
@@ -146,6 +147,13 @@ export async function createPlatformTeamMemberAction(input: {
 
             const pending_setup = !passwordHashLooksValid(existingRow?.password_hash);
             revalidatePath("/platform/team");
+            await auditPlatformAction({
+                action: "platform_team.create",
+                resourceType: "portal_user",
+                resourceId: existingId,
+                summary: `Membro ${email} adicionado à equipe (${PLATFORM_ROLE_LABELS[role]})`,
+                metadata: { role },
+            });
             return {
                 success: true,
                 message: pending_setup
@@ -174,6 +182,13 @@ export async function createPlatformTeamMemberAction(input: {
         if (!userId) return { success: false, error: "Erro ao criar usuário" };
 
         revalidatePath("/platform/team");
+        await auditPlatformAction({
+            action: "platform_team.create",
+            resourceType: "portal_user",
+            resourceId: userId,
+            summary: `Membro ${email} criado na equipe (${PLATFORM_ROLE_LABELS[role]})`,
+            metadata: { role },
+        });
         return {
             success: true,
             message: `Usuário ${email} criado. Defina a senha para liberar o login.`,
@@ -237,6 +252,12 @@ export async function setPlatformTeamMemberPasswordAction(input: {
         );
 
         revalidatePath("/platform/team");
+        await auditPlatformAction({
+            action: "platform_team.password_set",
+            resourceType: "portal_user",
+            resourceId: parsed.data.userId,
+            summary: "Senha definida para membro da equipe",
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -302,6 +323,13 @@ export async function updatePlatformTeamMemberRoleAction(input: {
         });
 
         revalidatePath("/platform/team");
+        await auditPlatformAction({
+            action: "platform_team.role_update",
+            resourceType: "portal_user",
+            resourceId: input.userId,
+            summary: `Papel alterado de ${currentRole} para ${input.role}`,
+            metadata: { from: currentRole, to: input.role },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -358,6 +386,13 @@ export async function revokePlatformTeamMemberAction(userId: string): Promise<{
         );
 
         revalidatePath("/platform/team");
+        await auditPlatformAction({
+            action: "platform_team.revoke",
+            resourceType: "portal_user",
+            resourceId: userId,
+            summary: `Acesso revogado para ${email}`,
+            metadata: { role: currentRole },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {

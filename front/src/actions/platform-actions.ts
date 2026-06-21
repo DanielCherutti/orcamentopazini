@@ -31,6 +31,7 @@ import { getTenantPublicOrigin } from "@/lib/tenant-public-origin";
 import { RESERVED_SUBDOMAINS } from "@/lib/tenant-host";
 import { passwordHashLooksValid } from "@/lib/password-hash-present";
 import { resolveTenantRef } from "@/actions/platform-helpers";
+import { auditPlatformAction } from "@/lib/audit-log";
 
 function slugify(input: string): string {
     return input
@@ -65,6 +66,12 @@ function serializeTenant(row: Record<string, unknown>): Tenant {
                 ? String(row.custom_domain_verified_at)
                 : null,
         require_custom_host: row.require_custom_host === true,
+        billing_email: row.billing_email != null ? String(row.billing_email) : null,
+        billing_name: row.billing_name != null ? String(row.billing_name) : null,
+        billing_cpf_cnpj: row.billing_cpf_cnpj != null ? String(row.billing_cpf_cnpj) : null,
+        billing_phone: row.billing_phone != null ? String(row.billing_phone) : null,
+        asaas_customer_id: row.asaas_customer_id != null ? String(row.asaas_customer_id) : null,
+        billing_enabled: row.billing_enabled === true,
         created_at: row.created_at != null ? String(row.created_at) : undefined,
         updated_at: row.updated_at != null ? String(row.updated_at) : undefined,
     };
@@ -348,7 +355,16 @@ export async function createPlatformOrganizationAction(input: {
 
         revalidatePath("/platform");
         revalidatePath("/platform/organizations");
-        return { success: true, data: toPlain(serializeTenant(row as Record<string, unknown>)) };
+        const tenant = serializeTenant(row as Record<string, unknown>);
+        await auditPlatformAction({
+            action: "org.create",
+            resourceType: "org",
+            resourceId: tenant.id,
+            tenantId: tenant.id,
+            summary: `Organização criada: ${name}`,
+            metadata: { slug, license_plan: plan },
+        });
+        return { success: true, data: toPlain(tenant) };
     } catch (error) {
         console.error("createPlatformOrganizationAction:", error);
         if (isTokenExpiredError(error)) resetDb();
@@ -408,7 +424,20 @@ export async function updatePlatformOrganizationAction(input: {
         revalidatePath("/platform");
         revalidatePath("/platform/organizations");
         revalidatePath(`/platform/organizations/${String(row.slug ?? canonicalId)}`);
-        return { success: true, data: toPlain(serializeTenant(row)) };
+        const serialized = serializeTenant(row);
+        const patchKeys = Object.keys(patch).filter((k) => k !== "updated_at");
+        let auditAction = "org.update";
+        if (patchKeys.length === 1 && patchKeys[0] === "active") {
+            auditAction = patch.active === false ? "org.deactivate" : "org.reactivate";
+        }
+        await auditPlatformAction({
+            action: auditAction,
+            resourceType: "org",
+            resourceId: canonicalId,
+            tenantId: canonicalId,
+            summary: `Organização ${serialized.name} (${auditAction})`,
+        });
+        return { success: true, data: toPlain(serialized) };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
             return { success: false, error: error.message };
@@ -515,6 +544,13 @@ export async function updatePlatformOrganizationBrandingAction(
         const slugRow = await db.select<{ slug?: string }>(rid);
         const slugRec = Array.isArray(slugRow) ? slugRow[0] : slugRow;
         revalidatePath(`/platform/organizations/${String(slugRec?.slug ?? canonicalId)}`);
+        await auditPlatformAction({
+            action: "org.branding_update",
+            resourceType: "org",
+            resourceId: canonicalId,
+            tenantId: canonicalId,
+            summary: `Customização visual atualizada para org ${canonicalId}`,
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -713,7 +749,7 @@ export async function createPlatformOrganizationUserAction(
         const rid = await resolveTenantRef(db, tenantRef);
         const tenantId = recordIdToString(rid)!;
 
-        return createUserInTenant({
+        const result = await createUserInTenant({
             tenantId,
             email: parsed.data.email,
             role: inviteRole,
@@ -721,6 +757,17 @@ export async function createPlatformOrganizationUserAction(
             passwordConfirm: parsed.data.passwordConfirm?.trim() ?? "",
             revalidatePaths: [platformOrgUsersPath(tenantRef)],
         });
+        if (result.success) {
+            await auditPlatformAction({
+                action: "org.user_create",
+                resourceType: "portal_user",
+                resourceId: result.userId,
+                tenantId,
+                summary: `Usuário ${parsed.data.email} criado na org ${tenantRef}`,
+                metadata: { role: inviteRole },
+            });
+        }
+        return result;
     } catch (error) {
         console.error("createPlatformOrganizationUserAction:", error);
         if (isTokenExpiredError(error)) resetDb();
@@ -778,6 +825,13 @@ export async function setPlatformOrganizationUserPasswordAction(input: {
         );
 
         revalidatePath(platformOrgUsersPath(input.tenantRef));
+        await auditPlatformAction({
+            action: "org.user_password_set",
+            resourceType: "portal_user",
+            resourceId: userId,
+            tenantId,
+            summary: `Senha definida para usuário na org ${input.tenantRef}`,
+        });
         return { success: true };
     } catch (error) {
         console.error("setPlatformOrganizationUserPasswordAction:", error);
@@ -851,6 +905,15 @@ export async function updateTenantSubdomainAction(
         }
 
         await db.update(rid).merge({ subdomain: sub, updated_at: new Date().toISOString() });
+        const tenantId = recordIdToString(rid)!;
+        await auditPlatformAction({
+            action: "org.subdomain_update",
+            resourceType: "org",
+            resourceId: tenantId,
+            tenantId,
+            summary: `Subdomínio atualizado para ${sub}`,
+            metadata: { subdomain: sub },
+        });
         revalidatePath("/platform/organizations");
         return { success: true };
     } catch (error) {
@@ -879,6 +942,15 @@ export async function setCustomDomainAction(
             custom_domain: custom,
             custom_domain_verified_at: null,
             updated_at: new Date().toISOString(),
+        });
+        const tenantId = recordIdToString(rid)!;
+        await auditPlatformAction({
+            action: "org.domain_set",
+            resourceType: "org",
+            resourceId: tenantId,
+            tenantId,
+            summary: `Domínio personalizado definido: ${custom}`,
+            metadata: { custom_domain: custom },
         });
         revalidatePath("/platform/organizations");
         return { success: true };
@@ -925,6 +997,15 @@ export async function verifyCustomDomainAction(tenantRef: string): Promise<{
             await db.update(rid).merge({
                 custom_domain_verified_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
+            });
+            const tenantId = recordIdToString(rid)!;
+            await auditPlatformAction({
+                action: "org.domain_verify",
+                resourceType: "org",
+                resourceId: tenantId,
+                tenantId,
+                summary: `Domínio ${domain} verificado via DNS`,
+                metadata: { custom_domain: domain },
             });
         }
 

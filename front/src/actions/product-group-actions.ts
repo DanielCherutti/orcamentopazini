@@ -9,6 +9,7 @@ import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
 import { assertEntityInActiveTenant } from "@/lib/tenant-access";
 import { saveFile, deleteFile } from "@/lib/upload";
 import { InvalidRecordIdError, recordIdToString, requireRecordId } from "@/lib/surreal-record-ids";
+import { auditTenantAction } from "@/lib/audit-log";
 
 export type ProductGroup = {
   id: string;
@@ -134,7 +135,14 @@ export async function createProductGroupAction(formData: FormData) {
 
     revalidatePath("/dashboard/products");
     revalidatePath("/dashboard/products/groups");
-    return { success: true, data: serializeGroup(group as Record<string, unknown>) };
+    const serialized = serializeGroup(group as Record<string, unknown>);
+    await auditTenantAction({
+      action: "product_group.create",
+      resourceType: "product_group",
+      resourceId: serialized.id,
+      summary: `Grupo criado: ${validated.data.name}`,
+    });
+    return { success: true, data: serialized };
   } catch (error) {
     console.error("Error creating product group:", error);
     if (isTokenExpiredError(error)) resetDb();
@@ -202,7 +210,14 @@ export async function updateProductGroupAction(id: string, formData: FormData) {
 
     revalidatePath("/dashboard/products");
     revalidatePath("/dashboard/products/groups");
-    return { success: true, data: serializeGroup(group as Record<string, unknown>) };
+    const serialized = serializeGroup(group as Record<string, unknown>);
+    await auditTenantAction({
+      action: "product_group.update",
+      resourceType: "product_group",
+      resourceId: id,
+      summary: `Grupo atualizado: ${validated.data.name}`,
+    });
+    return { success: true, data: serialized };
   } catch (error) {
     if (error instanceof InvalidRecordIdError) {
       return { success: false, error: error.message };
@@ -244,8 +259,14 @@ export async function deleteProductGroupAction(id: string) {
     }
 
     revalidatePath("/dashboard/products");
-    revalidatePath("/dashboard/products/groups");
-    return { success: true };
+        revalidatePath("/dashboard/products/groups");
+        await auditTenantAction({
+            action: "product_group.delete",
+            resourceType: "product_group",
+            resourceId: id,
+            summary: "Grupo de produtos excluído",
+        });
+        return { success: true };
   } catch (error) {
     if (error instanceof InvalidRecordIdError) {
       return { success: false, error: error.message };

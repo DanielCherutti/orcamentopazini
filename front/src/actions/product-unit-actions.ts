@@ -7,6 +7,7 @@ import { assertWriteActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
 import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
 import { assertEntityInActiveTenant } from "@/lib/tenant-access";
+import { auditTenantAction } from "@/lib/audit-log";
 
 export type ProductUnit = {
   id: string;
@@ -96,7 +97,14 @@ export async function createProductUnitAction(data: { name: string }) {
     if (!unit) return { success: false, error: "Erro ao criar unidade" };
 
     revalidatePath("/dashboard/products");
-    return { success: true, data: serializeUnit(unit) };
+    const serialized = serializeUnit(unit);
+    await auditTenantAction({
+        action: "product_unit.create",
+        resourceType: "product_unit",
+        resourceId: serialized.id,
+        summary: `Unidade criada: ${validated.data.name}`,
+    });
+    return { success: true, data: serialized };
   } catch (error) {
     console.error("Error creating product unit:", error);
     if (isTokenExpiredError(error)) resetDb();

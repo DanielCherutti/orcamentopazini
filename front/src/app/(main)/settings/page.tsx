@@ -14,6 +14,12 @@ export default async function SettingsPage() {
         <div className="max-w-7xl mx-auto p-6 space-y-6">
             <div className="flex flex-wrap gap-4 justify-end">
                 <Link
+                    href="/settings/audit"
+                    className="text-sm font-medium text-primary hover:underline"
+                >
+                    Auditoria →
+                </Link>
+                <Link
                     href="/settings/users"
                     className="text-sm font-medium text-primary hover:underline"
                 >

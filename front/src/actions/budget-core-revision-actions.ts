@@ -18,6 +18,7 @@ import {
 } from "@/lib/budgets/budget-revision";
 import { assertBudgetInActiveTenant } from "@/lib/budget-tenant";
 import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
+import { auditTenantAction } from "@/lib/audit-log";
 
 function resolveRelationId(value: unknown): string {
     if (!value) return "";
@@ -287,6 +288,13 @@ export async function createBudgetRevisionAction(
         }
 
         revalidatePath("/budgets");
+        await auditTenantAction({
+            action: "budget.revision_create",
+            resourceType: "budget",
+            resourceId: newBudgetId,
+            summary: `Revisão ${revisionNumber} criada a partir de ${budgetId}`,
+            metadata: { sourceBudgetId: budgetId, revisionNumber },
+        });
         return { success: true, newBudgetId, revisionNumber };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {

@@ -13,6 +13,7 @@ import {
     assertBudgetChildInActiveTenant,
     assertBudgetInActiveTenant,
 } from "@/lib/budget-tenant";
+import { auditTenantAction } from "@/lib/audit-log";
 
 type RootBlockRow = { id: unknown; order_index: number; type: string; props?: Record<string, unknown> };
 
@@ -131,6 +132,13 @@ export async function ensureCompositorCoverBlockAction(
         });
 
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_block.ensure",
+            resourceType: "budget",
+            resourceId: budgetId,
+            summary: "Bloco de capa garantido no compositor",
+            metadata: { blockType: "cover" },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -429,6 +437,13 @@ export async function addBlockAction(params: {
         });
         const created = Array.isArray(raw) ? raw[0] : raw;
 
+        await auditTenantAction({
+            action: "budget_block.create",
+            resourceType: "budget_block",
+            resourceId: String(created.id),
+            summary: `Bloco ${type} adicionado ao compositor`,
+            metadata: { budgetId, type, label },
+        });
         revalidatePath(budgetRevalidatePath(budgetId));
         return { success: true, blockId: String(created.id) };
     } catch (error) {
@@ -474,6 +489,13 @@ export async function updateBlockAction(
             });
         }
 
+        await auditTenantAction({
+            action: "budget_block.update",
+            resourceType: "budget_block",
+            resourceId: blockId,
+            summary: "Bloco do compositor atualizado",
+            metadata: { budgetId },
+        });
         revalidatePath(budgetRevalidatePath(budgetId));
         return { success: true };
     } catch (error) {
@@ -527,6 +549,13 @@ export async function deleteBlockAction(
         }
 
         await deleteBlockCascade(db, blockId);
+        await auditTenantAction({
+            action: "budget_block.delete",
+            resourceType: "budget_block",
+            resourceId: blockId,
+            summary: "Bloco removido do compositor",
+            metadata: { budgetId },
+        });
         revalidatePath(budgetRevalidatePath(budgetId));
         return { success: true };
     } catch (error) {
@@ -614,6 +643,13 @@ export async function moveBlockToParentAction(
         } else {
             await db.query("UPDATE $block SET parent_id = NONE", { block: blockRecordId });
         }
+        await auditTenantAction({
+            action: "budget_block.move",
+            resourceType: "budget_block",
+            resourceId: blockId,
+            summary: "Bloco movido no compositor",
+            metadata: { budgetId, newParentId },
+        });
         revalidatePath(budgetRevalidatePath(budgetId));
         return { success: true };
     } catch (error) {
@@ -660,6 +696,13 @@ export async function reorderBlocksAction(
         for (let i = 0; i < blockIds.length; i++) {
             await db.update(requireRecordId("budget_block", blockIds[i])).merge({ order_index: i });
         }
+        await auditTenantAction({
+            action: "budget_block.reorder",
+            resourceType: "budget",
+            resourceId: budgetId,
+            summary: "Blocos reordenados no compositor",
+            metadata: { count: blockIds.length },
+        });
         revalidatePath(budgetRevalidatePath(budgetId));
         return { success: true };
     } catch (error) {

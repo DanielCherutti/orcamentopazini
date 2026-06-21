@@ -1,11 +1,22 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { getPlatformOrganizationAction, getPlatformOrganizationMetricsAction, listOrgMembersForPlatformAction } from "@/actions/platform-actions";
-import { listImpersonationAuditAction } from "@/actions/platform-impersonation-actions";
+import {
+    getPlatformOrganizationAction,
+    getPlatformOrganizationMetricsAction,
+    listOrgMembersForPlatformAction,
+} from "@/actions/platform-actions";
+import {
+    getTenantBillingProfileAction,
+    listPlatformChargesAction,
+} from "@/actions/platform-billing-actions";
+import { listAuditLogAction, ensureAuditReadyAction } from "@/actions/audit-actions";
+import { resolveTenantRef } from "@/actions/platform-helpers";
 import { PlatformOrganizationDetail } from "@/components/platform/platform-organization-detail";
 import { OrgAvatar } from "@/components/platform/platform-utils";
 import { Button } from "@/components/ui/button";
+import { getDb } from "@/lib/surreal";
+import { recordIdToString } from "@/lib/surreal-record-ids";
 
 type Props = {
     params: Promise<{ tenantId: string }>;
@@ -34,10 +45,17 @@ export default async function PlatformOrganizationPage({ params }: Props) {
         );
     }
 
-    const [metricsRes, membersRes, auditRes] = await Promise.all([
+    await ensureAuditReadyAction();
+    const db = await getDb();
+    const rid = await resolveTenantRef(db, orgRef);
+    const tenantId = recordIdToString(rid)!;
+
+    const [metricsRes, membersRes, billingProfileRes, chargesRes, auditRes] = await Promise.all([
         getPlatformOrganizationMetricsAction(orgRef),
         listOrgMembersForPlatformAction(orgRef),
-        listImpersonationAuditAction(orgRef),
+        getTenantBillingProfileAction(orgRef),
+        listPlatformChargesAction(orgRef),
+        listAuditLogAction({ tenantId, limit: 50, offset: 0 }),
     ]);
 
     return (
@@ -56,7 +74,7 @@ export default async function PlatformOrganizationPage({ params }: Props) {
                             {org.data.name}
                         </h1>
                         <p className="text-muted-foreground">
-                            Configure licença, acesso e aparência desta empresa cliente.
+                            Configure licença, cobrança, acesso e aparência desta empresa cliente.
                         </p>
                     </div>
                 </div>
@@ -65,7 +83,10 @@ export default async function PlatformOrganizationPage({ params }: Props) {
                 organization={org.data}
                 metrics={metricsRes.data}
                 members={membersRes.data ?? []}
-                auditLog={auditRes.data ?? []}
+                billingProfile={billingProfileRes.data}
+                charges={chargesRes.data ?? []}
+                auditEntries={auditRes.data ?? []}
+                auditTotal={auditRes.total ?? 0}
             />
         </div>
     );

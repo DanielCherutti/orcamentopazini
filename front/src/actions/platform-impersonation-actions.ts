@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { Table } from "surrealdb";
 
+import { auditPlatformAction } from "@/lib/audit-log";
 import { ensurePlatformAuditSchema } from "@/actions/platform-admin-actions";
 import { resolveTenantRef } from "@/actions/platform-helpers";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
@@ -107,6 +108,14 @@ export async function startImpersonationAction(input: {
         );
 
         revalidatePath("/platform");
+        await auditPlatformAction({
+            action: "impersonation.start",
+            resourceType: "org",
+            resourceId: canonicalId,
+            tenantId: canonicalId,
+            summary: `Modo suporte iniciado (${input.mode}) em ${slug}`,
+            metadata: { reason, mode: input.mode, ttlMinutes: ttl, auditId },
+        });
         return { success: true };
     } catch (error) {
         console.error("startImpersonationAction:", error);
@@ -151,6 +160,18 @@ export async function endImpersonationAction(): Promise<{ success: boolean; erro
 
     await setPlatformSession(ctx.email, (await getPlatformRoleForEmail(ctx.email)) ?? "super_admin");
     revalidatePath("/platform");
+    await auditPlatformAction({
+        action: "impersonation.end",
+        resourceType: "org",
+        resourceId: ctx.impersonation.tenantId,
+        tenantId: ctx.impersonation.tenantId,
+        summary: `Modo suporte encerrado em ${ctx.impersonation.tenantSlug}`,
+        metadata: {
+            mode: ctx.impersonation.mode,
+            reason: ctx.impersonation.reason,
+            auditId: ctx.impersonation.auditId,
+        },
+    });
     return { success: true };
 }
 

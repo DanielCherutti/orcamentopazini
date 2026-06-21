@@ -23,6 +23,7 @@ import {
     assertBudgetInActiveTenant,
     assertSectionsInActiveTenant,
 } from "@/lib/budget-tenant";
+import { auditTenantAction } from "@/lib/audit-log";
 
 /** Próximo `order_index` na seção (múltiplos de 10, alinhado a `reorderSectionItemsAction`). */
 async function nextSectionItemOrderIndex(
@@ -693,6 +694,13 @@ export async function addItemAction(sectionId: string, budgetId: string, product
 
         await recalculateBudgetTotal(budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.add",
+            resourceType: "budget_section",
+            resourceId: sectionId,
+            summary: "Item adicionado ao trecho",
+            metadata: { budgetId, productId, itemId: newItemId },
+        });
         return { success: true, itemId: newItemId };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -800,6 +808,13 @@ export async function addGroupToSectionAction(
 
         await recalculateBudgetTotal(budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.add_group",
+            resourceType: "budget_section",
+            resourceId: sectionId,
+            summary: `Grupo adicionado ao trecho (${inserted} item(ns))`,
+            metadata: { budgetId, groupId, addedCount: inserted },
+        });
         return { success: true, addedCount: inserted };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -824,6 +839,13 @@ export async function deleteItemAction(itemId: string, budgetId: string) {
         await db.update(itemRecordId).merge({ deleted_at: new Date().toISOString() });
         await recalculateBudgetTotal(budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.delete",
+            resourceType: "budget_item",
+            resourceId: itemId,
+            summary: "Item removido do trecho",
+            metadata: { budgetId },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -878,6 +900,13 @@ export async function deleteBudgetItemsBulkAction(
 
         await recalculateBudgetTotal(budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.delete_bulk",
+            resourceType: "budget",
+            resourceId: budgetId,
+            summary: `${rows.length} item(ns) removidos em lote`,
+            metadata: { deletedCount: rows.length },
+        });
         return { success: true, deletedCount: rows.length };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -929,6 +958,13 @@ export async function updateItemQuantityAction(itemId: string, budgetId: string,
         await recalculateBudgetTotal(budgetId);
 
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.update_quantity",
+            resourceType: "budget_item",
+            resourceId: itemId,
+            summary: "Quantidade do item atualizada",
+            metadata: { budgetId, quantity },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -980,6 +1016,13 @@ export async function updateItemLaborCostAction(itemId: string, budgetId: string
         await recalculateBudgetTotal(budgetId);
 
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.update_labor_cost",
+            resourceType: "budget_item",
+            resourceId: itemId,
+            summary: "Custo de mão de obra do item atualizado",
+            metadata: { budgetId, laborCost },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -1021,6 +1064,13 @@ export async function updateItemGroupInSectionAction(
             await db.query("UPDATE $item SET group_instance_id = NONE", { item: itemRecordId });
         }
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.update_group",
+            resourceType: "budget_item",
+            resourceId: itemId,
+            summary: "Grupo do item atualizado no trecho",
+            metadata: { budgetId, groupId },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -1047,6 +1097,13 @@ export async function reorderSectionItemsAction(orderedItemIds: string[], budget
             });
         }
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.reorder",
+            resourceType: "budget",
+            resourceId: budgetId,
+            summary: "Itens reordenados no trecho",
+            metadata: { count: orderedItemIds.length },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -1139,6 +1196,13 @@ export async function updateItemCommercialSettingsAction(
         await db.update(itemRecordId).merge(mergePayload);
         await recalculateBudgetTotal(budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.update_commercial",
+            resourceType: "budget_item",
+            resourceId: itemId,
+            summary: "Configurações comerciais do item atualizadas",
+            metadata: { budgetId },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -1230,6 +1294,15 @@ export async function clearScopeItemPriceAdjustmentsAction(
 
         await recalculateBudgetTotal(budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
+        if (clearedCount > 0) {
+            await auditTenantAction({
+                action: "budget_item.clear_price_adjustments",
+                resourceType: "budget",
+                resourceId: budgetId,
+                summary: `Ajustes de preço limpos em ${clearedCount} item(ns)`,
+                metadata: { clearedCount, scopeType: scope.type },
+            });
+        }
         return { success: true, clearedCount };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {

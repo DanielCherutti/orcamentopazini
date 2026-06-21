@@ -35,6 +35,7 @@ import {
 import { canUseBudgetEmail } from "@/lib/budgets/budget-status";
 import { getDb } from "@/lib/surreal";
 import { assertBudgetInActiveTenant } from "@/lib/budget-tenant";
+import { auditTenantAction } from "@/lib/audit-log";
 
 const EMAIL_LOCKED_ERROR =
     "Envio de e-mail disponível apenas após finalizar o orçamento.";
@@ -151,6 +152,15 @@ export async function syncBudgetEmailRepliesAction(
     }
 
     revalidatePath(budgetRevalidatePath(budgetId));
+    if (result.imported > 0) {
+        await auditTenantAction({
+            action: "budget_email.sync",
+            resourceType: "budget",
+            resourceId: budgetId,
+            summary: `${result.imported} resposta(s) de e-mail importada(s)`,
+            metadata: { imported: result.imported },
+        });
+    }
     return { success: true, imported: result.imported };
 }
 
@@ -218,6 +228,15 @@ export async function syncAllBudgetEmailRepliesAction(): Promise<{
     }
 
     const importedAccessible = imports.reduce((sum, row) => sum + row.count, 0);
+
+    if (importedAccessible > 0) {
+        await auditTenantAction({
+            action: "budget_email.sync_all",
+            resourceType: "budget",
+            summary: `${importedAccessible} resposta(s) de e-mail importada(s) em lote`,
+            metadata: { imported: importedAccessible, budgetCount: imports.length },
+        });
+    }
 
     return {
         success: true,
@@ -308,6 +327,14 @@ async function sendAndRecordMessage(
         internetMessageId: mail.internetMessageId,
         inReplyTo: payload.inReplyTo,
         hasPdfAttachment: Boolean(payload.includePdf),
+    });
+
+    await auditTenantAction({
+        action: payload.includePdf ? "budget_email.send_proposal" : "budget_email.send_reply",
+        resourceType: "budget",
+        resourceId: budgetId,
+        summary: payload.includePdf ? "Proposta enviada por e-mail" : "Resposta enviada por e-mail",
+        metadata: { to: toStored, hasPdf: Boolean(payload.includePdf) },
     });
 
     return { success: true };

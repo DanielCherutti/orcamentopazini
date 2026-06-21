@@ -12,6 +12,7 @@ import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { revalidatePath } from "next/cache";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
+import { auditTenantAction } from "@/lib/audit-log";
 
 export interface ProposalSettings {
     id?: string;
@@ -226,6 +227,12 @@ export async function updateProposalSettingsAction(data: UpdateProposalSettingsI
         revalidatePath("/settings");
         revalidatePath("/dashboard");
         revalidatePath("/");
+        await auditTenantAction({
+            action: "settings.update",
+            resourceType: "proposal_settings",
+            tenantId,
+            summary: "Configurações da proposta atualizadas",
+        });
         return { success: true };
     } catch (e) {
         if (e instanceof InvalidRecordIdError) {

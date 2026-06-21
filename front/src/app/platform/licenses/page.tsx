@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { getPlatformLicenseSettingsAction } from "@/actions/platform-license-actions";
+import { getPlatformAsaasSettingsAction } from "@/actions/platform-billing-settings-actions";
+import { PlatformAsaasSettingsForm } from "@/components/platform/platform-asaas-settings-form";
 import { PlatformLicensesForm } from "@/components/platform/platform-licenses-form";
 import { Button } from "@/components/ui/button";
 
@@ -10,7 +12,10 @@ export const metadata: Metadata = {
 };
 
 export default async function PlatformLicensesPage() {
-    const settings = await getPlatformLicenseSettingsAction();
+    const [settings, asaas] = await Promise.all([
+        getPlatformLicenseSettingsAction(),
+        getPlatformAsaasSettingsAction(),
+    ]);
 
     if (!settings.success || !settings.data) {
         return (
@@ -47,6 +52,10 @@ export default async function PlatformLicensesPage() {
                 initialForm={settings.data.form}
                 updatedAt={settings.data.updatedAt}
             />
+
+            {asaas.success && asaas.data && (
+                <PlatformAsaasSettingsForm initial={asaas.data} />
+            )}
         </div>
     );
 }
