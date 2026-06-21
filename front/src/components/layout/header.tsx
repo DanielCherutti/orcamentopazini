@@ -10,18 +10,27 @@ export function Header({ companyName }: { companyName: string }) {
     const { collapsed, toggleSidebar } = useSidebar();
 
     return (
-        <header className="h-16 border-b border-border bg-background px-6 flex items-center justify-between sticky top-[var(--support-banner-height,0px)] z-10 w-full">
-            <div className="flex items-center gap-3">
+        <header className="tenant-glass-header sticky top-[var(--support-banner-height,0px)] z-10 flex h-16 w-full shrink-0 items-center justify-between gap-4 px-4 sm:px-6">
+            <div className="flex min-w-0 items-center gap-3">
                 <button
+                    type="button"
                     onClick={toggleSidebar}
-                    className="text-muted-foreground hover:text-foreground transition-colors"
-                    aria-label={collapsed ? "Abrir menu lateral" : "Fechar menu lateral"}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-black/[0.06] bg-white/60 text-muted-foreground transition-colors hover:bg-white hover:text-foreground dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
+                    aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
                 >
-                    {collapsed ? <PanelLeft className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+                    {collapsed ? (
+                        <PanelLeft className="h-4 w-4" />
+                    ) : (
+                        <PanelLeftClose className="h-4 w-4" />
+                    )}
                 </button>
-                <h1 className="text-lg font-semibold text-foreground">{companyName}</h1>
+                <div className="min-w-0">
+                    <h1 className="truncate text-base font-bold tracking-tight text-foreground sm:text-lg">
+                        {companyName}
+                    </h1>
+                </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
                 <PlatformAccessLink />
                 <TenantSwitcher />
                 <BudgetEmailNotificationsBell />

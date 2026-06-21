@@ -208,7 +208,7 @@ export function PlatformOrgBillingSection({ tenantRef, profile, charges, canWrit
                 </Card>
             )}
 
-            <Card className="border-border/70 shadow-sm">
+            <Card className="platform-panel border-0 shadow-none">
                 <CardHeader>
                     <CardTitle className="text-base">Dados de cobrança</CardTitle>
                     <CardDescription>Cliente Asaas vinculado a esta organização.</CardDescription>
@@ -271,7 +271,7 @@ export function PlatformOrgBillingSection({ tenantRef, profile, charges, canWrit
                 </CardContent>
             </Card>
 
-            <Card className="border-border/70 shadow-sm">
+            <Card className="platform-panel border-0 shadow-none">
                 <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
                     <div>
                         <CardTitle className="text-base flex items-center gap-2">

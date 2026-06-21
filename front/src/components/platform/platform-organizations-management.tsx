@@ -8,6 +8,7 @@ import {
     reactivatePlatformOrganizationAction,
 } from "@/actions/platform-actions";
 import { CreateOrganizationDialog } from "@/components/platform/create-organization-dialog";
+import { PlatformContentCard } from "@/components/layout/platform-page-shell";
 import {
     getOrganizationLicenseStatus,
     LicenseStatusBadge,
@@ -15,15 +16,7 @@ import {
     PlanBadge,
     UsageBar,
 } from "@/components/platform/platform-utils";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
     Select,
@@ -124,34 +117,34 @@ export function PlatformOrganizationsManagement({
 
     return (
         <>
-            <Card className="border-border/70 shadow-sm">
-                <CardHeader className="border-b border-border/60 bg-muted/20">
+            <PlatformContentCard>
+                <div className="border-b border-black/[0.04] px-6 py-5 dark:border-white/[0.06]">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                            <CardTitle>Empresas clientes</CardTitle>
-                            <CardDescription className="mt-1">
+                            <h2 className="text-base font-semibold tracking-tight">Empresas clientes</h2>
+                            <p className="mt-1 text-sm text-muted-foreground">
                                 Licenças, limites e identidade visual por organização.
-                            </CardDescription>
+                            </p>
                         </div>
-                        {canWrite && (
-                            <Button onClick={() => setCreateOpen(true)} className="shrink-0">
+                        {canWrite ? (
+                            <Button onClick={() => setCreateOpen(true)} className="shrink-0 rounded-xl">
                                 <Plus className="h-4 w-4" />
                                 Nova organização
                             </Button>
-                        )}
+                        ) : null}
                     </div>
-                    <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                         <div className="relative max-w-sm flex-1">
                             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                             <Input
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
                                 placeholder="Buscar por nome ou slug…"
-                                className="h-10 pl-9 bg-background"
+                                className="h-10 rounded-xl border-black/[0.06] bg-white/80 pl-9 dark:bg-white/[0.04]"
                             />
                         </div>
                         <Select value={planFilter} onValueChange={setPlanFilter}>
-                            <SelectTrigger className="w-full sm:w-40 bg-background">
+                            <SelectTrigger className="w-full rounded-xl border-black/[0.06] bg-white/80 sm:w-40 dark:bg-white/[0.04]">
                                 <SelectValue placeholder="Plano" />
                             </SelectTrigger>
                             <SelectContent>
@@ -169,7 +162,7 @@ export function PlatformOrganizationsManagement({
                             value={statusFilter}
                             onValueChange={(v) => setStatusFilter(v as StatusFilter)}
                         >
-                            <SelectTrigger className="w-full sm:w-44 bg-background">
+                            <SelectTrigger className="w-full rounded-xl border-black/[0.06] bg-white/80 sm:w-44 dark:bg-white/[0.04]">
                                 <SelectValue placeholder="Status" />
                             </SelectTrigger>
                             <SelectContent>
@@ -182,12 +175,12 @@ export function PlatformOrganizationsManagement({
                             </SelectContent>
                         </Select>
                     </div>
-                </CardHeader>
-                <CardContent className="p-0">
+                </div>
+                <div>
                     {filtered.length === 0 ? (
                         <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
-                            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
-                                <Building2 className="h-7 w-7 text-muted-foreground" />
+                            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/10">
+                                <Building2 className="h-7 w-7 text-violet-600 dark:text-violet-400" />
                             </div>
                             <div>
                                 <p className="font-medium">
@@ -207,9 +200,10 @@ export function PlatformOrganizationsManagement({
                             )}
                         </div>
                     ) : (
+                        <div className="app-table">
                         <Table>
                             <TableHeader>
-                                <TableRow className="hover:bg-transparent">
+                                <TableRow className="border-black/[0.04] hover:bg-transparent dark:border-white/[0.06]">
                                     <TableHead className="pl-6">Organização</TableHead>
                                     <TableHead>Plano</TableHead>
                                     <TableHead>Uso de usuários</TableHead>
@@ -221,7 +215,7 @@ export function PlatformOrganizationsManagement({
                                 {filtered.map((org) => (
                                     <TableRow
                                         key={org.id}
-                                        className="group cursor-pointer transition-colors hover:bg-muted/40"
+                                        className="group cursor-pointer transition-colors hover:bg-violet-500/[0.04]"
                                         onClick={() =>
                                             router.push(`/platform/organizations/${org.slug}`)
                                         }
@@ -278,9 +272,10 @@ export function PlatformOrganizationsManagement({
                                 ))}
                             </TableBody>
                         </Table>
+                        </div>
                     )}
-                </CardContent>
-            </Card>
+                </div>
+            </PlatformContentCard>
 
             {canWrite && (
                 <CreateOrganizationDialog open={createOpen} onOpenChange={setCreateOpen} />

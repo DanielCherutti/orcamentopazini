@@ -461,3 +461,232 @@
 .pdf-indeterminate-bar {
   animation: pdf-indeterminate-slide 1.15s ease-in-out infinite;
 }
+
+/* ── EngHub Platform (/platform) ─────────────────────────────────────────── */
+.platform-app {
+  --platform-sidebar: #110f1a;
+  --platform-sidebar-hover: rgba(255, 255, 255, 0.08);
+  --platform-sidebar-active: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
+  --platform-canvas: #eceaf4;
+  --platform-canvas-accent: rgba(124, 58, 237, 0.14);
+  --platform-glow: rgba(139, 92, 246, 0.5);
+  --primary-rgb: 99 102 241;
+  --muted-foreground: oklch(0.38 0.02 280);
+  --foreground: oklch(0.12 0.02 280);
+}
+
+.dark .platform-app {
+  --platform-canvas: oklch(0.13 0.02 280);
+  --platform-canvas-accent: rgba(124, 58, 237, 0.18);
+  --muted-foreground: oklch(0.72 0.02 280);
+  --foreground: oklch(0.98 0 0);
+}
+
+.platform-app .platform-mesh-bg {
+  background-color: var(--platform-canvas);
+  background-image:
+    radial-gradient(ellipse 90% 60% at 0% -10%, var(--platform-canvas-accent), transparent 50%),
+    radial-gradient(ellipse 70% 50% at 100% 0%, rgba(99, 102, 241, 0.12), transparent 45%),
+    radial-gradient(ellipse 50% 40% at 50% 100%, rgba(124, 58, 237, 0.08), transparent 40%);
+}
+
+.platform-app .platform-sidebar-surface {
+  background: linear-gradient(180deg, #1a1730 0%, #110f1a 42%, #08070d 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 4px 0 48px -8px rgba(0, 0, 0, 0.55);
+}
+
+.platform-app .platform-nav-active {
+  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+  box-shadow: 0 4px 24px -4px var(--platform-glow);
+}
+
+.platform-app .platform-glass-header {
+  background: rgba(255, 255, 255, 0.96);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+}
+
+.dark .platform-app .platform-glass-header {
+  background: rgba(18, 16, 30, 0.92);
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+.platform-app .platform-panel {
+  border-radius: 1.25rem;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: #ffffff;
+  box-shadow:
+    0 1px 3px rgba(15, 10, 40, 0.06),
+    0 16px 48px -20px rgba(76, 29, 149, 0.22);
+}
+
+.dark .platform-app .platform-panel {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(24, 22, 36, 0.98);
+  box-shadow: 0 16px 48px -20px rgba(0, 0, 0, 0.55);
+}
+
+.platform-app .platform-stat-card {
+  border-radius: 1.25rem;
+  border: 1px solid rgba(0, 0, 0, 0.09);
+  background: #ffffff;
+  box-shadow: 0 10px 36px -14px rgba(76, 29, 149, 0.2);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.platform-app .platform-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 48px -14px rgba(76, 29, 149, 0.28);
+}
+
+.dark .platform-app .platform-stat-card {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(28, 26, 42, 0.98);
+}
+
+/* ── Tenant app (/(main)) ─────────────────────────────────────────────────── */
+.tenant-app {
+  --tenant-canvas: #e8ecf4;
+  --tenant-canvas-accent: rgb(var(--primary-rgb) / 0.14);
+  --tenant-canvas-accent-2: rgb(var(--brand-secondary-rgb) / 0.12);
+  --muted-foreground: oklch(0.38 0.02 265);
+  --foreground: oklch(0.12 0.02 265);
+}
+
+.dark .tenant-app {
+  --tenant-canvas: oklch(0.14 0.02 265);
+  --tenant-canvas-accent: rgb(var(--primary-rgb) / 0.2);
+  --tenant-canvas-accent-2: rgb(var(--brand-secondary-rgb) / 0.14);
+  --muted-foreground: oklch(0.72 0.02 265);
+  --foreground: oklch(0.98 0 0);
+}
+
+.tenant-app .tenant-mesh-bg {
+  background-color: var(--tenant-canvas);
+  background-image:
+    radial-gradient(ellipse 90% 60% at 0% -10%, var(--tenant-canvas-accent), transparent 50%),
+    radial-gradient(ellipse 70% 50% at 100% 0%, var(--tenant-canvas-accent-2), transparent 45%),
+    radial-gradient(ellipse 50% 40% at 50% 100%, rgb(var(--primary-rgb) / 0.08), transparent 40%);
+}
+
+.tenant-app .tenant-sidebar-surface {
+  background: linear-gradient(180deg, #141824 0%, #0c0e14 45%, #07080c 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 4px 0 48px -8px rgba(0, 0, 0, 0.55);
+}
+
+.tenant-app .tenant-nav-active {
+  background: linear-gradient(
+    135deg,
+    var(--primary) 0%,
+    color-mix(in srgb, var(--primary) 65%, var(--brand-secondary)) 100%
+  );
+  box-shadow: 0 4px 24px -4px rgb(var(--primary-rgb) / 0.55);
+}
+
+.tenant-app .tenant-glass-header {
+  background: rgba(255, 255, 255, 0.96);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+}
+
+.dark .tenant-app .tenant-glass-header {
+  background: rgba(14, 16, 24, 0.92);
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+.tenant-app .tenant-panel {
+  border-radius: 1.25rem;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: #ffffff;
+  box-shadow:
+    0 1px 3px rgba(15, 20, 40, 0.06),
+    0 16px 48px -20px rgb(var(--primary-rgb) / 0.2);
+}
+
+.dark .tenant-app .tenant-panel {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(20, 22, 32, 0.98);
+  box-shadow: 0 16px 48px -20px rgba(0, 0, 0, 0.55);
+}
+
+.tenant-app .tenant-stat-card {
+  border-radius: 1.25rem;
+  border: 1px solid rgba(0, 0, 0, 0.09);
+  background: #ffffff;
+  box-shadow: 0 10px 36px -14px rgb(var(--primary-rgb) / 0.18);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.tenant-app .tenant-stat-card:hover {
+  transform: translateY(-2px);
+  border-color: rgb(var(--primary-rgb) / 0.35);
+  box-shadow: 0 20px 48px -14px rgb(var(--primary-rgb) / 0.28);
+}
+
+.dark .tenant-app .tenant-stat-card {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(24, 26, 36, 0.98);
+}
+
+/* Tabelas de dados (tenant + platform) */
+.tenant-app .app-table,
+.platform-app .app-table {
+  overflow: hidden;
+  border-radius: 0.875rem;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.tenant-app .app-table thead,
+.platform-app .app-table thead {
+  border-bottom: 1px solid rgb(var(--primary-rgb) / 0.15);
+  background: rgb(var(--primary-rgb) / 0.08);
+}
+
+.tenant-app .app-table th,
+.platform-app .app-table th {
+  color: oklch(0.28 0.03 265);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  letter-spacing: 0.01em;
+}
+
+.tenant-app .app-table tbody tr,
+.platform-app .app-table tbody tr {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.tenant-app .app-table tbody tr:hover,
+.platform-app .app-table tbody tr:hover {
+  background: rgb(var(--primary-rgb) / 0.05);
+}
+
+.tenant-app .app-table [data-slot="table-row"]:hover,
+.platform-app .app-table [data-slot="table-row"]:hover {
+  background: rgb(var(--primary-rgb) / 0.05);
+}
+
+.tenant-app .app-table [data-slot="table-head"],
+.platform-app .app-table [data-slot="table-head"] {
+  color: oklch(0.28 0.03 265);
+  font-weight: 600;
+  height: 2.75rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.dark .tenant-app .app-table,
+.dark .platform-app .app-table {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(22, 24, 34, 0.98);
+}
+
+.dark .tenant-app .app-table th,
+.dark .platform-app .app-table th {
+  color: oklch(0.88 0.01 265);
+}

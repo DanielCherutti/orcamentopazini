@@ -43,7 +43,7 @@ export default async function BudgetsPage(props: {
             action={
                 <div className="flex flex-wrap items-center gap-2">
                     <BudgetImportDialog />
-                    <Button asChild className="rounded-lg shadow-sm">
+                    <Button asChild className="rounded-xl shadow-sm">
                         <Link href="/budgets/new">
                             <Plus className="mr-2 h-4 w-4" />
                             Novo orçamento

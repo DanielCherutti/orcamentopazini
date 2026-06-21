@@ -115,7 +115,7 @@ export function BudgetWorkspaceHeader({
     };
 
     return (
-        <header className="border-b bg-card shrink-0 flex items-stretch h-12 overflow-hidden">
+        <header className="tenant-glass-header flex h-12 shrink-0 items-stretch overflow-hidden">
             {/* Left: back + title + status + total */}
             <div className="flex items-center gap-2 px-3 shrink-0 min-w-0 max-w-[45%]">
                 <Button variant="ghost" size="sm" className="h-8 shrink-0 gap-1.5 px-2" asChild>

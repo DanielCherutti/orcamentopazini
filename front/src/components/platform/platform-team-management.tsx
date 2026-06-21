@@ -9,9 +9,9 @@ import {
     type PlatformTeamMember,
 } from "@/actions/platform-team-actions";
 import { PasswordRequirementsHint } from "@/components/settings/password-requirements-hint";
+import { PlatformContentCard } from "@/components/layout/platform-page-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
     Dialog,
     DialogContent,
@@ -200,18 +200,18 @@ export function PlatformTeamManagement({ initialMembers }: { initialMembers: Pla
 
     return (
         <>
-            <Card className="border-border/70 shadow-sm">
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+            <PlatformContentCard className="p-6">
+                <div className="mb-6">
+                    <h2 className="flex items-center gap-2 text-base font-semibold tracking-tight">
                         <Shield className="h-5 w-5 text-violet-600" />
                         Equipe da plataforma
-                    </CardTitle>
-                <CardDescription>
-                    Mesma conta do login — adicione acesso ao painel /platform pelo e-mail e defina
-                    a senha. Quem já usa uma empresa pode ter os dois destinos após entrar.
-                </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
+                    </h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                        Mesma conta do login — adicione acesso ao painel /platform pelo e-mail e defina
+                        a senha. Quem já usa uma empresa pode ter os dois destinos após entrar.
+                    </p>
+                </div>
+                <div className="space-y-6">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                         <div className="flex-1 space-y-1">
                             <label className="text-sm font-medium" htmlFor="create-email">
@@ -249,6 +249,7 @@ export function PlatformTeamManagement({ initialMembers }: { initialMembers: Pla
                         </Button>
                     </div>
 
+                    <div className="app-table overflow-x-auto">
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -330,8 +331,9 @@ export function PlatformTeamManagement({ initialMembers }: { initialMembers: Pla
                             )}
                         </TableBody>
                     </Table>
-                </CardContent>
-            </Card>
+                    </div>
+                </div>
+            </PlatformContentCard>
 
             <SetPasswordDialog
                 member={passwordMember}

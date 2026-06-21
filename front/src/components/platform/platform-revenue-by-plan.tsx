@@ -2,17 +2,11 @@
 
 import Link from "next/link";
 import type { PlatformDashboardData } from "@/actions/platform-actions";
+import { PlatformContentCard } from "@/components/layout/platform-page-shell";
 import { PlanBadge } from "@/components/platform/platform-utils";
 import { formatBrl, type PlanDefinition } from "@/lib/platform-license";
 import type { TenantLicensePlan } from "@/types/tenant-types";
 import { Button } from "@/components/ui/button";
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card";
 import { ArrowRight, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -22,18 +16,18 @@ const PLAN_ACCENT: Record<
 > = {
     trial: {
         bar: "bg-amber-500",
-        ring: "ring-amber-500/25",
-        bg: "from-amber-500/10 to-amber-500/5",
+        ring: "ring-amber-500/20",
+        bg: "from-amber-500/12 to-amber-500/4",
     },
     standard: {
         bar: "bg-sky-500",
-        ring: "ring-sky-500/25",
-        bg: "from-sky-500/10 to-sky-500/5",
+        ring: "ring-sky-500/20",
+        bg: "from-sky-500/12 to-sky-500/4",
     },
     professional: {
         bar: "bg-violet-500",
-        ring: "ring-violet-500/25",
-        bg: "from-violet-500/10 to-violet-500/5",
+        ring: "ring-violet-500/20",
+        bg: "from-violet-500/12 to-violet-500/4",
     },
 };
 
@@ -57,17 +51,17 @@ export function PlatformRevenueByPlan({
     const totalRegistered = planBreakdown.reduce((s, r) => s + r.count, 0);
 
     return (
-        <Card className="border-border/70 shadow-sm overflow-hidden">
-            <CardHeader className="border-b border-border/50 bg-muted/20">
+        <PlatformContentCard>
+            <div className="border-b border-black/[0.04] bg-gradient-to-br from-violet-500/[0.04] to-transparent px-6 py-5 dark:border-white/[0.06]">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                        <CardTitle className="text-base">Receita por plano</CardTitle>
-                        <CardDescription className="mt-1 max-w-lg">
+                        <h2 className="text-base font-semibold tracking-tight">Receita por plano</h2>
+                        <p className="mt-1 max-w-lg text-sm text-muted-foreground">
                             MRR estimado = licenças ativas × preço configurado em Planos e
                             preços. Trials não entram na receita.
-                        </CardDescription>
+                        </p>
                     </div>
-                    <Button variant="outline" size="sm" className="shrink-0" asChild>
+                    <Button variant="outline" size="sm" className="shrink-0 rounded-xl" asChild>
                         <Link href="/platform/licenses">
                             <Pencil className="h-3.5 w-3.5" />
                             Editar preços
@@ -75,10 +69,9 @@ export function PlatformRevenueByPlan({
                     </Button>
                 </div>
 
-                {/* Barra empilhada — participação no MRR */}
-                {totalMrrBrl > 0 && (
-                    <div className="mt-4 space-y-2">
-                        <div className="flex h-3 overflow-hidden rounded-full bg-muted">
+                {totalMrrBrl > 0 ? (
+                    <div className="mt-5 space-y-2">
+                        <div className="flex h-2.5 overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
                             {planBreakdown.map((row) => {
                                 const pct = mrrSharePercent(row.mrrBrl, totalMrrBrl);
                                 if (pct <= 0) return null;
@@ -113,11 +106,11 @@ export function PlatformRevenueByPlan({
                             })}
                         </div>
                     </div>
-                )}
+                ) : null}
 
-                <div className="mt-4 flex flex-wrap gap-6 text-sm">
+                <div className="mt-5 flex flex-wrap gap-8">
                     <div>
-                        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                             MRR total
                         </p>
                         <p className="text-2xl font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
@@ -125,21 +118,21 @@ export function PlatformRevenueByPlan({
                         </p>
                     </div>
                     <div>
-                        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                             Licenças ativas
                         </p>
                         <p className="text-2xl font-bold tabular-nums">{totalActive}</p>
                     </div>
                     <div>
-                        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                             Orgs no sistema
                         </p>
                         <p className="text-2xl font-bold tabular-nums">{totalRegistered}</p>
                     </div>
                 </div>
-            </CardHeader>
+            </div>
 
-            <CardContent className="grid gap-4 p-5 sm:grid-cols-3">
+            <div className="grid gap-4 p-5 sm:grid-cols-3">
                 {planBreakdown.map((row) => {
                     const def = plans[row.plan];
                     const accent = PLAN_ACCENT[row.plan];
@@ -151,7 +144,7 @@ export function PlatformRevenueByPlan({
                         <div
                             key={row.plan}
                             className={cn(
-                                "relative flex flex-col rounded-xl border bg-gradient-to-br p-4 ring-1",
+                                "relative flex flex-col rounded-2xl border border-black/[0.04] bg-gradient-to-br p-4 ring-1 dark:border-white/[0.06]",
                                 accent.bg,
                                 accent.ring,
                             )}
@@ -165,12 +158,12 @@ export function PlatformRevenueByPlan({
                             </div>
 
                             <p className="text-sm font-medium leading-snug">{def.label}</p>
-                            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground min-h-[2rem]">
+                            <p className="mt-1 line-clamp-2 min-h-[2rem] text-xs text-muted-foreground">
                                 {def.description}
                             </p>
 
-                            <div className="my-4 border-t border-border/40 pt-4">
-                                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                            <div className="my-4 border-t border-black/[0.04] pt-4 dark:border-white/[0.06]">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                                     {isTrial ? "Custo mensal" : "Receita mensal"}
                                 </p>
                                 <p
@@ -183,62 +176,60 @@ export function PlatformRevenueByPlan({
                                 >
                                     {formatBrl(row.mrrBrl)}
                                 </p>
-                                {!isTrial && totalMrrBrl > 0 && row.mrrBrl > 0 && (
+                                {!isTrial && totalMrrBrl > 0 && row.mrrBrl > 0 ? (
                                     <p className="text-xs text-muted-foreground">
                                         {share}% do MRR total
                                     </p>
-                                )}
+                                ) : null}
                             </div>
 
                             <dl className="mt-auto space-y-2 text-sm">
                                 <div className="flex justify-between gap-2">
                                     <dt className="text-muted-foreground">Ativas</dt>
-                                    <dd className="font-semibold tabular-nums">
-                                        {row.activeCount}
-                                    </dd>
+                                    <dd className="font-semibold tabular-nums">{row.activeCount}</dd>
                                 </div>
                                 <div className="flex justify-between gap-2">
                                     <dt className="text-muted-foreground">Cadastradas</dt>
                                     <dd className="tabular-nums">{row.count}</dd>
                                 </div>
-                                {inactive > 0 && (
+                                {inactive > 0 ? (
                                     <div className="flex justify-between gap-2">
                                         <dt className="text-muted-foreground">Inativas</dt>
                                         <dd className="tabular-nums text-muted-foreground">
                                             {inactive}
                                         </dd>
                                     </div>
-                                )}
-                                <div className="flex justify-between gap-2 border-t border-border/30 pt-2">
+                                ) : null}
+                                <div className="flex justify-between gap-2 border-t border-black/[0.04] pt-2 dark:border-white/[0.06]">
                                     <dt className="text-muted-foreground">Usuários sugeridos</dt>
                                     <dd className="tabular-nums">{def.defaultMaxUsers}</dd>
                                 </div>
                             </dl>
 
-                            {row.activeCount > 0 && !isTrial && (
-                                <p className="mt-3 text-[11px] text-muted-foreground leading-relaxed">
+                            {row.activeCount > 0 && !isTrial ? (
+                                <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
                                     {row.activeCount} × {formatBrl(def.monthlyPriceBrl)} ={" "}
                                     {formatBrl(row.mrrBrl)}
                                 </p>
-                            )}
+                            ) : null}
 
-                            {row.activeCount === 0 && row.count > 0 && (
+                            {row.activeCount === 0 && row.count > 0 ? (
                                 <p className="mt-3 text-[11px] text-amber-700 dark:text-amber-400">
                                     {row.count} org(s) neste plano, nenhuma ativa gerando receita.
                                 </p>
-                            )}
+                            ) : null}
 
-                            {row.count === 0 && (
+                            {row.count === 0 ? (
                                 <p className="mt-3 text-[11px] text-muted-foreground">
                                     Nenhuma organização neste plano ainda.
                                 </p>
-                            )}
+                            ) : null}
                         </div>
                     );
                 })}
-            </CardContent>
+            </div>
 
-            <div className="border-t border-border/50 bg-muted/10 px-5 py-3">
+            <div className="border-t border-black/[0.04] bg-black/[0.02] px-5 py-3 dark:border-white/[0.06] dark:bg-white/[0.02]">
                 <Link
                     href="/platform/organizations"
                     className="inline-flex items-center gap-1 text-xs font-medium text-violet-700 hover:underline dark:text-violet-400"
@@ -247,6 +238,6 @@ export function PlatformRevenueByPlan({
                     <ArrowRight className="h-3 w-3" />
                 </Link>
             </div>
-        </Card>
+        </PlatformContentCard>
     );
 }

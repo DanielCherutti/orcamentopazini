@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { AuditLogEntry } from "@/types/audit-types";
+import { PlatformContentCard } from "@/components/layout/platform-page-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,7 +37,8 @@ export function AuditLogTable({ entries, total, basePath = "" }: Props) {
     }
 
     return (
-        <div className="space-y-4">
+        <PlatformContentCard className="p-5">
+            <div className="space-y-4">
             <div className="flex flex-wrap items-end gap-3">
                 <div className="space-y-1">
                     <Label htmlFor="audit-search" className="text-xs">
@@ -47,7 +49,7 @@ export function AuditLogTable({ entries, total, basePath = "" }: Props) {
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Resumo…"
-                        className="h-9 w-48"
+                        className="h-9 w-48 rounded-xl"
                     />
                 </div>
                 <div className="space-y-1">
@@ -59,16 +61,16 @@ export function AuditLogTable({ entries, total, basePath = "" }: Props) {
                         value={action}
                         onChange={(e) => setAction(e.target.value)}
                         placeholder="product.create"
-                        className="h-9 w-40"
+                        className="h-9 w-40 rounded-xl"
                     />
                 </div>
-                <Button type="button" size="sm" variant="secondary" onClick={applyFilters}>
+                <Button type="button" size="sm" variant="secondary" className="rounded-xl" onClick={applyFilters}>
                     Filtrar
                 </Button>
-                <p className="text-xs text-muted-foreground ml-auto">{total} registro(s)</p>
+                <p className="ml-auto text-xs text-muted-foreground">{total} registro(s)</p>
             </div>
 
-            <div className="rounded-lg border overflow-x-auto">
+            <div className="overflow-x-auto app-table">
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -112,6 +114,7 @@ export function AuditLogTable({ entries, total, basePath = "" }: Props) {
                     </TableBody>
                 </Table>
             </div>
-        </div>
+            </div>
+        </PlatformContentCard>
     );
 }

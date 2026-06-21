@@ -5,11 +5,33 @@ import {
 } from "@/components/layout/platform-breadcrumb-context";
 import { cn } from "@/lib/utils";
 
-export { DashboardContentCard } from "@/components/layout/dashboard-page-shell";
+/**
+ * Painel branco/vidro usado em listas, tabelas e blocos do painel EngHub.
+ */
+export function PlatformContentCard({
+    children,
+    className,
+    padding = true,
+}: {
+    children: ReactNode;
+    className?: string;
+    padding?: boolean;
+}) {
+    return (
+        <div
+            className={cn(
+                "platform-panel overflow-hidden",
+                padding && "p-0",
+                className,
+            )}
+        >
+            {children}
+        </div>
+    );
+}
 
 /**
- * Layout comum das páginas internas do painel EngHub (/platform):
- * fundo suave, faixa violet e cabeçalho alinhado ao app da empresa.
+ * Layout das páginas internas do painel EngHub (/platform).
  */
 export function PlatformPageShell({
     title,
@@ -25,7 +47,6 @@ export function PlatformPageShell({
     description?: string;
     eyebrow?: string;
     action?: ReactNode;
-    /** Trilha exibida no header (sobrescreve inferência por URL). */
     breadcrumbs?: BreadcrumbItem[];
     titleLeading?: ReactNode;
     children: ReactNode;
@@ -37,42 +58,35 @@ export function PlatformPageShell({
     return (
         <>
             {breadcrumbs ? <SetPlatformBreadcrumbs items={breadcrumbs} /> : null}
-            <div className="min-h-[calc(100dvh-3.5rem)] bg-gradient-to-b from-violet-500/[0.04] via-background to-background">
-                <div
-                    className={cn(
-                        "mx-auto space-y-6 px-4 py-7 sm:px-6 lg:px-8 lg:py-9",
-                        maxWidthClass,
-                    )}
-                >
-                    <header className="flex flex-col gap-5 border-b border-border/60 pb-7 sm:flex-row sm:items-end sm:justify-between">
-                        <div className="flex min-w-0 items-start gap-4">
-                            {titleLeading}
-                            <div className="min-w-0 space-y-2">
-                                <div
-                                    className="h-1 w-11 rounded-full bg-violet-500 shadow-[0_0_14px_rgba(139,92,246,0.45)]"
-                                    aria-hidden
-                                />
-                                {eyebrow ? (
-                                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-violet-600 dark:text-violet-400">
-                                        {eyebrow}
-                                    </p>
-                                ) : null}
-                                <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-                                    {title}
-                                </h1>
-                                {description ? (
-                                    <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                                        {description}
-                                    </p>
-                                ) : null}
+            <div className={cn("mx-auto px-4 py-8 sm:px-6 lg:px-8 lg:py-10", maxWidthClass)}>
+                <header className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                    <div className="flex min-w-0 items-start gap-5">
+                        {titleLeading ? (
+                            <div className="shrink-0 rounded-2xl bg-white/80 p-1 shadow-md ring-1 ring-black/[0.04] dark:bg-white/10 dark:ring-white/10">
+                                {titleLeading}
                             </div>
-                        </div>
-                        {action ? (
-                            <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div>
                         ) : null}
-                    </header>
-                    {children}
-                </div>
+                        <div className="min-w-0 space-y-3">
+                            {eyebrow ? (
+                                <span className="inline-flex items-center rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-700 dark:text-violet-300">
+                                    {eyebrow}
+                                </span>
+                            ) : null}
+                            <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                                {title}
+                            </h1>
+                            {description ? (
+                                <p className="max-w-2xl text-base leading-relaxed text-foreground/75">
+                                    {description}
+                                </p>
+                            ) : null}
+                        </div>
+                    </div>
+                    {action ? (
+                        <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div>
+                    ) : null}
+                </header>
+                <div className="space-y-6">{children}</div>
             </div>
         </>
     );

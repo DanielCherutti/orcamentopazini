@@ -29,9 +29,10 @@ function initialsFromEmail(email: string | null | undefined): string {
     return local.slice(0, 2).toUpperCase();
 }
 
-function SectionLabel({ children }: { children: ReactNode }) {
+function SectionLabel({ children, collapsed }: { children: ReactNode; collapsed: boolean }) {
+    if (collapsed) return null;
     return (
-        <p className="px-3 pb-1.5 pt-4 first:pt-0 text-[10px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/40">
+        <p className="px-3 pb-1.5 pt-4 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 first:pt-0">
             {children}
         </p>
     );
@@ -43,36 +44,68 @@ function NavItem({
     children,
     active,
     nested,
+    collapsed,
 }: {
     href: string;
     icon: React.ComponentType<{ className?: string }>;
     children: React.ReactNode;
     active: boolean;
     nested?: boolean;
+    collapsed?: boolean;
 }) {
+    if (collapsed) {
+        return (
+            <Link
+                href={href}
+                title={String(children)}
+                className={cn(
+                    "group relative flex items-center justify-center rounded-xl py-3 text-sm transition-all duration-200",
+                    active
+                        ? "tenant-nav-active text-white"
+                        : "text-slate-300 hover:bg-white/[0.1] hover:text-white",
+                )}
+            >
+                <Icon
+                    className={cn(
+                        "h-[1.125rem] w-[1.125rem] shrink-0",
+                        active ? "text-white" : "text-slate-400 group-hover:text-[color:var(--brand-secondary)]",
+                    )}
+                />
+            </Link>
+        );
+    }
+
     return (
         <Link
             href={href}
             className={cn(
-                "group flex items-center gap-3 rounded-lg text-sm transition-all duration-150",
-                nested ? "py-1.5 pl-3 pr-2 ml-2 border-l-2" : "px-3 py-2",
-                nested && !active && "border-transparent text-sidebar-foreground/65 hover:text-sidebar-foreground",
-                nested && active &&
-                    "border-[color:var(--brand-secondary)] bg-sidebar-accent/60 text-sidebar-foreground font-medium",
+                "group flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-200",
+                nested ? "ml-2 border-l-2 py-2 pl-3 pr-2" : "px-3 py-2.5",
+                nested && !active && "border-transparent text-slate-300 hover:text-white",
+                nested &&
+                    active &&
+                    "border-[color:var(--brand-secondary)] bg-white/[0.08] font-medium text-white",
                 !nested &&
                     (active
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm ring-1 ring-white/10"
-                        : "text-sidebar-foreground/75 hover:bg-sidebar-accent/55 hover:text-sidebar-accent-foreground")
+                        ? "relative tenant-nav-active text-white"
+                        : "text-slate-300 hover:bg-white/[0.1] hover:text-white"),
             )}
         >
             <Icon
                 className={cn(
                     "shrink-0 transition-colors",
-                    nested ? "h-3.5 w-3.5" : "h-[18px] w-[18px]",
-                    active ? "text-sidebar-accent-foreground" : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground/80"
+                    nested ? "h-3.5 w-3.5" : "h-[1.125rem] w-[1.125rem]",
+                    active
+                        ? "text-white"
+                        : nested
+                          ? "text-slate-400"
+                          : "text-slate-400 group-hover:text-[color:var(--brand-secondary)]",
                 )}
             />
             <span className="truncate">{children}</span>
+            {active && !nested ? (
+                <span className="absolute right-2 h-1.5 w-1.5 rounded-full bg-white/90" aria-hidden />
+            ) : null}
         </Link>
     );
 }
@@ -99,115 +132,166 @@ export function Sidebar({
     const isProducts = pathname.startsWith("/dashboard/products");
     const isGroups = pathname.startsWith("/dashboard/products/groups");
     const isProductCatalog =
-        pathname.startsWith("/dashboard/products") && !pathname.startsWith("/dashboard/products/groups");
+        pathname.startsWith("/dashboard/products") &&
+        !pathname.startsWith("/dashboard/products/groups");
 
     return (
         <aside
             className={cn(
-                "fixed left-0 z-20 flex flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-[4px_0_24px_-8px_rgba(0,0,0,0.25)] transition-all duration-300 ease-in-out top-[var(--support-banner-height,0px)] h-[calc(100vh-var(--support-banner-height,0px))]",
-                collapsed ? "w-0 overflow-hidden opacity-0 pointer-events-none" : "w-64 opacity-100"
+                "tenant-sidebar-surface fixed left-0 z-30 flex flex-col bg-[#0c0e14] text-slate-100 transition-[width] duration-300 ease-in-out top-[var(--support-banner-height,0px)] h-[calc(100dvh-var(--support-banner-height,0px))]",
+                collapsed ? "w-[4.75rem]" : "w-64",
             )}
             aria-label="Menu principal"
         >
-            {/* Marca */}
-            <div className="shrink-0 border-b border-sidebar-border bg-gradient-to-br from-sidebar-accent/40 via-sidebar to-sidebar px-4 py-5">
-                <div
-                    className="mb-2 h-1 w-10 rounded-full"
-                    style={{
-                        backgroundColor: "var(--brand-secondary)",
-                        boxShadow: "0 0 12px rgb(var(--brand-secondary-rgb) / 0.45)",
-                    }}
-                />
-                <h2 className="text-lg font-bold tracking-tight text-white">{companyName}</h2>
-                {companySubtitle ? (
-                    <p className="text-[11px] font-medium text-sidebar-foreground/55">{companySubtitle}</p>
-                ) : null}
+            <div
+                className={cn(
+                    "shrink-0 border-b border-white/[0.06] px-4 py-5",
+                    collapsed ? "flex justify-center px-3" : "px-5",
+                )}
+            >
+                <div className={cn("flex items-center gap-3", collapsed && "justify-center")}>
+                    <div
+                        className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl shadow-lg"
+                        style={{
+                            background: `linear-gradient(135deg, var(--primary) 0%, color-mix(in srgb, var(--primary) 70%, var(--brand-secondary)) 100%)`,
+                            boxShadow: "0 8px 24px -8px rgb(var(--primary-rgb) / 0.5)",
+                        }}
+                    >
+                        <span className="text-sm font-bold text-white">
+                            {companyName.slice(0, 1).toUpperCase()}
+                        </span>
+                        <span
+                            className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full ring-2 ring-[#0e1016]"
+                            style={{ backgroundColor: "var(--brand-secondary)" }}
+                            aria-hidden
+                        />
+                    </div>
+                    {!collapsed ? (
+                        <div className="min-w-0">
+                            <h2 className="truncate text-base font-bold tracking-tight text-white">
+                                {companyName}
+                            </h2>
+                            {companySubtitle ? (
+                                <p className="truncate text-[11px] font-medium text-slate-400">{companySubtitle}</p>
+                            ) : null}
+                        </div>
+                    ) : null}
+                </div>
             </div>
 
-            <nav className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-2 pb-3 [scrollbar-gutter:stable]">
-                <SectionLabel>Navegação</SectionLabel>
-                <div className="space-y-0.5">
+            <nav className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-3 py-4 [scrollbar-gutter:stable]">
+                <SectionLabel collapsed={collapsed}>Navegação</SectionLabel>
+                <div className="space-y-1">
                     <NavItem
                         href="/dashboard"
                         icon={LayoutDashboard}
                         active={pathname === "/dashboard"}
+                        collapsed={collapsed}
                     >
                         Início
                     </NavItem>
                 </div>
 
-                <SectionLabel>Catálogo</SectionLabel>
-                <div className="space-y-0.5">
-                    <div>
-                        <button
-                            type="button"
-                            onClick={() => setProductsOpen((v) => !v)}
-                            className={cn(
-                                "flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors",
-                                isProducts
-                                    ? "bg-sidebar-accent/70 text-white ring-1 ring-white/10"
-                                    : "text-sidebar-foreground/75 hover:bg-sidebar-accent/50 hover:text-white"
-                            )}
-                            aria-expanded={productsOpen}
-                        >
-                            <span className="flex items-center gap-3 min-w-0">
-                                <Package
-                                    className={cn(
-                                        "h-[18px] w-[18px] shrink-0",
-                                        isProducts ? "text-[color:var(--brand-secondary)]" : "text-sidebar-foreground/50"
-                                    )}
-                                />
-                                <span className="truncate">Produtos</span>
-                            </span>
+                <SectionLabel collapsed={collapsed}>Catálogo</SectionLabel>
+                <div className="space-y-1">
+                    {collapsed ? (
+                        <>
+                            <NavItem
+                                href="/dashboard/products"
+                                icon={Package}
+                                active={isProductCatalog}
+                                collapsed
+                            >
+                                Produtos
+                            </NavItem>
+                            <NavItem
+                                href="/dashboard/products/groups"
+                                icon={Boxes}
+                                active={isGroups}
+                                collapsed
+                            >
+                                Grupos
+                            </NavItem>
+                        </>
+                    ) : (
+                        <div>
+                            <button
+                                type="button"
+                                onClick={() => setProductsOpen((v) => !v)}
+                                className={cn(
+                                    "flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors",
+                                    isProducts
+                                        ? "tenant-nav-active text-white"
+                                        : "text-slate-300 hover:bg-white/[0.1] hover:text-white",
+                                )}
+                                aria-expanded={productsOpen}
+                            >
+                                <span className="flex min-w-0 items-center gap-3">
+                                    <Package
+                                        className={cn(
+                                            "h-[1.125rem] w-[1.125rem] shrink-0",
+                                            isProducts ? "text-white" : "text-slate-400",
+                                        )}
+                                    />
+                                    <span className="truncate">Produtos</span>
+                                </span>
+                                {productsOpen ? (
+                                    <ChevronDown className="h-4 w-4 shrink-0 opacity-70" />
+                                ) : (
+                                    <ChevronRight className="h-4 w-4 shrink-0 opacity-70" />
+                                )}
+                            </button>
                             {productsOpen ? (
-                                <ChevronDown className="h-4 w-4 shrink-0 opacity-70" />
-                            ) : (
-                                <ChevronRight className="h-4 w-4 shrink-0 opacity-70" />
-                            )}
-                        </button>
-                        {productsOpen && (
-                            <div className="mt-1 space-y-0.5 pb-1">
-                                <NavItem
-                                    href="/dashboard/products"
-                                    icon={Package}
-                                    active={isProductCatalog}
-                                    nested
-                                >
-                                    Cadastro de produtos
-                                </NavItem>
-                                <NavItem
-                                    href="/dashboard/products/groups"
-                                    icon={Boxes}
-                                    active={isGroups}
-                                    nested
-                                >
-                                    Grupos de produtos
-                                </NavItem>
-                            </div>
-                        )}
-                    </div>
+                                <div className="relative mt-1 space-y-0.5 pb-1">
+                                    <NavItem
+                                        href="/dashboard/products"
+                                        icon={Package}
+                                        active={isProductCatalog}
+                                        nested
+                                    >
+                                        Cadastro de produtos
+                                    </NavItem>
+                                    <NavItem
+                                        href="/dashboard/products/groups"
+                                        icon={Boxes}
+                                        active={isGroups}
+                                        nested
+                                    >
+                                        Grupos de produtos
+                                    </NavItem>
+                                </div>
+                            ) : null}
+                        </div>
+                    )}
                 </div>
 
-                <SectionLabel>Operação</SectionLabel>
-                <div className="space-y-0.5">
+                <SectionLabel collapsed={collapsed}>Operação</SectionLabel>
+                <div className="space-y-1">
                     <NavItem
                         href="/budgets"
                         icon={FileSpreadsheet}
                         active={pathname.startsWith("/budgets")}
+                        collapsed={collapsed}
                     >
                         Orçamentos
                     </NavItem>
-                    <NavItem href="/customers" icon={Users} active={pathname.startsWith("/customers")}>
+                    <NavItem
+                        href="/customers"
+                        icon={Users}
+                        active={pathname.startsWith("/customers")}
+                        collapsed={collapsed}
+                    >
                         Clientes
                     </NavItem>
                 </div>
 
-                <SectionLabel>Sistema</SectionLabel>
-                <div className="space-y-0.5">
+                <SectionLabel collapsed={collapsed}>Sistema</SectionLabel>
+                <div className="space-y-1">
                     <NavItem
                         href="/settings"
                         icon={Settings}
                         active={pathname === "/settings"}
+                        collapsed={collapsed}
                     >
                         Configurações
                     </NavItem>
@@ -215,41 +299,58 @@ export function Sidebar({
                         href="/settings/users"
                         icon={UserCog}
                         active={pathname.startsWith("/settings/users")}
+                        collapsed={collapsed}
                     >
                         Usuários
                     </NavItem>
                 </div>
             </nav>
 
-            {/* Usuário */}
-            <div className="shrink-0 border-t border-sidebar-border bg-sidebar-accent/25 p-3">
-                <div className="flex items-center gap-3 rounded-lg border border-sidebar-border/60 bg-sidebar/80 p-2.5 shadow-sm">
-                    <div
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/90 to-primary text-[11px] font-bold text-primary-foreground shadow-inner"
-                        style={{ boxShadow: "0 0 0 2px rgb(var(--brand-secondary-rgb) / 0.35)" }}
-                        aria-hidden
-                    >
-                        {initialsFromEmail(sessionEmail)}
+            <div className="shrink-0 border-t border-white/[0.06] p-3">
+                {!collapsed ? (
+                    <div className="mb-3 flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.04] p-3">
+                        <div
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xs font-bold text-white"
+                            style={{
+                                background: `linear-gradient(135deg, var(--primary) 0%, color-mix(in srgb, var(--primary) 70%, var(--brand-secondary)) 100%)`,
+                            }}
+                            aria-hidden
+                        >
+                            {initialsFromEmail(sessionEmail)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-medium text-slate-200">
+                                {sessionEmail?.split("@")[0] ?? "Usuário"}
+                            </p>
+                            <p
+                                className="truncate text-[10px] text-slate-500"
+                                title={sessionEmail ?? undefined}
+                            >
+                                {sessionEmail ?? "—"}
+                            </p>
+                        </div>
+                        <form action={logoutAction} className="shrink-0">
+                            <button
+                                type="submit"
+                                className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/[0.08] hover:text-red-300"
+                                aria-label="Sair"
+                                title="Sair"
+                            >
+                                <LogOut className="h-4 w-4" />
+                            </button>
+                        </form>
                     </div>
-                    <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-white">
-                            {sessionEmail?.split("@")[0] ?? "Usuário"}
-                        </p>
-                        <p className="truncate text-[11px] text-sidebar-foreground/50" title={sessionEmail ?? undefined}>
-                            {sessionEmail ?? "—"}
-                        </p>
-                    </div>
-                    <form action={logoutAction} className="shrink-0">
+                ) : (
+                    <form action={logoutAction} className="flex justify-center">
                         <button
                             type="submit"
-                            className="rounded-md p-2 text-sidebar-foreground/55 transition-colors hover:bg-destructive/20 hover:text-red-200"
-                            aria-label="Sair"
                             title="Sair"
+                            className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-slate-300 transition-colors hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
                         >
                             <LogOut className="h-4 w-4" />
                         </button>
                     </form>
-                </div>
+                )}
             </div>
         </aside>
     );

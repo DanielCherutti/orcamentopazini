@@ -2,24 +2,16 @@
 
 import Link from "next/link";
 import type { PlatformDashboardData } from "@/actions/platform-actions";
+import { PlatformContentCard } from "@/components/layout/platform-page-shell";
 import { PlatformRevenueByPlan } from "@/components/platform/platform-revenue-by-plan";
 import {
     OrgAvatar,
     PlanBadge,
     UsageBar,
 } from "@/components/platform/platform-utils";
-import {
-    formatBrl,
-} from "@/lib/platform-license";
+import { formatBrl } from "@/lib/platform-license";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card";
 import {
     AlertTriangle,
     ArrowRight,
@@ -50,41 +42,61 @@ function KpiCard({
     accent: "violet" | "emerald" | "sky" | "amber" | "rose";
 }) {
     const accentMap = {
-        violet: "from-violet-500/15 to-violet-500/5 text-violet-600 dark:text-violet-400",
-        emerald: "from-emerald-500/15 to-emerald-500/5 text-emerald-600 dark:text-emerald-400",
-        sky: "from-sky-500/15 to-sky-500/5 text-sky-600 dark:text-sky-400",
-        amber: "from-amber-500/15 to-amber-500/5 text-amber-600 dark:text-amber-400",
-        rose: "from-rose-500/15 to-rose-500/5 text-rose-600 dark:text-rose-400",
+        violet: "from-violet-500 to-indigo-600 shadow-violet-500/25",
+        emerald: "from-emerald-500 to-teal-600 shadow-emerald-500/25",
+        sky: "from-sky-500 to-blue-600 shadow-sky-500/25",
+        amber: "from-amber-500 to-orange-500 shadow-amber-500/25",
+        rose: "from-rose-500 to-pink-600 shadow-rose-500/25",
     };
 
     return (
-        <Card className="border-border/70 shadow-sm overflow-hidden">
-            <CardContent className="flex items-start gap-4 p-5">
-                <div
-                    className={cn(
-                        "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br",
-                        accentMap[accent],
-                    )}
-                >
-                    <Icon className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                    <p className="text-2xl font-bold tracking-tight tabular-nums">{value}</p>
-                    <p className="text-sm font-medium">{label}</p>
-                    {hint && (
-                        <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
-                    )}
-                </div>
-            </CardContent>
-        </Card>
+        <div className="platform-stat-card flex items-start gap-4 p-5">
+            <div
+                className={cn(
+                    "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-lg",
+                    accentMap[accent],
+                )}
+            >
+                <Icon className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 pt-0.5">
+                <p className="text-2xl font-bold tracking-tight tabular-nums">{value}</p>
+                <p className="text-sm font-medium text-foreground/90">{label}</p>
+                {hint ? (
+                    <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
+                ) : null}
+            </div>
+        </div>
+    );
+}
+
+function PanelHeader({
+    title,
+    description,
+    action,
+}: {
+    title: string;
+    description?: string;
+    action?: React.ReactNode;
+}) {
+    return (
+        <div className="flex flex-row items-start justify-between gap-4 border-b border-black/[0.04] px-6 py-5 dark:border-white/[0.06]">
+            <div>
+                <h2 className="text-base font-semibold tracking-tight">{title}</h2>
+                {description ? (
+                    <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+                ) : null}
+            </div>
+            {action}
+        </div>
     );
 }
 
 function AlertIcon({ type }: { type: PlatformDashboardData["alerts"][0]["type"] }) {
-    if (type === "expired") return <XCircle className="h-4 w-4 text-destructive shrink-0" />;
-    if (type === "expiring") return <CalendarClock className="h-4 w-4 text-amber-600 shrink-0" />;
-    if (type === "user_limit") return <Users className="h-4 w-4 text-orange-600 shrink-0" />;
-    return <AlertTriangle className="h-4 w-4 text-muted-foreground shrink-0" />;
+    if (type === "expired") return <XCircle className="h-4 w-4 shrink-0 text-destructive" />;
+    if (type === "expiring") return <CalendarClock className="h-4 w-4 shrink-0 text-amber-600" />;
+    if (type === "user_limit") return <Users className="h-4 w-4 shrink-0 text-orange-600" />;
+    return <AlertTriangle className="h-4 w-4 shrink-0 text-muted-foreground" />;
 }
 
 export function PlatformDashboard({
@@ -98,8 +110,7 @@ export function PlatformDashboard({
     const { summary, planBreakdown, alerts, topByUsers, recentOrganizations } = data;
 
     return (
-        <>
-            <div className="space-y-8">
+        <div className="space-y-8">
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
                 <KpiCard
                     label="MRR estimado"
@@ -108,7 +119,7 @@ export function PlatformDashboard({
                     icon={Wallet}
                     accent="emerald"
                 />
-                {can("billing.view") && (
+                {can("billing.view") ? (
                     <KpiCard
                         label="Receita confirmada (mês)"
                         value={formatBrl(confirmedRevenueCents / 100)}
@@ -116,7 +127,7 @@ export function PlatformDashboard({
                         icon={TrendingUp}
                         accent="emerald"
                     />
-                )}
+                ) : null}
                 <KpiCard
                     label="Organizações ativas"
                     value={summary.activeOrganizations}
@@ -158,73 +169,73 @@ export function PlatformDashboard({
             />
 
             <div className="grid gap-6 lg:grid-cols-2">
-                <Card className="border-border/70 shadow-sm">
-                    <CardHeader className="flex flex-row items-center justify-between">
-                        <div>
-                            <CardTitle className="text-base">Alertas</CardTitle>
-                            <CardDescription>
-                                Licenças, limites e orgs que precisam de atenção.
-                            </CardDescription>
-                        </div>
-                        {alerts.length > 0 && (
-                            <Badge variant="secondary">{alerts.length}</Badge>
-                        )}
-                    </CardHeader>
-                    <CardContent>
+                <PlatformContentCard>
+                    <PanelHeader
+                        title="Alertas"
+                        description="Licenças, limites e orgs que precisam de atenção."
+                        action={
+                            alerts.length > 0 ? (
+                                <Badge variant="secondary" className="rounded-full">
+                                    {alerts.length}
+                                </Badge>
+                            ) : undefined
+                        }
+                    />
+                    <div className="px-2 pb-2">
                         {alerts.length === 0 ? (
-                            <p className="py-8 text-center text-sm text-muted-foreground">
+                            <p className="py-10 text-center text-sm text-muted-foreground">
                                 Nenhum alerta no momento. Tudo em ordem.
                             </p>
                         ) : (
-                            <ul className="divide-y divide-border/60">
+                            <ul className="divide-y divide-black/[0.04] dark:divide-white/[0.06]">
                                 {alerts.map((alert) => (
                                     <li key={`${alert.type}-${alert.organization.id}`}>
                                         <Link
                                             href={`/platform/organizations/${alert.organization.slug}`}
-                                            className="flex items-start gap-3 py-3 transition-colors hover:bg-muted/30 -mx-2 px-2 rounded-lg"
+                                            className="flex items-start gap-3 rounded-xl px-4 py-3 transition-colors hover:bg-violet-500/[0.04]"
                                         >
                                             <AlertIcon type={alert.type} />
                                             <div className="min-w-0 flex-1">
-                                                <p className="font-medium truncate">
+                                                <p className="truncate font-medium">
                                                     {alert.organization.name}
                                                 </p>
                                                 <p className="text-sm text-muted-foreground">
                                                     {alert.detail}
                                                 </p>
                                             </div>
-                                            <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground/50 mt-0.5" />
+                                            <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/50" />
                                         </Link>
                                     </li>
                                 ))}
                             </ul>
                         )}
-                    </CardContent>
-                </Card>
+                    </div>
+                </PlatformContentCard>
 
-                <Card className="border-border/70 shadow-sm">
-                    <CardHeader>
-                        <CardTitle className="text-base">Top clientes por usuários</CardTitle>
-                        <CardDescription>Organizações com maior base de usuários.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
+                <PlatformContentCard>
+                    <PanelHeader
+                        title="Top clientes por usuários"
+                        description="Organizações com maior base de usuários."
+                    />
+                    <div className="px-4 pb-4">
                         {topByUsers.length === 0 ? (
-                            <p className="py-8 text-center text-sm text-muted-foreground">
+                            <p className="py-10 text-center text-sm text-muted-foreground">
                                 Nenhuma organização cadastrada.
                             </p>
                         ) : (
-                            <ul className="space-y-3">
+                            <ul className="space-y-1">
                                 {topByUsers.map((org, i) => (
                                     <li key={org.id}>
                                         <Link
                                             href={`/platform/organizations/${org.slug}`}
-                                            className="flex items-center gap-3 rounded-lg p-2 -mx-2 transition-colors hover:bg-muted/40"
+                                            className="flex items-center gap-3 rounded-xl p-3 transition-colors hover:bg-violet-500/[0.04]"
                                         >
-                                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-bold tabular-nums">
+                                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-xs font-bold tabular-nums text-violet-700 dark:text-violet-300">
                                                 {i + 1}
                                             </span>
                                             <OrgAvatar name={org.name} size="sm" />
                                             <div className="min-w-0 flex-1">
-                                                <p className="font-medium truncate">{org.name}</p>
+                                                <p className="truncate font-medium">{org.name}</p>
                                                 <PlanBadge plan={org.license_plan} />
                                             </div>
                                             <UsageBar used={org.member_count} max={org.max_users} />
@@ -233,54 +244,51 @@ export function PlatformDashboard({
                                 ))}
                             </ul>
                         )}
-                    </CardContent>
-                </Card>
+                    </div>
+                </PlatformContentCard>
             </div>
 
-            <Card className="border-border/70 shadow-sm">
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                        <CardTitle className="text-base">Organizações recentes</CardTitle>
-                        <CardDescription>Últimas empresas cadastradas na plataforma.</CardDescription>
-                    </div>
-                    <Button variant="ghost" size="sm" asChild>
-                        <Link href="/platform/organizations">
-                            Ver todas
-                            <ArrowRight className="h-4 w-4" />
-                        </Link>
-                    </Button>
-                </CardHeader>
-                <CardContent>
-                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                        {recentOrganizations.map((org) => (
-                            <Link
-                                key={org.id}
-                                href={`/platform/organizations/${org.slug}`}
-                                className="group flex items-center gap-3 rounded-xl border border-border/60 bg-card p-4 shadow-sm transition-all hover:border-violet-500/30 hover:shadow-md"
-                            >
-                                <OrgAvatar name={org.name} />
-                                <div className="min-w-0 flex-1">
-                                    <p className="font-medium truncate group-hover:text-violet-700 dark:group-hover:text-violet-300">
-                                        {org.name}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground font-mono truncate">
-                                        {org.slug}
-                                    </p>
-                                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                                        <PlanBadge plan={org.license_plan} />
-                                        <span className="text-xs text-muted-foreground">
-                                            {org.member_count} usuário
-                                            {org.member_count === 1 ? "" : "s"}
-                                        </span>
-                                    </div>
-                                </div>
-                                <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-violet-500" />
+            <PlatformContentCard>
+                <PanelHeader
+                    title="Organizações recentes"
+                    description="Últimas empresas cadastradas na plataforma."
+                    action={
+                        <Button variant="ghost" size="sm" asChild>
+                            <Link href="/platform/organizations">
+                                Ver todas
+                                <ArrowRight className="h-4 w-4" />
                             </Link>
-                        ))}
-                    </div>
-                </CardContent>
-            </Card>
-            </div>
-        </>
+                        </Button>
+                    }
+                />
+                <div className="grid gap-3 p-5 sm:grid-cols-2 xl:grid-cols-3">
+                    {recentOrganizations.map((org) => (
+                        <Link
+                            key={org.id}
+                            href={`/platform/organizations/${org.slug}`}
+                            className="group flex items-center gap-3 rounded-2xl border border-black/[0.05] bg-white/50 p-4 transition-all hover:border-violet-500/30 hover:bg-white hover:shadow-md dark:border-white/[0.06] dark:bg-white/[0.02] dark:hover:bg-white/[0.05]"
+                        >
+                            <OrgAvatar name={org.name} />
+                            <div className="min-w-0 flex-1">
+                                <p className="truncate font-medium group-hover:text-violet-700 dark:group-hover:text-violet-300">
+                                    {org.name}
+                                </p>
+                                <p className="truncate font-mono text-xs text-muted-foreground">
+                                    {org.slug}
+                                </p>
+                                <div className="mt-2 flex flex-wrap items-center gap-2">
+                                    <PlanBadge plan={org.license_plan} />
+                                    <span className="text-xs text-muted-foreground">
+                                        {org.member_count} usuário
+                                        {org.member_count === 1 ? "" : "s"}
+                                    </span>
+                                </div>
+                            </div>
+                            <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-violet-500" />
+                        </Link>
+                    ))}
+                </div>
+            </PlatformContentCard>
+        </div>
     );
 }

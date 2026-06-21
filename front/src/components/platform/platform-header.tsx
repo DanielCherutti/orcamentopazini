@@ -4,7 +4,6 @@ import { PanelLeft, PanelLeftClose } from "lucide-react";
 import { PlatformBreadcrumbs } from "@/components/layout/platform-breadcrumb-context";
 import { usePlatformSidebar } from "@/components/layout/platform-sidebar-context";
 import { PlatformOrgAccessButton } from "@/components/platform/platform-org-access-button";
-import { PRODUCT_NAME } from "@/lib/product-brand";
 import { cn } from "@/lib/utils";
 
 export function PlatformHeader() {
@@ -13,30 +12,23 @@ export function PlatformHeader() {
     return (
         <header
             className={cn(
-                "sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between gap-4",
-                "border-b border-border/80 bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-6",
+                "platform-glass-header sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between gap-4 px-4 sm:px-6",
             )}
         >
             <div className="flex min-w-0 flex-1 items-center gap-3">
                 <button
                     type="button"
                     onClick={toggleSidebar}
-                    className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
-                    aria-label={collapsed ? "Abrir menu lateral" : "Fechar menu lateral"}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-black/[0.06] bg-white/60 text-muted-foreground transition-colors hover:bg-white hover:text-foreground dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
+                    aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
                 >
                     {collapsed ? (
-                        <PanelLeft className="h-5 w-5" />
+                        <PanelLeft className="h-4 w-4" />
                     ) : (
-                        <PanelLeftClose className="h-5 w-5" />
+                        <PanelLeftClose className="h-4 w-4" />
                     )}
                 </button>
-                <div className="hidden min-w-0 sm:block">
-                    <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-violet-600 dark:text-violet-400">
-                        {PRODUCT_NAME}
-                    </p>
-                    <PlatformBreadcrumbs />
-                </div>
-                <div className="min-w-0 sm:hidden">
+                <div className="min-w-0">
                     <PlatformBreadcrumbs />
                 </div>
             </div>

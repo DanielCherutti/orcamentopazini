@@ -553,12 +553,12 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
             )}
 
             {/* Desktop Table */}
-            <div className="hidden md:block rounded-md border border-border overflow-hidden">
+            <div className="hidden md:block app-table">
                 <table className="w-full text-sm">
-                    <thead className="bg-muted/30 border-b border-border">
+                    <thead>
                         <tr>
                             <th
-                                className="h-10 px-4 text-left font-medium text-muted-foreground w-[180px] cursor-pointer hover:bg-muted/50 transition-colors group"
+                                className="h-11 px-4 text-left w-[180px] cursor-pointer hover:bg-black/[0.03] transition-colors group"
                                 onClick={() => handleSort("code")}
                             >
                                 <div className="flex items-center">
@@ -567,7 +567,7 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                                 </div>
                             </th>
                             <th
-                                className="h-10 px-4 text-left font-medium text-muted-foreground cursor-pointer hover:bg-muted/50 transition-colors group"
+                                className="h-11 px-4 text-left cursor-pointer hover:bg-black/[0.03] transition-colors group"
                                 onClick={() => handleSort("title")}
                             >
                                 <div className="flex items-center">
@@ -576,7 +576,7 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                                 </div>
                             </th>
                             <th
-                                className="h-10 px-4 text-left font-medium text-muted-foreground min-w-[11rem] max-w-[16rem] cursor-pointer hover:bg-muted/50 transition-colors group"
+                                className="h-11 px-4 text-left min-w-[11rem] max-w-[16rem] cursor-pointer hover:bg-black/[0.03] transition-colors group"
                                 onClick={() => handleSort("client_name")}
                             >
                                 <div className="flex items-center">
@@ -585,7 +585,7 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                                 </div>
                             </th>
                             <th
-                                className="h-10 px-4 text-center font-medium text-muted-foreground min-w-[168px] w-[168px] cursor-pointer hover:bg-muted/50 transition-colors group"
+                                className="h-11 px-4 text-center min-w-[168px] w-[168px] cursor-pointer hover:bg-black/[0.03] transition-colors group"
                                 onClick={() => handleSort("status")}
                             >
                                 <div className="flex items-center justify-center gap-1">
@@ -594,7 +594,7 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                                 </div>
                             </th>
                             <th
-                                className="h-10 px-4 text-left font-medium text-muted-foreground w-[160px] cursor-pointer hover:bg-muted/50 transition-colors group"
+                                className="h-11 px-4 text-left w-[160px] cursor-pointer hover:bg-black/[0.03] transition-colors group"
                                 onClick={() => handleSort("total_value")}
                             >
                                 <div className="flex items-center">
@@ -603,7 +603,7 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                                 </div>
                             </th>
                             <th
-                                className="h-10 px-4 text-left font-medium text-muted-foreground w-[140px] cursor-pointer hover:bg-muted/50 transition-colors group"
+                                className="h-11 px-4 text-left w-[140px] cursor-pointer hover:bg-black/[0.03] transition-colors group"
                                 onClick={() => handleSort("created_at")}
                             >
                                 <div className="flex items-center">
@@ -611,7 +611,7 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                                     {getSortIcon("created_at")}
                                 </div>
                             </th>
-                            <th className="h-10 px-4 text-right font-medium text-muted-foreground min-w-[132px] w-[132px]">
+                            <th className="h-11 px-4 text-right min-w-[132px] w-[132px]">
                                 Ações
                             </th>
                         </tr>

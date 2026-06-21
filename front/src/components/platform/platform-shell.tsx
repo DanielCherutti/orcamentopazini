@@ -2,7 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, CreditCard, LayoutDashboard, LogOut, ScrollText, Shield, Users } from "lucide-react";
+import {
+    Building2,
+    CreditCard,
+    LayoutDashboard,
+    LogOut,
+    ScrollText,
+    Shield,
+    Sparkles,
+    Users,
+} from "lucide-react";
 import { logoutAction } from "@/actions/auth-actions";
 import { PlatformBreadcrumbProvider } from "@/components/layout/platform-breadcrumb-context";
 import {
@@ -17,34 +26,47 @@ import { PRODUCT_NAME, PRODUCT_TAGLINE } from "@/lib/product-brand";
 import { usePlatformPermissions } from "@/components/platform/platform-permissions-context";
 import { PLATFORM_ROLE_LABELS, type PlatformRole } from "@/types/platform-types";
 
+const SIDEBAR_EXPANDED = "17rem";
+const SIDEBAR_COLLAPSED = "4.75rem";
+
 function NavLink({
     href,
     icon: Icon,
-    children,
+    label,
     active,
+    collapsed,
 }: {
     href: string;
     icon: React.ComponentType<{ className?: string }>;
-    children: React.ReactNode;
+    label: string;
     active: boolean;
+    collapsed: boolean;
 }) {
     return (
         <Link
             href={href}
+            title={collapsed ? label : undefined}
             className={cn(
-                "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all duration-150",
+                "group relative flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-200",
+                collapsed ? "justify-center px-0 py-3" : "px-3 py-2.5",
                 active
-                    ? "bg-white/10 font-medium text-white shadow-sm ring-1 ring-white/10"
-                    : "text-slate-400 hover:bg-white/5 hover:text-slate-100",
+                    ? "platform-nav-active text-white"
+                    : "text-slate-300 hover:bg-white/[0.1] hover:text-white",
             )}
         >
             <Icon
                 className={cn(
-                    "h-[18px] w-[18px] shrink-0",
-                    active ? "text-violet-300" : "text-slate-500 group-hover:text-slate-300",
+                    "h-[1.125rem] w-[1.125rem] shrink-0 transition-colors",
+                    active ? "text-white" : "text-slate-400 group-hover:text-violet-300",
                 )}
             />
-            <span className="truncate">{children}</span>
+            {!collapsed ? <span className="truncate">{label}</span> : null}
+            {active && !collapsed ? (
+                <span
+                    className="absolute right-2 h-1.5 w-1.5 rounded-full bg-white/90"
+                    aria-hidden
+                />
+            ) : null}
         </Link>
     );
 }
@@ -73,99 +95,133 @@ function PlatformShellInner({
         pathname === "/platform/admins";
     const isAudit = pathname === "/platform/audit" || pathname.startsWith("/platform/audit/");
 
+    const navItems = [
+        { href: "/platform", icon: LayoutDashboard, label: "Dashboard", active: isDashboard },
+        {
+            href: "/platform/organizations",
+            icon: Building2,
+            label: "Organizações",
+            active: isOrgs,
+        },
+        {
+            href: "/platform/licenses",
+            icon: CreditCard,
+            label: "Planos e preços",
+            active: isLicenses,
+        },
+        ...(can("audit.view")
+            ? [{ href: "/platform/audit", icon: ScrollText, label: "Auditoria", active: isAudit }]
+            : []),
+        ...(can("team.manage")
+            ? [{ href: "/platform/team", icon: Users, label: "Equipe", active: isTeam }]
+            : []),
+    ] as const;
+
     return (
-        <div className="min-h-dvh bg-slate-50 dark:bg-background">
+        <div
+            className="platform-app min-h-dvh"
+            style={
+                {
+                    "--platform-sidebar-width": collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED,
+                } as React.CSSProperties
+            }
+        >
             <aside
                 className={cn(
-                    "fixed inset-y-0 left-0 z-30 flex flex-col border-r border-slate-800/80 bg-slate-950 text-slate-100 shadow-[4px_0_32px_-8px_rgba(0,0,0,0.45)] transition-all duration-300 ease-in-out",
-                    collapsed ? "w-0 overflow-hidden opacity-0 pointer-events-none" : "w-64 opacity-100",
+                    "platform-sidebar-surface fixed inset-y-0 left-0 z-30 flex flex-col bg-[#110f1a] text-slate-100 transition-[width] duration-300 ease-in-out",
+                    collapsed ? "w-[4.75rem]" : "w-[17rem]",
                 )}
                 aria-label="Admin da plataforma"
             >
-                <div className="border-b border-slate-800/80 bg-gradient-to-br from-slate-900 via-slate-950 to-violet-950/40 px-5 py-6">
-                    <div
-                        className="mb-3 h-1 w-10 rounded-full bg-violet-400 shadow-[0_0_16px_rgba(167,139,250,0.55)]"
-                        aria-hidden
-                    />
-                    <div className="flex items-center gap-2">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/20 ring-1 ring-violet-400/30">
-                            <Shield className="h-4 w-4 text-violet-300" />
+                <div
+                    className={cn(
+                        "border-b border-white/[0.06] px-4 py-5",
+                        collapsed ? "flex justify-center" : "px-5",
+                    )}
+                >
+                    <div className={cn("flex items-center gap-3", collapsed && "justify-center")}>
+                        <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-lg shadow-violet-900/40">
+                            <Shield className="h-5 w-5 text-white" />
+                            <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-400 ring-2 ring-[#110f1a]">
+                                <Sparkles className="h-2.5 w-2.5 text-emerald-950" />
+                            </span>
                         </div>
-                        <div className="min-w-0">
-                            <p className="text-sm font-bold tracking-tight text-white">{PRODUCT_NAME}</p>
-                            <p className="text-[10px] leading-snug text-slate-500">{PRODUCT_TAGLINE}</p>
-                        </div>
+                        {!collapsed ? (
+                            <div className="min-w-0">
+                                <p className="text-base font-bold tracking-tight text-white">
+                                    {PRODUCT_NAME}
+                                </p>
+                                <p className="text-[11px] leading-snug text-slate-500">
+                                    {PRODUCT_TAGLINE}
+                                </p>
+                            </div>
+                        ) : null}
                     </div>
                 </div>
 
                 <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-                    <p className="px-3 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600">
-                        Revenda
-                    </p>
-                    <NavLink href="/platform" icon={LayoutDashboard} active={isDashboard}>
-                        Dashboard
-                    </NavLink>
-                    <NavLink href="/platform/organizations" icon={Building2} active={isOrgs}>
-                        Organizações
-                    </NavLink>
-                    <NavLink href="/platform/licenses" icon={CreditCard} active={isLicenses}>
-                        Planos e preços
-                    </NavLink>
-                    {can("audit.view") && (
-                        <NavLink href="/platform/audit" icon={ScrollText} active={isAudit}>
-                            Auditoria
-                        </NavLink>
-                    )}
-                    {can("team.manage") && (
-                        <NavLink href="/platform/team" icon={Users} active={isTeam}>
-                            Equipe
-                        </NavLink>
-                    )}
+                    {!collapsed ? (
+                        <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                            Operação
+                        </p>
+                    ) : null}
+                    {navItems.map((item) => (
+                        <NavLink
+                            key={item.href}
+                            href={item.href}
+                            icon={item.icon}
+                            label={item.label}
+                            active={item.active}
+                            collapsed={collapsed}
+                        />
+                    ))}
                 </nav>
 
-                <div className="border-t border-slate-800/80 bg-slate-900/50 p-3">
-                    <div className="mb-3 flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/80 p-2.5">
-                        <div
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-[11px] font-bold text-white"
-                            aria-hidden
-                        >
-                            {initialsFromEmail(sessionEmail)}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-medium text-slate-200">
-                                {sessionEmail ?? "—"}
-                            </p>
-                            <p className="text-[10px] text-slate-500">
-                                {PLATFORM_ROLE_LABELS[platformRole]}
-                            </p>
-                        </div>
-                    </div>
-                    <PlatformOrgAccessButton />
-                    <form action={logoutAction}>
+                <div className="border-t border-white/[0.06] p-3">
+                    {!collapsed ? (
+                        <>
+                            <div className="mb-3 flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.04] p-3">
+                                <div
+                                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 text-xs font-bold text-white"
+                                    aria-hidden
+                                >
+                                    {initialsFromEmail(sessionEmail)}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <p className="truncate text-xs font-medium text-slate-200">
+                                        {sessionEmail ?? "—"}
+                                    </p>
+                                    <p className="text-[10px] text-slate-500">
+                                        {PLATFORM_ROLE_LABELS[platformRole]}
+                                    </p>
+                                </div>
+                            </div>
+                            <PlatformOrgAccessButton />
+                        </>
+                    ) : null}
+                    <form action={logoutAction} className={collapsed ? "flex justify-center" : undefined}>
                         <button
                             type="submit"
-                            className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-300 transition-colors hover:border-slate-600 hover:bg-slate-800 hover:text-white"
+                            title={collapsed ? "Sair" : undefined}
+                            className={cn(
+                                "flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] text-sm text-slate-300 transition-colors hover:border-white/20 hover:bg-white/[0.08] hover:text-white",
+                                collapsed ? "h-11 w-11 p-0" : "w-full px-3 py-2.5",
+                            )}
                         >
-                            <LogOut className="h-4 w-4" />
-                            Sair
+                            <LogOut className="h-4 w-4 shrink-0" />
+                            {!collapsed ? "Sair" : null}
                         </button>
                     </form>
                 </div>
             </aside>
 
             <div
-                className={cn(
-                    "transition-[padding-left] duration-300 ease-in-out",
-                    collapsed ? "pl-0" : "pl-64",
-                )}
+                className="min-h-dvh transition-[padding-left] duration-300 ease-in-out"
+                style={{ paddingLeft: collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED }}
             >
-                <div className="relative flex min-h-dvh flex-col">
-                    <div
-                        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_40%_at_50%_-10%,rgba(139,92,246,0.07),transparent)]"
-                        aria-hidden
-                    />
+                <div className="platform-mesh-bg relative flex min-h-dvh flex-col">
                     <PlatformHeader />
-                    <div className="relative flex-1">{children}</div>
+                    <main className="relative flex-1">{children}</main>
                 </div>
             </div>
         </div>

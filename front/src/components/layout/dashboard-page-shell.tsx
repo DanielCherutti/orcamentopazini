@@ -5,12 +5,12 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
- * Layout comum para páginas internas (catálogo, clientes, orçamentos):
- * fundo suave, faixa da marca e cabeçalho alinhado ao design Pazini.
+ * Layout comum para páginas internas do tenant (catálogo, clientes, orçamentos).
  */
 export function DashboardPageShell({
     title,
     description,
+    eyebrow,
     action,
     backLink,
     children,
@@ -18,6 +18,7 @@ export function DashboardPageShell({
 }: {
     title: string;
     description?: string;
+    eyebrow?: string;
     action?: ReactNode;
     backLink?: { href: string; label: string };
     children: ReactNode;
@@ -27,53 +28,50 @@ export function DashboardPageShell({
         maxWidth === "4xl" ? "max-w-4xl" : maxWidth === "5xl" ? "max-w-5xl" : "max-w-7xl";
 
     return (
-        <div className="min-h-[calc(100dvh-4rem)] bg-gradient-to-b from-primary/[0.045] via-background to-background">
-            <div
-                className={cn(
-                    "mx-auto space-y-6 px-4 py-7 sm:px-6 lg:px-8 lg:py-9",
-                    maxWidthClass,
-                )}
-            >
-                <header className="flex flex-col gap-5 border-b border-border/60 pb-7">
-                    {backLink ? (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="-ml-2 h-8 w-fit gap-1.5 text-muted-foreground"
-                            asChild
-                        >
-                            <Link href={backLink.href}>
-                                <ArrowLeft className="size-4" />
-                                {backLink.label}
-                            </Link>
-                        </Button>
-                    ) : null}
-                    <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-                        <div className="min-w-0 space-y-2">
-                            <div
-                                className="h-1 w-11 rounded-full"
+        <div className={cn("mx-auto px-4 py-8 sm:px-6 lg:px-8 lg:py-10", maxWidthClass)}>
+            <header className="mb-8 flex flex-col gap-6">
+                {backLink ? (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="-ml-2 h-8 w-fit gap-1.5 rounded-xl text-muted-foreground"
+                        asChild
+                    >
+                        <Link href={backLink.href}>
+                            <ArrowLeft className="size-4" />
+                            {backLink.label}
+                        </Link>
+                    </Button>
+                ) : null}
+                <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+                    <div className="min-w-0 space-y-3">
+                        {eyebrow ? (
+                            <span
+                                className="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]"
                                 style={{
-                                    backgroundColor: "var(--brand-secondary)",
-                                    boxShadow: "0 0 14px rgb(var(--brand-secondary-rgb) / 0.4)",
+                                    borderColor: "rgb(var(--primary-rgb) / 0.2)",
+                                    backgroundColor: "rgb(var(--primary-rgb) / 0.08)",
+                                    color: "var(--primary)",
                                 }}
-                                aria-hidden
-                            />
-                            <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-                                {title}
-                            </h1>
+                            >
+                                {eyebrow}
+                            </span>
+                        ) : null}
+                        <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                            {title}
+                        </h1>
                             {description ? (
-                                <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                                    {description}
-                                </p>
-                            ) : null}
-                        </div>
-                        {action ? (
-                            <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div>
+                                <p className="max-w-2xl text-base leading-relaxed text-foreground/75">
+                                {description}
+                            </p>
                         ) : null}
                     </div>
-                </header>
-                {children}
-            </div>
+                    {action ? (
+                        <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div>
+                    ) : null}
+                </div>
+            </header>
+            <div className="space-y-6">{children}</div>
         </div>
     );
 }
@@ -91,10 +89,7 @@ export function DashboardContentCard({
     return (
         <div
             className={cn(
-                "rounded-2xl border border-border/80 bg-card text-card-foreground",
-                "shadow-[0_1px_3px_rgba(0,0,0,0.06),0_8px_24px_-8px_rgba(46,58,135,0.08)]",
-                "dark:shadow-[0_1px_3px_rgba(0,0,0,0.2)]",
-                "ring-1 ring-black/[0.03] dark:ring-white/[0.06]",
+                "tenant-panel overflow-hidden text-card-foreground",
                 padding && "p-5 sm:p-7",
                 className,
             )}

@@ -41,26 +41,24 @@ function KpiCard({
   className?: string;
 }) {
   return (
-    <Link
-      href={href}
-      className={cn(
-        "group relative overflow-hidden rounded-2xl border border-border/80 bg-card p-5 shadow-sm ring-1 ring-black/[0.03] transition-all",
-        "hover:border-primary/25 hover:shadow-md hover:ring-primary/10",
-        "dark:ring-white/[0.05]",
-        className
-      )}
-    >
+    <Link href={href} className={cn("tenant-stat-card group block p-5", className)}>
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            {label}
+          </p>
           <p className="text-3xl font-bold tabular-nums tracking-tight text-foreground">{value}</p>
-          <p className="flex items-center gap-1 text-xs font-medium text-primary opacity-90 group-hover:opacity-100">
+          <p className="flex items-center gap-1 text-xs font-medium opacity-90 group-hover:opacity-100" style={{ color: "var(--primary)" }}>
             Abrir
             <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
           </p>
         </div>
         <div
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white shadow-lg"
+          style={{
+            background: `linear-gradient(135deg, var(--primary) 0%, color-mix(in srgb, var(--primary) 70%, var(--brand-secondary)) 100%)`,
+            boxShadow: "0 8px 20px -6px rgb(var(--primary-rgb) / 0.45)",
+          }}
           aria-hidden
         >
           <Icon className="h-5 w-5" />
@@ -77,7 +75,6 @@ export function DashboardHomePanel({
 }: {
   data: DashboardHomeSummary | null;
   errorMessage?: string | null;
-  /** Configurações → URL da logo, ou `NEXT_PUBLIC_BRAND_LOGO_URL` */
   logoUrl?: string | null;
 }) {
   const counts = data?.counts ?? {
@@ -106,23 +103,26 @@ export function DashboardHomePanel({
         </div>
       ) : null}
 
-      {/* Marca + boas-vindas */}
       <DashboardContentCard className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-4">
-          <DashboardWelcomeLogo logoUrl={logoUrl} alt="Logomarca" />
+          <div className="shrink-0 rounded-2xl bg-white/80 p-1 shadow-md ring-1 ring-black/[0.04] dark:bg-white/10 dark:ring-white/10">
+            <DashboardWelcomeLogo logoUrl={logoUrl} alt="Logomarca" />
+          </div>
           <div className="min-w-0 space-y-1">
             <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <Sparkles className="h-4 w-4 shrink-0 text-[color:var(--brand-secondary)]" aria-hidden />
+              <Sparkles
+                className="h-4 w-4 shrink-0 text-[color:var(--brand-secondary)]"
+                aria-hidden
+              />
               Bem-vindo ao painel
             </p>
-            <p className="max-w-md text-sm text-muted-foreground leading-relaxed">
+            <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
               Acompanhe números do negócio e retome orçamentos recentes.
             </p>
           </div>
         </div>
       </DashboardContentCard>
 
-      {/* KPIs */}
       <section aria-labelledby="dashboard-kpis-heading">
         <h2 id="dashboard-kpis-heading" className="sr-only">
           Indicadores
@@ -141,8 +141,7 @@ export function DashboardHomePanel({
       </section>
 
       <div className="grid gap-6 lg:grid-cols-5">
-        {/* Atalhos */}
-        <DashboardContentCard className="lg:col-span-2 space-y-4">
+        <DashboardContentCard className="space-y-4 lg:col-span-2">
           <div>
             <h2 className="text-base font-semibold text-foreground">Atalhos rápidos</h2>
             <p className="mt-1 text-sm text-muted-foreground">Comece um fluxo novo em um clique.</p>
@@ -152,9 +151,14 @@ export function DashboardHomePanel({
               <li key={href}>
                 <Link
                   href={href}
-                  className="flex items-center gap-3 rounded-xl border border-border/70 bg-muted/25 px-3 py-3 text-sm font-medium transition-colors hover:border-primary/30 hover:bg-primary/[0.04]"
+                  className="flex items-center gap-3 rounded-xl border border-black/[0.05] bg-white/50 px-3 py-3 text-sm font-medium transition-colors hover:border-[color:rgb(var(--primary-rgb)/0.25)] hover:bg-[color:rgb(var(--primary-rgb)/0.04)] dark:border-white/[0.06] dark:bg-white/[0.02]"
                 >
-                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-background text-primary shadow-sm ring-1 ring-border/60">
+                  <span
+                    className="flex h-9 w-9 items-center justify-center rounded-lg text-white shadow-sm"
+                    style={{
+                      background: `linear-gradient(135deg, var(--primary) 0%, color-mix(in srgb, var(--primary) 80%, var(--brand-secondary)) 100%)`,
+                    }}
+                  >
                     <Icon className="h-4 w-4" />
                   </span>
                   <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
@@ -167,8 +171,7 @@ export function DashboardHomePanel({
           </ul>
         </DashboardContentCard>
 
-        {/* Orçamentos recentes */}
-        <DashboardContentCard className="lg:col-span-3 space-y-4">
+        <DashboardContentCard className="space-y-4 lg:col-span-3">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold text-foreground">Orçamentos recentes</h2>
@@ -176,28 +179,25 @@ export function DashboardHomePanel({
                 Até 5 registros, do mais recente ao mais antigo.
               </p>
             </div>
-            <Link
-              href="/budgets"
-              className="text-sm font-medium text-primary hover:underline"
-            >
+            <Link href="/budgets" className="text-sm font-medium hover:underline" style={{ color: "var(--primary)" }}>
               Ver todos
             </Link>
           </div>
 
           {recent.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border/80 bg-muted/15 px-4 py-10 text-center text-sm text-muted-foreground">
+            <div className="rounded-xl border border-dashed border-black/[0.08] bg-black/[0.02] px-4 py-10 text-center text-sm text-muted-foreground dark:border-white/[0.08] dark:bg-white/[0.02]">
               Nenhum orçamento ainda.{" "}
-              <Link href="/budgets/new" className="font-medium text-primary hover:underline">
+              <Link href="/budgets/new" className="font-medium hover:underline" style={{ color: "var(--primary)" }}>
                 Criar primeiro orçamento
               </Link>
             </div>
           ) : (
-            <ul className="divide-y divide-border/70 rounded-xl border border-border/80 overflow-hidden">
+            <ul className="overflow-hidden rounded-xl border border-black/[0.05] divide-y divide-black/[0.04] dark:border-white/[0.06] dark:divide-white/[0.06]">
               {recent.map((b) => (
                 <li key={b.id}>
                   <Link
                     href={b.href}
-                    className="flex flex-col gap-1 px-4 py-3.5 transition-colors hover:bg-primary/[0.04] sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col gap-1 px-4 py-3.5 transition-colors hover:bg-[color:rgb(var(--primary-rgb)/0.04)] sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0">
                       <p className="truncate font-medium text-foreground">
@@ -212,7 +212,7 @@ export function DashboardHomePanel({
                     </div>
                     <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground sm:text-sm">
                       <time dateTime={b.createdAt ?? undefined}>{formatShortDate(b.createdAt)}</time>
-                      <ArrowRight className="h-4 w-4 text-primary opacity-70" aria-hidden />
+                      <ArrowRight className="h-4 w-4 opacity-70" style={{ color: "var(--primary)" }} aria-hidden />
                     </div>
                   </Link>
                 </li>
