@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 
 import {
@@ -6,8 +7,8 @@ import {
     normalizeHex,
 } from "@/lib/branding-theme";
 import { PRODUCT_NAME, PRODUCT_TAGLINE } from "@/lib/product-brand";
-import { resolveHostKind } from "@/lib/tenant-host";
-import { resolveTenantFromHost } from "@/lib/tenant-host-resolve";
+import { resolveHostKind, type HostTenantResolution } from "@/lib/tenant-host";
+import { resolveBrandingTenantFromHost } from "@/lib/tenant-host-resolve";
 import { getDb, isTokenExpiredError, resetDb } from "@/lib/surreal";
 import { tenantRecordId } from "@/lib/tenant-query";
 
@@ -31,7 +32,20 @@ export function getProductDisplayBranding(): HostDisplayBranding {
     };
 }
 
-async function loadTenantPublicBranding(tenantId: string): Promise<HostDisplayBranding | null> {
+function fallbackNameForOrgHost(resolution: HostTenantResolution): string {
+    if (resolution.kind === "subdomain") {
+        return resolution.subdomain;
+    }
+    if (resolution.kind === "custom") {
+        return resolution.customDomain;
+    }
+    return "Empresa";
+}
+
+async function loadTenantPublicBranding(
+    tenantId: string,
+    tenantDisplayName: string,
+): Promise<HostDisplayBranding> {
     try {
         const db = await getDb();
         const result = await db.query<
@@ -50,26 +64,26 @@ async function loadTenantPublicBranding(tenantId: string): Promise<HostDisplayBr
             { tenantId: tenantRecordId(tenantId) },
         );
         const row = result[0]?.[0];
-        if (!row) return null;
 
         const primary =
-            normalizeHex(row.primary_color != null ? String(row.primary_color) : undefined) ??
+            normalizeHex(row?.primary_color != null ? String(row.primary_color) : undefined) ??
             BRAND_DEFAULT_PRIMARY;
         const secondary =
-            normalizeHex(row.secondary_color != null ? String(row.secondary_color) : undefined) ??
+            normalizeHex(row?.secondary_color != null ? String(row.secondary_color) : undefined) ??
             BRAND_DEFAULT_SECONDARY;
 
-        const companyName = row.company_name != null ? String(row.company_name).trim() : "";
-        if (!companyName) return null;
+        const configuredName =
+            row?.company_name != null ? String(row.company_name).trim() : "";
+        const companyName = configuredName || tenantDisplayName.trim() || "Empresa";
 
         return {
             company_name: companyName,
             company_header_subtitle:
-                row.company_header_subtitle != null
+                row?.company_header_subtitle != null
                     ? String(row.company_header_subtitle).trim() || undefined
                     : undefined,
             company_logo_url:
-                row.company_logo_url != null && String(row.company_logo_url).trim() !== ""
+                row?.company_logo_url != null && String(row.company_logo_url).trim() !== ""
                     ? String(row.company_logo_url).trim()
                     : undefined,
             primary_color: primary,
@@ -79,7 +93,12 @@ async function loadTenantPublicBranding(tenantId: string): Promise<HostDisplayBr
     } catch (error) {
         console.error("loadTenantPublicBranding:", error);
         if (isTokenExpiredError(error)) resetDb();
-        return null;
+        return {
+            company_name: tenantDisplayName.trim() || "Empresa",
+            primary_color: BRAND_DEFAULT_PRIMARY,
+            secondary_color: BRAND_DEFAULT_SECONDARY,
+            isProductHost: false,
+        };
     }
 }
 
@@ -88,7 +107,13 @@ async function resolveHostHeader(): Promise<string | null> {
     return h.get("x-forwarded-host") ?? h.get("host");
 }
 
-/** Marca exibida no login e no shell conforme o Host (produto vs org por subdomínio). */
+async function resolveTenantIdFromHeaders(): Promise<string | null> {
+    const h = await headers();
+    const fromProxy = h.get("x-resolved-tenant-id")?.trim();
+    return fromProxy || null;
+}
+
+/** Marca exibida no login, convite e shell conforme o Host (produto vs org). */
 export async function getHostDisplayBranding(): Promise<HostDisplayBranding> {
     const host = await resolveHostHeader();
     const resolution = resolveHostKind(host);
@@ -97,18 +122,17 @@ export async function getHostDisplayBranding(): Promise<HostDisplayBranding> {
         return getProductDisplayBranding();
     }
 
-    const { tenant } = await resolveTenantFromHost(host);
-    if (!tenant?.id) {
-        return getProductDisplayBranding();
-    }
+    const headerTenantId = await resolveTenantIdFromHeaders();
+    const { tenant } = await resolveBrandingTenantFromHost(host);
+    const tenantId = tenant?.id ?? headerTenantId;
+    const tenantName = tenant?.name ?? "";
 
-    const tenantBranding = await loadTenantPublicBranding(tenant.id);
-    if (tenantBranding) {
-        return tenantBranding;
+    if (tenantId) {
+        return loadTenantPublicBranding(tenantId, tenantName);
     }
 
     return {
-        company_name: tenant.name.trim() || tenant.slug,
+        company_name: fallbackNameForOrgHost(resolution),
         primary_color: BRAND_DEFAULT_PRIMARY,
         secondary_color: BRAND_DEFAULT_SECONDARY,
         isProductHost: false,
@@ -120,5 +144,23 @@ export function loginSubtitleForBranding(branding: HostDisplayBranding): string 
     if (branding.isProductHost) {
         return `${PRODUCT_TAGLINE} — entre com sua conta do portal`;
     }
+    if (branding.company_header_subtitle) {
+        return `${branding.company_header_subtitle} — entre com sua conta do portal`;
+    }
     return "Entre com sua conta do portal";
+}
+
+/** Título da aba do browser conforme host (EngHub vs nome da org). */
+export async function buildHostPageMetadata(pageTitle?: string): Promise<Metadata> {
+    const branding = await getHostDisplayBranding();
+    const title = pageTitle ?? (branding.isProductHost ? "Entrar" : branding.company_name);
+    return {
+        title: {
+            default: title,
+            template: `%s | ${branding.company_name}`,
+        },
+        description: branding.isProductHost
+            ? PRODUCT_TAGLINE
+            : `${branding.company_name} — portal comercial`,
+    };
 }

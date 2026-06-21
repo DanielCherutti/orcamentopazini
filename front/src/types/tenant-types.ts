@@ -24,6 +24,18 @@ export type Tenant = {
     billing_phone?: string | null;
     asaas_customer_id?: string | null;
     billing_enabled?: boolean;
+    company_cnpj?: string | null;
+    company_ie?: string | null;
+    company_contact_name?: string | null;
+    company_contact_phone?: string | null;
+    company_contact_email?: string | null;
+    company_cep?: string | null;
+    company_street?: string | null;
+    company_number?: string | null;
+    company_complement?: string | null;
+    company_neighborhood?: string | null;
+    company_city?: string | null;
+    company_state?: string | null;
     created_at?: string;
     updated_at?: string;
 };

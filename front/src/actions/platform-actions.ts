@@ -31,6 +31,11 @@ import { getTenantPublicOrigin } from "@/lib/tenant-public-origin";
 import { RESERVED_SUBDOMAINS } from "@/lib/tenant-host";
 import { passwordHashLooksValid } from "@/lib/password-hash-present";
 import { resolveTenantRef } from "@/actions/platform-helpers";
+import {
+    normalizeOrganizationCompanyInput,
+    type OrganizationCompanyFormValues,
+    type OrganizationCompanyInput,
+} from "@/lib/organization-company";
 import { auditPlatformAction } from "@/lib/audit-log";
 
 function slugify(input: string): string {
@@ -72,6 +77,23 @@ function serializeTenant(row: Record<string, unknown>): Tenant {
         billing_phone: row.billing_phone != null ? String(row.billing_phone) : null,
         asaas_customer_id: row.asaas_customer_id != null ? String(row.asaas_customer_id) : null,
         billing_enabled: row.billing_enabled === true,
+        company_cnpj: row.company_cnpj != null ? String(row.company_cnpj) : null,
+        company_ie: row.company_ie != null ? String(row.company_ie) : null,
+        company_contact_name:
+            row.company_contact_name != null ? String(row.company_contact_name) : null,
+        company_contact_phone:
+            row.company_contact_phone != null ? String(row.company_contact_phone) : null,
+        company_contact_email:
+            row.company_contact_email != null ? String(row.company_contact_email) : null,
+        company_cep: row.company_cep != null ? String(row.company_cep) : null,
+        company_street: row.company_street != null ? String(row.company_street) : null,
+        company_number: row.company_number != null ? String(row.company_number) : null,
+        company_complement:
+            row.company_complement != null ? String(row.company_complement) : null,
+        company_neighborhood:
+            row.company_neighborhood != null ? String(row.company_neighborhood) : null,
+        company_city: row.company_city != null ? String(row.company_city) : null,
+        company_state: row.company_state != null ? String(row.company_state) : null,
         created_at: row.created_at != null ? String(row.created_at) : undefined,
         updated_at: row.updated_at != null ? String(row.updated_at) : undefined,
     };
@@ -294,18 +316,34 @@ export async function listPlatformOrganizationsAction(): Promise<{
     }
 }
 
+function billingPrefillFromCompany(
+    company: OrganizationCompanyInput,
+    legalName: string,
+): Record<string, unknown> {
+    const prefill: Record<string, unknown> = {};
+    if (company.company_cnpj) prefill.billing_cpf_cnpj = company.company_cnpj;
+    if (legalName) prefill.billing_name = legalName;
+    if (company.company_contact_phone) prefill.billing_phone = company.company_contact_phone;
+    if (company.company_contact_email) prefill.billing_email = company.company_contact_email;
+    return prefill;
+}
+
 export async function createPlatformOrganizationAction(input: {
     name: string;
     slug?: string;
     max_users?: number;
     license_plan?: TenantLicensePlan;
     license_expires_at?: string;
+    company?: OrganizationCompanyFormValues;
 }): Promise<{ success: boolean; data?: Tenant; error?: string }> {
     const auth = await assertPlatformSession("orgs.write");
     if (!auth.ok) return { success: false, error: auth.error };
 
-    const name = input.name?.trim();
-    if (!name) return { success: false, error: "Nome é obrigatório" };
+    const companyNorm = input.company
+        ? normalizeOrganizationCompanyInput(input.company)
+        : {};
+    const name = (input.company?.legalName.trim() || input.name?.trim());
+    if (!name) return { success: false, error: "Nome / razão social é obrigatório" };
 
     const slug = slugify(input.slug?.trim() || name);
     if (!slug) return { success: false, error: "Slug inválido" };
@@ -339,6 +377,8 @@ export async function createPlatformOrganizationAction(input: {
             max_users: maxUsers,
             license_plan: plan,
             license_expires_at: licenseExpires,
+            ...companyNorm,
+            ...billingPrefillFromCompany(companyNorm, name),
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
         });
@@ -362,13 +402,75 @@ export async function createPlatformOrganizationAction(input: {
             resourceId: tenant.id,
             tenantId: tenant.id,
             summary: `Organização criada: ${name}`,
-            metadata: { slug, license_plan: plan },
+            metadata: {
+                slug,
+                license_plan: plan,
+                ...(companyNorm.company_cnpj ? { cnpj: companyNorm.company_cnpj } : {}),
+            },
         });
         return { success: true, data: toPlain(tenant) };
     } catch (error) {
         console.error("createPlatformOrganizationAction:", error);
         if (isTokenExpiredError(error)) resetDb();
         return { success: false, error: "Erro ao criar organização" };
+    }
+}
+
+export async function updatePlatformOrganizationCompanyAction(input: {
+    tenantId: string;
+    company: OrganizationCompanyFormValues;
+}): Promise<{ success: boolean; data?: Tenant; error?: string }> {
+    const auth = await assertPlatformSession("orgs.write");
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const tenantId = input.tenantId?.trim();
+    if (!tenantId) return { success: false, error: "Organização inválida" };
+
+    const legalName = input.company.legalName.trim();
+    if (!legalName) return { success: false, error: "Razão social é obrigatória" };
+
+    const companyNorm = normalizeOrganizationCompanyInput(input.company);
+    const patch: Record<string, unknown> = {
+        name: legalName,
+        updated_at: new Date().toISOString(),
+        ...companyNorm,
+    };
+
+    const db = await getDb();
+    try {
+        const rid = await resolveTenantRef(db, tenantId);
+        const canonicalId = recordIdToString(rid)!;
+        await db.update(rid).merge(patch);
+
+        await db.query(
+            `UPDATE proposal_settings SET company_name = $name, updated_at = time::now()
+             WHERE tenant_id = $tenantId`,
+            { name: legalName, tenantId: tenantRecordId(canonicalId) },
+        );
+
+        const raw = await db.select<Record<string, unknown>>(rid);
+        const row = Array.isArray(raw) ? raw[0] : raw;
+        if (!row) return { success: false, error: "Organização não encontrada" };
+
+        revalidatePath("/platform/organizations");
+        revalidatePath(`/platform/organizations/${String(row.slug ?? canonicalId)}`);
+
+        const serialized = serializeTenant(row);
+        await auditPlatformAction({
+            action: "org.company_update",
+            resourceType: "org",
+            resourceId: canonicalId,
+            tenantId: canonicalId,
+            summary: `Cadastro da empresa ${serialized.name} atualizado`,
+        });
+        return { success: true, data: toPlain(serialized) };
+    } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
+        console.error("updatePlatformOrganizationCompanyAction:", error);
+        if (isTokenExpiredError(error)) resetDb();
+        return { success: false, error: "Erro ao salvar cadastro da empresa" };
     }
 }
 

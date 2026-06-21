@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { loginAction } from "@/actions/auth-actions";
-import { getPublicProposalBrandingAction } from "@/actions/settings-actions";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,12 +7,12 @@ import { Label } from "@/components/ui/label";
 import { LoginHighlightsCard } from "@/components/auth/login-highlights-card";
 import { DashboardWelcomeLogo } from "@/components/dashboard/dashboard-welcome-logo";
 import { brandingCSSProperties } from "@/lib/branding-theme";
-import { PRODUCT_TAGLINE } from "@/lib/product-brand";
+import { getHostDisplayBranding, loginSubtitleForBranding, buildHostPageMetadata } from "@/lib/host-branding";
 import { AlertCircle, CheckCircle2, Lock, Mail } from "lucide-react";
 
-export const metadata: Metadata = {
-    title: "Entrar",
-};
+export async function generateMetadata(): Promise<Metadata> {
+    return buildHostPageMetadata("Entrar");
+}
 
 export default async function LoginPage({
     searchParams,
@@ -21,9 +20,8 @@ export default async function LoginPage({
     searchParams: Promise<{ error?: string; success?: string }>;
 }) {
     const { error, success } = await searchParams;
-    const branding = await getPublicProposalBrandingAction();
-    const hostBranding = await getHostDisplayBranding();
-    const loginSubtitle = loginSubtitleForBranding(hostBranding);
+    const branding = await getHostDisplayBranding();
+    const loginSubtitle = loginSubtitleForBranding(branding);
     const themeStyle = brandingCSSProperties(branding.primary_color, branding.secondary_color);
 
     const envLogo = process.env.NEXT_PUBLIC_BRAND_LOGO_URL?.trim();

@@ -10,10 +10,10 @@ import {
 } from "@/lib/rate-limit";
 import { verifySessionToken, type ImpersonationPayload } from "@/lib/session-token";
 import { tenantMatchesHost } from "@/lib/tenant-host";
-import { resolveTenantFromHost } from "@/lib/tenant-host-resolve";
+import { resolveTenantFromHost, resolveBrandingTenantFromHost } from "@/lib/tenant-host-resolve";
 
-/** Páginas acessíveis sem sessão completa (login e seleção de tenant). */
-const PUBLIC_PAGE_PATHS = ["/", "/select-tenant"];
+/** Páginas acessíveis sem sessão completa (login, convite e seleção de tenant). */
+const PUBLIC_PAGE_PATHS = ["/", "/select-tenant", "/convite"];
 
 function getSessionSecret(): string | undefined {
     const s = process.env.JWT_SECRET?.trim();
@@ -171,8 +171,13 @@ export async function proxy(request: NextRequest) {
 
     if (isPublicPage(pathname)) {
         const res = NextResponse.next();
-        if (hostResolved.tenant) {
-            res.headers.set("x-resolved-tenant-id", hostResolved.tenant.id);
+        let tenantId = hostResolved.tenant?.id ?? null;
+        if (!tenantId && (hostResolved.resolution.kind === "subdomain" || hostResolved.resolution.kind === "custom")) {
+            const brandingResolved = await resolveBrandingTenantFromHost(hostHeader);
+            tenantId = brandingResolved.tenant?.id ?? null;
+        }
+        if (tenantId) {
+            res.headers.set("x-resolved-tenant-id", tenantId);
         }
         return res;
     }

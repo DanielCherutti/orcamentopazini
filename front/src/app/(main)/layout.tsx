@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getSessionEmail } from "@/actions/auth-actions";
 import { getProposalSettingsAction } from "@/actions/settings-actions";
@@ -5,7 +6,14 @@ import { LayoutShell } from "@/components/layout/layout-shell";
 import { SidebarProvider } from "@/components/layout/sidebar-context";
 import { MainAppProviders } from "@/components/providers/main-app-providers";
 import { brandingCSSProperties } from "@/lib/branding-theme";
-import { getHostDisplayBranding } from "@/lib/host-branding";
+import { buildHostPageMetadata, getHostDisplayBranding } from "@/lib/host-branding";
+import { getSessionContext } from "@/lib/tenant-context";
+import { SupportModeBanner } from "@/components/platform/support-mode-banner";
+import { SupportModeLayoutProvider } from "@/components/platform/support-mode-layout-provider";
+
+export async function generateMetadata(): Promise<Metadata> {
+    return buildHostPageMetadata();
+}
 
 export default async function DashboardLayout({
     children,

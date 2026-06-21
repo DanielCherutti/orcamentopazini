@@ -7,7 +7,7 @@ import {
   BRAND_DEFAULT_SECONDARY,
   normalizeHex,
 } from "@/lib/branding-theme";
-import { DEFAULT_TENANT_RECORD_ID } from "@/lib/tenant-constants";
+import { getHostDisplayBranding } from "@/lib/host-branding";
 import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { revalidatePath } from "next/cache";

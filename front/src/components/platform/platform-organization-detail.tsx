@@ -6,6 +6,7 @@ import type { OrganizationListItem, PlatformOrgMember, PlatformOrganizationMetri
 import {
     updatePlatformOrganizationAction,
     updatePlatformOrganizationBrandingAction,
+    updatePlatformOrganizationCompanyAction,
     updateTenantSubdomainAction,
     setCustomDomainAction,
     verifyCustomDomainAction,
@@ -18,7 +19,9 @@ import { ImpersonateOrganizationDialog } from "@/components/platform/impersonate
 import { AuditLogTable } from "@/components/platform/audit-log-table";
 import { PlatformOrgBillingSection } from "@/components/platform/platform-org-billing-section";
 import { PlatformOrgUsersSection } from "@/components/platform/platform-org-users-section";
+import { OrganizationCompanyFields } from "@/components/platform/organization-company-fields";
 import { getTenantPublicOrigin } from "@/lib/tenant-public-origin";
+import { organizationCompanyFromTenant } from "@/lib/organization-company";
 import { getAppTenantDomain } from "@/lib/tenant-host";
 import { PlatformBrandPreview } from "@/components/platform/platform-brand-preview";
 import { PlanBadge, UsageBar } from "@/components/platform/platform-utils";
@@ -41,7 +44,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar, CreditCard, Globe, Loader2, Palette, Receipt, Save, ScrollText, Users } from "lucide-react";
+import { Calendar, CreditCard, Globe, Loader2, Palette, Receipt, Save, ScrollText, Users, Building2 } from "lucide-react";
 import { usePlatformPermissions } from "@/components/platform/platform-permissions-context";
 import { toast } from "@/lib/toast";
 import type { TenantLicensePlan } from "@/types/tenant-types";
@@ -136,6 +139,7 @@ export function PlatformOrganizationDetail({
     const [appPublicUrl, setAppPublicUrl] = useState(branding?.app_public_url ?? "");
     const [subdomain, setSubdomain] = useState(organization.subdomain ?? organization.slug);
     const [customDomain, setCustomDomain] = useState(organization.custom_domain ?? "");
+    const [company, setCompany] = useState(() => organizationCompanyFromTenant(organization));
     const tenantDomain = getAppTenantDomain();
     const publicOrigin = getTenantPublicOrigin({ ...organization, subdomain });
 
@@ -155,6 +159,24 @@ export function PlatformOrganizationDetail({
                 return;
             }
             toast.success("Licença atualizada");
+            router.refresh();
+        });
+    }
+
+    function saveCompany(e: React.FormEvent) {
+        e.preventDefault();
+        startTransition(async () => {
+            const res = await updatePlatformOrganizationCompanyAction({
+                tenantId: organization.id,
+                company,
+            });
+            if (!res.success) {
+                toast.error(res.error ?? "Erro ao salvar cadastro");
+                return;
+            }
+            setName(company.legalName);
+            setCompanyName(company.legalName);
+            toast.success("Cadastro da empresa salvo");
             router.refresh();
         });
     }
@@ -219,6 +241,13 @@ export function PlatformOrganizationDetail({
                         >
                             <CreditCard className="h-4 w-4" />
                             Licença
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="company"
+                            className="gap-2 rounded-none border-b-2 border-transparent px-4 pb-3 pt-1 data-[state=active]:border-violet-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                        >
+                            <Building2 className="h-4 w-4" />
+                            Empresa
                         </TabsTrigger>
                         <TabsTrigger
                             value="access"
@@ -365,6 +394,40 @@ export function PlatformOrganizationDetail({
                                             )}
                                         </Button>
                                     </div>
+                                </form>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    <TabsContent value="company" className="mt-2">
+                        <Card className="border-border/70 shadow-sm">
+                            <CardHeader>
+                                <CardTitle className="text-base">Cadastro da empresa</CardTitle>
+                                <CardDescription>
+                                    CNPJ, endereço e contato do responsável. Consultas automáticas
+                                    de CNPJ (Brasil API) e CEP (ViaCEP).
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <form onSubmit={saveCompany} className="space-y-4">
+                                    <OrganizationCompanyFields
+                                        values={company}
+                                        onChange={(patch) =>
+                                            setCompany((prev) => ({ ...prev, ...patch }))
+                                        }
+                                        disabled={pending || !canWrite}
+                                        onLegalNameResolved={(legalName) => setName(legalName)}
+                                    />
+                                    {canWrite && (
+                                        <Button type="submit" disabled={pending}>
+                                            {pending ? (
+                                                <Loader2 className="size-4 animate-spin" />
+                                            ) : (
+                                                <Save className="size-4" />
+                                            )}
+                                            Salvar cadastro
+                                        </Button>
+                                    )}
                                 </form>
                             </CardContent>
                         </Card>

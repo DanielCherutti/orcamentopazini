@@ -36,6 +36,30 @@ function serializeTenantRow(row: Record<string, unknown>): Tenant {
     };
 }
 
+/** Resolve tenant para exibição de marca (inclui domínio customizado ainda não verificado). */
+export async function resolveBrandingTenantFromHost(
+    hostHeader: string | null | undefined,
+): Promise<ResolvedHostTenant> {
+    const resolved = await resolveTenantFromHost(hostHeader);
+    if (resolved.tenant) return resolved;
+
+    const resolution = resolveHostKind(hostHeader);
+    if (resolution.kind !== "custom") {
+        return resolved;
+    }
+
+    const db = await getDb();
+    const rows = await db.query<[Array<Record<string, unknown>>]>(
+        `SELECT * FROM tenant
+         WHERE deleted_at IS NONE
+           AND custom_domain = $domain
+         LIMIT 1`,
+        { domain: resolution.customDomain.toLowerCase() },
+    );
+    const row = rows[0]?.[0];
+    return { resolution, tenant: row ? serializeTenantRow(row) : null };
+}
+
 /** Resolve tenant a partir do header Host (subdomínio ou domínio customizado). */
 export async function resolveTenantFromHost(
     hostHeader: string | null | undefined,
