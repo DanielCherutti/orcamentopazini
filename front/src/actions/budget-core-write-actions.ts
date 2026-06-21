@@ -296,7 +296,7 @@ export async function syncDraftPricesAction(
         let updatedCount = 0;
         for (const item of items) {
             const product = item.product_id as Record<string, unknown> | null;
-            if (!product) continue;
+            if (!product || product.is_temporary === true) continue;
 
             const currentUnitPrice = Number(product.equipmentPrice || 0);
             const currentLaborCost = Number(product.assemblyPrice || 0);

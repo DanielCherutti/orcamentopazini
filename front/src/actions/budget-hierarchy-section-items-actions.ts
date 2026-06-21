@@ -24,6 +24,13 @@ import {
     assertSectionsInActiveTenant,
 } from "@/lib/budget-tenant";
 import { auditTenantAction } from "@/lib/audit-log";
+import {
+    generateTemporaryProductCode,
+    parseTemporaryProductInput,
+    resolveAssemblyPrice,
+    type TemporaryProductInput,
+} from "@/lib/products/temporary-product";
+import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
 
 /** Próximo `order_index` na seção (múltiplos de 10, alinhado a `reorderSectionItemsAction`). */
 async function nextSectionItemOrderIndex(
@@ -177,6 +184,7 @@ async function serializeBudgetItemsFromRawQueryRows(
                     name: product.name,
                     unit: product.unit,
                     imageUrl: product.imageUrl ?? product.image_url ?? undefined,
+                    is_temporary: Boolean(product.is_temporary),
                 };
             }
             return it;
@@ -291,6 +299,7 @@ async function hydrateLightItemsProductData(
                     name: p.name,
                     unit: p.unit,
                     imageUrl: p.imageUrl ?? p.image_url ?? undefined,
+                    is_temporary: Boolean(p.is_temporary),
                 };
                 byId.set(rawId, normalized);
                 byId.set(clean, normalized);
@@ -709,6 +718,125 @@ export async function addItemAction(sectionId: string, budgetId: string, product
         console.error("Error adding item:", error);
         if (isTokenExpiredError(error)) resetDb();
         return { success: false, error: "Falha ao adicionar item" };
+    }
+}
+
+const DEFAULT_COMPANY_ID = 0;
+
+async function ensureUniqueTemporaryProductCode(
+    db: Awaited<ReturnType<typeof getDb>>,
+    tenantId: string,
+    preferred?: string,
+): Promise<string> {
+    const tenantRid = tenantRecordId(tenantId);
+    let candidate = (preferred?.trim() || generateTemporaryProductCode()).toUpperCase();
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+        const existing = await db.query<[Array<{ id: unknown }>]>(
+            `SELECT id FROM product WHERE code = $code AND company_id = $company_id AND tenant_id = $tenantId LIMIT 1`,
+            { code: candidate, company_id: DEFAULT_COMPANY_ID, tenantId: tenantRid },
+        );
+        if (!existing[0]?.length) return candidate;
+        candidate = generateTemporaryProductCode();
+    }
+
+    throw new Error("Não foi possível gerar código único para o produto temporário");
+}
+
+export async function addTemporaryProductToSectionAction(
+    sectionId: string,
+    budgetId: string,
+    rawProduct: TemporaryProductInput,
+    quantity: number,
+) {
+    const auth = await assertWriteActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const parsed = parseTemporaryProductInput(rawProduct);
+    if (!parsed.ok) {
+        return {
+            success: false,
+            error: parsed.error,
+            fieldErrors: parsed.fieldErrors,
+        };
+    }
+
+    if (!Number.isFinite(quantity) || quantity < 1) {
+        return { success: false, error: "Quantidade inválida" };
+    }
+
+    const gate = await assertBudgetChildInActiveTenant("budget_section", sectionId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
+
+    const db = await getDb();
+    try {
+        const tenantId = await requireActiveTenantId();
+        const productInput = parsed.data;
+        const code = await ensureUniqueTemporaryProductCode(db, tenantId, productInput.code);
+        const assemblyPrice = resolveAssemblyPrice(productInput);
+        const budgetRecordId = requireRecordId("budget", budgetId);
+
+        const created = await db.create(new Table("product")).content({
+            code,
+            description: productInput.description.trim(),
+            detailedDescription: productInput.detailedDescription?.trim() || undefined,
+            unit: productInput.unit.trim(),
+            equipmentPrice: productInput.equipmentPrice,
+            assemblyPrice,
+            assemblyPriceType: productInput.assemblyPriceType ?? "fixed",
+            assemblyPricePercentage:
+                productInput.assemblyPriceType === "percentage"
+                    ? productInput.assemblyPricePercentage ?? null
+                    : null,
+            imageUrl: productInput.imageUrl?.trim() || undefined,
+            group_ids: [],
+            attachments: [],
+            company_id: DEFAULT_COMPANY_ID,
+            tenant_id: tenantRecordId(tenantId),
+            is_temporary: true,
+            source_budget_id: budgetRecordId,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        });
+
+        const product = Array.isArray(created) ? created[0] : created;
+        if (!product?.id) throw new Error("Falha ao criar produto temporário");
+
+        const productId = String(product.id);
+        const productName = productInput.description.trim();
+        const unitPrice = productInput.equipmentPrice;
+        const laborCost = assemblyPrice;
+
+        const newItemId = await createBudgetItemInSection(
+            db,
+            sectionId,
+            budgetId,
+            productId,
+            productName,
+            unitPrice,
+            laborCost,
+            quantity,
+            productInput.unit.trim(),
+            code,
+        );
+
+        await recalculateBudgetTotal(budgetId);
+        revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.add_temporary",
+            resourceType: "budget_section",
+            resourceId: sectionId,
+            summary: "Produto temporário adicionado ao trecho",
+            metadata: { budgetId, productId, itemId: newItemId, code },
+        });
+        return { success: true, itemId: newItemId, productId };
+    } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
+        console.error("addTemporaryProductToSectionAction error:", error);
+        if (isTokenExpiredError(error)) resetDb();
+        return { success: false, error: "Falha ao adicionar produto temporário" };
     }
 }
 

@@ -68,7 +68,7 @@ export async function getDashboardHomeSummaryAction(): Promise<{
       recentRes,
     ] = await Promise.all([
       db.query<[{ count: number }]>(
-        `SELECT count() FROM product WHERE company_id = $company_id AND tenant_id = $tenantId GROUP ALL`,
+        `SELECT count() FROM product WHERE company_id = $company_id AND tenant_id = $tenantId AND (is_temporary IS NONE OR is_temporary = false) GROUP ALL`,
         { company_id: DEFAULT_COMPANY_ID, tenantId: tenantRecordId(tenantId) }
       ),
       db.query<[{ count: number }]>(

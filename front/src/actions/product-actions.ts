@@ -30,6 +30,9 @@ export type Product = {
     group_ids?: string[];
     attachments?: Attachment[];
     created_at?: string;
+    /** Produto criado só para um orçamento — oculto do catálogo. */
+    is_temporary?: boolean;
+    source_budget_id?: string;
 };
 
 const TABLE_NAME = "product";
@@ -88,6 +91,10 @@ function serializeProduct(product: Record<string, unknown>): Product {
             ? JSON.parse(JSON.stringify(product.attachments))
             : [],
         created_at: product.created_at ? String(product.created_at) : undefined,
+        is_temporary: Boolean(product.is_temporary),
+        source_budget_id: product.source_budget_id
+            ? safeId(product.source_budget_id)
+            : undefined,
     };
 }
 
@@ -118,7 +125,7 @@ export async function getProductsAction(params?: {
     try {
         const db = await getDb();
         const tenantId = await requireActiveTenantId();
-        let sql = `SELECT * FROM ${TABLE_NAME} WHERE company_id = $company_id AND tenant_id = $tenantId`;
+        let sql = `SELECT * FROM ${TABLE_NAME} WHERE company_id = $company_id AND tenant_id = $tenantId AND (is_temporary IS NONE OR is_temporary = false)`;
         const queryParams: Record<string, string | number | ReturnType<typeof tenantRecordId>> = {
             company_id: DEFAULT_COMPANY_ID,
             tenantId: tenantRecordId(tenantId),
