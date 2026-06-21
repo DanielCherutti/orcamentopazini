@@ -1,23 +1,23 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 
-interface SidebarContextValue {
+interface PlatformSidebarContextValue {
     collapsed: boolean;
     toggleSidebar: () => void;
     setCollapsed: (value: boolean) => void;
 }
 
-const SidebarContext = createContext<SidebarContextValue | null>(null);
+const PlatformSidebarContext = createContext<PlatformSidebarContextValue | null>(null);
 
-const STORAGE_KEY = "sidebar-collapsed";
+const STORAGE_KEY = "platform-sidebar-collapsed";
 
 function getInitialCollapsed(): boolean {
     if (typeof window === "undefined") return false;
     return localStorage.getItem(STORAGE_KEY) === "true";
 }
 
-export function SidebarProvider({ children }: { children: ReactNode }) {
+export function PlatformSidebarProvider({ children }: { children: ReactNode }) {
     const [collapsed, setCollapsedState] = useState(getInitialCollapsed);
 
     const setCollapsed = useCallback((value: boolean) => {
@@ -34,16 +34,16 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     }, []);
 
     return (
-        <SidebarContext.Provider value={{ collapsed, toggleSidebar, setCollapsed }}>
+        <PlatformSidebarContext.Provider value={{ collapsed, toggleSidebar, setCollapsed }}>
             {children}
-        </SidebarContext.Provider>
+        </PlatformSidebarContext.Provider>
     );
 }
 
-export function useSidebar() {
-    const context = useContext(SidebarContext);
+export function usePlatformSidebar() {
+    const context = useContext(PlatformSidebarContext);
     if (!context) {
-        throw new Error("useSidebar must be used within a SidebarProvider");
+        throw new Error("usePlatformSidebar must be used within PlatformSidebarProvider");
     }
     return context;
 }

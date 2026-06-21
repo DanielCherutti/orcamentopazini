@@ -29,7 +29,7 @@ export default async function DashboardHomePage() {
     return (
         <DashboardPageShell
             title="Início"
-            description="Resumo do cadastro e acesso rápido à operação do dia a dia."
+            description="Indicadores, atalhos e orçamentos recentes."
         >
             <DashboardHomePanel
                 data={summary.success ? summary.data ?? null : null}

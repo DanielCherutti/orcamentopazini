@@ -1,4 +1,7 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
@@ -9,32 +12,65 @@ export function DashboardPageShell({
     title,
     description,
     action,
+    backLink,
     children,
+    maxWidth = "7xl",
 }: {
     title: string;
     description?: string;
     action?: ReactNode;
+    backLink?: { href: string; label: string };
     children: ReactNode;
+    maxWidth?: "4xl" | "5xl" | "7xl";
 }) {
+    const maxWidthClass =
+        maxWidth === "4xl" ? "max-w-4xl" : maxWidth === "5xl" ? "max-w-5xl" : "max-w-7xl";
+
     return (
         <div className="min-h-[calc(100dvh-4rem)] bg-gradient-to-b from-primary/[0.045] via-background to-background">
-            <div className="mx-auto max-w-7xl space-y-6 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
-                <header className="flex flex-col gap-5 border-b border-border/60 pb-7 sm:flex-row sm:items-end sm:justify-between">
-                    <div className="min-w-0 space-y-2">
-                        <div
-                            className="h-1 w-11 rounded-full"
-                            style={{
-                                backgroundColor: "var(--brand-secondary)",
-                                boxShadow: "0 0 14px rgb(var(--brand-secondary-rgb) / 0.4)",
-                            }}
-                            aria-hidden
-                        />
-                        <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{title}</h1>
-                        {description ? (
-                            <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">{description}</p>
+            <div
+                className={cn(
+                    "mx-auto space-y-6 px-4 py-7 sm:px-6 lg:px-8 lg:py-9",
+                    maxWidthClass,
+                )}
+            >
+                <header className="flex flex-col gap-5 border-b border-border/60 pb-7">
+                    {backLink ? (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="-ml-2 h-8 w-fit gap-1.5 text-muted-foreground"
+                            asChild
+                        >
+                            <Link href={backLink.href}>
+                                <ArrowLeft className="size-4" />
+                                {backLink.label}
+                            </Link>
+                        </Button>
+                    ) : null}
+                    <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+                        <div className="min-w-0 space-y-2">
+                            <div
+                                className="h-1 w-11 rounded-full"
+                                style={{
+                                    backgroundColor: "var(--brand-secondary)",
+                                    boxShadow: "0 0 14px rgb(var(--brand-secondary-rgb) / 0.4)",
+                                }}
+                                aria-hidden
+                            />
+                            <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+                                {title}
+                            </h1>
+                            {description ? (
+                                <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                                    {description}
+                                </p>
+                            ) : null}
+                        </div>
+                        {action ? (
+                            <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div>
                         ) : null}
                     </div>
-                    {action ? <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div> : null}
                 </header>
                 {children}
             </div>
@@ -60,7 +96,7 @@ export function DashboardContentCard({
                 "dark:shadow-[0_1px_3px_rgba(0,0,0,0.2)]",
                 "ring-1 ring-black/[0.03] dark:ring-white/[0.06]",
                 padding && "p-5 sm:p-7",
-                className
+                className,
             )}
         >
             {children}

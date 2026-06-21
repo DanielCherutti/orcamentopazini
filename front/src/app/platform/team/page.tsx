@@ -1,23 +1,28 @@
+import type { Metadata } from "next";
 import { listPlatformTeamAction } from "@/actions/platform-team-actions";
+import { PlatformPageShell } from "@/components/layout/platform-page-shell";
+import { PageErrorAlert } from "@/components/layout/page-error-alert";
 import { PlatformTeamManagement } from "@/components/platform/platform-team-management";
+
+export const metadata: Metadata = {
+    title: "Equipe da plataforma",
+};
 
 export default async function PlatformTeamPage() {
     const res = await listPlatformTeamAction();
     const members = res.success ? (res.data ?? []) : [];
 
     return (
-        <div className="mx-auto max-w-4xl space-y-6 p-8">
-            <div>
-                <h1 className="text-2xl font-bold tracking-tight">Equipe da plataforma</h1>
-                <p className="mt-1 text-sm text-muted-foreground">
-                    Gerencie quem acessa o painel de revenda. É a mesma conta do login — quem já
-                    usa uma empresa pode também ter acesso à plataforma.
-                </p>
-            </div>
-            {!res.success && (
-                <p className="text-sm text-destructive">{res.error ?? "Erro ao carregar equipe."}</p>
-            )}
+        <PlatformPageShell
+            eyebrow="Revenda"
+            title="Equipe da plataforma"
+            description="Gerencie quem acessa o painel de revenda. É a mesma conta do login — quem já usa uma empresa pode também ter acesso à plataforma."
+            maxWidth="4xl"
+        >
+            {!res.success ? (
+                <PageErrorAlert message={res.error ?? "Erro ao carregar equipe."} />
+            ) : null}
             <PlatformTeamManagement initialMembers={members} />
-        </div>
+        </PlatformPageShell>
     );
 }

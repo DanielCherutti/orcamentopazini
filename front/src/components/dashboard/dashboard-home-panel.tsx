@@ -116,7 +116,7 @@ export function DashboardHomePanel({
               Bem-vindo ao painel
             </p>
             <p className="max-w-md text-sm text-muted-foreground leading-relaxed">
-              Acompanhe números do negócio, acesse o que usa com frequência e retome orçamentos recentes.
+              Acompanhe números do negócio e retome orçamentos recentes.
             </p>
           </div>
         </div>

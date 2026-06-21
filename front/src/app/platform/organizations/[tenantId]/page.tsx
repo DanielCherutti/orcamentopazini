@@ -1,6 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import {
     getPlatformOrganizationAction,
     getPlatformOrganizationMetricsAction,
@@ -12,9 +10,10 @@ import {
 } from "@/actions/platform-billing-actions";
 import { listAuditLogAction, ensureAuditReadyAction } from "@/actions/audit-actions";
 import { resolveTenantRef } from "@/actions/platform-helpers";
+import { PlatformPageShell } from "@/components/layout/platform-page-shell";
+import { PlatformPageError } from "@/components/layout/page-error-alert";
 import { PlatformOrganizationDetail } from "@/components/platform/platform-organization-detail";
 import { OrgAvatar } from "@/components/platform/platform-utils";
-import { Button } from "@/components/ui/button";
 import { getDb } from "@/lib/surreal";
 import { recordIdToString } from "@/lib/surreal-record-ids";
 
@@ -36,12 +35,11 @@ export default async function PlatformOrganizationPage({ params }: Props) {
 
     if (!org.success || !org.data) {
         return (
-            <div className="p-8">
-                <p className="text-destructive">{org.error ?? "Organização não encontrada."}</p>
-                <Button variant="link" className="mt-4 px-0" asChild>
-                    <Link href="/platform/organizations">Voltar às organizações</Link>
-                </Button>
-            </div>
+            <PlatformPageError
+                pageTitle="Organização"
+                message={org.error ?? "Organização não encontrada."}
+                backLink={{ href: "/platform/organizations", label: "Organizações" }}
+            />
         );
     }
 
@@ -59,26 +57,17 @@ export default async function PlatformOrganizationPage({ params }: Props) {
     ]);
 
     return (
-        <div className="space-y-8 p-8">
-            <header className="space-y-4">
-                <Button variant="ghost" size="sm" className="-ml-2 h-8 gap-1.5 text-muted-foreground" asChild>
-                    <Link href="/platform/organizations">
-                        <ArrowLeft className="size-4" />
-                        Organizações
-                    </Link>
-                </Button>
-                <div className="flex items-start gap-4">
-                    <OrgAvatar name={org.data.name} size="lg" />
-                    <div className="min-w-0 flex-1 space-y-1">
-                        <h1 className="text-3xl font-bold tracking-tight truncate">
-                            {org.data.name}
-                        </h1>
-                        <p className="text-muted-foreground">
-                            Configure licença, cobrança, acesso e aparência desta empresa cliente.
-                        </p>
-                    </div>
-                </div>
-            </header>
+        <PlatformPageShell
+            eyebrow="Revenda"
+            title={org.data.name}
+            description="Configure licença, cobrança, acesso e aparência desta empresa cliente."
+            titleLeading={<OrgAvatar name={org.data.name} size="lg" className="shrink-0" />}
+            breadcrumbs={[
+                { href: "/platform", label: "Dashboard" },
+                { href: "/platform/organizations", label: "Organizações" },
+                { label: org.data.name },
+            ]}
+        >
             <PlatformOrganizationDetail
                 organization={org.data}
                 metrics={metricsRes.data}
@@ -88,6 +77,6 @@ export default async function PlatformOrganizationPage({ params }: Props) {
                 auditEntries={auditRes.data ?? []}
                 auditTotal={auditRes.total ?? 0}
             />
-        </div>
+        </PlatformPageShell>
     );
 }

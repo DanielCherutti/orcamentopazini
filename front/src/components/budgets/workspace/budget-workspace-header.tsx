@@ -118,11 +118,18 @@ export function BudgetWorkspaceHeader({
         <header className="border-b bg-card shrink-0 flex items-stretch h-12 overflow-hidden">
             {/* Left: back + title + status + total */}
             <div className="flex items-center gap-2 px-3 shrink-0 min-w-0 max-w-[45%]">
-                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" asChild>
-                    <Link href="/budgets">
+                <Button variant="ghost" size="sm" className="h-8 shrink-0 gap-1.5 px-2" asChild>
+                    <Link href="/budgets" title="Voltar para orçamentos">
                         <ArrowLeft className="h-4 w-4" />
+                        <span className="hidden lg:inline text-xs">Orçamentos</span>
                     </Link>
                 </Button>
+
+                <span className="hidden md:inline text-muted-foreground/40" aria-hidden>/</span>
+                <span className="hidden md:inline truncate text-xs text-muted-foreground max-w-[8rem] lg:max-w-[12rem]">
+                    {budget.code || "Compositor"}
+                </span>
+                <span className="hidden md:inline text-muted-foreground/40" aria-hidden>/</span>
 
                 {editingTitle ? (
                     <Input

@@ -4,6 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Building2, CreditCard, LayoutDashboard, LogOut, ScrollText, Shield, Users } from "lucide-react";
 import { logoutAction } from "@/actions/auth-actions";
+import { PlatformBreadcrumbProvider } from "@/components/layout/platform-breadcrumb-context";
+import {
+    PlatformSidebarProvider,
+    usePlatformSidebar,
+} from "@/components/layout/platform-sidebar-context";
+import { PlatformHeader } from "@/components/platform/platform-header";
 import { PlatformOrgAccessButton } from "@/components/platform/platform-org-access-button";
 import { cn } from "@/lib/utils";
 import { initialsFromEmail } from "@/components/platform/platform-utils";
@@ -43,7 +49,7 @@ function NavLink({
     );
 }
 
-export function PlatformShell({
+function PlatformShellInner({
     children,
     sessionEmail,
     platformRole,
@@ -53,9 +59,9 @@ export function PlatformShell({
     platformRole: PlatformRole;
 }) {
     const { can } = usePlatformPermissions();
+    const { collapsed } = usePlatformSidebar();
     const pathname = usePathname() ?? "";
-    const isDashboard =
-        pathname === "/platform" || pathname === "/platform/";
+    const isDashboard = pathname === "/platform" || pathname === "/platform/";
     const isOrgs =
         pathname === "/platform/organizations" ||
         pathname.startsWith("/platform/organizations/");
@@ -65,13 +71,15 @@ export function PlatformShell({
         pathname === "/platform/team" ||
         pathname.startsWith("/platform/team/") ||
         pathname === "/platform/admins";
-    const isAudit =
-        pathname === "/platform/audit" || pathname.startsWith("/platform/audit/");
+    const isAudit = pathname === "/platform/audit" || pathname.startsWith("/platform/audit/");
 
     return (
         <div className="min-h-dvh bg-slate-50 dark:bg-background">
             <aside
-                className="fixed inset-y-0 left-0 z-30 flex w-64 flex-col border-r border-slate-800/80 bg-slate-950 text-slate-100 shadow-[4px_0_32px_-8px_rgba(0,0,0,0.45)]"
+                className={cn(
+                    "fixed inset-y-0 left-0 z-30 flex flex-col border-r border-slate-800/80 bg-slate-950 text-slate-100 shadow-[4px_0_32px_-8px_rgba(0,0,0,0.45)] transition-all duration-300 ease-in-out",
+                    collapsed ? "w-0 overflow-hidden opacity-0 pointer-events-none" : "w-64 opacity-100",
+                )}
                 aria-label="Admin da plataforma"
             >
                 <div className="border-b border-slate-800/80 bg-gradient-to-br from-slate-900 via-slate-950 to-violet-950/40 px-5 py-6">
@@ -83,11 +91,9 @@ export function PlatformShell({
                         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/20 ring-1 ring-violet-400/30">
                             <Shield className="h-4 w-4 text-violet-300" />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                             <p className="text-sm font-bold tracking-tight text-white">{PRODUCT_NAME}</p>
-                            <p className="text-[10px] leading-snug text-slate-500">
-                                {PRODUCT_TAGLINE}
-                            </p>
+                            <p className="text-[10px] leading-snug text-slate-500">{PRODUCT_TAGLINE}</p>
                         </div>
                     </div>
                 </div>
@@ -147,15 +153,41 @@ export function PlatformShell({
                 </div>
             </aside>
 
-            <div className="pl-64">
-                <div className="relative min-h-dvh">
+            <div
+                className={cn(
+                    "transition-[padding-left] duration-300 ease-in-out",
+                    collapsed ? "pl-0" : "pl-64",
+                )}
+            >
+                <div className="relative flex min-h-dvh flex-col">
                     <div
                         className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_40%_at_50%_-10%,rgba(139,92,246,0.07),transparent)]"
                         aria-hidden
                     />
-                    <div className="relative">{children}</div>
+                    <PlatformHeader />
+                    <div className="relative flex-1">{children}</div>
                 </div>
             </div>
         </div>
+    );
+}
+
+export function PlatformShell({
+    children,
+    sessionEmail,
+    platformRole,
+}: {
+    children: React.ReactNode;
+    sessionEmail: string | null;
+    platformRole: PlatformRole;
+}) {
+    return (
+        <PlatformSidebarProvider>
+            <PlatformBreadcrumbProvider>
+                <PlatformShellInner sessionEmail={sessionEmail} platformRole={platformRole}>
+                    {children}
+                </PlatformShellInner>
+            </PlatformBreadcrumbProvider>
+        </PlatformSidebarProvider>
     );
 }

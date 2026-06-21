@@ -72,14 +72,8 @@ export function SettingsForm({ initialSettings }: { initialSettings: ProposalSet
     };
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl mx-auto pb-10">
-            <div className="flex justify-between items-center mb-2 mt-6">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Configurações da Empresa</h1>
-                    <p className="text-muted-foreground">
-                        Identidade visual, textos das propostas e envio de e-mail (convites de usuário).
-                    </p>
-                </div>
+        <form onSubmit={handleSubmit} className="mx-auto max-w-4xl space-y-6 pb-10">
+            <div className="flex justify-end">
                 <Button type="submit" disabled={isLoading}>
                     {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                     Salvar Alterações

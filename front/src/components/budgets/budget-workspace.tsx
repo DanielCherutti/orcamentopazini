@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { Info, FileText, Loader2, Map as MapIcon, Mail, Printer, Table2 } from "lucide-react";
 import { Budget } from "@/types/budget-types";
 import { BudgetTreeV2 } from "./editor/budget-tree-v2";
+import { BudgetWorkspaceFocusMode } from "@/components/budgets/workspace/budget-workspace-focus-mode";
 import { BudgetWorkspaceHeader } from "./workspace/budget-workspace-header";
 import { BudgetEmailTab } from "./workspace/budget-email-tab";
 import { BudgetEmailSyncProvider } from "./workspace/budget-email-sync-context";
@@ -159,7 +160,8 @@ export function BudgetWorkspace({
     return (
         <WorkspaceContext.Provider value={{ activeTab, setActiveTab }}>
             <EnvironmentsContext.Provider value={{ environmentsExpanded, toggleEnvironmentsExpanded }}>
-                <div className="flex flex-col fixed inset-x-0 bottom-0 top-[var(--support-banner-height,0px)] z-40 bg-background">
+                <div className="flex flex-col fixed inset-x-0 bottom-0 top-[var(--support-banner-height,0px)] z-40 bg-background animate-in fade-in-0 duration-200">
+                    <BudgetWorkspaceFocusMode />
                     {/* Barra unificada: back + título + abas + ações */}
                     <BudgetWorkspaceHeader
                         budget={budget}

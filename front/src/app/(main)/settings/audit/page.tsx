@@ -2,14 +2,9 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { listTenantAuditLogAction, ensureAuditReadyAction } from "@/actions/audit-actions";
 import { assertPortalAdminSession } from "@/lib/tenant-context";
+import { DashboardContentCard, DashboardPageShell } from "@/components/layout/dashboard-page-shell";
+import { PageErrorAlert } from "@/components/layout/page-error-alert";
 import { AuditLogTable } from "@/components/platform/audit-log-table";
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card";
 
 export const metadata: Metadata = {
     title: "Auditoria",
@@ -34,21 +29,21 @@ export default async function SettingsAuditPage({ searchParams }: Props) {
     });
 
     return (
-        <div className="space-y-6">
-            <div>
-                <h1 className="text-2xl font-bold tracking-tight">Auditoria</h1>
-                <p className="text-muted-foreground mt-1">
-                    Registro de ações realizadas nesta organização.
-                </p>
-            </div>
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-base">Histórico</CardTitle>
-                    <CardDescription>Últimas operações de usuários e administradores.</CardDescription>
-                </CardHeader>
-                <CardContent>
+        <DashboardPageShell
+            title="Auditoria"
+            description="Registro de ações realizadas nesta organização."
+            backLink={{ href: "/settings", label: "Configurações" }}
+        >
+            <DashboardContentCard padding={false} className="overflow-hidden">
+                <div className="border-b border-border/60 px-5 py-4 sm:px-7">
+                    <h2 className="text-base font-semibold">Histórico</h2>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                        Últimas operações de usuários e administradores.
+                    </p>
+                </div>
+                <div className="p-5 sm:p-7">
                     {!audit.success ? (
-                        <p className="text-destructive text-sm">{audit.error}</p>
+                        <PageErrorAlert message={audit.error ?? "Erro ao carregar auditoria."} />
                     ) : (
                         <AuditLogTable
                             entries={audit.data ?? []}
@@ -56,8 +51,8 @@ export default async function SettingsAuditPage({ searchParams }: Props) {
                             basePath="/settings/audit"
                         />
                     )}
-                </CardContent>
-            </Card>
-        </div>
+                </div>
+            </DashboardContentCard>
+        </DashboardPageShell>
     );
 }

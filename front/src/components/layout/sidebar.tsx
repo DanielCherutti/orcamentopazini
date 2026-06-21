@@ -154,7 +154,7 @@ export function Sidebar({
                                 <Package
                                     className={cn(
                                         "h-[18px] w-[18px] shrink-0",
-                                        isProducts ? "text-[#FBB03B]" : "text-sidebar-foreground/50"
+                                        isProducts ? "text-[color:var(--brand-secondary)]" : "text-sidebar-foreground/50"
                                     )}
                                 />
                                 <span className="truncate">Produtos</span>

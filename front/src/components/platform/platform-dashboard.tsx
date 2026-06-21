@@ -1,10 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import type { PlatformDashboardData } from "@/actions/platform-actions";
-import { CreateOrganizationDialog } from "@/components/platform/create-organization-dialog";
-import { ExportOrganizationsCsvButton } from "@/components/platform/export-organizations-csv-button";
 import { PlatformRevenueByPlan } from "@/components/platform/platform-revenue-by-plan";
 import {
     OrgAvatar,
@@ -37,7 +34,6 @@ import {
     XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PRODUCT_NAME } from "@/lib/product-brand";
 import { usePlatformPermissions } from "@/components/platform/platform-permissions-context";
 
 function KpiCard({
@@ -98,40 +94,12 @@ export function PlatformDashboard({
     data: PlatformDashboardData;
     confirmedRevenueCents?: number;
 }) {
-    const [createOpen, setCreateOpen] = useState(false);
     const { can } = usePlatformPermissions();
     const { summary, planBreakdown, alerts, topByUsers, recentOrganizations } = data;
 
     return (
         <>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-violet-600 dark:text-violet-400">
-                        {PRODUCT_NAME} · Painel comercial
-                    </p>
-                    <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-                    <p className="mt-1 max-w-xl text-muted-foreground">
-                        Visão geral da operação SaaS: clientes, receita estimada, alertas e
-                        crescimento.
-                    </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                    <ExportOrganizationsCsvButton />
-                    <Button variant="outline" asChild>
-                        <Link href="/platform/licenses">Planos e preços</Link>
-                    </Button>
-                    <Button variant="outline" asChild>
-                        <Link href="/platform/organizations">Ver organizações</Link>
-                    </Button>
-                    {can("orgs.write") && (
-                        <Button onClick={() => setCreateOpen(true)}>
-                            <Plus className="h-4 w-4" />
-                            Nova organização
-                        </Button>
-                    )}
-                </div>
-            </div>
-
+            <div className="space-y-8">
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
                 <KpiCard
                     label="MRR estimado"
@@ -312,10 +280,7 @@ export function PlatformDashboard({
                     </div>
                 </CardContent>
             </Card>
-
-            {can("orgs.write") && (
-                <CreateOrganizationDialog open={createOpen} onOpenChange={setCreateOpen} />
-            )}
+            </div>
         </>
     );
 }
