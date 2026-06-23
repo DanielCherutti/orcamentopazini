@@ -314,7 +314,7 @@ export async function createProductAction(formData: FormData) {
             return { success: false, error: "Erro no banco de dados ao criar" };
         }
 
-        const product = (Array.isArray(created) ? created[0] : created) as any;
+        const product = (Array.isArray(created) ? created[0] : created) as Record<string, unknown> | null;
 
         if (!product || !product.id) {
             return { success: false, error: "Erro no banco de dados: ID inválido" };
