@@ -34,6 +34,8 @@ async function main(): Promise<void> {
 
     await mod.run();
     console.log("\nMigração concluída.");
+    // Encerra o processo: conexão SurrealDB mantém o event loop ativo.
+    process.exit(0);
 }
 
 main().catch((error: unknown) => {
