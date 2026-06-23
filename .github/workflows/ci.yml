@@ -41,3 +41,16 @@ jobs:
 
       - name: Run ESLint
         run: npm run lint
+
+      - name: Notify Discord
+        if: always()
+        working-directory: ${{ github.workspace }}
+        run: bash .github/scripts/discord-notify.sh
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          CONCLUSION: ${{ job.status }}
+          WORKFLOW: CI
+          BRANCH: ${{ github.head_ref }}
+          URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
