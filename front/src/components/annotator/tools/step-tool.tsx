@@ -46,8 +46,8 @@ export function StepNumberTool({
         setIsDragging(false);
 
         const node = e.target;
-        let newX = node.x();
-        let newY = node.y();
+        const newX = node.x();
+        const newY = node.y();
 
         // Converter para coordenadas relativas
         const relativeX = newX / imageSize.width;

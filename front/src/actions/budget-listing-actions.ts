@@ -30,7 +30,7 @@ export async function getBudgetsAction(params?: {
       "SELECT * FROM budget WHERE tenant_id = $tenantId FETCH client_id",
       { tenantId: tenantRecordId(tenantId) },
     );
-    let allBudgets = (budgetsResult[0] || []).map(serializeBudgetEntity);
+    const allBudgets = (budgetsResult[0] || []).map(serializeBudgetEntity);
 
     const { rows, meta } = filterAndPaginateBudgetFamilies(allBudgets, {
       query: search,

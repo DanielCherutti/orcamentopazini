@@ -57,8 +57,8 @@ export function TextTool({
         setIsDragging(false);
 
         const node = e.target;
-        let newX = node.x();
-        let newY = node.y();
+        const newX = node.x();
+        const newY = node.y();
 
         // Permitir arrastar para fora da imagem
         node.x(newX);

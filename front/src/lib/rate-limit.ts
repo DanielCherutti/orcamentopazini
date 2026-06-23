@@ -48,7 +48,7 @@ export function rateLimitConsume(
     const now = Date.now();
     maybePrune(now);
 
-    let state = store.get(key);
+    const state = store.get(key);
     if (!state || now >= state.resetAt) {
         store.set(key, { count: 1, resetAt: now + windowMs });
         return { ok: true };
