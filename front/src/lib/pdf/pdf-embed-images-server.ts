@@ -77,7 +77,7 @@ function collectCompositorHtmlImageUrls(compositorPdf?: CompositorPdfPayload): s
             continue;
         }
         if (block.type === "text") {
-            for (const src of collectImgSrcFromHtml(String(props.content ?? ""))) {
+            for (const src of collectImgSrcFromHtml(String(props.content ?? props.description ?? ""))) {
                 out.add(src);
             }
         }

@@ -173,7 +173,10 @@ export const CompositorRichTextEditor = memo(function CompositorRichTextEditor({
     const fd = new FormData();
     fd.append("file", file);
     if (budgetId) fd.append("budgetId", budgetId);
-    const res = await fetch("/api/upload/budget/image", { method: "POST", body: fd });
+    const res = await fetch(budgetId ? "/api/upload/budget/image" : "/api/upload/library", {
+      method: "POST",
+      body: fd,
+    });
     const json = await res.json() as { url?: string; error?: string };
     if (!res.ok || !json.url) throw new Error(json.error || "Upload falhou");
     return json.url;

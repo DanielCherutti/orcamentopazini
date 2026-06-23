@@ -23,14 +23,7 @@ export function DashboardPageShell({
     children: ReactNode;
     maxWidth?: "4xl" | "5xl" | "7xl" | "full";
 }) {
-    const maxWidthClass =
-        maxWidth === "4xl"
-            ? "max-w-4xl"
-            : maxWidth === "5xl"
-              ? "max-w-5xl"
-              : maxWidth === "full"
-                ? "max-w-[1600px]"
-                : "max-w-7xl";
+    const maxWidthClass = "max-w-none w-full";
 
     return (
         <>

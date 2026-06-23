@@ -17,6 +17,7 @@ import { budgetEditUrl } from "@/lib/budgets/budget-path";
 import { useBudgetsRepository } from "@/lib/budgets/use-budgets-repository";
 import { toast } from "@/lib/toast";
 import { useConfirmDialog } from "@/components/providers/confirm-dialog-provider";
+import { BudgetModelImportDialog } from "@/components/budgets/budget-model-import-dialog";
 
 interface BudgetWorkspaceHeaderProps {
     budget: Budget;
@@ -236,6 +237,12 @@ export function BudgetWorkspaceHeader({
                         <Save className="h-3.5 w-3.5 mr-1.5" />
                         Salvar
                     </Button>
+                )}
+                {editable && (
+                    <BudgetModelImportDialog
+                        budgetId={budget.id!}
+                        onImported={onBudgetRefresh}
+                    />
                 )}
                 {canRevision && (
                     <Button

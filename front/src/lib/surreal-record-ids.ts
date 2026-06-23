@@ -30,6 +30,7 @@ const ALLOWED_TABLES = new Set([
     "image_annotation",
     "image_library",
     "proposal_settings",
+    "modelos",
 ]);
 
 const SUFFIX_RE = /^[A-Za-z0-9_-]+$/;

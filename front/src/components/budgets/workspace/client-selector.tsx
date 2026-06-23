@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { User, X, Search } from "lucide-react";
+import { User, Search } from "lucide-react";
 import {
     Popover,
     PopoverContent,
@@ -88,13 +88,6 @@ export function ClientSelector({ budgetId, clientId, isReadOnly = false, onClien
         onClientChange?.(String(client.id), client.name);
     };
 
-    const handleClear = async (e: React.MouseEvent) => {
-        e.stopPropagation();
-        setClientName(null);
-        await updateBudgetAction(budgetId, { client_id: "" });
-        onClientChange?.("", "");
-    };
-
     if (isReadOnly) {
         return (
             <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
@@ -122,27 +115,14 @@ export function ClientSelector({ budgetId, clientId, isReadOnly = false, onClien
 
     if (!mounted) {
         return (
-            <div className="flex items-center gap-0.5 shrink-0">
-                <button
-                    type="button"
-                    className={triggerClassName}
-                    title={clientName ? "Clique para trocar cliente" : "Selecionar cliente"}
-                    disabled={saving}
-                >
-                    {triggerLabel}
-                </button>
-                {clientName ? (
-                    <button
-                        type="button"
-                        onClick={handleClear}
-                        className="p-1 rounded-md opacity-40 hover:opacity-100 transition-opacity"
-                        title="Remover cliente"
-                        disabled={saving}
-                    >
-                        <X className="h-2.5 w-2.5" />
-                    </button>
-                ) : null}
-            </div>
+            <button
+                type="button"
+                className={triggerClassName}
+                title={clientName ? "Clique para trocar cliente" : "Selecionar cliente"}
+                disabled={saving}
+            >
+                {triggerLabel}
+            </button>
         );
     }
 
@@ -195,17 +175,6 @@ export function ClientSelector({ budgetId, clientId, isReadOnly = false, onClien
                 </div>
             </PopoverContent>
             </Popover>
-            {clientName ? (
-                <button
-                    type="button"
-                    onClick={handleClear}
-                    className="p-1 rounded-md opacity-40 hover:opacity-100 transition-opacity"
-                    title="Remover cliente"
-                    disabled={saving}
-                >
-                    <X className="h-2.5 w-2.5" />
-                </button>
-            ) : null}
         </div>
     );
 }

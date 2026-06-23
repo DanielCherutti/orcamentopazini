@@ -1,0 +1,209 @@
+import type { CustomerFull } from "@/actions/client-actions";
+import type { Budget } from "@/types/budget-types";
+
+export type TemplateVariableToken = {
+  token: string;
+  label: string;
+  group: "Cliente" | "Orçamento" | "Campos personalizados";
+  description?: string;
+};
+
+export const TEMPLATE_VARIABLE_TOKENS: TemplateVariableToken[] = [
+  {
+    token: "{{cliente.logo}}",
+    label: "Logo do cliente",
+    group: "Cliente",
+    description: "Insere a logomarca cadastrada no cliente.",
+  },
+  {
+    token: "{{cliente.razao_social}}",
+    label: "Razão social",
+    group: "Cliente",
+  },
+  {
+    token: "{{cliente.nome_fantasia}}",
+    label: "Nome fantasia",
+    group: "Cliente",
+  },
+  {
+    token: "{{cliente.cnpj}}",
+    label: "CNPJ",
+    group: "Cliente",
+  },
+  {
+    token: "{{cliente.endereco}}",
+    label: "Endereço completo",
+    group: "Cliente",
+  },
+  {
+    token: "{{orcamento.codigo}}",
+    label: "Código do orçamento",
+    group: "Orçamento",
+  },
+  {
+    token: "{{cliente.adicional.inscricao_estadual}}",
+    label: "Campo personalizado",
+    group: "Campos personalizados",
+    description: "Troque o último trecho pelo nome do campo salvo no cliente.",
+  },
+];
+
+export type TemplateVariableContext = {
+  cliente?: {
+    razao_social?: string | null;
+    nome_fantasia?: string | null;
+    cnpj?: string | null;
+    endereco?: string | null;
+    logo?: string | null;
+    adicional?: Record<string, unknown> | null;
+  } | null;
+  orcamento?: {
+    codigo?: string | null;
+  } | null;
+};
+
+export type RenderTemplateVariableOptions = {
+  /**
+   * Em HTML rico, `{{cliente.logo}}` vira uma tag img. Em campos URL, use "url".
+   */
+  logoMode?: "img" | "url";
+  /**
+   * Escapa texto antes da substituição. Use true para HTML vindo do editor.
+   */
+  escapeText?: boolean;
+};
+
+const VARIABLE_RE = /\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g;
+
+export function normalizeAdditionalInfoKey(input: string): string {
+  return input
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+export function formatCustomerAddress(customer?: CustomerFull | null): string {
+  const address = customer?.address;
+  if (!address) return "";
+  const streetLine = [address.street, address.number].filter(Boolean).join(", ");
+  const districtLine = [address.neighborhood, address.complement].filter(Boolean).join(" - ");
+  const cityLine = [address.city, address.state].filter(Boolean).join("/");
+  return [streetLine, districtLine, cityLine, address.cep].filter(Boolean).join(" - ");
+}
+
+export function buildTemplateVariableContext(params: {
+  customer?: CustomerFull | null;
+  budget?: Pick<Budget, "code"> | null;
+}): TemplateVariableContext {
+  const customer = params.customer;
+  return {
+    cliente: {
+      razao_social: customer?.razao_social || customer?.name || "",
+      nome_fantasia: customer?.nome_fantasia || "",
+      cnpj: customer?.cnpj || "",
+      endereco: formatCustomerAddress(customer),
+      logo: customer?.logo_url || "",
+      adicional: customer?.informacoes_adicionais || {},
+    },
+    orcamento: {
+      codigo: params.budget?.code || "",
+    },
+  };
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function escapeAttribute(value: string): string {
+  return escapeHtml(value).replace(/`/g, "&#96;");
+}
+
+function safeLogoUrl(raw: unknown): string {
+  const value = String(raw ?? "").trim();
+  if (!value) return "";
+  if (/^https?:\/\//i.test(value)) return value;
+  if (value.startsWith("/api/uploads/") || value.startsWith("/uploads/")) return value;
+  return "";
+}
+
+function valueToString(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return "";
+}
+
+function lookupAdditionalValue(
+  additional: Record<string, unknown> | null | undefined,
+  key: string,
+): string {
+  if (!additional || !key) return "";
+  if (Object.prototype.hasOwnProperty.call(additional, key)) {
+    return valueToString(additional[key]);
+  }
+  const normalized = normalizeAdditionalInfoKey(key);
+  if (Object.prototype.hasOwnProperty.call(additional, normalized)) {
+    return valueToString(additional[normalized]);
+  }
+  const found = Object.entries(additional).find(
+    ([candidate]) => normalizeAdditionalInfoKey(candidate) === normalized,
+  );
+  return found ? valueToString(found[1]) : "";
+}
+
+function resolveVariable(
+  path: string,
+  context: TemplateVariableContext,
+  options: Required<RenderTemplateVariableOptions>,
+): string {
+  const normalizedPath = path.trim().toLowerCase();
+  if (normalizedPath === "cliente.logo") {
+    const url = safeLogoUrl(context.cliente?.logo);
+    if (!url) return "";
+    if (options.logoMode === "url") return url;
+    return `<img src="${escapeAttribute(url)}" alt="Logo do cliente" style="max-width:180px;max-height:80px;object-fit:contain;" />`;
+  }
+  if (normalizedPath === "cliente.razao_social") return valueToString(context.cliente?.razao_social);
+  if (normalizedPath === "cliente.nome_fantasia") return valueToString(context.cliente?.nome_fantasia);
+  if (normalizedPath === "cliente.cnpj") return valueToString(context.cliente?.cnpj);
+  if (normalizedPath === "cliente.endereco") return valueToString(context.cliente?.endereco);
+  if (normalizedPath === "orcamento.codigo") return valueToString(context.orcamento?.codigo);
+  if (normalizedPath.startsWith("cliente.adicional.")) {
+    return lookupAdditionalValue(
+      context.cliente?.adicional ?? {},
+      path.slice("cliente.adicional.".length),
+    );
+  }
+  return "";
+}
+
+export function renderTemplateVariables(
+  input: string | null | undefined,
+  context: TemplateVariableContext,
+  options?: RenderTemplateVariableOptions,
+): string {
+  const source = String(input ?? "");
+  if (!source.trim()) return source;
+  const resolvedOptions: Required<RenderTemplateVariableOptions> = {
+    logoMode: options?.logoMode ?? "img",
+    escapeText: options?.escapeText ?? true,
+  };
+  return source.replace(VARIABLE_RE, (_full, path: string) => {
+    const resolved = resolveVariable(path, context, resolvedOptions);
+    if (!resolved) return "";
+    if (path.trim().toLowerCase() === "cliente.logo" && resolvedOptions.logoMode === "img") {
+      return resolved;
+    }
+    return resolvedOptions.escapeText ? escapeHtml(resolved) : resolved;
+  });
+}
+

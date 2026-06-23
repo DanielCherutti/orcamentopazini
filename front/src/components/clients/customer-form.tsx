@@ -20,6 +20,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { CustomerFull, CustomerFormInput } from "@/actions/client-actions";
 import { lookupCnpjAction } from "@/actions/client-actions";
+import { normalizeAdditionalInfoKey } from "@/lib/model-variables";
+import { Image as ImageIcon, Plus, Trash2, Upload, X } from "lucide-react";
 
 // ─── Mask helpers ────────────────────────────────────────────────────────────
 
@@ -49,11 +51,15 @@ function maskCep(v: string): string {
 
 const formSchema = z.object({
     name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+    razao_social: z.string().optional(),
+    nome_fantasia: z.string().optional(),
     cnpj: z.string().optional(),
     stateRegistration: z.string().optional(),
     contact: z.string().optional(),
     phone: z.string().optional(),
     email: z.string().email("E-mail inválido").optional().or(z.literal("")),
+    logo_url: z.string().optional(),
+    informacoes_adicionais: z.record(z.string(), z.string()).optional(),
     address: z.object({
         cep: z.string().optional(),
         street: z.string().optional(),
@@ -94,6 +100,18 @@ export function CustomerForm({
     const [cnpjError, setCnpjError] = useState<string | null>(null);
     const lastFetchedCnpjRef = useRef<string | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
+    const logoInputRef = useRef<HTMLInputElement>(null);
+    const [logoUrl, setLogoUrl] = useState(initialData?.logo_url ?? "");
+    const [logoUploading, setLogoUploading] = useState(false);
+    const [logoError, setLogoError] = useState<string | null>(null);
+    const [additionalFields, setAdditionalFields] = useState<Array<{ id: string; key: string; value: string }>>(
+        () =>
+            Object.entries(initialData?.informacoes_adicionais ?? {}).map(([key, value]) => ({
+                id: `${key}-${Math.random().toString(36).slice(2)}`,
+                key,
+                value: String(value ?? ""),
+            })),
+    );
 
     const {
         register,
@@ -106,11 +124,15 @@ export function CustomerForm({
         resolver: zodResolver(formSchema),
         defaultValues: {
             name: initialData?.name ?? "",
+            razao_social: initialData?.razao_social ?? initialData?.name ?? "",
+            nome_fantasia: initialData?.nome_fantasia ?? "",
             cnpj: initialData?.cnpj ?? "",
             stateRegistration: initialData?.stateRegistration ?? "",
             contact: initialData?.contact ?? "",
             phone: initialData?.phone ?? "",
             email: initialData?.email ?? "",
+            logo_url: initialData?.logo_url ?? "",
+            informacoes_adicionais: initialData?.informacoes_adicionais ?? {},
             address: {
                 cep: initialData?.address?.cep ?? "",
                 street: initialData?.address?.street ?? "",
@@ -123,8 +145,19 @@ export function CustomerForm({
         },
     });
 
-    const busy = isSubmitting || formSubmitting || isDeleting;
+    const busy = isSubmitting || formSubmitting || isDeleting || logoUploading;
     const cnpjFieldReg = register("cnpj");
+
+    const buildAdditionalInfo = () => {
+        const out: Record<string, string> = {};
+        for (const field of additionalFields) {
+            const key = normalizeAdditionalInfoKey(field.key);
+            const value = field.value.trim();
+            if (!key || !value) continue;
+            out[key] = value;
+        }
+        return out;
+    };
 
     const handleCnpjBlur = async () => {
         const raw = getValues("cnpj")?.replace(/\D/g, "") ?? "";
@@ -141,6 +174,7 @@ export function CustomerForm({
             const r = await lookupCnpjAction(raw);
             if (r.success) {
                 setValue("name", r.name, { shouldValidate: true, shouldDirty: true });
+                setValue("razao_social", r.name, { shouldValidate: true, shouldDirty: true });
                 const prev = getValues("address") ?? {};
                 // Campos `cnpj_*` vêm no nível raiz da action (Flight costuma apagar chaves em objetos aninhados).
                 setValue(
@@ -211,7 +245,50 @@ export function CustomerForm({
     };
 
     const handleFormSubmit = async (values: FormValues) => {
-        await onSubmit(values as CustomerFormInput);
+        const payload: CustomerFormInput = {
+            ...(values as CustomerFormInput),
+            name: values.name,
+            razao_social: values.name,
+            logo_url: logoUrl.trim(),
+            informacoes_adicionais: buildAdditionalInfo(),
+        };
+        await onSubmit(payload);
+    };
+
+    const handleLogoFileChange = async (file: File | undefined) => {
+        if (!file) return;
+        setLogoUploading(true);
+        setLogoError(null);
+        try {
+            const fd = new FormData();
+            fd.append("file", file);
+            if (initialData?.id) fd.append("customerId", initialData.id);
+            const res = await fetch("/api/upload/customer/logo", {
+                method: "POST",
+                body: fd,
+            });
+            const json = (await res.json()) as { url?: string; error?: string };
+            if (!res.ok || !json.url) {
+                setLogoError(json.error || "Falha ao enviar logo.");
+                return;
+            }
+            setLogoUrl(json.url);
+            setValue("logo_url", json.url, { shouldDirty: true });
+        } catch {
+            setLogoError("Erro inesperado ao enviar logo.");
+        } finally {
+            setLogoUploading(false);
+            if (logoInputRef.current) logoInputRef.current.value = "";
+        }
+    };
+
+    const updateAdditionalField = (
+        id: string,
+        patch: Partial<{ key: string; value: string }>,
+    ) => {
+        setAdditionalFields((prev) =>
+            prev.map((field) => (field.id === id ? { ...field, ...patch } : field)),
+        );
     };
 
     const handleDelete = async () => {
@@ -296,19 +373,108 @@ export function CustomerForm({
 
                     {/* Nome */}
                     <div className="md:col-span-2 space-y-1.5">
-                        <Label htmlFor="name">Nome / Razão Social *</Label>
+                        <Label htmlFor="name">Razão Social *</Label>
                         <Input
                             id="name"
                             {...register("name")}
                             placeholder="Empresa Exemplo Ltda"
                             disabled={busy}
                             className="rounded-sm"
+                            onChange={(e) => {
+                                setValue("name", e.target.value, {
+                                    shouldValidate: true,
+                                    shouldDirty: true,
+                                });
+                                setValue("razao_social", e.target.value, {
+                                    shouldValidate: true,
+                                    shouldDirty: true,
+                                });
+                            }}
                         />
                         {(errors.name?.message || fieldErrors?.name?.[0]) && (
                             <p className="text-xs text-destructive">
                                 {errors.name?.message || fieldErrors?.name?.[0]}
                             </p>
                         )}
+                    </div>
+
+                    <div className="md:col-span-2 space-y-1.5">
+                        <Label htmlFor="nome_fantasia">Nome Fantasia</Label>
+                        <Input
+                            id="nome_fantasia"
+                            {...register("nome_fantasia")}
+                            placeholder="Nome comercial da empresa"
+                            disabled={busy}
+                            className="rounded-sm"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* ── Logo ── */}
+            <div className="bg-card rounded-xl border border-border shadow-sm p-6 space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                    <h2 className="text-base font-semibold tracking-tight">Logo do Cliente</h2>
+                    <input
+                        ref={logoInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/gif,image/webp"
+                        className="sr-only"
+                        onChange={(e) => void handleLogoFileChange(e.target.files?.[0])}
+                        disabled={busy || logoUploading}
+                    />
+                    <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-sm"
+                        disabled={busy || logoUploading}
+                        onClick={() => logoInputRef.current?.click()}
+                    >
+                        <Upload className="mr-2 h-4 w-4" />
+                        {logoUploading ? "Enviando..." : "Enviar logo"}
+                    </Button>
+                </div>
+
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                    <div className="flex h-28 w-40 items-center justify-center overflow-hidden rounded-md border border-dashed bg-muted/20">
+                        {logoUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={logoUrl} alt="Logo do cliente" className="max-h-full max-w-full object-contain" />
+                        ) : (
+                            <div className="flex flex-col items-center gap-2 text-xs text-muted-foreground">
+                                <ImageIcon className="h-8 w-8" />
+                                Sem logo
+                            </div>
+                        )}
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-2">
+                        <Input
+                            value={logoUrl}
+                            placeholder="/api/uploads/customers/.../logo.png"
+                            disabled={busy}
+                            className="rounded-sm"
+                            onChange={(e) => {
+                                setLogoUrl(e.target.value);
+                                setValue("logo_url", e.target.value, { shouldDirty: true });
+                            }}
+                        />
+                        {logoError ? <p className="text-xs text-destructive">{logoError}</p> : null}
+                        {logoUrl ? (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 rounded-sm px-2 text-xs"
+                                disabled={busy}
+                                onClick={() => {
+                                    setLogoUrl("");
+                                    setValue("logo_url", "", { shouldDirty: true });
+                                }}
+                            >
+                                <X className="mr-1.5 h-3.5 w-3.5" />
+                                Remover logo
+                            </Button>
+                        ) : null}
                     </div>
                 </div>
             </div>
@@ -418,6 +584,87 @@ export function CustomerForm({
                             }}
                         />
                     </div>
+                </div>
+            </div>
+
+            {/* ── Campos Personalizados ── */}
+            <div className="bg-card rounded-xl border border-border shadow-sm p-6 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h2 className="text-base font-semibold tracking-tight">Campos Personalizados</h2>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-sm"
+                        disabled={busy}
+                        onClick={() =>
+                            setAdditionalFields((prev) => [
+                                ...prev,
+                                {
+                                    id: `field-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                                    key: "",
+                                    value: "",
+                                },
+                            ])
+                        }
+                    >
+                        <Plus className="mr-2 h-4 w-4" />
+                        Adicionar Campo
+                    </Button>
+                </div>
+                <div className="space-y-3">
+                    {additionalFields.length === 0 ? (
+                        <p className="rounded-md border border-dashed bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
+                            Nenhum campo personalizado cadastrado.
+                        </p>
+                    ) : (
+                        additionalFields.map((field) => {
+                            const normalizedKey = normalizeAdditionalInfoKey(field.key);
+                            return (
+                                <div key={field.id} className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                                    <div className="space-y-1.5">
+                                        <Label>Nome da propriedade</Label>
+                                        <Input
+                                            value={field.key}
+                                            placeholder="Ex: Inscrição Estadual"
+                                            disabled={busy}
+                                            className="rounded-sm"
+                                            onChange={(e) => updateAdditionalField(field.id, { key: e.target.value })}
+                                        />
+                                        {normalizedKey ? (
+                                            <p className="text-[11px] text-muted-foreground">
+                                                Variável: <code>{`{{cliente.adicional.${normalizedKey}}}`}</code>
+                                            </p>
+                                        ) : null}
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label>Valor</Label>
+                                        <Input
+                                            value={field.value}
+                                            placeholder="Valor exibido no documento"
+                                            disabled={busy}
+                                            className="rounded-sm"
+                                            onChange={(e) => updateAdditionalField(field.id, { value: e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="flex items-end">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="icon"
+                                            className="h-10 w-10 rounded-sm text-destructive hover:text-destructive"
+                                            disabled={busy}
+                                            onClick={() =>
+                                                setAdditionalFields((prev) => prev.filter((item) => item.id !== field.id))
+                                            }
+                                            title="Remover campo"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            );
+                        })
+                    )}
                 </div>
             </div>
 

@@ -27,12 +27,21 @@ import { assertClientInActiveTenant } from "@/lib/tenant-access";
 import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
 import { auditTenantAction } from "@/lib/audit-log";
 
-export async function createBudgetAction(title: string, code: string) {
+export async function createBudgetAction(title: string, code: string, clientId: string) {
     const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();
     try {
+        const normalizedClientId = clientId?.trim();
+        if (!normalizedClientId) {
+            return { success: false, error: "Cliente é obrigatório para criar um orçamento." };
+        }
+        const clientGate = await assertClientInActiveTenant(normalizedClientId, db);
+        if (!clientGate.ok) {
+            return { success: false, error: clientGate.error };
+        }
+
         const tenantId = await requireActiveTenantId();
         const numberResult = await getNextBudgetNumberAction();
         if (!numberResult.success || !numberResult.data) {
@@ -44,7 +53,7 @@ export async function createBudgetAction(title: string, code: string) {
             code: code || numberResult.data.nextNumber,
             status: "draft" as const,
             total_value: 0,
-            client_id: "",
+            client_id: requireRecordId("client", normalizedClientId),
             tenant_id: tenantRecordId(tenantId),
             use_compositor: true,
             compositor_label: DEFAULT_COMPOSITOR_PANEL_LABEL,
@@ -153,12 +162,11 @@ export async function updateBudgetAction(budgetId: string, updates: Partial<Budg
             }
         });
 
-        if (
-            safeUpdates.client_id !== undefined &&
-            safeUpdates.client_id !== null &&
-            safeUpdates.client_id !== ""
-        ) {
+        if (safeUpdates.client_id !== undefined) {
             const rawClientId = safeUpdates.client_id;
+            if (rawClientId === null || String(rawClientId).trim() === "") {
+                return { success: false, error: "Cliente é obrigatório no orçamento." };
+            }
             if (
                 typeof rawClientId === "object" &&
                 rawClientId !== null &&

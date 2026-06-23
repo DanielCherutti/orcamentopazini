@@ -11,8 +11,8 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "dotenv";
-import { Table } from "surrealdb";
-import { getDb } from "./src/lib/surreal";
+import { StringRecordId, Table } from "surrealdb";
+import { DEFAULT_TENANT_RECORD_ID } from "./src/lib/tenant-constants";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 config({ path: path.join(__dirname, ".env") });
@@ -151,23 +151,25 @@ async function seedProducts() {
     console.log(`   USER: ${process.env.SURREAL_USER || process.env.SURREALDB_USER || "admin"}`);
     console.log(`   PASS: ${(process.env.SURREAL_PASS || process.env.SURREALDB_PASS) ? "***" : "(vazio)"}\n`);
 
+    const { getDb } = await import("./src/lib/surreal");
     const db = await getDb();
 
     try {
         // Verifica se já existem produtos
         const existing = await db.query<[{ count: number }[]]>(
-            `SELECT count() AS count FROM ${TABLE_NAME} WHERE company_id = $company_id`,
-            { company_id: DEFAULT_COMPANY_ID }
+            `SELECT count() AS count FROM ${TABLE_NAME} WHERE company_id = $company_id AND tenant_id = $tenant_id GROUP ALL`,
+            {
+                company_id: DEFAULT_COMPANY_ID,
+                tenant_id: new StringRecordId(DEFAULT_TENANT_RECORD_ID),
+            }
         );
 
         const currentCount = existing[0]?.[0]?.count || 0;
 
         if (currentCount > 0) {
-            console.log(`⚠️  Já existem ${currentCount} produtos no banco.`);
-            console.log("   Deseja continuar e adicionar mais 50 produtos? (Ctrl+C para cancelar)\n");
-
-            // Aguarda 3 segundos para dar tempo de cancelar
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            console.log(`Já existem ${currentCount} produtos de seed no tenant padrão.`);
+            console.log("Seed ignorado para evitar duplicação.");
+            process.exit(0);
         }
 
         const products = [];
@@ -188,6 +190,7 @@ async function seedProducts() {
 
             const product = {
                 company_id: DEFAULT_COMPANY_ID,
+                tenant_id: new StringRecordId(DEFAULT_TENANT_RECORD_ID),
                 code,
                 description: `${description} ${category.name}`,
                 detailedDescription: generateDetailedDescription(description, category.name),
@@ -216,8 +219,11 @@ async function seedProducts() {
 
         // Verifica total final
         const final = await db.query<[{ count: number }[]]>(
-            `SELECT count() AS count FROM ${TABLE_NAME} WHERE company_id = $company_id`,
-            { company_id: DEFAULT_COMPANY_ID }
+            `SELECT count() AS count FROM ${TABLE_NAME} WHERE company_id = $company_id AND tenant_id = $tenant_id GROUP ALL`,
+            {
+                company_id: DEFAULT_COMPANY_ID,
+                tenant_id: new StringRecordId(DEFAULT_TENANT_RECORD_ID),
+            }
         );
 
         const finalCount = final[0]?.[0]?.count || 0;

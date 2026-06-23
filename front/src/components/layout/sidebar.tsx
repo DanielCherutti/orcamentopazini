@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
     Boxes,
     FileSpreadsheet,
+    FileText,
     LayoutDashboard,
     LogOut,
     Package,
@@ -78,7 +79,7 @@ export function Sidebar({
     companyName,
     companySubtitle,
 }: {
-    sessionEmail: string | null;
+    sessionEmail?: string | null;
     companyName: string;
     companySubtitle?: string;
 }) {
@@ -92,6 +93,7 @@ export function Sidebar({
     const isGroups = pathname.startsWith("/dashboard/products/groups");
     const isBudgets = pathname.startsWith("/budgets");
     const isCustomers = pathname.startsWith("/customers");
+    const isModelos = pathname.startsWith("/modelos");
     const isSettings = pathname === "/settings";
     const isUsers = pathname.startsWith("/settings/users");
 
@@ -101,6 +103,7 @@ export function Sidebar({
         { href: "/dashboard/products/groups", icon: Boxes, label: "Grupos", active: isGroups },
         { href: "/budgets", icon: FileSpreadsheet, label: "Orçamentos", active: isBudgets },
         { href: "/customers", icon: Users, label: "Clientes", active: isCustomers },
+        { href: "/modelos", icon: FileText, label: "Modelos", active: isModelos },
         { href: "/settings", icon: Settings, label: "Configurações", active: isSettings },
         { href: "/settings/users", icon: UserCog, label: "Usuários", active: isUsers },
     ] as const;
@@ -114,7 +117,6 @@ export function Sidebar({
                 collapsed ? "w-20 items-center" : "w-64 items-stretch px-3",
             )}
             aria-label="Menu principal"
-            aria-expanded={!collapsed}
         >
             {collapsed ? (
                 <Link

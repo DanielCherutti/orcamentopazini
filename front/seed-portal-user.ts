@@ -10,7 +10,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "dotenv";
 import { StringRecordId, Table } from "surrealdb";
-import { getDb } from "./src/lib/surreal";
 import { hashPassword } from "./src/lib/password";
 import { DEFAULT_TENANT_RECORD_ID } from "./src/lib/tenant-constants";
 import { recordIdToString } from "./src/lib/surreal-record-ids";
@@ -29,6 +28,7 @@ async function main() {
         process.exit(1);
     }
 
+    const { getDb } = await import("./src/lib/surreal");
     const db = await getDb();
 
     const existing = await db.query<[Array<{ id: unknown }>]>(
@@ -40,6 +40,14 @@ async function main() {
     if (existingUser?.id) {
         const userId = recordIdToString(existingUser.id);
         if (userId) {
+            const password_hash = await hashPassword(plain);
+            await db.query(
+                "UPDATE $userId SET password_hash = $passwordHash, active = true, updated_at = time::now()",
+                {
+                    userId: new StringRecordId(userId),
+                    passwordHash: password_hash,
+                },
+            );
             const link = await db.query<[unknown[]]>(
                 "SELECT id FROM portal_user_tenant WHERE user_id = $userId AND tenant_id = $tenantId LIMIT 1",
                 {
@@ -57,7 +65,7 @@ async function main() {
                 console.log(`Membership criada para usuário existente: ${email}`);
             }
         }
-        console.log(`Usuário já existe: ${email}`);
+        console.log(`Usuário atualizado: ${email}`);
         process.exit(0);
     }
 

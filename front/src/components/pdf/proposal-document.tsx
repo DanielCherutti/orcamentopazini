@@ -486,7 +486,7 @@ function collectSessionPrintRows(
                 blockImageUrls: resolveBlockImageUrls(node.id),
             });
         } else if (node.type === 'text') {
-            const html = String((node.props?.content as string) || '');
+            const html = String((node.props?.content as string) || (node.props?.description as string) || '');
             rows.push({
                 depth,
                 title: 'Texto',

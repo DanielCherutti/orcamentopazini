@@ -86,6 +86,7 @@ export function BudgetWorkspace({
     const [budget, setBudget] = useState<Budget>(initialBudget);
     const [useLightScopeRead] = useState(Boolean(initialUseLightScopeRead));
     const [hasChanges, setHasChanges] = useState(false);
+    const [refreshCounter, setRefreshCounter] = useState(0);
     const [environmentsExpanded, setEnvironmentsExpanded] = useState(false);
     const searchParams = useSearchParams();
     const [activeTab, setActiveTab] = useState<ActiveTab>("budget");
@@ -122,6 +123,7 @@ export function BudgetWorkspace({
             setBudget(result.data as Budget);
         }
         setHasChanges(false);
+        setRefreshCounter((prev) => prev + 1);
     };
 
     const handleSave = async () => {
@@ -197,6 +199,7 @@ export function BudgetWorkspace({
                                 {/* Aba Compositor */}
                                 <div className={cn("flex-1 flex min-h-0 overflow-hidden bg-white", activeTab !== 'budget' && "hidden")}>
                                     <BudgetCompositor
+                                        key={`${budgetId}-${refreshCounter}`}
                                         budgetId={budgetId}
                                         budgetCode={budget.code}
                                         compositorLabel={getCompositorPanelLabel(budget.compositor_label)}
