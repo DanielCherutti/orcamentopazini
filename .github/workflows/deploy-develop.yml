@@ -1,0 +1,52 @@
+# Deploy automático para produção quando houver push na branch develop (merge incluído).
+#
+# Secrets obrigatórios (Settings → Secrets and variables → Actions):
+#   SSH_HOST        — ex.: 72.62.105.45
+#   SSH_USER        — ex.: root
+#   SSH_PRIVATE_KEY — chave privada ed25519 (pública em ~/.ssh/authorized_keys no servidor)
+#
+# Opcional:
+#   SSH_PORT        — padrão 22
+#
+# No servidor:
+#   1. Clone em /root/docker/orcamentopazini com acesso git ao GitHub
+#   2. front/.env de produção (não commitar)
+#   3. Chave pública do deploy em authorized_keys
+
+name: Deploy develop
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-develop-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 25m
+          script_stop: true
+          script: |
+            set -euo pipefail
+            export DEPLOY_REPO_PATH="${DEPLOY_REPO_PATH:-/root/docker/orcamentopazini}"
+            cd "$DEPLOY_REPO_PATH"
+            echo ">>> Atualizando código (develop)..."
+            git fetch origin develop
+            git checkout develop
+            git pull --ff-only origin develop
+            chmod +x scripts/deploy-develop.sh
+            bash scripts/deploy-develop.sh
