@@ -7,6 +7,7 @@ import { listCustomersAction } from "@/actions/client-actions";
 import { CustomersTable } from "@/components/clients/customers-table";
 import { CustomerSearchInput } from "@/components/clients/customer-search-input";
 import { DashboardContentCard, DashboardPageShell } from "@/components/layout/dashboard-page-shell";
+import { PageErrorAlert } from "@/components/layout/page-error-alert";
 
 export const metadata: Metadata = {
     title: "Clientes",
@@ -26,11 +27,7 @@ async function CustomersContent({
     const result = await listCustomersAction({ query, page, limit, sortBy, sortOrder });
 
     if (!result.success) {
-        return (
-            <div className="p-8 text-center text-red-500 border border-red-200 rounded-sm bg-red-50">
-                Erro ao carregar clientes: {result.error}
-            </div>
-        );
+        return <PageErrorAlert message={`Erro ao carregar clientes: ${result.error}`} />;
     }
 
     const { data: customers, meta } = result;

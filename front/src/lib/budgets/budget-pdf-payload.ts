@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { assertActionSession } from "@/actions/auth-actions";
 import { getBudgetPdfScopeAction } from "@/actions/budget-actions";
 import { getProposalSettingsAction } from "@/actions/settings-actions";
+import { getCustomerAction, type CustomerFull } from "@/actions/client-actions";
 import type { ProposalSettings } from "@/actions/settings-actions";
 import { getCompositorTreeSnapshotAction } from "@/actions/budget-compositor-tree-actions";
 import {
@@ -12,6 +13,8 @@ import { getScopeFiguresListAction } from "@/actions/budget-scope-actions";
 import { buildTree } from "@/types/budget-compositor-types";
 import type { CompositorPdfPayload } from "@/components/pdf/compositor-pdf-types";
 import type { Budget } from "@/types/budget-types";
+import { renderCompositorPdfVariables } from "@/lib/budget-template-rendering";
+import { buildTemplateVariableContext } from "@/lib/model-variables";
 
 export type BudgetPdfPayloadResult =
     | { ok: true; budget: Budget; settings: ProposalSettings; compositorPdf?: CompositorPdfPayload }
@@ -83,6 +86,14 @@ export async function loadBudgetPdfPayload(
     };
 
     let compositorPdf: CompositorPdfPayload | undefined;
+    let customerForVariables: CustomerFull | null = null;
+    if (budget.client_id) {
+        const customerRes = await getCustomerAction(String(budget.client_id));
+        if (customerRes.success && customerRes.data) {
+            customerForVariables = customerRes.data;
+        }
+    }
+
     if (budget.use_compositor && budget.id) {
         const budgetId = String(budget.id);
         await ensureCompositorHeaderFooterBlockAction(budgetId, { skipRevalidate: true });
@@ -105,6 +116,12 @@ export async function loadBudgetPdfPayload(
             };
         }
     }
+
+    const variableContext = buildTemplateVariableContext({
+        customer: customerForVariables,
+        budget,
+    });
+    compositorPdf = renderCompositorPdfVariables(compositorPdf, variableContext);
 
     return { ok: true, budget, settings, compositorPdf };
 }

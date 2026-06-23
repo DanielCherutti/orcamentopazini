@@ -17,6 +17,7 @@ import { budgetEditUrl } from "@/lib/budgets/budget-path";
 import { useBudgetsRepository } from "@/lib/budgets/use-budgets-repository";
 import { toast } from "@/lib/toast";
 import { useConfirmDialog } from "@/components/providers/confirm-dialog-provider";
+import { BudgetModelImportDialog } from "@/components/budgets/budget-model-import-dialog";
 
 interface BudgetWorkspaceHeaderProps {
     budget: Budget;
@@ -115,14 +116,21 @@ export function BudgetWorkspaceHeader({
     };
 
     return (
-        <header className="border-b bg-card shrink-0 flex items-stretch h-12 overflow-hidden">
+        <header className="tenant-ops-command-bar flex h-12 shrink-0 items-stretch overflow-hidden">
             {/* Left: back + title + status + total */}
             <div className="flex items-center gap-2 px-3 shrink-0 min-w-0 max-w-[45%]">
-                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" asChild>
-                    <Link href="/budgets">
+                <Button variant="ghost" size="sm" className="h-8 shrink-0 gap-1.5 px-2" asChild>
+                    <Link href="/budgets" title="Voltar para orçamentos">
                         <ArrowLeft className="h-4 w-4" />
+                        <span className="hidden lg:inline text-xs">Orçamentos</span>
                     </Link>
                 </Button>
+
+                <span className="hidden md:inline text-muted-foreground/40" aria-hidden>/</span>
+                <span className="hidden md:inline truncate text-xs text-muted-foreground max-w-[8rem] lg:max-w-[12rem]">
+                    {budget.code || "Compositor"}
+                </span>
+                <span className="hidden md:inline text-muted-foreground/40" aria-hidden>/</span>
 
                 {editingTitle ? (
                     <Input
@@ -163,7 +171,7 @@ export function BudgetWorkspaceHeader({
                 {budget.status && getStatusBadge(budget.status)}
 
                 {revisionBadge ? (
-                    <span className="px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 text-xs font-medium shrink-0">
+                    <span className="budget-revision-badge shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold">
                         {revisionBadge}
                     </span>
                 ) : null}
@@ -229,6 +237,12 @@ export function BudgetWorkspaceHeader({
                         <Save className="h-3.5 w-3.5 mr-1.5" />
                         Salvar
                     </Button>
+                )}
+                {editable && (
+                    <BudgetModelImportDialog
+                        budgetId={budget.id!}
+                        onImported={onBudgetRefresh}
+                    />
                 )}
                 {canRevision && (
                     <Button

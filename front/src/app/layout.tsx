@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { PRODUCT_NAME, PRODUCT_TAGLINE } from "@/lib/product-brand";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,10 +15,10 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Pazini",
-    template: "%s | Pazini",
+    default: PRODUCT_NAME,
+    template: `%s | ${PRODUCT_NAME}`,
   },
-  description: "Sistema de orçamentos para equipamentos de segurança",
+  description: PRODUCT_TAGLINE,
   robots: {
     index: false,
     follow: false,
@@ -30,7 +31,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="pt-BR" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning

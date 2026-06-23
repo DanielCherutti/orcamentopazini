@@ -38,6 +38,7 @@ const BASE_SCHEMA_QL = `
             DEFINE TABLE IF NOT EXISTS product_unit SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS image_library SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS client SCHEMALESS;
+            DEFINE TABLE IF NOT EXISTS modelos SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS budget SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS budget_block SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS budget_item SCHEMALESS;
@@ -47,7 +48,10 @@ const BASE_SCHEMA_QL = `
             DEFINE TABLE IF NOT EXISTS image_annotation SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS proposal_settings SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS portal_user SCHEMALESS;
+            DEFINE TABLE IF NOT EXISTS platform_license_settings SCHEMALESS;
             DEFINE INDEX IF NOT EXISTS idx_portal_user_email ON portal_user FIELDS email UNIQUE;
+            DEFINE INDEX IF NOT EXISTS idx_modelos_tenant ON modelos FIELDS tenant_id;
+            DEFINE INDEX IF NOT EXISTS idx_modelos_tipo ON modelos FIELDS tipo;
             DEFINE INDEX IF NOT EXISTS idx_budget_item_budget_id ON budget_item FIELDS budget_id;
             DEFINE INDEX IF NOT EXISTS idx_budget_item_section_id ON budget_item FIELDS section_id;
             DEFINE INDEX IF NOT EXISTS idx_budget_section_location_id ON budget_section FIELDS location_id;

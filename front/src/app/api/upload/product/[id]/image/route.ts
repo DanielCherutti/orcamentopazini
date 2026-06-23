@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiSession } from "@/lib/api-session";
+import { normalizeRouteRecordId, requireProductInTenant } from "@/lib/api-upload-guards";
 import { saveUploadBuffer, uploadPersistErrorResponse } from "@/lib/upload";
 import {
     IMAGE_UPLOAD_MAX_BYTES,
@@ -13,6 +14,11 @@ export async function POST(
 ) {
     const session = await requireApiSession(request);
     if (!session.ok) return session.response;
+
+    const { id: rawId } = await params;
+    const productId = normalizeRouteRecordId(decodeURIComponent(rawId), "product");
+    const denied = await requireProductInTenant(productId, session.ctx.tenantId);
+    if (denied) return denied;
 
     try {
         const formData = await request.formData();
@@ -28,8 +34,7 @@ export async function POST(
             return NextResponse.json({ error: validationError }, { status: 400 });
         }
 
-        const { id } = await params;
-        const sanitizedId = id.replace(":", "_");
+        const sanitizedId = productId.replace(":", "_");
         const url = await saveUploadBuffer(buffer, `products/${sanitizedId}`, file.name);
 
         return NextResponse.json({ url });

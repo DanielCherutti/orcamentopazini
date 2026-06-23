@@ -1,6 +1,6 @@
 "use server";
 
-import { assertActionSession } from "@/actions/auth-actions";
+import { assertWriteActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { Table } from "surrealdb";
 import { revalidatePath } from "next/cache";
@@ -15,6 +15,10 @@ import type { ImageAnnotation, ArrowAnnotation, RectAnnotation, StickerAnnotatio
 import type { AnnotatorViewportState } from "@/components/annotator/annotator-viewport-types";
 
 import type { Surreal } from "surrealdb";
+import {
+    assertBudgetChildInActiveTenant,
+    assertBudgetInActiveTenant,
+} from "@/lib/budget-tenant";
 
 // Tipos para as actions
 export interface SaveBudgetImageParams {
@@ -146,8 +150,11 @@ async function fetchAnnotationsForImages(db: Surreal, images: DbImage[]) {
 }
 
 export async function saveBudgetImageWithAnnotations(params: SaveBudgetImageParams) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetInActiveTenant(params.budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
 
@@ -169,7 +176,7 @@ export async function saveBudgetImageWithAnnotations(params: SaveBudgetImagePara
         let imageId: string;
         let image: DbImage;
 
-        const budgetRecordId = requireRecordId("budget", params.budgetId);
+        const budgetRecordId = gate.budgetRecordId;
         const sectionRecordId = params.sectionId ? requireRecordId("budget_section", params.sectionId) : null;
         const locationRecordId = params.locationId ? requireRecordId("budget_location", params.locationId) : null;
         const blockRecordId = params.blockId ? requireRecordId("budget_block", params.blockId) : null;
@@ -325,13 +332,16 @@ export async function saveBudgetImageWithAnnotations(params: SaveBudgetImagePara
 }
 
 export async function deleteBudgetImage(imageId: string, budgetId: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_image", imageId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
         const imageRecordId = requireRecordId("budget_image", imageId);
-        const budgetRecordId = requireRecordId("budget", budgetId);
+        const budgetRecordId = gate.budgetRecordId;
         const [rows] = await db.query<[DbImage[]]>(
             "SELECT * FROM budget_image WHERE id = $imageId AND budget_id = $budgetId",
             { imageId: imageRecordId, budgetId: budgetRecordId }
@@ -355,8 +365,11 @@ export async function deleteBudgetImage(imageId: string, budgetId: string) {
 }
 
 export async function getBudgetImagesBySection(sectionId: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return [];
+
+    const gate = await assertBudgetChildInActiveTenant("budget_section", sectionId);
+    if (!gate.ok) return [];
 
     const db = await getDb();
     try {
@@ -378,8 +391,11 @@ export async function getBudgetImagesBySection(sectionId: string) {
 }
 
 export async function getBudgetImagesByLocation(locationId: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return [];
+
+    const gate = await assertBudgetChildInActiveTenant("budget_location", locationId);
+    if (!gate.ok) return [];
 
     const db = await getDb();
     try {
@@ -401,12 +417,15 @@ export async function getBudgetImagesByLocation(locationId: string) {
 }
 
 export async function getBudgetImages(budgetId: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return [];
+
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) return [];
 
     const db = await getDb();
     try {
-        const budgetRecordId = requireRecordId("budget", budgetId);
+        const budgetRecordId = gate.budgetRecordId;
         const [images] = await db.query<[DbImage[]]>(`
             SELECT * FROM budget_image
             WHERE budget_id = $budgetId
@@ -424,8 +443,11 @@ export async function getBudgetImages(budgetId: string) {
 }
 
 export async function getBudgetImagesByBlock(blockId: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return [];
+
+    const gate = await assertBudgetChildInActiveTenant("budget_block", blockId);
+    if (!gate.ok) return [];
 
     const db = await getDb();
     try {
@@ -449,8 +471,13 @@ export async function getBudgetImagesByBlock(blockId: string) {
 /** Carrega imagens de múltiplos blocos em uma única query (usado pelo compositor). */
 export async function getBudgetImagesByBlocks(blockIds: string[]): Promise<Record<string, Awaited<ReturnType<typeof fetchAnnotationsForImages>>[number][]>> {
     if (!blockIds.length) return {};
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return {};
+
+    for (const blockId of blockIds) {
+        const gate = await assertBudgetChildInActiveTenant("budget_block", blockId);
+        if (!gate.ok) return {};
+    }
 
     const db = await getDb();
     try {

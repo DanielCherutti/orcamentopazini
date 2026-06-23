@@ -59,12 +59,12 @@ export function ProductGroupsTable({ groups, productCounts }: ProductGroupsTable
 
   if (groups.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/80 bg-muted/20 px-6 py-14 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+      <div className="tenant-ops-empty flex flex-col items-center justify-center gap-3 rounded-xl px-6 py-14 text-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[rgb(var(--primary-rgb)/0.15)] text-[color:var(--brand-secondary)]">
           <Layers className="h-7 w-7" />
         </div>
         <div className="space-y-1">
-          <p className="text-sm font-medium text-foreground">Nenhum grupo ainda</p>
+          <p className="tenant-ops-text text-sm font-medium">Nenhum grupo ainda</p>
           <p className="max-w-sm text-sm text-muted-foreground">
             Crie um grupo para organizar o catálogo e facilitar filtros nos orçamentos.
           </p>
@@ -75,36 +75,23 @@ export function ProductGroupsTable({ groups, productCounts }: ProductGroupsTable
 
   return (
     <>
-      <div className="overflow-hidden rounded-xl border border-border/80 shadow-sm">
+      <div className="app-table overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="border-b border-border bg-gradient-to-r from-primary/[0.08] via-muted/60 to-muted/40">
+          <thead>
             <tr>
-              <th className="h-11 w-16 px-4 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Foto
-              </th>
-              <th className="h-11 px-4 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Nome
-              </th>
-              <th className="h-11 w-[108px] px-4 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Produtos
-              </th>
-              <th className="h-11 w-[128px] px-4 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Criado em
-              </th>
-              <th className="h-11 w-[96px] px-4 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Ações
-              </th>
+              <th className="h-11 w-16 px-4 text-left">Foto</th>
+              <th className="h-11 px-4 text-left">Nome</th>
+              <th className="h-11 w-[108px] px-4 text-center">Produtos</th>
+              <th className="h-11 w-[128px] px-4 text-left">Criado em</th>
+              <th className="h-11 w-[96px] px-4 text-right">Ações</th>
             </tr>
           </thead>
           <tbody>
             {groups.map((group) => (
-              <tr
-                key={group.id}
-                className="border-b border-border/70 transition-colors last:border-0 hover:bg-primary/[0.03]"
-              >
+              <tr key={group.id}>
                 <td className="p-4">
                   {group.image_url ? (
-                    <div className="relative w-10 h-10 rounded-md overflow-hidden bg-muted shrink-0">
+                    <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md bg-[rgb(var(--primary-rgb)/0.1)]">
                       <Image
                         src={group.image_url}
                         alt={group.name}
@@ -115,8 +102,8 @@ export function ProductGroupsTable({ groups, productCounts }: ProductGroupsTable
                       />
                     </div>
                   ) : (
-                    <div className="w-10 h-10 rounded-md bg-muted flex items-center justify-center shrink-0">
-                      <Layers className="h-5 w-5 text-muted-foreground/40" />
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[rgb(var(--primary-rgb)/0.1)]">
+                      <Layers className="h-5 w-5 text-[color:rgb(var(--brand-secondary-rgb)/0.8)]" />
                     </div>
                   )}
                 </td>
@@ -127,12 +114,7 @@ export function ProductGroupsTable({ groups, productCounts }: ProductGroupsTable
                 <td className="p-4 text-muted-foreground">{formatDate(group.created_at)}</td>
                 <td className="p-4">
                   <div className="flex items-center justify-end gap-2">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="rounded-sm h-8 w-8"
-                      asChild
-                    >
+                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" asChild>
                       <Link href={`/dashboard/products/groups/${encodeURIComponent(getGroupId(group))}/edit`}>
                         <Edit className="h-4 w-4" />
                       </Link>
@@ -140,7 +122,7 @@ export function ProductGroupsTable({ groups, productCounts }: ProductGroupsTable
                     <Button
                       variant="outline"
                       size="icon"
-                      className="rounded-sm h-8 w-8 text-destructive hover:text-destructive"
+                      className="h-8 w-8 rounded-lg text-destructive hover:text-destructive"
                       onClick={() => setConfirmId(group.id)}
                       disabled={deletingId === group.id}
                     >

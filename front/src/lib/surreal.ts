@@ -80,6 +80,24 @@ export function resetDb() {
     dbInitialized = false;
 }
 
+/** Erros de token expirado, auth HTTP ou socket inativo — candidatos a reconexão */
+export function isRecoverableDbError(error: unknown): boolean {
+    return isTokenExpiredError(error) || isDbConnectionError(error);
+}
+
+/** Executa operação no SurrealDB; em falha recuperável, reconecta e tenta uma vez */
+export async function withDbRetry<T>(operation: (db: Surreal) => Promise<T>): Promise<T> {
+    try {
+        const db = await getDb();
+        return await operation(db);
+    } catch (error) {
+        if (!isRecoverableDbError(error)) throw error;
+        resetDb();
+        const db = await getDb();
+        return await operation(db);
+    }
+}
+
 async function ensureLiveConnection(instance: Surreal): Promise<boolean> {
     try {
         await instance.query("RETURN 1");
@@ -111,6 +129,7 @@ async function ensureSchema(instance: Surreal): Promise<void> {
             DEFINE TABLE IF NOT EXISTS product_unit SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS image_library SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS client SCHEMALESS;
+            DEFINE TABLE IF NOT EXISTS modelos SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS budget SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS budget_block SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS budget_item SCHEMALESS;
@@ -120,12 +139,38 @@ async function ensureSchema(instance: Surreal): Promise<void> {
             DEFINE TABLE IF NOT EXISTS image_annotation SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS proposal_settings SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS portal_user SCHEMALESS;
+            DEFINE TABLE IF NOT EXISTS tenant SCHEMALESS;
+            DEFINE TABLE IF NOT EXISTS portal_user_tenant SCHEMALESS;
+            DEFINE TABLE IF NOT EXISTS platform_license_settings SCHEMALESS;
+            DEFINE TABLE IF NOT EXISTS platform_audit_log SCHEMALESS;
+            DEFINE TABLE IF NOT EXISTS platform_charge SCHEMALESS;
+            DEFINE TABLE IF NOT EXISTS platform_billing_settings SCHEMALESS;
+            DEFINE TABLE IF NOT EXISTS audit_log SCHEMALESS;
             DEFINE INDEX IF NOT EXISTS idx_portal_user_email ON portal_user FIELDS email UNIQUE;
+            DEFINE INDEX IF NOT EXISTS idx_tenant_slug ON tenant FIELDS slug UNIQUE;
+            DEFINE INDEX IF NOT EXISTS idx_tenant_subdomain ON tenant FIELDS subdomain;
+            DEFINE INDEX IF NOT EXISTS idx_tenant_custom_domain ON tenant FIELDS custom_domain;
+            DEFINE INDEX IF NOT EXISTS idx_platform_audit_tenant ON platform_audit_log FIELDS tenant_id;
+            DEFINE INDEX IF NOT EXISTS idx_platform_audit_at ON platform_audit_log FIELDS created_at;
+            DEFINE INDEX IF NOT EXISTS idx_platform_charge_tenant ON platform_charge FIELDS tenant_id;
+            DEFINE INDEX IF NOT EXISTS idx_platform_charge_asaas ON platform_charge FIELDS asaas_payment_id;
+            DEFINE INDEX IF NOT EXISTS idx_audit_log_tenant ON audit_log FIELDS tenant_id;
+            DEFINE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log FIELDS created_at;
+            DEFINE INDEX IF NOT EXISTS idx_portal_user_tenant_user ON portal_user_tenant FIELDS user_id;
+            DEFINE INDEX IF NOT EXISTS idx_portal_user_tenant_tenant ON portal_user_tenant FIELDS tenant_id;
+            DEFINE INDEX IF NOT EXISTS idx_product_tenant ON product FIELDS tenant_id;
+            DEFINE INDEX IF NOT EXISTS idx_client_tenant ON client FIELDS tenant_id;
+            DEFINE INDEX IF NOT EXISTS idx_modelos_tenant ON modelos FIELDS tenant_id;
+            DEFINE INDEX IF NOT EXISTS idx_modelos_tipo ON modelos FIELDS tipo;
+            DEFINE INDEX IF NOT EXISTS idx_budget_tenant ON budget FIELDS tenant_id;
+            DEFINE INDEX IF NOT EXISTS idx_image_library_tenant ON image_library FIELDS tenant_id;
+            DEFINE INDEX IF NOT EXISTS idx_proposal_settings_tenant ON proposal_settings FIELDS tenant_id;
             DEFINE INDEX IF NOT EXISTS idx_budget_item_budget_id ON budget_item FIELDS budget_id;
             DEFINE INDEX IF NOT EXISTS idx_budget_item_section_id ON budget_item FIELDS section_id;
             DEFINE INDEX IF NOT EXISTS idx_budget_section_location_id ON budget_section FIELDS location_id;
             DEFINE INDEX IF NOT EXISTS idx_budget_location_budget_id ON budget_location FIELDS budget_id;
             INSERT IGNORE INTO company { id: company:0, name: 'Pazini', created_at: time::now() };
+            INSERT IGNORE INTO tenant { id: tenant:pazini, name: 'Pazini', slug: 'pazini', active: true, created_at: time::now() };
         `);
         dbInitialized = true;
         console.log("SurrealDB schema ensured.");

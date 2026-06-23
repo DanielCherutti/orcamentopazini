@@ -1,12 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
     ProposalSettings,
     testImapConnectionAction,
     updateProposalSettingsAction,
 } from "@/actions/settings-actions";
+import { BrandAssetUploadField } from "@/components/platform/brand-asset-upload-field";
+import { TenantAppearanceSettings } from "@/components/settings/tenant-appearance-settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/lib/toast";
-import { Loader2, Mail, Upload } from "lucide-react";
+import { Loader2, Mail } from "lucide-react";
 
 export function SettingsForm({ initialSettings }: { initialSettings: ProposalSettings }) {
     const router = useRouter();
@@ -23,8 +25,6 @@ export function SettingsForm({ initialSettings }: { initialSettings: ProposalSet
     const [imapPassNew, setImapPassNew] = useState("");
     const [imapTesting, setImapTesting] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
-    const [logoUploading, setLogoUploading] = useState(false);
-    const logoFileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         setFormData(initialSettings);
@@ -72,43 +72,16 @@ export function SettingsForm({ initialSettings }: { initialSettings: ProposalSet
         }
     };
 
-    const handleLogoFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        e.target.value = "";
-        if (!file) return;
-        setLogoUploading(true);
-        try {
-            const fd = new FormData();
-            fd.append("file", file);
-            const res = await fetch("/api/upload/library", { method: "POST", body: fd });
-            const json = (await res.json()) as { url?: string; error?: string };
-            if (!res.ok || !json.url) {
-                toast.error(json.error || "Falha ao enviar a imagem");
-                return;
-            }
-            setFormData((prev) => ({ ...prev, company_logo_url: json.url }));
-            toast.success("Logo enviado. Clique em Salvar para aplicar.");
-        } catch {
-            toast.error("Erro ao enviar a imagem");
-        } finally {
-            setLogoUploading(false);
-        }
-    };
-
     return (
-        <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl mx-auto pb-10">
-            <div className="flex justify-between items-center mb-2 mt-6">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Configurações da Empresa</h1>
-                    <p className="text-muted-foreground">
-                        Identidade visual, textos das propostas e envio de e-mail (convites de usuário).
-                    </p>
-                </div>
+        <form onSubmit={handleSubmit} className="mx-auto max-w-4xl space-y-6 pb-10">
+            <div className="flex justify-end">
                 <Button type="submit" disabled={isLoading}>
                     {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                     Salvar Alterações
                 </Button>
             </div>
+
+            <TenantAppearanceSettings />
 
             {/* Identidade Visual */}
             <Card>
@@ -121,7 +94,7 @@ export function SettingsForm({ initialSettings }: { initialSettings: ProposalSet
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-4">
                         <div className="space-y-2">
                             <Label>Nome da Empresa (Exibição)</Label>
                             <Input
@@ -129,49 +102,28 @@ export function SettingsForm({ initialSettings }: { initialSettings: ProposalSet
                                 onChange={e => setFormData({ ...formData, company_name: e.target.value })}
                             />
                         </div>
-                        <div className="space-y-2">
-                            <Label>Logo</Label>
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                                <Input
-                                    className="sm:flex-1"
-                                    value={formData.company_logo_url || ""}
-                                    onChange={e =>
-                                        setFormData({ ...formData, company_logo_url: e.target.value })
-                                    }
-                                    placeholder="https://... ou envie um arquivo"
-                                />
-                                <input
-                                    ref={logoFileInputRef}
-                                    type="file"
-                                    accept="image/jpeg,image/png,image/gif,image/webp"
-                                    className="sr-only"
-                                    onChange={handleLogoFileSelected}
-                                />
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="shrink-0"
-                                    disabled={logoUploading}
-                                    onClick={() => logoFileInputRef.current?.click()}
-                                >
-                                    {logoUploading ? (
-                                        <>
-                                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                            Enviando…
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Upload className="h-4 w-4 mr-2" />
-                                            Enviar imagem
-                                        </>
-                                    )}
-                                </Button>
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                                Cole uma URL pública, use Data URI, ou envie JPG, PNG, GIF ou WEBP (até 5&nbsp;MB). Salve
-                                as alterações após o upload.
-                            </p>
-                        </div>
+                        <BrandAssetUploadField
+                            id="settings-logo"
+                            label="Logo"
+                            value={formData.company_logo_url || ""}
+                            onChange={(url) =>
+                                setFormData({ ...formData, company_logo_url: url })
+                            }
+                            asset="logo"
+                            uploadUrl="/api/upload/library"
+                            hint="JPG, PNG, GIF ou WEBP (até 5 MB). Salve após o upload."
+                        />
+                        <BrandAssetUploadField
+                            id="settings-favicon"
+                            label="Favicon (opcional)"
+                            value={formData.company_favicon_url || ""}
+                            onChange={(url) =>
+                                setFormData({ ...formData, company_favicon_url: url })
+                            }
+                            asset="favicon"
+                            uploadUrl="/api/upload/library"
+                            hint="PNG ou ICO (até 512 KB). Ícone da aba do navegador."
+                        />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">

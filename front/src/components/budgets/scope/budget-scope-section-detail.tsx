@@ -154,7 +154,7 @@ export function SectionDetail({
     useEffect(() => {
         let cancelled = false;
         setItemsLoading(true);
-        void loadScopeSectionPayloadCached(scopeDataVersion, sectionId, {
+        void loadScopeSectionPayloadCached(budgetId, sectionId, {
             skipRead: disableScopePayloadCache,
             skipWrite: disableScopePayloadCache,
         })
@@ -178,7 +178,7 @@ export function SectionDetail({
         return () => {
             cancelled = true;
         };
-    }, [sectionId, scopeDataVersion, disableScopePayloadCache]);
+    }, [sectionId, budgetId, scopeDataVersion, disableScopePayloadCache]);
 
     useEffect(() => {
         if (productGroupsFromParent !== undefined) {
@@ -328,7 +328,7 @@ export function SectionDetail({
 
     const refreshSectionAndScope = useCallback(() => {
         setItemsLoading(true);
-        void loadScopeSectionPayloadCached(scopeDataVersion, sectionId, {
+        void loadScopeSectionPayloadCached(budgetId, sectionId, {
             skipRead: true,
             skipWrite: disableScopePayloadCache,
         }).then((res) => {
@@ -339,7 +339,7 @@ export function SectionDetail({
             setItemsLoading(false);
         });
         onRefresh();
-    }, [scopeDataVersion, sectionId, onRefresh, disableScopePayloadCache]);
+    }, [budgetId, scopeDataVersion, sectionId, onRefresh, disableScopePayloadCache]);
 
     const totalRaw = items.reduce((sum, i) => {
         const subtotal = computeItemSubtotal(i);
@@ -571,6 +571,7 @@ export function SectionDetail({
                 >
                     <CompositorRichTextEditor
                     key={sectionId}
+                    budgetId={budgetId}
                     value={description}
                     onChange={handleDescChange}
                     placeholder="Descreva o trecho..."

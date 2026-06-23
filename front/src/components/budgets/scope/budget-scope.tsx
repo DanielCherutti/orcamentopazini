@@ -39,7 +39,12 @@ import { ScopeFiguresProvider } from "./scope-figures-context";
 import {
     loadScopeSectionPayloadCached,
     prefetchScopeSectionPayloadDebounced,
+    invalidateScopeSectionPayloadCacheForBudget,
 } from "@/lib/budgets/scope-section-payload-cache";
+import {
+    readBudgetScopeSessionCache,
+    writeBudgetScopeSessionCache,
+} from "@/lib/budgets/budget-scope-session-cache";
 import type { BudgetItem } from "@/types/budget-types";
 import { budgetItemsFromGroupedBySectionId } from "@/lib/budgets/budget-section-items-grouped";
 
@@ -70,15 +75,20 @@ export function BudgetScope({
     quoteMarkupPercent = 0,
     quoteDiscountPercent = 0,
 }: BudgetScopeProps) {
-    const [locations, setLocations] = useState<ScopeLocation[]>([]);
+    const sessionSnapshot = readBudgetScopeSessionCache(budgetId);
+    const [locations, setLocations] = useState<ScopeLocation[]>(() => sessionSnapshot?.locations ?? []);
     /** Incrementa após cada refresh para forçar recálculo dos totais por local no índice. */
-    const [scopeDataVersion, setScopeDataVersion] = useState(0);
-    const [loading, setLoading] = useState(true);
-    const [loadingProgress, setLoadingProgress] = useState(0);
-    const [loadingStatusText, setLoadingStatusText] = useState("A carregar estrutura de adequações…");
-    const [selected, setSelected] = useState<Selection | null>(null);
-    const [scopeNumber, setScopeNumber] = useState<string>("");
-    const [locationTotalsById, setLocationTotalsById] = useState<Record<string, number>>({});
+    const [scopeDataVersion, setScopeDataVersion] = useState(() => sessionSnapshot?.scopeDataVersion ?? 0);
+    const [loading, setLoading] = useState(() => !sessionSnapshot?.prefetched);
+    const [loadingProgress, setLoadingProgress] = useState(() => (sessionSnapshot?.prefetched ? 100 : 0));
+    const [loadingStatusText, setLoadingStatusText] = useState(() =>
+        sessionSnapshot?.prefetched ? "Adequações prontas." : "A carregar estrutura de adequações…",
+    );
+    const [selected, setSelected] = useState<Selection | null>(() => sessionSnapshot?.selected ?? null);
+    const [scopeNumber, setScopeNumber] = useState(() => sessionSnapshot?.scopeNumber ?? "");
+    const [locationTotalsById, setLocationTotalsById] = useState<Record<string, number>>(
+        () => sessionSnapshot?.locationTotalsById ?? {},
+    );
     const [locationTotalsLoading, setLocationTotalsLoading] = useState(false);
     const [showCostsOnPrint, setShowCostsOnPrint] = useState(false);
     const [costsDisplayMode, setCostsDisplayMode] = useState<CostDisplayMode>("section");
@@ -88,7 +98,9 @@ export function BudgetScope({
     const [assemblyMode, setAssemblyMode] = useState<LocationAssemblyMode>("percent");
     const [assemblyValue, setAssemblyValue] = useState(0);
     const [costConfigOpen, setCostConfigOpen] = useState(false);
-    const [productGroups, setProductGroups] = useState<ProductGroup[] | undefined>(undefined);
+    const [productGroups, setProductGroups] = useState<ProductGroup[] | undefined>(
+        () => sessionSnapshot?.productGroups,
+    );
     const toggleBtnClass =
         "inline-flex h-8 items-center justify-center rounded-md border px-3 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50";
 
@@ -96,6 +108,7 @@ export function BudgetScope({
         locations: ScopeLocation[];
         scopeVersion: number;
     }> => {
+        invalidateScopeSectionPayloadCacheForBudget(budgetId);
         const scopeVersion = Date.now();
         const locResult = await getLocationsAction(budgetId);
         if (locResult.success && locResult.data) {
@@ -138,12 +151,16 @@ export function BudgetScope({
 
     useEffect(() => {
         let cancelled = false;
+        const cached = readBudgetScopeSessionCache(budgetId);
+        if (cached?.prefetched) {
+            return;
+        }
+
         void (async () => {
             setLoading(true);
             setLoadingProgress(0);
             setLoadingStatusText("A carregar estrutura de adequações…");
 
-            // Etapa 1: estrutura base + cabeçalho do escopo + grupos para cards de produtos.
             const [locPack] = await Promise.all([
                 loadLocations(),
                 loadScopeNumber(),
@@ -153,7 +170,6 @@ export function BudgetScope({
             setLoadingProgress(35);
             setLoadingStatusText("Estrutura carregada. A preparar trechos…");
 
-            // Etapa 2: payload completo de cada trecho (itens + imagens) para evitar "carregando..." ao abrir.
             const sectionIds = locPack.locations.flatMap((loc) => loc.sections.map((sec) => sec.id));
             if (sectionIds.length > 0) {
                 let completed = 0;
@@ -161,10 +177,7 @@ export function BudgetScope({
                 setLoadingStatusText(`Carregando trecho 1 de ${total}…`);
                 await Promise.all(
                     sectionIds.map(async (sectionId) => {
-                        await loadScopeSectionPayloadCached(locPack.scopeVersion, sectionId, {
-                            skipRead: true,
-                            skipWrite: false,
-                        });
+                        await loadScopeSectionPayloadCached(budgetId, sectionId);
                         completed += 1;
                         if (!cancelled) {
                             const pct = 35 + Math.round((completed / total) * 65);
@@ -173,10 +186,10 @@ export function BudgetScope({
                             setLoadingStatusText(
                                 completed >= total
                                     ? "Finalizando carregamento de adequações…"
-                                    : `Carregando trecho ${nextIdx} de ${total}…`
+                                    : `Carregando trecho ${nextIdx} de ${total}…`,
                             );
                         }
-                    })
+                    }),
                 );
             } else {
                 setLoadingProgress(100);
@@ -189,7 +202,30 @@ export function BudgetScope({
         return () => {
             cancelled = true;
         };
-    }, [loadLocations, loadScopeNumber, loadProductGroups]);
+    }, [budgetId, loadLocations, loadScopeNumber, loadProductGroups]);
+
+    useEffect(() => {
+        if (loading) return;
+        writeBudgetScopeSessionCache(budgetId, {
+            locations,
+            scopeNumber,
+            scopeDataVersion,
+            selected,
+            locationTotalsById,
+            productGroups,
+            prefetched: true,
+            cachedAt: Date.now(),
+        });
+    }, [
+        budgetId,
+        loading,
+        locations,
+        scopeNumber,
+        scopeDataVersion,
+        selected,
+        locationTotalsById,
+        productGroups,
+    ]);
 
     useEffect(() => {
         if (!loading) return;
@@ -201,8 +237,9 @@ export function BudgetScope({
     }, [loading]);
 
     useEffect(() => {
+        if (scopeNumber) return;
         void loadScopeNumber();
-    }, [loadScopeNumber]);
+    }, [loadScopeNumber, scopeNumber]);
 
     const totalsCacheRef = useRef<Map<string, Record<string, number>>>(new Map());
     const totalsCacheKey = useMemo(
@@ -448,7 +485,7 @@ export function BudgetScope({
                     isReadOnly={isReadOnly}
                     scopeNumber={scopeNumber}
                     onPrefetchSection={(sectionId) => {
-                        prefetchScopeSectionPayloadDebounced(scopeDataVersion, sectionId);
+                        prefetchScopeSectionPayloadDebounced(budgetId, sectionId);
                     }}
                 />
             )}
@@ -806,8 +843,8 @@ export function BudgetScope({
                     )}
                     {!selected ? (
                         <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
-                            <MapIcon className="h-12 w-12 mb-4 opacity-20" />
-                            <p className="text-sm">Selecione um local ou adicione um novo para começar</p>
+                            <MapIcon className="mb-4 h-12 w-12 text-muted-foreground/40" />
+                            <p className="text-sm text-foreground/75">Selecione um local ou adicione um novo para começar</p>
                         </div>
                     ) : selected.type === "location" ? (
                         <LocationDetail

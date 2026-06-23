@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { Info, FileText, Loader2, Map as MapIcon, Mail, Printer, Table2 } from "lucide-react";
 import { Budget } from "@/types/budget-types";
 import { BudgetTreeV2 } from "./editor/budget-tree-v2";
+import { BudgetWorkspaceFocusMode } from "@/components/budgets/workspace/budget-workspace-focus-mode";
 import { BudgetWorkspaceHeader } from "./workspace/budget-workspace-header";
 import { BudgetEmailTab } from "./workspace/budget-email-tab";
 import { BudgetEmailSyncProvider } from "./workspace/budget-email-sync-context";
@@ -85,6 +86,7 @@ export function BudgetWorkspace({
     const [budget, setBudget] = useState<Budget>(initialBudget);
     const [useLightScopeRead] = useState(Boolean(initialUseLightScopeRead));
     const [hasChanges, setHasChanges] = useState(false);
+    const [refreshCounter, setRefreshCounter] = useState(0);
     const [environmentsExpanded, setEnvironmentsExpanded] = useState(false);
     const searchParams = useSearchParams();
     const [activeTab, setActiveTab] = useState<ActiveTab>("budget");
@@ -121,6 +123,7 @@ export function BudgetWorkspace({
             setBudget(result.data as Budget);
         }
         setHasChanges(false);
+        setRefreshCounter((prev) => prev + 1);
     };
 
     const handleSave = async () => {
@@ -159,7 +162,8 @@ export function BudgetWorkspace({
     return (
         <WorkspaceContext.Provider value={{ activeTab, setActiveTab }}>
             <EnvironmentsContext.Provider value={{ environmentsExpanded, toggleEnvironmentsExpanded }}>
-                <div className="flex flex-col fixed inset-0 z-40 bg-background">
+                <div className="flex flex-col fixed inset-x-0 bottom-0 top-[var(--support-banner-height,0px)] z-40 bg-background animate-in fade-in-0 duration-200 budget-ops-panel">
+                    <BudgetWorkspaceFocusMode />
                     {/* Barra unificada: back + título + abas + ações */}
                     <BudgetWorkspaceHeader
                         budget={budget}
@@ -195,6 +199,7 @@ export function BudgetWorkspace({
                                 {/* Aba Compositor */}
                                 <div className={cn("flex-1 flex min-h-0 overflow-hidden bg-white", activeTab !== 'budget' && "hidden")}>
                                     <BudgetCompositor
+                                        key={`${budgetId}-${refreshCounter}`}
                                         budgetId={budgetId}
                                         budgetCode={budget.code}
                                         compositorLabel={getCompositorPanelLabel(budget.compositor_label)}
@@ -205,15 +210,19 @@ export function BudgetWorkspace({
                                     />
                                 </div>
 
-                                {/* Aba Escopo */}
-                                {activeTab === 'scope' && (
-                                    <div className="flex-1 flex min-h-0 overflow-hidden bg-white">
-                                        <BudgetScope
-                                            budgetId={budgetId}
-                                            isReadOnly={isReadOnly}
-                                        />
-                                    </div>
-                                )}
+                                {/* Aba Escopo — mantém montado para reutilizar cache ao voltar */}
+                                <div
+                                    className={cn(
+                                        "flex-1 flex min-h-0 overflow-hidden bg-white",
+                                        activeTab !== "scope" && "hidden",
+                                    )}
+                                >
+                                    <BudgetScope
+                                        key={budgetId}
+                                        budgetId={budgetId}
+                                        isReadOnly={isReadOnly}
+                                    />
+                                </div>
 
                                 {activeTab === 'quote' && (
                                     <div className="flex-1 flex min-h-0 overflow-hidden bg-white">

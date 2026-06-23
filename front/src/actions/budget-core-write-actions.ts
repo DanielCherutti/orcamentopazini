@@ -3,7 +3,7 @@
 import { Table } from "surrealdb";
 import { revalidatePath } from "next/cache";
 import { StringRecordId } from "surrealdb";
-import { assertActionSession } from "@/actions/auth-actions";
+import { assertWriteActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
 import type { Budget } from "@/types/budget-types";
@@ -22,13 +22,27 @@ import {
 import { isBudgetEditableStatus } from "@/lib/budgets/budget-status";
 import { getNextBudgetNumberAction } from "@/actions/budget-core-read-actions";
 import { recalculateBudgetTotal } from "@/actions/budget-hierarchy-helpers";
+import { assertBudgetInActiveTenant, budgetBelongsToActiveTenant } from "@/lib/budget-tenant";
+import { assertClientInActiveTenant } from "@/lib/tenant-access";
+import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
+import { auditTenantAction } from "@/lib/audit-log";
 
-export async function createBudgetAction(title: string, code: string) {
-    const auth = await assertActionSession();
+export async function createBudgetAction(title: string, code: string, clientId: string) {
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();
     try {
+        const normalizedClientId = clientId?.trim();
+        if (!normalizedClientId) {
+            return { success: false, error: "Cliente é obrigatório para criar um orçamento." };
+        }
+        const clientGate = await assertClientInActiveTenant(normalizedClientId, db);
+        if (!clientGate.ok) {
+            return { success: false, error: clientGate.error };
+        }
+
+        const tenantId = await requireActiveTenantId();
         const numberResult = await getNextBudgetNumberAction();
         if (!numberResult.success || !numberResult.data) {
             return { success: false, error: numberResult.error };
@@ -39,7 +53,8 @@ export async function createBudgetAction(title: string, code: string) {
             code: code || numberResult.data.nextNumber,
             status: "draft" as const,
             total_value: 0,
-            client_id: "",
+            client_id: requireRecordId("client", normalizedClientId),
+            tenant_id: tenantRecordId(tenantId),
             use_compositor: true,
             compositor_label: DEFAULT_COMPOSITOR_PANEL_LABEL,
             show_costs_on_print: false,
@@ -87,6 +102,13 @@ export async function createBudgetAction(title: string, code: string) {
 
         revalidatePath("/budgets");
 
+        await auditTenantAction({
+            action: "budget.create",
+            resourceType: "budget",
+            resourceId: createdBudget.id!,
+            summary: `Orçamento criado: ${createdBudget.title ?? createdBudget.code}`,
+        });
+
         return { success: true, data: toPlain(createdBudget) };
     } catch (error) {
         console.error("Error creating budget:", error);
@@ -96,11 +118,14 @@ export async function createBudgetAction(title: string, code: string) {
 }
 
 export async function updateBudgetAction(budgetId: string, updates: Partial<Budget>) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();
     try {
+        const gate = await assertBudgetInActiveTenant(budgetId, db);
+        if (!gate.ok) return { success: false, error: gate.error };
+
         const allowedFields = [
             "client_id",
             "title",
@@ -125,7 +150,7 @@ export async function updateBudgetAction(budgetId: string, updates: Partial<Budg
             "quote_note_below",
         ];
 
-        const budgetRecordId = requireRecordId("budget", budgetId);
+        const budgetRecordId = gate.budgetRecordId;
 
         const safeUpdates: Record<string, unknown> = {
             updated_at: new Date().toISOString(),
@@ -137,12 +162,11 @@ export async function updateBudgetAction(budgetId: string, updates: Partial<Budg
             }
         });
 
-        if (
-            safeUpdates.client_id !== undefined &&
-            safeUpdates.client_id !== null &&
-            safeUpdates.client_id !== ""
-        ) {
+        if (safeUpdates.client_id !== undefined) {
             const rawClientId = safeUpdates.client_id;
+            if (rawClientId === null || String(rawClientId).trim() === "") {
+                return { success: false, error: "Cliente é obrigatório no orçamento." };
+            }
             if (
                 typeof rawClientId === "object" &&
                 rawClientId !== null &&
@@ -152,6 +176,10 @@ export async function updateBudgetAction(budgetId: string, updates: Partial<Budg
                     String((rawClientId as Record<string, unknown>).id)
                 );
             } else if (typeof rawClientId === "string" && rawClientId.trim().length > 0) {
+                const clientGate = await assertClientInActiveTenant(rawClientId, db);
+                if (!clientGate.ok) {
+                    return { success: false, error: clientGate.error };
+                }
                 safeUpdates.client_id = requireRecordId("client", rawClientId);
             }
         }
@@ -178,6 +206,14 @@ export async function updateBudgetAction(budgetId: string, updates: Partial<Budg
         revalidatePath(budgetRevalidatePath(budgetId));
         revalidatePath("/budgets");
 
+        await auditTenantAction({
+            action: "budget.update",
+            resourceType: "budget",
+            resourceId: budgetId,
+            summary: "Orçamento atualizado",
+            metadata: { fields: Object.keys(safeUpdates).filter((k) => k !== "updated_at") },
+        });
+
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -190,12 +226,15 @@ export async function updateBudgetAction(budgetId: string, updates: Partial<Budg
 }
 
 export async function deleteBudgetAction(budgetId: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();
     try {
-        const budgetRecordId = requireRecordId("budget", budgetId);
+        const gate = await assertBudgetInActiveTenant(budgetId, db);
+        if (!gate.ok) return { success: false, error: gate.error };
+
+        const budgetRecordId = gate.budgetRecordId;
         const currentRaw = await db.select(budgetRecordId);
         const currentBudget = (Array.isArray(currentRaw) ? currentRaw[0] : currentRaw) as
             | Record<string, unknown>
@@ -215,6 +254,12 @@ export async function deleteBudgetAction(budgetId: string) {
         await db.delete(budgetRecordId);
         revalidatePath("/budgets");
         revalidatePath("/dashboard");
+        await auditTenantAction({
+            action: "budget.delete",
+            resourceType: "budget",
+            resourceId: budgetId,
+            summary: "Orçamento excluído",
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -229,12 +274,15 @@ export async function deleteBudgetAction(budgetId: string) {
 export async function syncDraftPricesAction(
     budgetId: string
 ): Promise<{ success: boolean; updatedCount: number; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, updatedCount: 0, error: auth.error };
+
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) return { success: false, updatedCount: 0, error: gate.error };
 
     const runSync = async (): Promise<number> => {
         const db = await getDb();
-        const budgetRecordId = requireRecordId("budget", budgetId);
+        const budgetRecordId = gate.budgetRecordId;
 
         const itemQueries = [
             "SELECT * FROM budget_item WHERE block_id.budget_id = $budgetId AND deleted_at IS NONE FETCH product_id",
@@ -256,7 +304,7 @@ export async function syncDraftPricesAction(
         let updatedCount = 0;
         for (const item of items) {
             const product = item.product_id as Record<string, unknown> | null;
-            if (!product) continue;
+            if (!product || product.is_temporary === true) continue;
 
             const currentUnitPrice = Number(product.equipmentPrice || 0);
             const currentLaborCost = Number(product.assemblyPrice || 0);
@@ -286,6 +334,15 @@ export async function syncDraftPricesAction(
 
     try {
         const updatedCount = await runSync();
+        if (updatedCount > 0) {
+            await auditTenantAction({
+                action: "budget.sync_prices",
+                resourceType: "budget",
+                resourceId: budgetId,
+                summary: `Preços sincronizados em ${updatedCount} item(ns)`,
+                metadata: { updatedCount },
+            });
+        }
         return { success: true, updatedCount };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -478,7 +535,7 @@ export async function syncProductCatalogToDraftBudgetItemsAction(
     productId: string,
     snapshot: ProductCatalogSyncSnapshot
 ): Promise<{ success: boolean; updatedItems: number; updatedStickers: number; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, updatedItems: 0, updatedStickers: 0, error: auth.error };
 
     const db = await getDb();
@@ -502,6 +559,8 @@ export async function syncProductCatalogToDraftBudgetItemsAction(
         for (const item of items) {
             const budget = nestedBudgetFromItem(item);
             if (!budget) continue;
+            const bid = budgetIdStringFromRecord(budget);
+            if (!bid || !(await budgetBelongsToActiveTenant(bid, db))) continue;
             const status = String(budget.status ?? "");
             if (!isBudgetEditableStatus(status)) continue;
 
@@ -610,6 +669,13 @@ export async function syncProductCatalogToDraftBudgetItemsAction(
 
         if (updatedItems > 0 || updatedStickers > 0) {
             revalidatePath("/budgets");
+            await auditTenantAction({
+                action: "budget.sync_catalog",
+                resourceType: "product",
+                resourceId: productId,
+                summary: `Cadastro propagado para orçamentos (${updatedItems} itens, ${updatedStickers} figurinhas)`,
+                metadata: { updatedItems, updatedStickers },
+            });
         }
 
         return { success: true, updatedItems, updatedStickers };
@@ -634,7 +700,7 @@ export async function syncProductPricesToDraftBudgetsAction(
     unitPrice: number,
     laborCost: number
 ): Promise<{ success: boolean; updatedItems: number; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, updatedItems: 0, error: auth.error };
 
     const db = await getDb();

@@ -1,10 +1,12 @@
 import { Surreal, Table } from "surrealdb";
 import type { LiveSubscription } from "surrealdb";
+import { NextRequest, NextResponse } from "next/server";
 import { requireSurrealPassword } from "@/lib/surreal-env";
+import { requireApiSession } from "@/lib/api-session";
+import { assertBudgetInActiveTenant } from "@/lib/budget-tenant";
 
 export const dynamic = "force-dynamic";
 
-// Deriva endpoint WebSocket a partir das mesmas env vars usadas em surreal.ts
 function getWsEndpoint(): string {
   if (process.env.SURREAL_URL) {
     return process.env.SURREAL_URL
@@ -21,10 +23,17 @@ const database = process.env.SURREAL_DB || process.env.SURREALDB_DB || "pazini";
 const username = process.env.SURREAL_USER || process.env.SURREALDB_USER || "admin";
 
 export async function GET(
-  req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ budgetId: string }> }
 ) {
+  const session = await requireApiSession(req);
+  if (!session.ok) return session.response;
+
   const { budgetId } = await params;
+  const gate = await assertBudgetInActiveTenant(budgetId);
+  if (!gate.ok) {
+    return NextResponse.json({ error: gate.error }, { status: 404 });
+  }
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -38,7 +47,6 @@ export async function GET(
         }
       };
 
-      // Conexão WebSocket dedicada por cliente SSE — LIVE SELECT exige WebSocket
       const db = new Surreal();
       let password: string;
       try {
@@ -82,13 +90,28 @@ export async function GET(
       try {
         sub2 = await db.live(new Table("budget_item"));
         sub2.subscribe((msg) => {
-          send(JSON.stringify({ type: "item", action: msg.action }));
+          try {
+            const rec = msg.value as Record<string, unknown>;
+            const bid =
+              String(rec?.budget_id ?? "") ||
+              String((rec?.block_id as Record<string, unknown> | undefined)?.budget_id ?? "") ||
+              String(
+                (
+                  (rec?.section_id as Record<string, unknown> | undefined)?.location_id as
+                    | Record<string, unknown>
+                    | undefined
+                )?.budget_id ?? ""
+              );
+            if (bid && !bid.includes(budgetId)) return;
+            send(JSON.stringify({ type: "item", action: msg.action }));
+          } catch {
+            // ignore
+          }
         });
       } catch (e) {
         console.error("[SSE] Falha ao abrir LIVE SELECT budget_item:", e);
       }
 
-      // Keepalive a cada 25s para evitar timeout de proxies
       const keepalive = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(": keepalive\n\n"));

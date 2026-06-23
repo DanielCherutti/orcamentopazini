@@ -10,9 +10,11 @@ import { UserPlus } from "lucide-react";
 export function PortalUsersForm({
     users,
     sessionEmail,
+    tenantName,
 }: {
     users: PortalUserPublic[];
     sessionEmail: string | null;
+    tenantName?: string | null;
 }) {
     const [createOpen, setCreateOpen] = useState(false);
 
@@ -25,9 +27,12 @@ export function PortalUsersForm({
                             Lista de usuários
                         </h2>
                         <p className="text-sm text-muted-foreground mt-0.5">
+                            {tenantName
+                                ? `Usuários com acesso à organização ${tenantName}.`
+                                : "Usuários com acesso à organização ativa."}{" "}
                             {users.length === 0
-                                ? "Nenhum usuário cadastrado ainda."
-                                : `${users.length} usuário${users.length === 1 ? "" : "s"} com acesso ao portal.`}
+                                ? "Nenhum usuário ainda."
+                                : `${users.length} usuário${users.length === 1 ? "" : "s"}.`}
                         </p>
                     </div>
                     <Button
@@ -36,7 +41,7 @@ export function PortalUsersForm({
                         className="shrink-0"
                     >
                         <UserPlus className="size-4" />
-                        Convidar usuário
+                        Criar usuário
                     </Button>
                 </div>
                 <div className="p-5">

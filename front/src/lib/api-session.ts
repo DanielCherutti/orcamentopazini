@@ -3,21 +3,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE } from "@/lib/auth-constants";
 import { verifySessionToken } from "@/lib/session-token";
 
+import type { TenantRole } from "@/types/tenant-types";
+
+export type ApiSessionContext = {
+    email: string;
+    tenantId: string;
+    role: TenantRole;
+};
+
 function getSessionSecret(): string | undefined {
     const s = process.env.JWT_SECRET?.trim();
     return s && s.length >= 32 ? s : undefined;
 }
 
-async function verifyCookieValue(raw: string | undefined): Promise<boolean> {
-    const secret = getSessionSecret();
-    if (!secret || !raw) return false;
-    const email = await verifySessionToken(raw, secret);
-    return email !== null;
-}
-
 /** Rotas App Router que usam `cookies()` (export/import). */
 export async function assertApiSession(): Promise<
-    { ok: true } | { ok: false; error: string; status: number }
+    { ok: true; ctx: ApiSessionContext } | { ok: false; error: string; status: number }
 > {
     const secret = getSessionSecret();
     if (!secret) {
@@ -26,17 +27,25 @@ export async function assertApiSession(): Promise<
 
     const cookieStore = await cookies();
     const raw = cookieStore.get(SESSION_COOKIE)?.value;
-    if (!(await verifyCookieValue(raw))) {
+    const payload = raw ? await verifySessionToken(raw, secret) : null;
+    if (!payload || payload.pending || !payload.tenantId || !payload.role) {
         return { ok: false, error: "Não autorizado", status: 401 };
     }
 
-    return { ok: true };
+    return {
+        ok: true,
+        ctx: {
+            email: payload.sub,
+            tenantId: payload.tenantId,
+            role: payload.role,
+        },
+    };
 }
 
 /** Rotas que recebem `NextRequest` (uploads). */
 export async function requireApiSession(
     request: NextRequest,
-): Promise<{ ok: true } | { ok: false; response: NextResponse }> {
+): Promise<{ ok: true; ctx: ApiSessionContext } | { ok: false; response: NextResponse }> {
     const secret = getSessionSecret();
     if (!secret) {
         return {
@@ -49,12 +58,27 @@ export async function requireApiSession(
     }
 
     const raw = request.cookies.get(SESSION_COOKIE)?.value;
-    if (!(await verifyCookieValue(raw))) {
+    if (!raw) {
         return {
             ok: false,
             response: NextResponse.json({ error: "Não autorizado" }, { status: 401 }),
         };
     }
 
-    return { ok: true };
+    const payload = await verifySessionToken(raw, secret);
+    if (!payload || payload.pending || !payload.tenantId || !payload.role) {
+        return {
+            ok: false,
+            response: NextResponse.json({ error: "Não autorizado" }, { status: 401 }),
+        };
+    }
+
+    return {
+        ok: true,
+        ctx: {
+            email: payload.sub,
+            tenantId: payload.tenantId,
+            role: payload.role,
+        },
+    };
 }

@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import { Mark, Node as TiptapNode, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
@@ -16,6 +16,7 @@ import {
   Bold, Italic, Underline as UnderlineIcon, List, ListOrdered,
   Heading1, Heading2, AlignLeft, AlignCenter, AlignRight, AlignJustify,
   ImagePlus, Table2, PanelTop, PanelBottom, Hash, ChevronDown, GripHorizontal,
+  Braces,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -23,6 +24,7 @@ import { cn } from '@/lib/utils';
 import { WordPageClientLogo } from '@/components/budgets/compositor/word-page-client-logo';
 import { WordPageWatermark } from '@/components/budgets/compositor/word-page-watermark';
 import { WORD_BAND_THREE_COLUMNS_HTML } from '@/lib/compositor/word-header-templates';
+import { TEMPLATE_VARIABLE_TOKENS } from '@/lib/model-variables';
 
 interface RichTextEditorProps {
   value: string;
@@ -166,8 +168,14 @@ function TiptapEditorSurface({
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
-    setMounted(true);
-    return () => setMounted(false);
+    let active = true;
+    const timer = window.setTimeout(() => {
+      if (active) setMounted(true);
+    }, 0);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, [editor]);
   if (!mounted) {
     return <div className={className} style={style} aria-hidden />;
@@ -279,7 +287,7 @@ export function RichTextEditor({
   onUploadImage,
   extraToolbarItems,
   onEditorReady,
-  persistenceKey,
+  persistenceKey: _persistenceKey,
   variant = 'default',
   readOnly = false,
   wordPageWatermarkUrl,
@@ -292,7 +300,10 @@ export function RichTextEditor({
   valueNormalize,
 }: RichTextEditorProps) {
   const shouldUseFloatingHeaderImages = variant === "word" && !!wordPageBands;
-  const normalizeStoredHtml = (html: string) => valueNormalize?.(html) ?? html;
+  const normalizeStoredHtml = useCallback(
+    (html: string) => valueNormalize?.(html) ?? html,
+    [valueNormalize],
+  );
   const initialEditorValue = shouldUseFloatingHeaderImages
     ? hoistFloatingImages(normalizeStoredHtml(value || ""))
     : normalizeStoredHtml(value || "");
@@ -324,9 +335,16 @@ export function RichTextEditor({
 
   useEffect(() => {
     if (bandDragRef.current) return;
-    setPreviewBandHeights({
+    const next = {
       headerHeight: wordPageBands?.headerHeight ?? 96,
       footerHeight: wordPageBands?.footerHeight ?? 40,
+    };
+    queueMicrotask(() => {
+      setPreviewBandHeights((prev) =>
+        prev.headerHeight === next.headerHeight && prev.footerHeight === next.footerHeight
+          ? prev
+          : next,
+      );
     });
   }, [wordPageBands?.headerHeight, wordPageBands?.footerHeight]);
 
@@ -531,7 +549,7 @@ export function RichTextEditor({
     return () => {
       cancelled = true;
     };
-  }, [value, editor, shouldUseFloatingHeaderImages, valueNormalize]);
+  }, [value, editor, shouldUseFloatingHeaderImages, normalizeStoredHtml]);
 
   if (!editor) return null;
 
@@ -648,6 +666,56 @@ export function RichTextEditor({
       .run();
   };
 
+  const groupedVariables = TEMPLATE_VARIABLE_TOKENS.reduce<Record<string, typeof TEMPLATE_VARIABLE_TOKENS>>(
+    (acc, token) => {
+      if (!acc[token.group]) acc[token.group] = [];
+      acc[token.group].push(token);
+      return acc;
+    },
+    {},
+  );
+
+  const variableToolbarItem = (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          type="button"
+          title="Inserir variável"
+          className={wc}
+        >
+          <Braces className="h-4 w-4" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-80 p-2">
+        <div className="mb-2 text-xs font-semibold text-muted-foreground">Variáveis do documento</div>
+        <div className="max-h-80 space-y-3 overflow-y-auto">
+          {Object.entries(groupedVariables).map(([group, tokens]) => (
+            <div key={group} className="space-y-1.5">
+              <div className="px-1 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                {group}
+              </div>
+              {tokens.map((item) => (
+                <button
+                  key={item.token}
+                  type="button"
+                  className="w-full rounded-md border bg-background p-2 text-left hover:bg-muted/50"
+                  onClick={() => editor.chain().focus().insertContent(item.token).run()}
+                >
+                  <div className="text-xs font-medium">{item.label}</div>
+                  <code className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                    {item.token}
+                  </code>
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+
   const fontToolsBasic = (
     <>
       <Button
@@ -685,6 +753,7 @@ export function RichTextEditor({
       {fontToolsBasic}
       {imageToolbarButton}
       {imagePositionTools}
+      {variableToolbarItem}
       {extraToolbarItems}
     </>
   );
@@ -1156,6 +1225,10 @@ export function RichTextEditor({
                         <span className="text-[11px]">3 colunas</span>
                       </Button>
                     </div>
+                  </div>
+                  <div className="flex min-w-0 flex-col gap-1 border-r border-neutral-200 pr-4">
+                    <span className="text-[10px] font-medium text-neutral-500">Variáveis</span>
+                    <div className="flex h-7 min-h-7 items-center">{variableToolbarItem}</div>
                   </div>
                   {extraToolbarItems ? (
                     <div className="flex min-w-0 flex-col gap-1">

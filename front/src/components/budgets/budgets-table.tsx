@@ -30,18 +30,23 @@ import { useConfirmDialog } from "@/components/providers/confirm-dialog-provider
 
 function BudgetListBranch({ isLast }: { isLast: boolean }) {
     return (
-        <div
-            className="relative mr-2 flex h-10 w-5 shrink-0 items-center"
-            aria-hidden
-        >
+        <div className="relative mr-2 flex h-10 w-5 shrink-0 items-center" aria-hidden>
             <span
                 className={cn(
-                    "absolute left-2 top-0 w-px bg-violet-300",
-                    isLast ? "h-5" : "h-full"
+                    "absolute left-2 top-0 w-px bg-[rgb(var(--brand-secondary-rgb)/0.85)]",
+                    isLast ? "h-5" : "h-full",
                 )}
             />
-            <span className="absolute left-2 top-5 h-px w-3 bg-violet-300" />
+            <span className="absolute left-2 top-5 h-px w-3 bg-[rgb(var(--brand-secondary-rgb)/0.85)]" />
         </div>
+    );
+}
+
+function BudgetRevisionBadge({ label }: { label: string }) {
+    return (
+        <span className="budget-revision-badge inline-flex items-center rounded-md border border-[rgb(var(--brand-secondary-rgb)/0.65)] bg-[rgb(var(--brand-secondary-rgb)/0.32)] px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.08em] text-white shadow-[0_0_12px_-4px_rgb(var(--brand-secondary-rgb)/0.75)]">
+            {label}
+        </span>
     );
 }
 
@@ -289,7 +294,7 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                 <Button
                     variant="outline"
                     size="icon"
-                    className="rounded-sm h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    className="rounded-lg h-8 w-8"
                     title="Excluir orçamento"
                     disabled={
                         deletingId === String(budget.id) ||
@@ -305,7 +310,7 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                 <Button
                     variant="outline"
                     size="icon"
-                    className="rounded-sm h-8 w-8"
+                    className="rounded-lg h-8 w-8"
                     title="Criar revisão editável"
                     disabled={
                         creatingRevisionId === String(budget.id) ||
@@ -329,7 +334,7 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
             <Button
                 variant="outline"
                 size="icon"
-                className="rounded-sm h-8 w-8"
+                className="rounded-lg h-8 w-8"
                 title="Duplicar orçamento"
                 disabled={
                     duplicatingId === String(budget.id) ||
@@ -343,7 +348,7 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
             <Button
                 variant="outline"
                 size="icon"
-                className="rounded-sm h-8 w-8"
+                className="rounded-lg h-8 w-8"
                 asChild
                 disabled={
                     deletingId === String(budget.id) ||
@@ -376,25 +381,24 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
         return (
             <tr
                 key={budget.id}
+                data-revision={isRevision ? "true" : undefined}
                 className={cn(
-                    "border-b border-border transition-colors hover:bg-muted/20",
-                    isRevision && "bg-violet-50/40 hover:bg-violet-50/60"
+                    "border-b border-[rgb(var(--primary-rgb)/0.1)] transition-colors hover:bg-[rgb(var(--primary-rgb)/0.08)]",
+                    isRevision && "budget-revision-row bg-[rgb(var(--primary-rgb)/0.14)] hover:bg-[rgb(var(--primary-rgb)/0.18)]",
                 )}
             >
                 <td className="p-4 align-middle font-medium">
                     {isRevision ? (
-                        <div className="flex items-center text-violet-800">
+                        <div className="flex items-center">
                             <BudgetListBranch isLast={isLastInBranch} />
-                            <span className="text-xs font-semibold uppercase tracking-wide">
-                                {revisionLabel}
-                            </span>
+                            <BudgetRevisionBadge label={revisionLabel ?? ""} />
                         </div>
                     ) : (
                         budget.code || "---"
                     )}
                 </td>
                 <td className={cn("p-4 align-middle", isRevision && "pl-2")}>
-                    <span className={cn(isRevision && "text-sm text-violet-950")}>
+                    <span className={cn(isRevision && "text-sm font-medium tenant-ops-text")}>
                         {budget.title || "---"}
                     </span>
                 </td>
@@ -417,14 +421,14 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
             <div
                 key={budget.id}
                 className={cn(
-                    "border border-border rounded-sm p-4 bg-card space-y-2",
-                    isRevision && "ml-5 border-l-2 border-l-violet-300 bg-violet-50/40"
+                    "space-y-2 rounded-lg border border-[rgb(var(--primary-rgb)/0.15)] bg-[rgb(var(--primary-rgb)/0.04)] p-4",
+                    isRevision && "ml-5 border-l-2 border-l-[color:var(--brand-secondary)] bg-[rgb(var(--primary-rgb)/0.14)]",
                 )}
             >
                 {isRevision ? (
-                    <div className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-violet-800">
+                    <div className="flex items-center gap-1">
                         <BudgetListBranch isLast={isLastInBranch} />
-                        {revisionLabel}
+                        <BudgetRevisionBadge label={revisionLabel ?? ""} />
                     </div>
                 ) : null}
                 <div className="flex items-center justify-between gap-3">
@@ -553,12 +557,12 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
             )}
 
             {/* Desktop Table */}
-            <div className="hidden md:block rounded-md border border-border overflow-hidden">
+            <div className="hidden md:block app-table">
                 <table className="w-full text-sm">
-                    <thead className="bg-muted/30 border-b border-border">
+                    <thead>
                         <tr>
                             <th
-                                className="h-10 px-4 text-left font-medium text-muted-foreground w-[180px] cursor-pointer hover:bg-muted/50 transition-colors group"
+                                className="h-11 px-4 text-left w-[180px] cursor-pointer hover:bg-[rgb(var(--primary-rgb)/0.18)] transition-colors group"
                                 onClick={() => handleSort("code")}
                             >
                                 <div className="flex items-center">
@@ -567,7 +571,7 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                                 </div>
                             </th>
                             <th
-                                className="h-10 px-4 text-left font-medium text-muted-foreground cursor-pointer hover:bg-muted/50 transition-colors group"
+                                className="h-11 px-4 text-left cursor-pointer hover:bg-[rgb(var(--primary-rgb)/0.18)] transition-colors group"
                                 onClick={() => handleSort("title")}
                             >
                                 <div className="flex items-center">
@@ -576,7 +580,7 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                                 </div>
                             </th>
                             <th
-                                className="h-10 px-4 text-left font-medium text-muted-foreground min-w-[11rem] max-w-[16rem] cursor-pointer hover:bg-muted/50 transition-colors group"
+                                className="h-11 px-4 text-left min-w-[11rem] max-w-[16rem] cursor-pointer hover:bg-[rgb(var(--primary-rgb)/0.18)] transition-colors group"
                                 onClick={() => handleSort("client_name")}
                             >
                                 <div className="flex items-center">
@@ -585,7 +589,7 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                                 </div>
                             </th>
                             <th
-                                className="h-10 px-4 text-center font-medium text-muted-foreground min-w-[168px] w-[168px] cursor-pointer hover:bg-muted/50 transition-colors group"
+                                className="h-11 px-4 text-center min-w-[168px] w-[168px] cursor-pointer hover:bg-[rgb(var(--primary-rgb)/0.18)] transition-colors group"
                                 onClick={() => handleSort("status")}
                             >
                                 <div className="flex items-center justify-center gap-1">
@@ -594,7 +598,7 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                                 </div>
                             </th>
                             <th
-                                className="h-10 px-4 text-left font-medium text-muted-foreground w-[160px] cursor-pointer hover:bg-muted/50 transition-colors group"
+                                className="h-11 px-4 text-left w-[160px] cursor-pointer hover:bg-[rgb(var(--primary-rgb)/0.18)] transition-colors group"
                                 onClick={() => handleSort("total_value")}
                             >
                                 <div className="flex items-center">
@@ -603,7 +607,7 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                                 </div>
                             </th>
                             <th
-                                className="h-10 px-4 text-left font-medium text-muted-foreground w-[140px] cursor-pointer hover:bg-muted/50 transition-colors group"
+                                className="h-11 px-4 text-left w-[140px] cursor-pointer hover:bg-[rgb(var(--primary-rgb)/0.18)] transition-colors group"
                                 onClick={() => handleSort("created_at")}
                             >
                                 <div className="flex items-center">
@@ -611,7 +615,7 @@ export function BudgetsTable({ initialBudgets, initialMeta }: BudgetsTableProps)
                                     {getSortIcon("created_at")}
                                 </div>
                             </th>
-                            <th className="h-10 px-4 text-right font-medium text-muted-foreground min-w-[132px] w-[132px]">
+                            <th className="h-11 px-4 text-right min-w-[132px] w-[132px]">
                                 Ações
                             </th>
                         </tr>

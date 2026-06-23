@@ -1,60 +1,43 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { getSessionEmail } from "@/actions/auth-actions";
-import { listPortalUsersAction } from "@/actions/portal-user-actions";
+import { listPortalUsersAction, getPortalAdminCapabilitiesAction } from "@/actions/portal-user-actions";
+import { DashboardPageShell } from "@/components/layout/dashboard-page-shell";
+import { TenantPageError } from "@/components/layout/page-error-alert";
 import { PortalUsersForm } from "@/components/settings/portal-users-form";
-import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
     title: "Usuários do sistema",
 };
 
 export default async function SettingsUsersPage() {
-    const sessionEmail = await getSessionEmail();
-    const list = await listPortalUsersAction();
+    const [sessionEmail, list, caps] = await Promise.all([
+        getSessionEmail(),
+        listPortalUsersAction(),
+        getPortalAdminCapabilitiesAction(),
+    ]);
 
     if (!list.success || !list.users) {
         return (
-            <div className="max-w-7xl mx-auto p-6">
-                <p className="text-destructive">
-                    {list.error ?? "Não foi possível carregar os usuários."}
-                </p>
-                <Link href="/settings" className="text-primary underline mt-4 inline-block">
-                    Voltar às configurações
-                </Link>
-            </div>
+            <TenantPageError
+                pageTitle="Usuários do sistema"
+                message={list.error ?? caps.error ?? "Não foi possível carregar os usuários."}
+                backLink={{ href: "/settings", label: "Configurações" }}
+            />
         );
     }
 
     return (
-        <div className="max-w-5xl mx-auto p-6 space-y-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="space-y-1">
-                    <Button variant="ghost" size="sm" className="-ml-2 h-8 px-2" asChild>
-                        <Link href="/settings">
-                            <ArrowLeft className="size-4" />
-                            Configurações gerais
-                        </Link>
-                    </Button>
-                    <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                        Usuários do sistema
-                    </h1>
-                    <p className="text-sm text-muted-foreground max-w-xl">
-                        Novos acessos: envie só o e-mail — a pessoa recebe um link para criar a
-                        senha. Configure a URL pública e o SMTP em{" "}
-                        <Link href="/settings" className="text-primary font-medium hover:underline">
-                            Configurações da empresa
-                        </Link>{" "}
-                        (seção E-mail / convites). Use a lista para ativar, inativar ou definir senha
-                        manualmente.
-                    </p>
-                </div>
-            </div>
+        <DashboardPageShell
+            title="Usuários do sistema"
+            description="Convites e acessos são por organização (tenant ativo no header). Configure SMTP em Configurações da empresa."
+            backLink={{ href: "/settings", label: "Configurações" }}
+            maxWidth="5xl"
+        >
             <PortalUsersForm
                 users={list.users}
                 sessionEmail={sessionEmail}
+                tenantName={caps.data?.tenantName}
             />
-        </div>
+        </DashboardPageShell>
     );
 }

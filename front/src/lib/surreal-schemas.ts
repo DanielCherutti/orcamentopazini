@@ -15,6 +15,10 @@ DEFINE FIELD cnpj ON client TYPE option<string>;
 DEFINE FIELD phone ON client TYPE option<string>;
 DEFINE FIELD contact ON client TYPE option<string>;
 DEFINE FIELD stateRegistration ON client TYPE option<string>;
+DEFINE FIELD razao_social ON client TYPE option<string>;
+DEFINE FIELD nome_fantasia ON client TYPE option<string>;
+DEFINE FIELD logo_url ON client TYPE option<string>;
+DEFINE FIELD informacoes_adicionais ON client FLEXIBLE TYPE option<object>;
 DEFINE FIELD address ON client FLEXIBLE TYPE option<object>;
 DEFINE FIELD address.cep ON client TYPE option<string>;
 DEFINE FIELD address.street ON client TYPE option<string>;
@@ -33,6 +37,18 @@ DEFINE INDEX idx_client_city ON client FIELDS city;
 DEFINE INDEX idx_client_cnpj ON client FIELDS cnpj;
 DEFINE INDEX idx_client_phone ON client FIELDS phone;
 DEFINE INDEX idx_client_cnpj_unique ON TABLE client COLUMNS cnpj UNIQUE;
+`;
+
+export const modelosSchema = `
+DEFINE TABLE modelos SCHEMALESS;
+DEFINE FIELD nome ON modelos TYPE string ASSERT $value != NONE AND $value != "";
+DEFINE FIELD tipo ON modelos TYPE string ASSERT $value IN ["cabecalho", "rodape", "capa", "orcamento_completo"];
+DEFINE FIELD conteudo ON modelos TYPE string;
+DEFINE FIELD tenant_id ON modelos TYPE option<record<tenant>>;
+DEFINE FIELD created_at ON modelos TYPE datetime DEFAULT time::now();
+DEFINE FIELD updated_at ON modelos TYPE datetime DEFAULT time::now();
+DEFINE INDEX idx_modelos_tenant ON modelos FIELDS tenant_id;
+DEFINE INDEX idx_modelos_tipo ON modelos FIELDS tipo;
 `;
 
 export const createClientTable = async (db: Surreal) => {

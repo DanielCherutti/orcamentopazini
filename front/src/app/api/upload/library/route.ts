@@ -3,7 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireApiSession } from "@/lib/api-session";
 import { saveUploadBuffer, uploadPersistErrorResponse } from "@/lib/upload";
 import {
+    FAVICON_UPLOAD_MAX_BYTES,
     IMAGE_UPLOAD_MAX_BYTES,
+    validateFaviconBuffer,
     validateImageBuffer,
 } from "@/lib/upload-validation";
 
@@ -20,12 +22,18 @@ export async function POST(request: NextRequest) {
         }
 
         const buffer = Buffer.from(await file.arrayBuffer());
-        const validationError = validateImageBuffer(buffer, IMAGE_UPLOAD_MAX_BYTES);
+        const asset = String(formData.get("asset") ?? "logo").trim();
+        const validationError =
+            asset === "favicon"
+                ? validateFaviconBuffer(buffer)
+                : validateImageBuffer(buffer, IMAGE_UPLOAD_MAX_BYTES);
         if (validationError) {
             return NextResponse.json({ error: validationError }, { status: 400 });
         }
 
-        const url = await saveUploadBuffer(buffer, "library", file.name);
+        const tenantFolder = session.ctx.tenantId.replace(":", "_");
+        const subfolder = asset === "favicon" ? "brand/favicon" : "brand/logo";
+        const url = await saveUploadBuffer(buffer, `library/${tenantFolder}/${subfolder}`, file.name);
 
         return NextResponse.json({ url });
     } catch (error) {

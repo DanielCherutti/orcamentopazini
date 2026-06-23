@@ -85,7 +85,7 @@ export function PortalUsersTable({
             <div className="rounded-lg border border-dashed border-border bg-muted/20 px-6 py-10 text-center">
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
                     Nenhum usuário cadastrado. Use{" "}
-                    <strong className="text-foreground">Convidar usuário</strong>{" "}
+                    <strong className="text-foreground">Criar usuário</strong>{" "}
                     ou rode no terminal{" "}
                     <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
                         bun run seed:portal-user
@@ -106,6 +106,7 @@ export function PortalUsersTable({
                 <TableHeader>
                     <TableRow className="hover:bg-transparent">
                         <TableHead className="min-w-[220px]">E-mail</TableHead>
+                        <TableHead>Papel</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="w-[88px] text-right pr-2">
                             <span className="sr-only">Ações</span>
@@ -135,6 +136,11 @@ export function PortalUsersTable({
                             >
                                 <TableCell className="font-medium whitespace-normal py-3">
                                     {u.email}
+                                </TableCell>
+                                <TableCell className="py-3">
+                                    <Badge variant="outline" className="capitalize">
+                                        {u.tenant_role ?? "user"}
+                                    </Badge>
                                 </TableCell>
                                 <TableCell className="py-3">
                                     <div className="flex flex-wrap gap-1.5">
@@ -205,12 +211,12 @@ export function PortalUsersTable({
                         <AlertDialogTitle>Remover usuário?</AlertDialogTitle>
                         <AlertDialogDescription asChild>
                             <span>
-                                O cadastro de{" "}
+                                O acesso de{" "}
                                 <strong className="text-foreground">
                                     {deleteTarget?.email}
                                 </strong>{" "}
-                                será excluído permanentemente. Esta ação não pode
-                                ser desfeita.
+                                será removido desta organização. A conta global pode
+                                continuar existindo se pertencer a outras organizações.
                             </span>
                         </AlertDialogDescription>
                     </AlertDialogHeader>

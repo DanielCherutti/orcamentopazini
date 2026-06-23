@@ -3,9 +3,14 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { Table } from "surrealdb";
-import { assertActionSession } from "@/actions/auth-actions";
+import { assertActionSession, assertWriteActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
+import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
+import { assertEntityInActiveTenant } from "@/lib/tenant-access";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
+import { auditTenantAction } from "@/lib/audit-log";
+import { PRODUCT_USER_AGENT } from "@/lib/product-brand";
+import { normalizeAdditionalInfoKey } from "@/lib/model-variables";
 
 // Basic type for client selector (kept for backward compatibility)
 export type Client = {
@@ -27,25 +32,35 @@ export type CustomerAddress = {
     state?: string;
 };
 
+export type CustomerAdditionalInfo = Record<string, string>;
+
 export type CustomerFull = {
     id: string;
     name: string;
+    razao_social?: string;
+    nome_fantasia?: string;
     cnpj?: string;
     stateRegistration?: string;
     contact?: string;
     phone?: string;
     email?: string;
     city?: string;
+    logo_url?: string;
+    informacoes_adicionais?: CustomerAdditionalInfo;
     address?: CustomerAddress;
 };
 
 export type CustomerFormInput = {
     name: string;
+    razao_social?: string;
+    nome_fantasia?: string;
     cnpj?: string;
     stateRegistration?: string;
     contact?: string;
     phone?: string;
     email?: string;
+    logo_url?: string;
+    informacoes_adicionais?: CustomerAdditionalInfo;
     address?: CustomerAddress;
 };
 
@@ -61,13 +76,40 @@ const addressSchema = z.object({
 
 const customerSchema = z.object({
     name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+    razao_social: z.string().optional(),
+    nome_fantasia: z.string().optional(),
     cnpj: z.string().optional(),
     stateRegistration: z.string().optional(),
     contact: z.string().optional(),
     phone: z.string().optional(),
     email: z.string().email("E-mail inválido").optional().or(z.literal("")),
+    logo_url: z.string().optional(),
+    informacoes_adicionais: z.record(z.string(), z.string()).optional(),
     address: addressSchema,
 });
+
+function normalizeAdditionalInfo(raw: CustomerAdditionalInfo | undefined): CustomerAdditionalInfo {
+    const out: CustomerAdditionalInfo = {};
+    for (const [key, value] of Object.entries(raw ?? {})) {
+        const normalizedKey = normalizeAdditionalInfoKey(key);
+        const normalizedValue = String(value ?? "").trim();
+        if (!normalizedKey || !normalizedValue) continue;
+        out[normalizedKey] = normalizedValue;
+    }
+    return out;
+}
+
+function serializeAdditionalInfo(raw: unknown): CustomerAdditionalInfo {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+    const out: CustomerAdditionalInfo = {};
+    for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+        const normalizedKey = normalizeAdditionalInfoKey(key);
+        const normalizedValue = String(value ?? "").trim();
+        if (!normalizedKey || !normalizedValue) continue;
+        out[normalizedKey] = normalizedValue;
+    }
+    return out;
+}
 
 function serializeCustomer(record: Record<string, unknown>): CustomerFull {
     if (!record) return record as unknown as CustomerFull;
@@ -102,12 +144,16 @@ function serializeCustomer(record: Record<string, unknown>): CustomerFull {
     return {
         id: safeId(record.id),
         name: String(record.name || ""),
+        razao_social: record.razao_social ? String(record.razao_social) : String(record.name || ""),
+        nome_fantasia: record.nome_fantasia ? String(record.nome_fantasia) : undefined,
         cnpj: record.cnpj ? String(record.cnpj) : undefined,
         stateRegistration: record.stateRegistration ? String(record.stateRegistration) : undefined,
         contact: record.contact ? String(record.contact) : undefined,
         phone: record.phone ? String(record.phone) : undefined,
         email: record.email ? String(record.email) : undefined,
         city: record.city ? String(record.city) : undefined,
+        logo_url: record.logo_url ? String(record.logo_url) : undefined,
+        informacoes_adicionais: serializeAdditionalInfo(record.informacoes_adicionais),
         address,
     };
 }
@@ -118,17 +164,23 @@ export async function searchClientsAction(query: string) {
 
     const db = await getDb();
     try {
+        const tenantId = await requireActiveTenantId();
         const sql = `
             SELECT * FROM client
             WHERE
+                tenant_id = $tenantId
+                AND (
                 string::lowercase(name) CONTAINS string::lowercase($query)
                 OR string::lowercase(email) CONTAINS string::lowercase($query)
                 OR string::lowercase(city) CONTAINS string::lowercase($query)
+                OR string::lowercase(address.city) CONTAINS string::lowercase($query)
+                OR string::lowercase(nome_fantasia) CONTAINS string::lowercase($query)
                 OR string::lowercase(cnpj) CONTAINS string::lowercase($query)
+                )
             LIMIT 10
         `;
 
-        const result = await db.query<[Client[]]>(sql, { query });
+        const result = await db.query<[Client[]]>(sql, { query, tenantId: tenantRecordId(tenantId) });
         const data = result[0]?.map((c) => ({
             id: String(c.id),
             name: c.name,
@@ -165,14 +217,19 @@ export async function listCustomersAction(params?: {
     const sortOrder = params?.sortOrder || "asc";
 
     try {
-        let sql = "SELECT * FROM client";
-        const queryParams: Record<string, string> = {};
+        const tenantId = await requireActiveTenantId();
+        let sql = "SELECT * FROM client WHERE tenant_id = $tenantId";
+        const queryParams: Record<string, string | ReturnType<typeof tenantRecordId>> = {
+            tenantId: tenantRecordId(tenantId),
+        };
 
         if (search) {
-            sql += ` WHERE string::lowercase(name) CONTAINS string::lowercase($search)
+            sql += ` AND (string::lowercase(name) CONTAINS string::lowercase($search)
                 OR string::lowercase(cnpj) CONTAINS string::lowercase($search)
                 OR string::lowercase(city) CONTAINS string::lowercase($search)
-                OR string::lowercase(email) CONTAINS string::lowercase($search)`;
+                OR string::lowercase(address.city) CONTAINS string::lowercase($search)
+                OR string::lowercase(nome_fantasia) CONTAINS string::lowercase($search)
+                OR string::lowercase(email) CONTAINS string::lowercase($search))`;
             queryParams.search = search;
         }
 
@@ -208,6 +265,9 @@ export async function listCustomersAction(params?: {
 export async function getCustomerAction(id: string) {
     const auth = await assertActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const entityGate = await assertEntityInActiveTenant("client", id, "Cliente não encontrado");
+    if (!entityGate.ok) return { success: false, error: entityGate.error };
 
     const db = await getDb();
     try {
@@ -355,7 +415,7 @@ export async function lookupCnpjAction(cnpj: string): Promise<
                 signal: controller.signal,
                 headers: {
                     Accept: "application/json",
-                    "User-Agent": "Pazini/1.0 (client-form)",
+                    "User-Agent": `${PRODUCT_USER_AGENT} (client-form)`,
                 },
                 cache: "no-store",
             },
@@ -412,7 +472,7 @@ export async function lookupCnpjAction(cnpj: string): Promise<
 }
 
 export async function createCustomerAction(data: CustomerFormInput) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();
@@ -424,12 +484,15 @@ export async function createCustomerAction(data: CustomerFormInput) {
     }
 
     const d = validated.data;
+    const razaoSocial = (d.razao_social || d.name).trim();
+    const informacoesAdicionais = normalizeAdditionalInfo(d.informacoes_adicionais);
 
     try {
+        const tenantId = await requireActiveTenantId();
         if (d.cnpj) {
             const existing = await db.query<[{ id: unknown }[]]>(
-                "SELECT id FROM client WHERE cnpj = $cnpj",
-                { cnpj: d.cnpj }
+                "SELECT id FROM client WHERE cnpj = $cnpj AND tenant_id = $tenantId",
+                { cnpj: d.cnpj, tenantId: tenantRecordId(tenantId) },
             );
             if (existing[0] && existing[0].length > 0) {
                 return {
@@ -441,19 +504,30 @@ export async function createCustomerAction(data: CustomerFormInput) {
         }
 
         await db.create(new Table("client")).content({
-            name: d.name,
+            name: razaoSocial,
+            razao_social: razaoSocial,
+            nome_fantasia: d.nome_fantasia || null,
             cnpj: d.cnpj || null,
             stateRegistration: d.stateRegistration || null,
             contact: d.contact || null,
             phone: d.phone || null,
             email: d.email || null,
+            logo_url: d.logo_url || null,
+            informacoes_adicionais: informacoesAdicionais,
             city: d.address?.city || null,
             address: d.address || null,
+            tenant_id: tenantRecordId(tenantId),
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
         });
 
         revalidatePath("/customers");
+        await auditTenantAction({
+            action: "client.create",
+            resourceType: "client",
+            summary: `Cliente criado: ${razaoSocial}`,
+            metadata: { name: razaoSocial },
+        });
         return { success: true };
     } catch (error) {
         console.error("Error creating customer:", error);
@@ -463,8 +537,11 @@ export async function createCustomerAction(data: CustomerFormInput) {
 }
 
 export async function updateCustomerAction(id: string, data: CustomerFormInput) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const entityGate = await assertEntityInActiveTenant("client", id, "Cliente não encontrado");
+    if (!entityGate.ok) return { success: false, error: entityGate.error };
 
     const db = await getDb();
 
@@ -475,13 +552,16 @@ export async function updateCustomerAction(id: string, data: CustomerFormInput) 
     }
 
     const d = validated.data;
+    const razaoSocial = (d.razao_social || d.name).trim();
+    const informacoesAdicionais = normalizeAdditionalInfo(d.informacoes_adicionais);
 
     try {
         const recordId = requireRecordId("client", id);
         if (d.cnpj) {
+            const tenantId = entityGate.tenantId;
             const existing = await db.query<[{ id: unknown }[]]>(
-                "SELECT id FROM client WHERE cnpj = $cnpj AND id != $id",
-                { cnpj: d.cnpj, id: recordId }
+                "SELECT id FROM client WHERE cnpj = $cnpj AND id != $id AND tenant_id = $tenantId",
+                { cnpj: d.cnpj, id: recordId, tenantId: tenantRecordId(tenantId) }
             );
             if (existing[0] && existing[0].length > 0) {
                 return {
@@ -493,18 +573,28 @@ export async function updateCustomerAction(id: string, data: CustomerFormInput) 
         }
 
         await db.update(recordId).merge({
-            name: d.name,
+            name: razaoSocial,
+            razao_social: razaoSocial,
+            nome_fantasia: d.nome_fantasia || null,
             cnpj: d.cnpj || null,
             stateRegistration: d.stateRegistration || null,
             contact: d.contact || null,
             phone: d.phone || null,
             email: d.email || null,
+            logo_url: d.logo_url || null,
+            informacoes_adicionais: informacoesAdicionais,
             city: d.address?.city || null,
             address: d.address || null,
             updated_at: new Date().toISOString(),
         });
 
         revalidatePath("/customers");
+        await auditTenantAction({
+            action: "client.update",
+            resourceType: "client",
+            resourceId: id,
+            summary: `Cliente atualizado: ${razaoSocial}`,
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -517,15 +607,18 @@ export async function updateCustomerAction(id: string, data: CustomerFormInput) 
 }
 
 export async function deleteCustomerAction(id: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const entityGate = await assertEntityInActiveTenant("client", id, "Cliente não encontrado");
+    if (!entityGate.ok) return { success: false, error: entityGate.error };
 
     const db = await getDb();
     try {
         const recordId = requireRecordId("client", id);
 
         const refs = await db.query<[{ id: unknown }[]]>(
-            "SELECT id FROM budget WHERE client = $id LIMIT 1",
+            "SELECT id FROM budget WHERE client_id = $id LIMIT 1",
             { id: recordId }
         );
         if (refs[0] && refs[0].length > 0) {
@@ -537,6 +630,12 @@ export async function deleteCustomerAction(id: string) {
 
         await db.delete(recordId);
         revalidatePath("/customers");
+        await auditTenantAction({
+            action: "client.delete",
+            resourceType: "client",
+            resourceId: id,
+            summary: "Cliente excluído",
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {

@@ -1,34 +1,57 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 
 interface SidebarContextValue {
     collapsed: boolean;
     toggleSidebar: () => void;
+    setCollapsed: (value: boolean) => void;
 }
 
 const SidebarContext = createContext<SidebarContextValue | null>(null);
 
 const STORAGE_KEY = "sidebar-collapsed";
 
-function getInitialCollapsed(): boolean {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem(STORAGE_KEY) === "true";
-}
+/** Default recolhido — igual no SSR e na 1ª renderização do cliente (evita hydration mismatch). */
+const SSR_COLLAPSED_DEFAULT = true;
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
-    const [collapsed, setCollapsed] = useState(getInitialCollapsed);
+    const [collapsed, setCollapsedState] = useState(SSR_COLLAPSED_DEFAULT);
+
+    useEffect(() => {
+        try {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored !== null) {
+                setCollapsedState(stored === "true");
+            }
+        } catch {
+            /* ignore private mode */
+        }
+    }, []);
+
+    const setCollapsed = useCallback((value: boolean) => {
+        setCollapsedState(value);
+        try {
+            localStorage.setItem(STORAGE_KEY, String(value));
+        } catch {
+            /* ignore */
+        }
+    }, []);
 
     const toggleSidebar = useCallback(() => {
-        setCollapsed((prev) => {
+        setCollapsedState((prev) => {
             const next = !prev;
-            localStorage.setItem(STORAGE_KEY, String(next));
+            try {
+                localStorage.setItem(STORAGE_KEY, String(next));
+            } catch {
+                /* ignore */
+            }
             return next;
         });
     }, []);
 
     return (
-        <SidebarContext.Provider value={{ collapsed, toggleSidebar }}>
+        <SidebarContext.Provider value={{ collapsed, toggleSidebar, setCollapsed }}>
             {children}
         </SidebarContext.Provider>
     );

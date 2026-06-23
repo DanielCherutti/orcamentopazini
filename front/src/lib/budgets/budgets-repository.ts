@@ -31,7 +31,7 @@ export type BudgetGetResult = {
 export interface BudgetsRepository {
   list(params?: BudgetListParams): Promise<BudgetListResult>;
   get(id: string): Promise<BudgetGetResult>;
-  createDraft(): Promise<{ success: boolean; data?: Budget; error?: string }>;
+  createDraft(clientId: string, title?: string): Promise<{ success: boolean; data?: Budget; error?: string }>;
   updateBudget(budgetId: string, patch: Partial<Budget>): Promise<{ success: boolean; error?: string }>;
 
   addLocation(budgetId: string, name: string): Promise<{ success: boolean; error?: string }>;
@@ -58,4 +58,3 @@ export interface BudgetsRepository {
   /** Apenas orçamentos em andamento (`draft`). */
   deleteBudget(budgetId: string): Promise<{ success: boolean; error?: string }>;
 }
-

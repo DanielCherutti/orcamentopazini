@@ -3,10 +3,13 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { Table } from "surrealdb";
-import { assertActionSession } from "@/actions/auth-actions";
-import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
+import { assertWriteActionSession } from "@/actions/auth-actions";
+import { getDb, resetDb, isTokenExpiredError, withDbRetry } from "@/lib/surreal";
+import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
+import { assertEntityInActiveTenant } from "@/lib/tenant-access";
 import { saveFile, deleteFile } from "@/lib/upload";
 import { InvalidRecordIdError, recordIdToString, requireRecordId } from "@/lib/surreal-record-ids";
+import { auditTenantAction } from "@/lib/audit-log";
 
 export type ProductGroup = {
   id: string;
@@ -49,14 +52,15 @@ function serializeGroup(raw: Record<string, unknown>): ProductGroup {
 }
 
 export async function listProductGroupsAction() {
-  const auth = await assertActionSession();
+  const auth = await assertWriteActionSession();
   if (!auth.ok) return { success: false, error: auth.error, data: [] };
 
   const db = await getDb();
   try {
+    const tenantId = await requireActiveTenantId();
     const result = await db.query<[ProductGroup[]]>(
-      `SELECT * FROM ${TABLE_NAME} WHERE company_id = $company_id ORDER BY name ASC`,
-      { company_id: DEFAULT_COMPANY_ID }
+      `SELECT * FROM ${TABLE_NAME} WHERE company_id = $company_id AND tenant_id = $tenantId ORDER BY name ASC`,
+      { company_id: DEFAULT_COMPANY_ID, tenantId: tenantRecordId(tenantId) },
     );
     const rows = result[0] ?? [];
     return { success: true, data: rows.map(serializeGroup) };
@@ -68,8 +72,11 @@ export async function listProductGroupsAction() {
 }
 
 export async function getProductGroupAction(id: string) {
-  const auth = await assertActionSession();
+  const auth = await assertWriteActionSession();
   if (!auth.ok) return { success: false, error: auth.error };
+
+  const entityGate = await assertEntityInActiveTenant(TABLE_NAME, id, "Grupo não encontrado");
+  if (!entityGate.ok) return { success: false, error: entityGate.error };
 
   const db = await getDb();
   try {
@@ -89,7 +96,7 @@ export async function getProductGroupAction(id: string) {
 }
 
 export async function createProductGroupAction(formData: FormData) {
-  const auth = await assertActionSession();
+  const auth = await assertWriteActionSession();
   if (!auth.ok) return { success: false, error: auth.error };
 
   const db = await getDb();
@@ -113,8 +120,10 @@ export async function createProductGroupAction(formData: FormData) {
   }
 
   try {
+    const tenantId = await requireActiveTenantId();
     const created = await db.create(new Table(TABLE_NAME)).content({
       company_id: DEFAULT_COMPANY_ID,
+      tenant_id: tenantRecordId(tenantId),
       name: validated.data.name,
       image_url,
       created_at: new Date().toISOString(),
@@ -126,7 +135,14 @@ export async function createProductGroupAction(formData: FormData) {
 
     revalidatePath("/dashboard/products");
     revalidatePath("/dashboard/products/groups");
-    return { success: true, data: serializeGroup(group as Record<string, unknown>) };
+    const serialized = serializeGroup(group as Record<string, unknown>);
+    await auditTenantAction({
+      action: "product_group.create",
+      resourceType: "product_group",
+      resourceId: serialized.id,
+      summary: `Grupo criado: ${validated.data.name}`,
+    });
+    return { success: true, data: serialized };
   } catch (error) {
     console.error("Error creating product group:", error);
     if (isTokenExpiredError(error)) resetDb();
@@ -135,8 +151,11 @@ export async function createProductGroupAction(formData: FormData) {
 }
 
 export async function updateProductGroupAction(id: string, formData: FormData) {
-  const auth = await assertActionSession();
+  const auth = await assertWriteActionSession();
   if (!auth.ok) return { success: false, error: auth.error };
+
+  const entityGate = await assertEntityInActiveTenant(TABLE_NAME, id, "Grupo não encontrado");
+  if (!entityGate.ok) return { success: false, error: entityGate.error };
 
   const db = await getDb();
   const name = formData.get("name") as string;
@@ -191,7 +210,14 @@ export async function updateProductGroupAction(id: string, formData: FormData) {
 
     revalidatePath("/dashboard/products");
     revalidatePath("/dashboard/products/groups");
-    return { success: true, data: serializeGroup(group as Record<string, unknown>) };
+    const serialized = serializeGroup(group as Record<string, unknown>);
+    await auditTenantAction({
+      action: "product_group.update",
+      resourceType: "product_group",
+      resourceId: id,
+      summary: `Grupo atualizado: ${validated.data.name}`,
+    });
+    return { success: true, data: serialized };
   } catch (error) {
     if (error instanceof InvalidRecordIdError) {
       return { success: false, error: error.message };
@@ -203,8 +229,11 @@ export async function updateProductGroupAction(id: string, formData: FormData) {
 }
 
 export async function deleteProductGroupAction(id: string) {
-  const auth = await assertActionSession();
+  const auth = await assertWriteActionSession();
   if (!auth.ok) return { success: false, error: auth.error };
+
+  const entityGate = await assertEntityInActiveTenant(TABLE_NAME, id, "Grupo não encontrado");
+  if (!entityGate.ok) return { success: false, error: entityGate.error };
 
   const db = await getDb();
   try {
@@ -230,8 +259,14 @@ export async function deleteProductGroupAction(id: string) {
     }
 
     revalidatePath("/dashboard/products");
-    revalidatePath("/dashboard/products/groups");
-    return { success: true };
+        revalidatePath("/dashboard/products/groups");
+        await auditTenantAction({
+            action: "product_group.delete",
+            resourceType: "product_group",
+            resourceId: id,
+            summary: "Grupo de produtos excluído",
+        });
+        return { success: true };
   } catch (error) {
     if (error instanceof InvalidRecordIdError) {
       return { success: false, error: error.message };
@@ -244,7 +279,7 @@ export async function deleteProductGroupAction(id: string) {
 
 /** Retorna apenas grupos que possuem pelo menos 1 produto (para seletor no orçamento). */
 export async function listProductGroupsWithProductsAction() {
-  const auth = await assertActionSession();
+  const auth = await assertWriteActionSession();
   if (!auth.ok) return { success: false, error: auth.error, data: [] };
 
   const listRes = await listProductGroupsAction();
@@ -253,45 +288,97 @@ export async function listProductGroupsWithProductsAction() {
   }
   if (!listRes.data?.length) return { success: true, data: [] };
 
-  const withProducts: ProductGroup[] = [];
-  for (const g of listRes.data) {
-    const prodsRes = await getProductGroupProductsAction(g.id);
-    if (prodsRes.success && prodsRes.data && prodsRes.data.length > 0) {
-      withProducts.push(g);
-    }
+  const countsRes = await getProductGroupProductCountsAction(listRes.data.map((g) => g.id));
+  if (!countsRes.success) {
+    return { success: false, error: countsRes.error ?? "Falha ao contar produtos dos grupos", data: [] };
   }
+  const withProducts = listRes.data.filter((g) => (countsRes.counts[g.id] ?? 0) > 0);
   return { success: true, data: withProducts };
 }
 
+function groupIdLookupKeys(groupId: string): string[] {
+  try {
+    const rid = requireRecordId(TABLE_NAME, groupId);
+    const normalized = recordIdToString(rid) ?? groupId;
+    return normalized === groupId ? [groupId] : [groupId, normalized];
+  } catch {
+    return [groupId];
+  }
+}
+
+/** Conta produtos por grupo em uma única query (evita N chamadas paralelas ao SurrealDB). */
+export async function getProductGroupProductCountsAction(
+  groupIds: string[],
+): Promise<{ success: boolean; error?: string; counts: Record<string, number> }> {
+  const auth = await assertWriteActionSession();
+  if (!auth.ok) return { success: false, error: auth.error, counts: {} };
+
+  const counts: Record<string, number> = Object.fromEntries(groupIds.map((id) => [id, 0]));
+  if (groupIds.length === 0) return { success: true, counts };
+
+  try {
+    const tenantId = await requireActiveTenantId();
+    const keyToGroupId = new Map<string, string>();
+    for (const groupId of groupIds) {
+      for (const key of groupIdLookupKeys(groupId)) {
+        keyToGroupId.set(key, groupId);
+      }
+    }
+
+    await withDbRetry(async (db) => {
+      const result = await db.query(
+        `SELECT group_ids FROM product WHERE tenant_id = $tenantId AND group_ids != NONE`,
+        { tenantId: tenantRecordId(tenantId) },
+      );
+      const rows = Array.isArray(result[0]) ? result[0] : [];
+      for (const row of rows) {
+        const gids = (row as Record<string, unknown>).group_ids;
+        if (!Array.isArray(gids)) continue;
+        for (const gid of gids) {
+          const key = recordIdToString(gid) ?? String(gid);
+          const groupId = keyToGroupId.get(key);
+          if (groupId) counts[groupId] += 1;
+        }
+      }
+    });
+
+    return { success: true, counts };
+  } catch (error) {
+    console.error("Error fetching product group counts:", error);
+    return { success: false, error: "Falha ao contar produtos dos grupos", counts };
+  }
+}
+
 export async function getProductGroupProductsAction(groupId: string) {
-  const auth = await assertActionSession();
+  const auth = await assertWriteActionSession();
   if (!auth.ok) return { success: false, error: auth.error, data: [] };
 
-  const db = await getDb();
   try {
+    const tenantId = await requireActiveTenantId();
     const groupRecordId = requireRecordId(TABLE_NAME, groupId);
 
-    const result = await db.query(
-      `SELECT id, code, description, unit, equipmentPrice, assemblyPrice, imageUrl FROM product WHERE group_ids CONTAINS $groupId`,
-      { groupId: groupRecordId }
-    );
-    const rawProducts = Array.isArray(result[0]) ? result[0] : [];
-    const products = rawProducts.map((p: Record<string, unknown>) => ({
-      id: recordIdToString(p.id),
-      code: p.code as string,
-      description: p.description as string,
-      unit: p.unit as string,
-      equipmentPrice: p.equipmentPrice as number,
-      assemblyPrice: p.assemblyPrice as number,
-      imageUrl: p.imageUrl ? String(p.imageUrl) : undefined,
-    }));
+    const products = await withDbRetry(async (db) => {
+      const result = await db.query(
+        `SELECT id, code, description, unit, equipmentPrice, assemblyPrice, imageUrl FROM product WHERE tenant_id = $tenantId AND group_ids CONTAINS $groupId`,
+        { tenantId: tenantRecordId(tenantId), groupId: groupRecordId },
+      );
+      const rawProducts = Array.isArray(result[0]) ? result[0] : [];
+      return rawProducts.map((p: Record<string, unknown>) => ({
+        id: recordIdToString(p.id),
+        code: p.code as string,
+        description: p.description as string,
+        unit: p.unit as string,
+        equipmentPrice: p.equipmentPrice as number,
+        assemblyPrice: p.assemblyPrice as number,
+        imageUrl: p.imageUrl ? String(p.imageUrl) : undefined,
+      }));
+    });
     return { success: true, data: products };
   } catch (error) {
     if (error instanceof InvalidRecordIdError) {
       return { success: false, error: error.message, data: [] };
     }
     console.error("Error fetching group products:", error);
-    if (isTokenExpiredError(error)) resetDb();
-    return { success: true, data: [] };
+    return { success: false, error: "Falha ao buscar produtos do grupo", data: [] };
   }
 }

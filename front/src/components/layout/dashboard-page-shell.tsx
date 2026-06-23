@@ -1,48 +1,76 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * Layout comum para páginas internas (catálogo, clientes, orçamentos):
- * fundo suave, faixa da marca e cabeçalho alinhado ao design Pazini.
+ * Layout de páginas internas do tenant — hero + corpo ops (mesmo padrão EngHub).
  */
 export function DashboardPageShell({
     title,
     description,
+    eyebrow,
     action,
+    backLink,
     children,
+    maxWidth = "7xl",
 }: {
     title: string;
     description?: string;
+    eyebrow?: string;
     action?: ReactNode;
+    backLink?: { href: string; label: string };
     children: ReactNode;
+    maxWidth?: "4xl" | "5xl" | "7xl" | "full";
 }) {
+    const maxWidthClass = "max-w-none w-full";
+
     return (
-        <div className="min-h-[calc(100dvh-4rem)] bg-gradient-to-b from-primary/[0.045] via-background to-background">
-            <div className="mx-auto max-w-7xl space-y-6 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
-                <header className="flex flex-col gap-5 border-b border-border/60 pb-7 sm:flex-row sm:items-end sm:justify-between">
-                    <div className="min-w-0 space-y-2">
-                        <div
-                            className="h-1 w-11 rounded-full"
-                            style={{
-                                backgroundColor: "var(--brand-secondary)",
-                                boxShadow: "0 0 14px rgb(var(--brand-secondary-rgb) / 0.4)",
-                            }}
-                            aria-hidden
-                        />
-                        <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{title}</h1>
-                        {description ? (
-                            <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">{description}</p>
+        <>
+            <section className="tenant-ops-page-hero relative overflow-hidden border-b border-white/10">
+                <div className="tenant-ops-page-hero-bg absolute inset-0" aria-hidden />
+                <div className={cn("relative mx-auto px-5 py-6 lg:px-8 lg:py-7", maxWidthClass)}>
+                    {backLink ? (
+                        <Link
+                            href={backLink.href}
+                            className="tenant-ops-back-link mb-4 inline-flex items-center gap-2 text-sm font-semibold transition-colors"
+                        >
+                            <ArrowLeft className="h-4 w-4" />
+                            {backLink.label}
+                        </Link>
+                    ) : null}
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                        <div className="min-w-0 space-y-2">
+                            {eyebrow ? (
+                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[color:rgb(var(--brand-secondary-rgb)/0.85)]">
+                                    {eyebrow}
+                                </p>
+                            ) : null}
+                            <h1 className="tenant-ops-page-title text-xl font-semibold tracking-tight text-white sm:text-2xl">
+                                {title}
+                            </h1>
+                            {description ? (
+                                <p className="tenant-ops-page-desc max-w-2xl text-sm leading-relaxed">
+                                    {description}
+                                </p>
+                            ) : null}
+                        </div>
+                        {action ? (
+                            <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div>
                         ) : null}
                     </div>
-                    {action ? <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div> : null}
-                </header>
-                {children}
+                </div>
+            </section>
+            <div className="tenant-ops-page-body">
+                <div className={cn("mx-auto px-5 py-8 lg:px-8 lg:py-10", maxWidthClass)}>
+                    <div className="space-y-6">{children}</div>
+                </div>
             </div>
-        </div>
+        </>
     );
 }
 
-/** Cartão principal do conteúdo (tabelas, formulários em lista). */
+/** Superfície de conteúdo ops (tabelas, formulários, cards). */
 export function DashboardContentCard({
     children,
     className,
@@ -55,12 +83,9 @@ export function DashboardContentCard({
     return (
         <div
             className={cn(
-                "rounded-2xl border border-border/80 bg-card text-card-foreground",
-                "shadow-[0_1px_3px_rgba(0,0,0,0.06),0_8px_24px_-8px_rgba(46,58,135,0.08)]",
-                "dark:shadow-[0_1px_3px_rgba(0,0,0,0.2)]",
-                "ring-1 ring-black/[0.03] dark:ring-white/[0.06]",
+                "tenant-ops-surface overflow-hidden",
                 padding && "p-5 sm:p-7",
-                className
+                className,
             )}
         >
             {children}

@@ -116,6 +116,7 @@ function ScopeItemRowInner({
         (productFallback?.unit as string | undefined) ??
         ""
     ).trim();
+    const isTemporaryProduct = Boolean(productData?.is_temporary);
     const unitPrice = Number(item.unit_price) || 0;
     const laborCost = Number(item.labor_cost) || 0;
     const hasProductLabor = laborCost > 0;
@@ -217,6 +218,11 @@ function ScopeItemRowInner({
                         </button>
                     )}
                     <span className="truncate text-xs">{productName || "Produto"}</span>
+                    {isTemporaryProduct ? (
+                        <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                            Temp.
+                        </span>
+                    ) : null}
                 </div>
                 <div className="col-span-2 flex items-center justify-center gap-1 min-w-0">
                 {isReadOnly ? (

@@ -34,9 +34,8 @@ export const realBudgetsRepository: BudgetsRepository = {
     return await getBudgetAction(id);
   },
 
-  async createDraft() {
-    // Mantém o comportamento atual: draft com client_id vazio
-    return await createBudgetAction("", "");
+  async createDraft(clientId: string, title?: string) {
+    return await createBudgetAction(title || "", "", clientId);
   },
 
   async updateBudget(budgetId: string, patch: Partial<Budget>) {
@@ -108,4 +107,3 @@ export const realBudgetsRepository: BudgetsRepository = {
     return await deleteBudgetAction(budgetId);
   },
 };
-

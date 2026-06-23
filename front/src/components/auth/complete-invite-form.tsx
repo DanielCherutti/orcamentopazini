@@ -33,7 +33,7 @@ export function CompleteInviteForm({ token }: Props) {
         startTransition(async () => {
             const r = await completePortalInviteAction(fd);
             if (r.success) {
-                router.push("/?success=invite");
+                router.push(r.redirect === "platform" ? "/?success=platform_invite" : "/?success=invite");
                 return;
             }
             if (r.error) setError(r.error);
@@ -62,7 +62,7 @@ export function CompleteInviteForm({ token }: Props) {
                         disabled={pending}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="pl-10"
+                        className="auth-input h-11 rounded-xl pl-10"
                     />
                 </div>
                 <PasswordRequirementsHint password={password} />
@@ -90,7 +90,7 @@ export function CompleteInviteForm({ token }: Props) {
                         autoComplete="new-password"
                         placeholder="Repita a senha"
                         disabled={pending}
-                        className="pl-10"
+                        className="auth-input h-11 rounded-xl pl-10"
                     />
                 </div>
                 {fieldErrors.passwordConfirm?.[0] && (
@@ -100,7 +100,7 @@ export function CompleteInviteForm({ token }: Props) {
                 )}
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" className="w-full" disabled={pending}>
+            <Button type="submit" className="auth-submit-btn w-full rounded-lg" disabled={pending}>
                 {pending ? "Salvando…" : "Criar senha e concluir"}
             </Button>
         </form>

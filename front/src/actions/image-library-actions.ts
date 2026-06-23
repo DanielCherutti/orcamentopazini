@@ -2,10 +2,13 @@
 
 import { Table } from "surrealdb";
 import { z } from "zod";
-import { assertActionSession } from "@/actions/auth-actions";
+import { assertWriteActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { deleteFile } from "@/lib/upload";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
+import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
+import { assertEntityInActiveTenant } from "@/lib/tenant-access";
+import { auditTenantAction } from "@/lib/audit-log";
 
 export type LibraryImage = {
     id: string;
@@ -58,7 +61,7 @@ export async function getLibraryImagesAction(params?: {
     limit?: number;
     page?: number;
 }) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();
@@ -68,11 +71,12 @@ export async function getLibraryImagesAction(params?: {
     const search = params?.query || "";
 
     try {
-        let sql = `SELECT * FROM ${TABLE_NAME}`;
-        const queryParams: Record<string, unknown> = {};
+        const tenantId = await requireActiveTenantId();
+        let sql = `SELECT * FROM ${TABLE_NAME} WHERE tenant_id = $tenantId`;
+        const queryParams: Record<string, unknown> = { tenantId: tenantRecordId(tenantId) };
 
         if (search) {
-            sql += ` WHERE name CONTAINS $search`;
+            sql += ` AND name CONTAINS $search`;
             queryParams.search = search;
         }
 
@@ -97,7 +101,7 @@ export async function createLibraryImageAction(data: {
     width?: number;
     height?: number;
 }) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();
@@ -109,13 +113,22 @@ export async function createLibraryImageAction(data: {
     }
 
     try {
+        const tenantId = await requireActiveTenantId();
         const created = await db.create(new Table(TABLE_NAME)).content({
             ...validated.data,
+            tenant_id: tenantRecordId(tenantId),
             created_at: new Date().toISOString(),
         });
 
         const image = Array.isArray(created) ? created[0] : created;
-        return { success: true, data: toPlain(serializeImage(image)) };
+        const serialized = serializeImage(image);
+        await auditTenantAction({
+            action: "image_library.create",
+            resourceType: "image_library",
+            resourceId: serialized.id,
+            summary: `Imagem adicionada à biblioteca: ${validated.data.name}`,
+        });
+        return { success: true, data: toPlain(serialized) };
     } catch (error) {
         console.error("Error creating library image:", error);
         if (isTokenExpiredError(error)) resetDb();
@@ -124,8 +137,11 @@ export async function createLibraryImageAction(data: {
 }
 
 export async function deleteLibraryImageAction(id: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const entityGate = await assertEntityInActiveTenant(TABLE_NAME, id, "Imagem não encontrada");
+    if (!entityGate.ok) return { success: false, error: entityGate.error };
 
     const db = await getDb();
 
@@ -143,6 +159,12 @@ export async function deleteLibraryImageAction(id: string) {
 
         await db.delete(recordId);
 
+        await auditTenantAction({
+            action: "image_library.delete",
+            resourceType: "image_library",
+            resourceId: id,
+            summary: "Imagem removida da biblioteca",
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {

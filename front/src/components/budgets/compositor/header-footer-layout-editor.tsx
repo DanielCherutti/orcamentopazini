@@ -8,9 +8,11 @@ import {
   ArrowDown,
   ArrowUp,
   BringToFront,
+  Braces,
   Columns3,
   Copy,
   Hash,
+  Heading1,
   ImagePlus,
   Layers,
   SendToBack,
@@ -22,8 +24,10 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
+import { TEMPLATE_VARIABLE_TOKENS } from "@/lib/model-variables";
 import type {
   HeaderFooterBlockProps,
   HeaderFooterCanvasElement,
@@ -121,11 +125,14 @@ export function HeaderFooterLayoutEditor({
     }
   };
 
-  const addElement = (type: HeaderFooterCanvasElement["type"], src?: string) => {
+  const addElement = (
+    type: HeaderFooterCanvasElement["type"],
+    overrides?: Partial<HeaderFooterCanvasElement>,
+  ) => {
     if (readOnly) return;
     const maxZ = layout.elements.reduce((max, el) => Math.max(max, el.z_index), 0);
     const element = createHeaderFooterElement(type, maxZ + 1);
-    const nextElement = src ? { ...element, src } : element;
+    const nextElement = { ...element, ...overrides, id: element.id, type };
     const next = { version: 1 as const, elements: [...layout.elements, nextElement] };
     setSelectedId(nextElement.id);
     const numberingPatch = type === "page_number" ? pageNumberingPatchFor(scope, region, pageNumbering) : undefined;
@@ -203,7 +210,7 @@ export function HeaderFooterLayoutEditor({
         toast.error(json.error || "Falha ao enviar imagem");
         return;
       }
-      addElement("image", json.url);
+      addElement("image", { src: json.url });
     } catch {
       toast.error("Erro ao enviar imagem");
     } finally {
@@ -293,6 +300,17 @@ export function HeaderFooterLayoutEditor({
             variant="ghost"
             className="h-8 gap-1.5 px-2 text-xs"
             disabled={readOnly}
+            onClick={() => addElement("text", { text: "Título", font_size: 18, font_weight: "bold" })}
+            title="Adicionar título"
+          >
+            <Heading1 className="h-4 w-4" /> Título
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-8 gap-1.5 px-2 text-xs"
+            disabled={readOnly}
             onClick={() => addElement("text")}
             title="Adicionar texto"
           >
@@ -354,6 +372,46 @@ export function HeaderFooterLayoutEditor({
           >
             <Hash className="h-4 w-4" /> Página
           </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-8 gap-1.5 px-2 text-xs"
+                disabled={readOnly}
+                title="Adicionar variável dinâmica"
+              >
+                <Braces className="h-4 w-4" /> Variável
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-72 p-2">
+              <div className="mb-2 px-2 text-xs font-semibold text-muted-foreground">
+                Inserir variável
+              </div>
+              <div className="max-h-72 space-y-1 overflow-auto">
+                {TEMPLATE_VARIABLE_TOKENS.map((item) => (
+                  <button
+                    key={item.token}
+                    type="button"
+                    className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-2 text-left hover:bg-muted"
+                    onClick={() =>
+                      addElement(item.token === "{{cliente.logo}}" ? "image" : "text", {
+                        ...(item.token === "{{cliente.logo}}"
+                          ? { src: item.token, width_pct: 22, height_pct: 58 }
+                          : { text: item.token }),
+                      })
+                    }
+                  >
+                    <span className="text-xs font-medium">{item.label}</span>
+                    <code className="max-w-32 truncate text-[10px] text-muted-foreground">
+                      {item.token}
+                    </code>
+                  </button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
           <div className="mx-1 h-6 w-px bg-border" />
           <IconButton title="Trazer para frente" disabled={!selected || readOnly} onClick={() => changeLayer("front")}>
             <BringToFront className="h-4 w-4" />

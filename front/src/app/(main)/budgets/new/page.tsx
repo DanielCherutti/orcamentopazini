@@ -1,69 +1,105 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "@/lib/toast";
-import { Skeleton } from "@/components/ui/skeleton";
+import { ArrowLeft, FileSpreadsheet } from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ClientSelector } from "@/components/clients/client-selector";
 import { useBudgetsRepository } from "@/lib/budgets/use-budgets-repository";
 import { budgetIdToPath } from "@/lib/budgets/budget-path";
+import { toast } from "@/lib/toast";
 
-/**
- * Página /budgets/new
- * Esta página cria um rascunho vazio e redireciona para o workspace unificado em /budgets/[id].
- * 
- * Fluxo:
- * 1. Usuário acessa /budgets/new
- * 2. Sistema cria rascunho com client_id vazio (será preenchido no workspace)
- * 3. Redirect automático para /budgets/budget/[id] onde terá acesso ao workspace completo
- */
 export default function NewBudgetPage() {
-    const router = useRouter();
-    const repo = useBudgetsRepository();
-    const didRun = useRef(false);
+  const router = useRouter();
+  const repo = useBudgetsRepository();
+  const [title, setTitle] = useState("");
+  const [clientId, setClientId] = useState("");
+  const [clientError, setClientError] = useState(false);
+  const [creating, setCreating] = useState(false);
 
-    useEffect(() => {
-        if (didRun.current) return;
-        didRun.current = true;
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!clientId.trim()) {
+      setClientError(true);
+      toast.error("Selecione um cliente para criar o orçamento.");
+      return;
+    }
 
-        async function createDraftAndRedirect() {
-            try {
-                const result = await repo.createDraft();
+    setCreating(true);
+    const result = await repo.createDraft(clientId, title.trim());
+    setCreating(false);
 
-                if (result.success && result.data?.id) {
-                    // Redireciona para o workspace
-                    router.replace(`/budgets/budget/${budgetIdToPath(String(result.data.id))}`);
-                } else {
-                    toast.error(result.error || "Falha ao criar orçamento");
-                    // Volta para listagem em caso de erro
-                    router.replace("/budgets");
-                }
-            } catch (error) {
-                console.error("Erro ao criar rascunho:", error);
-                toast.error("Ocorreu um erro inesperado.");
-                router.replace("/budgets");
-            }
-        }
+    if (result.success && result.data?.id) {
+      router.replace(`/budgets/budget/${budgetIdToPath(String(result.data.id))}`);
+      return;
+    }
 
-        createDraftAndRedirect();
-    }, [router, repo]);
+    toast.error(result.error || "Falha ao criar orçamento");
+  };
 
-    // Loading state enquanto cria e redireciona
-    return (
-        <div className="flex flex-col h-[calc(100vh-4rem)] items-center justify-center">
-            <div className="w-full max-w-md space-y-6 text-center">
-                <div className="space-y-2">
-                    <h2 className="text-2xl font-bold">Criando orçamento...</h2>
-                    <p className="text-muted-foreground">
-                        Preparando o workspace para você.
-                    </p>
-                </div>
-
-                <div className="space-y-4">
-                    <Skeleton className="h-12 w-full" />
-                    <Skeleton className="h-32 w-full" />
-                    <Skeleton className="h-24 w-full" />
-                </div>
-            </div>
+  return (
+    <div className="mx-auto max-w-2xl p-6">
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Novo Orçamento</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Selecione o cliente antes de iniciar o compositor.
+          </p>
         </div>
-    );
+        <Button asChild variant="outline" className="rounded-sm">
+          <Link href="/budgets">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Voltar
+          </Link>
+        </Button>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-6 rounded-md border bg-card p-6 shadow-sm">
+        <div className="flex items-center gap-2 border-b pb-4">
+          <FileSpreadsheet className="h-5 w-5 text-primary" />
+          <h2 className="text-base font-semibold">Dados iniciais</h2>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="budget-client">Cliente *</Label>
+          <ClientSelector
+            value={clientId}
+            onSelect={(value) => {
+              setClientId(value);
+              setClientError(false);
+            }}
+            onClientSelect={(client) => {
+              setClientId(String(client.id));
+              setClientError(false);
+            }}
+            error={clientError}
+          />
+          {clientError ? (
+            <p className="text-xs text-destructive">Cliente é obrigatório.</p>
+          ) : null}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="budget-title">Título</Label>
+          <Input
+            id="budget-title"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="Ex: Proposta Comercial - Adequações NR 12"
+            className="rounded-sm"
+          />
+        </div>
+
+        <div className="flex justify-end">
+          <Button type="submit" disabled={creating} className="rounded-sm">
+            {creating ? "Criando..." : "Criar orçamento"}
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
 }
+

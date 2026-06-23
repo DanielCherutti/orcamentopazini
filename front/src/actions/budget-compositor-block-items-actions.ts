@@ -1,7 +1,7 @@
 "use server";
 
 import { Table } from "surrealdb";
-import { assertActionSession } from "@/actions/auth-actions";
+import { assertWriteActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
 import { revalidatePath } from "next/cache";
 import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
@@ -11,6 +11,8 @@ import {
     requireRecordId,
     safeStringRecordId,
 } from "@/lib/surreal-record-ids";
+import { assertBudgetChildInActiveTenant } from "@/lib/budget-tenant";
+import { auditTenantAction } from "@/lib/audit-log";
 
 async function recalculateCompositorTotal(db: Awaited<ReturnType<typeof getDb>>, budgetId: string) {
     const budgetRecordId = requireRecordId("budget", budgetId);
@@ -44,8 +46,11 @@ export async function addItemToBlockAction(
     productId: string,
     quantity: number
 ): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_block", blockId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -75,6 +80,13 @@ export async function addItemToBlockAction(
 
         await recalculateCompositorTotal(db, budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.add",
+            resourceType: "budget_block",
+            resourceId: blockId,
+            summary: "Item adicionado ao bloco do compositor",
+            metadata: { budgetId, productId },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -94,13 +106,16 @@ export async function addGroupToBlockAction(
     productQuantities: Record<string, number>,
     selectedProductIds: string[]
 ): Promise<{ success: boolean; error?: string; addedCount?: number }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error, addedCount: 0 };
 
     const groupRecordId = safeStringRecordId("product_group", groupId);
     if (!groupRecordId) {
         return { success: false, error: "Identificador inválido", addedCount: 0 };
     }
+
+    const gate = await assertBudgetChildInActiveTenant("budget_block", blockId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error, addedCount: 0 };
 
     const db = await getDb();
     try {
@@ -158,6 +173,13 @@ export async function addGroupToBlockAction(
 
         await recalculateCompositorTotal(db, budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.add_group",
+            resourceType: "budget_block",
+            resourceId: blockId,
+            summary: `Grupo adicionado ao bloco (${inserted} item(ns))`,
+            metadata: { budgetId, groupId, addedCount: inserted },
+        });
         return { success: true, addedCount: inserted };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -173,14 +195,24 @@ export async function deleteItemFromBlockAction(
     itemId: string,
     budgetId: string
 ): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_item", itemId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
         await db.update(requireRecordId("budget_item", itemId)).merge({ deleted_at: new Date().toISOString() });
         await recalculateCompositorTotal(db, budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.delete",
+            resourceType: "budget_item",
+            resourceId: itemId,
+            summary: "Item removido do bloco do compositor",
+            metadata: { budgetId },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -197,8 +229,11 @@ export async function updateItemQuantityInBlockAction(
     budgetId: string,
     quantity: number
 ): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_item", itemId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -213,6 +248,13 @@ export async function updateItemQuantityInBlockAction(
 
         await recalculateCompositorTotal(db, budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.update_quantity",
+            resourceType: "budget_item",
+            resourceId: itemId,
+            summary: "Quantidade do item atualizada no compositor",
+            metadata: { budgetId, quantity },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -230,8 +272,11 @@ export async function updateItemGroupInBlockAction(
     groupId: string | null,
     groupName?: string
 ): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_item", itemId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -250,6 +295,13 @@ export async function updateItemGroupInBlockAction(
             await db.query("UPDATE $item SET group_instance_id = NONE", { item: itemRecordId });
         }
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.update_group",
+            resourceType: "budget_item",
+            resourceId: itemId,
+            summary: "Grupo do item atualizado no compositor",
+            metadata: { budgetId, groupId },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -265,14 +317,24 @@ export async function reorderItemsInBlockAction(
     _blockId: string,
     itemIds: string[]
 ): Promise<{ success: boolean; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_block", _blockId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
         for (let i = 0; i < itemIds.length; i++) {
             await db.update(requireRecordId("budget_item", itemIds[i])).merge({ order_index: i });
         }
+        await auditTenantAction({
+            action: "budget_item.reorder",
+            resourceType: "budget_block",
+            resourceId: _blockId,
+            summary: "Itens reordenados no bloco do compositor",
+            metadata: { count: itemIds.length },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {

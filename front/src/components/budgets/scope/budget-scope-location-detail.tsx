@@ -334,6 +334,7 @@ export function LocationDetail({
             <CollapsibleEditorSection label="Descrição do local" defaultOpen={false}>
                 <CompositorRichTextEditor
                     key={locationId}
+                    budgetId={budgetId}
                     value={description}
                     onChange={handleDescChange}
                     placeholder="Descreva o local..."

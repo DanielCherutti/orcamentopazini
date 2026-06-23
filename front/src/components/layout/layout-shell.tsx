@@ -4,27 +4,31 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { useSidebar } from "./sidebar-context";
 
+const SIDEBAR_COLLAPSED = "5rem";
+const SIDEBAR_EXPANDED = "16rem";
+
 export function LayoutShell({
     children,
     sessionEmail,
+    companyName,
+    companySubtitle,
 }: {
     children: React.ReactNode;
     sessionEmail: string | null;
+    companyName: string;
+    companySubtitle?: string;
 }) {
     const { collapsed } = useSidebar();
 
     return (
-        <div className="min-h-screen bg-background">
-            <Sidebar sessionEmail={sessionEmail} />
+        <div className="tenant-app tenant-ops min-h-dvh bg-[#07060d]">
+            <Sidebar companyName={companyName} companySubtitle={companySubtitle} />
             <div
-                className={`transition-[padding-left] duration-300 ease-in-out ${
-                    collapsed ? "pl-0" : "pl-64"
-                }`}
+                className="flex min-h-dvh flex-col transition-[padding-left] duration-300 ease-in-out"
+                style={{ paddingLeft: collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED }}
             >
-                <Header />
-                <main>
-                    {children}
-                </main>
+                <Header companyName={companyName} sessionEmail={sessionEmail} />
+                <main className="tenant-ops-main relative flex-1">{children}</main>
             </div>
         </div>
     );

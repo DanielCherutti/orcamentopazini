@@ -1,15 +1,18 @@
 "use server";
 
 import { Table } from "surrealdb";
-import { assertActionSession } from "@/actions/auth-actions";
+import { assertActionSession, assertWriteActionSession } from "@/actions/auth-actions";
 import {
   BRAND_DEFAULT_PRIMARY,
   BRAND_DEFAULT_SECONDARY,
   normalizeHex,
 } from "@/lib/branding-theme";
+import { getHostDisplayBranding } from "@/lib/host-branding";
+import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { revalidatePath } from "next/cache";
 import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
+import { auditTenantAction } from "@/lib/audit-log";
 
 export interface ProposalSettings {
     id?: string;
@@ -17,6 +20,7 @@ export interface ProposalSettings {
     closing_text?: string;
     company_name?: string;
     company_logo_url?: string;
+    company_favicon_url?: string;
     /** Linha abaixo do nome quando dados da empresa forem usados em um cabeçalho do PDF. */
     company_header_subtitle?: string;
     /** Contatos disponíveis para o bloco cabeçalho/rodapé do compositor. */
@@ -54,71 +58,39 @@ export type UpdateProposalSettingsInput = ProposalSettings & {
 export type PublicProposalBranding = {
   company_name: string;
   company_logo_url?: string;
+  company_favicon_url?: string;
   primary_color: string;
   secondary_color: string;
 };
 
 const PROPOSAL_SETTINGS_DEFAULTS: ProposalSettings = {
-  company_name: "Pazini - Móveis Planejados",
+  company_name: "Minha empresa de engenharia",
+  company_header_subtitle: "Engenharia",
   introduction_text: `Prezado Cliente,
 
-É com satisfação que apresentamos nossa proposta comercial para execução do seu projeto de móveis planejados.
+É com satisfação que apresentamos nossa proposta comercial para execução do seu projeto de engenharia.
 
-Nossa proposta contempla materiais de altíssima qualidade, acabamento impecável e garantia estendida.`,
+Nossa proposta contempla escopo técnico detalhado, materiais conforme normas aplicáveis e prazos acordados.`,
   closing_text: `Termos Gerais:
 1. Validade da Proposta: 15 dias.
-2. Prazo de Entrega: 45 dias úteis após medição final.
-3. Garantia: 5 anos contra defeitos de fabricação.`,
+2. Prazo de execução: conforme cronograma aprovado após aceite.
+3. Garantia: conforme especificações técnicas do escopo.`,
   primary_color: BRAND_DEFAULT_PRIMARY,
   secondary_color: BRAND_DEFAULT_SECONDARY,
 };
 
 /**
- * Cores e nome exibidos no login. Sem autenticação — apenas campos não sensíveis.
+ * Cores e nome exibidos no login. Sem autenticação — host principal = EngHub; subdomínio = org.
  */
 export async function getPublicProposalBrandingAction(): Promise<PublicProposalBranding> {
-  try {
-    const db = await getDb();
-    const result = await db.query<
-      [
-        {
-          primary_color?: string;
-          secondary_color?: string;
-          company_name?: string;
-          company_logo_url?: string;
-        }[],
-      ]
-    >(
-      "SELECT primary_color, secondary_color, company_name, company_logo_url FROM proposal_settings LIMIT 1"
-    );
-    const row = result[0]?.[0];
-    const primary =
-      normalizeHex(row?.primary_color != null ? String(row.primary_color) : undefined) ??
-      BRAND_DEFAULT_PRIMARY;
-    const secondary =
-      normalizeHex(row?.secondary_color != null ? String(row.secondary_color) : undefined) ??
-      BRAND_DEFAULT_SECONDARY;
-    return {
-      company_name:
-        row?.company_name != null && String(row.company_name).trim() !== ""
-          ? String(row.company_name).trim()
-          : PROPOSAL_SETTINGS_DEFAULTS.company_name!,
-      company_logo_url:
-        row?.company_logo_url != null && String(row.company_logo_url).trim() !== ""
-          ? String(row.company_logo_url).trim()
-          : undefined,
-      primary_color: primary,
-      secondary_color: secondary,
-    };
-  } catch (e) {
-    console.error("getPublicProposalBrandingAction:", e);
-    if (isTokenExpiredError(e)) resetDb();
-    return {
-      company_name: PROPOSAL_SETTINGS_DEFAULTS.company_name!,
-      primary_color: BRAND_DEFAULT_PRIMARY,
-      secondary_color: BRAND_DEFAULT_SECONDARY,
-    };
-  }
+  const branding = await getHostDisplayBranding();
+  return {
+    company_name: branding.company_name,
+    company_logo_url: branding.company_logo_url,
+    company_favicon_url: branding.company_favicon_url,
+    primary_color: branding.primary_color,
+    secondary_color: branding.secondary_color,
+  };
 }
 
 export async function getProposalSettingsAction() {
@@ -127,7 +99,11 @@ export async function getProposalSettingsAction() {
 
     const db = await getDb();
     try {
-        const result = await db.query<[ProposalSettings[]]>("SELECT * FROM proposal_settings LIMIT 1");
+        const tenantId = await requireActiveTenantId();
+        const result = await db.query<[ProposalSettings[]]>(
+            "SELECT * FROM proposal_settings WHERE tenant_id = $tenantId LIMIT 1",
+            { tenantId: tenantRecordId(tenantId) },
+        );
 
         const raw = result[0]?.[0] || { ...PROPOSAL_SETTINGS_DEFAULTS };
         const plain = toPlain(raw) as Record<string, unknown>;
@@ -165,11 +141,12 @@ export async function getProposalSettingsAction() {
 }
 
 export async function updateProposalSettingsAction(data: UpdateProposalSettingsInput) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();
     try {
+        const tenantId = await requireActiveTenantId();
         const {
             smtp_pass_new,
             imap_pass_new,
@@ -200,18 +177,30 @@ export async function updateProposalSettingsAction(data: UpdateProposalSettingsI
             cleanData.smtp_secure = cleanData.smtp_secure === "true";
         }
 
-        const result = await db.query<[ProposalSettings[]]>("SELECT * FROM proposal_settings LIMIT 1");
+        const result = await db.query<[ProposalSettings[]]>(
+            "SELECT * FROM proposal_settings WHERE tenant_id = $tenantId LIMIT 1",
+            { tenantId: tenantRecordId(tenantId) },
+        );
 
         if (result[0] && result[0].length > 0) {
-            const id = result[0][0].id; // SurrealDB ID
+            const id = result[0][0].id;
             await db.update(requireRecordId("proposal_settings", String(id!))).merge(cleanData);
         } else {
-            await db.create(new Table("proposal_settings")).content(cleanData);
+            await db.create(new Table("proposal_settings")).content({
+                ...cleanData,
+                tenant_id: tenantRecordId(tenantId),
+            });
         }
 
         revalidatePath("/settings");
         revalidatePath("/dashboard");
         revalidatePath("/");
+        await auditTenantAction({
+            action: "settings.update",
+            resourceType: "proposal_settings",
+            tenantId,
+            summary: "Configurações da proposta atualizadas",
+        });
         return { success: true };
     } catch (e) {
         if (e instanceof InvalidRecordIdError) {
@@ -229,7 +218,7 @@ export async function testImapConnectionAction(): Promise<{
     imapHost?: string;
     imapUser?: string;
 }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     const { resolveImapConfig } = await import("@/lib/imap-config");

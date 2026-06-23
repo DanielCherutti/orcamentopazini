@@ -18,6 +18,8 @@ const ALLOWED_TABLES = new Set([
     "product",
     "product_group",
     "portal_user",
+    "portal_user_tenant",
+    "tenant",
     "budget_location",
     "budget_section",
     "budget_item",
@@ -28,6 +30,7 @@ const ALLOWED_TABLES = new Set([
     "image_annotation",
     "image_library",
     "proposal_settings",
+    "modelos",
 ]);
 
 const SUFFIX_RE = /^[A-Za-z0-9_-]+$/;

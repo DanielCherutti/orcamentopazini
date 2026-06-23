@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { Table } from "surrealdb";
-import { assertActionSession } from "@/actions/auth-actions";
+import { assertWriteActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
 import type { BudgetItem, BudgetLocation } from "@/types/budget-types";
@@ -18,6 +18,19 @@ import {
 import { extractProductId, recalculateBudgetTotal } from "@/actions/budget-hierarchy-helpers";
 import { budgetItemsFromGroupedBySectionId } from "@/lib/budgets/budget-section-items-grouped";
 import { computeItemSubtotal, type PriceAdjustmentMode } from "@/lib/budgets/scope-pricing";
+import {
+    assertBudgetChildInActiveTenant,
+    assertBudgetInActiveTenant,
+    assertSectionsInActiveTenant,
+} from "@/lib/budget-tenant";
+import { auditTenantAction } from "@/lib/audit-log";
+import {
+    generateTemporaryProductCode,
+    parseTemporaryProductInput,
+    resolveAssemblyPrice,
+    type TemporaryProductInput,
+} from "@/lib/products/temporary-product";
+import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
 
 /** Próximo `order_index` na seção (múltiplos de 10, alinhado a `reorderSectionItemsAction`). */
 async function nextSectionItemOrderIndex(
@@ -171,6 +184,7 @@ async function serializeBudgetItemsFromRawQueryRows(
                     name: product.name,
                     unit: product.unit,
                     imageUrl: product.imageUrl ?? product.image_url ?? undefined,
+                    is_temporary: Boolean(product.is_temporary),
                 };
             }
             return it;
@@ -285,6 +299,7 @@ async function hydrateLightItemsProductData(
                     name: p.name,
                     unit: p.unit,
                     imageUrl: p.imageUrl ?? p.image_url ?? undefined,
+                    is_temporary: Boolean(p.is_temporary),
                 };
                 byId.set(rawId, normalized);
                 byId.set(clean, normalized);
@@ -401,12 +416,15 @@ export async function getBudgetItemsBySectionIdsLightAction(sectionIds: string[]
     data?: Record<string, BudgetItem[]>;
     error?: string;
 }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     if (sectionIds.length === 0) {
         return { success: true, data: {} };
     }
+
+    const sectionsGate = await assertSectionsInActiveTenant(sectionIds);
+    if (!sectionsGate.ok) return { success: false, error: sectionsGate.error };
 
     const db = await getDb();
     try {
@@ -473,8 +491,11 @@ export async function getItemsBySectionLightAction(sectionId: string): Promise<{
 }
 
 export async function getItemsBySectionAction(sectionId: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_section", sectionId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -504,12 +525,15 @@ export async function getBudgetItemsGroupedByBudgetIdAction(budgetId: string): P
     data?: Record<string, BudgetItem[]>;
     error?: string;
 }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
-        const budgetRecordId = requireRecordId("budget", budgetId);
+        const budgetRecordId = gate.budgetRecordId;
         /**
          * Em bases legadas/migradas parcialmente, há mistura de linhas com e sem `budget_id`
          * denormalizado. Precisamos unir os três caminhos para não perder itens no agrupamento.
@@ -579,12 +603,15 @@ export async function getBudgetItemsGroupedByBudgetIdLightAction(budgetId: strin
     data?: Record<string, BudgetItem[]>;
     error?: string;
 }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
-        const budgetRecordId = requireRecordId("budget", budgetId);
+        const budgetRecordId = gate.budgetRecordId;
         const mergedById = new Map<string, Record<string, unknown>>();
         const mergeRows = (rows: Array<Record<string, unknown>>) => {
             for (const row of rows) {
@@ -642,8 +669,11 @@ export async function getBudgetItemsGroupedByBudgetIdLightAction(budgetId: strin
 }
 
 export async function addItemAction(sectionId: string, budgetId: string, productId: string, quantity: number) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_section", sectionId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -673,6 +703,13 @@ export async function addItemAction(sectionId: string, budgetId: string, product
 
         await recalculateBudgetTotal(budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.add",
+            resourceType: "budget_section",
+            resourceId: sectionId,
+            summary: "Item adicionado ao trecho",
+            metadata: { budgetId, productId, itemId: newItemId },
+        });
         return { success: true, itemId: newItemId };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -684,6 +721,125 @@ export async function addItemAction(sectionId: string, budgetId: string, product
     }
 }
 
+const DEFAULT_COMPANY_ID = 0;
+
+async function ensureUniqueTemporaryProductCode(
+    db: Awaited<ReturnType<typeof getDb>>,
+    tenantId: string,
+    preferred?: string,
+): Promise<string> {
+    const tenantRid = tenantRecordId(tenantId);
+    let candidate = (preferred?.trim() || generateTemporaryProductCode()).toUpperCase();
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+        const existing = await db.query<[Array<{ id: unknown }>]>(
+            `SELECT id FROM product WHERE code = $code AND company_id = $company_id AND tenant_id = $tenantId LIMIT 1`,
+            { code: candidate, company_id: DEFAULT_COMPANY_ID, tenantId: tenantRid },
+        );
+        if (!existing[0]?.length) return candidate;
+        candidate = generateTemporaryProductCode();
+    }
+
+    throw new Error("Não foi possível gerar código único para o produto temporário");
+}
+
+export async function addTemporaryProductToSectionAction(
+    sectionId: string,
+    budgetId: string,
+    rawProduct: TemporaryProductInput,
+    quantity: number,
+) {
+    const auth = await assertWriteActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const parsed = parseTemporaryProductInput(rawProduct);
+    if (!parsed.ok) {
+        return {
+            success: false,
+            error: parsed.error,
+            fieldErrors: parsed.fieldErrors,
+        };
+    }
+
+    if (!Number.isFinite(quantity) || quantity < 1) {
+        return { success: false, error: "Quantidade inválida" };
+    }
+
+    const gate = await assertBudgetChildInActiveTenant("budget_section", sectionId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
+
+    const db = await getDb();
+    try {
+        const tenantId = await requireActiveTenantId();
+        const productInput = parsed.data;
+        const code = await ensureUniqueTemporaryProductCode(db, tenantId, productInput.code);
+        const assemblyPrice = resolveAssemblyPrice(productInput);
+        const budgetRecordId = requireRecordId("budget", budgetId);
+
+        const created = await db.create(new Table("product")).content({
+            code,
+            description: productInput.description.trim(),
+            detailedDescription: productInput.detailedDescription?.trim() || undefined,
+            unit: productInput.unit.trim(),
+            equipmentPrice: productInput.equipmentPrice,
+            assemblyPrice,
+            assemblyPriceType: productInput.assemblyPriceType ?? "fixed",
+            assemblyPricePercentage:
+                productInput.assemblyPriceType === "percentage"
+                    ? productInput.assemblyPricePercentage ?? null
+                    : null,
+            imageUrl: productInput.imageUrl?.trim() || undefined,
+            group_ids: [],
+            attachments: [],
+            company_id: DEFAULT_COMPANY_ID,
+            tenant_id: tenantRecordId(tenantId),
+            is_temporary: true,
+            source_budget_id: budgetRecordId,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        });
+
+        const product = Array.isArray(created) ? created[0] : created;
+        if (!product?.id) throw new Error("Falha ao criar produto temporário");
+
+        const productId = String(product.id);
+        const productName = productInput.description.trim();
+        const unitPrice = productInput.equipmentPrice;
+        const laborCost = assemblyPrice;
+
+        const newItemId = await createBudgetItemInSection(
+            db,
+            sectionId,
+            budgetId,
+            productId,
+            productName,
+            unitPrice,
+            laborCost,
+            quantity,
+            productInput.unit.trim(),
+            code,
+        );
+
+        await recalculateBudgetTotal(budgetId);
+        revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.add_temporary",
+            resourceType: "budget_section",
+            resourceId: sectionId,
+            summary: "Produto temporário adicionado ao trecho",
+            metadata: { budgetId, productId, itemId: newItemId, code },
+        });
+        return { success: true, itemId: newItemId, productId };
+    } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
+        console.error("addTemporaryProductToSectionAction error:", error);
+        if (isTokenExpiredError(error)) resetDb();
+        return { success: false, error: "Falha ao adicionar produto temporário" };
+    }
+}
+
 export async function addGroupToSectionAction(
     sectionId: string,
     budgetId: string,
@@ -692,7 +848,7 @@ export async function addGroupToSectionAction(
     productQuantities: Record<string, number>,
     selectedProductIds: string[]
 ) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error, addedCount: 0 };
 
     const groupRecordId = safeStringRecordId("product_group", groupId);
@@ -704,6 +860,9 @@ export async function addGroupToSectionAction(
     if (!productsRes.success || !productsRes.data?.length) {
         return { success: false, error: "Este grupo não possui produtos cadastrados.", addedCount: 0 };
     }
+
+    const gate = await assertBudgetChildInActiveTenant("budget_section", sectionId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error, addedCount: 0 };
 
     const db = await getDb();
     try {
@@ -777,6 +936,13 @@ export async function addGroupToSectionAction(
 
         await recalculateBudgetTotal(budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.add_group",
+            resourceType: "budget_section",
+            resourceId: sectionId,
+            summary: `Grupo adicionado ao trecho (${inserted} item(ns))`,
+            metadata: { budgetId, groupId, addedCount: inserted },
+        });
         return { success: true, addedCount: inserted };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -789,8 +955,11 @@ export async function addGroupToSectionAction(
 }
 
 export async function deleteItemAction(itemId: string, budgetId: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_item", itemId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -798,6 +967,13 @@ export async function deleteItemAction(itemId: string, budgetId: string) {
         await db.update(itemRecordId).merge({ deleted_at: new Date().toISOString() });
         await recalculateBudgetTotal(budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.delete",
+            resourceType: "budget_item",
+            resourceId: itemId,
+            summary: "Item removido do trecho",
+            metadata: { budgetId },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -814,15 +990,18 @@ export async function deleteBudgetItemsBulkAction(
     itemIds: string[],
     budgetId: string
 ): Promise<{ success: boolean; error?: string; deletedCount: number }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error, deletedCount: 0 };
 
     const unique = [...new Set(itemIds.map((id) => String(id).trim()).filter(Boolean))];
     if (unique.length === 0) return { success: true, deletedCount: 0 };
 
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) return { success: false, error: gate.error, deletedCount: 0 };
+
     const db = await getDb();
     try {
-        const budgetRecordId = requireRecordId("budget", budgetId);
+        const budgetRecordId = gate.budgetRecordId;
         let itemRecordIds;
         try {
             itemRecordIds = unique.map((id) => requireRecordId("budget_item", id));
@@ -849,6 +1028,13 @@ export async function deleteBudgetItemsBulkAction(
 
         await recalculateBudgetTotal(budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.delete_bulk",
+            resourceType: "budget",
+            resourceId: budgetId,
+            summary: `${rows.length} item(ns) removidos em lote`,
+            metadata: { deletedCount: rows.length },
+        });
         return { success: true, deletedCount: rows.length };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -861,8 +1047,11 @@ export async function deleteBudgetItemsBulkAction(
 }
 
 export async function updateItemQuantityAction(itemId: string, budgetId: string, quantity: number) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_item", itemId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -897,6 +1086,13 @@ export async function updateItemQuantityAction(itemId: string, budgetId: string,
         await recalculateBudgetTotal(budgetId);
 
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.update_quantity",
+            resourceType: "budget_item",
+            resourceId: itemId,
+            summary: "Quantidade do item atualizada",
+            metadata: { budgetId, quantity },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -909,8 +1105,11 @@ export async function updateItemQuantityAction(itemId: string, budgetId: string,
 }
 
 export async function updateItemLaborCostAction(itemId: string, budgetId: string, laborCost: number) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_item", itemId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -945,6 +1144,13 @@ export async function updateItemLaborCostAction(itemId: string, budgetId: string
         await recalculateBudgetTotal(budgetId);
 
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.update_labor_cost",
+            resourceType: "budget_item",
+            resourceId: itemId,
+            summary: "Custo de mão de obra do item atualizado",
+            metadata: { budgetId, laborCost },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -963,8 +1169,11 @@ export async function updateItemGroupInSectionAction(
     groupId: string | null,
     groupName?: string
 ) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_item", itemId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -983,6 +1192,13 @@ export async function updateItemGroupInSectionAction(
             await db.query("UPDATE $item SET group_instance_id = NONE", { item: itemRecordId });
         }
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.update_group",
+            resourceType: "budget_item",
+            resourceId: itemId,
+            summary: "Grupo do item atualizado no trecho",
+            metadata: { budgetId, groupId },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -995,8 +1211,11 @@ export async function updateItemGroupInSectionAction(
 }
 
 export async function reorderSectionItemsAction(orderedItemIds: string[], budgetId: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -1006,6 +1225,13 @@ export async function reorderSectionItemsAction(orderedItemIds: string[], budget
             });
         }
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.reorder",
+            resourceType: "budget",
+            resourceId: budgetId,
+            summary: "Itens reordenados no trecho",
+            metadata: { count: orderedItemIds.length },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -1030,8 +1256,11 @@ export async function updateItemCommercialSettingsAction(
         labor_show_on_print?: boolean;
     }
 ) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetChildInActiveTenant("budget_item", itemId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -1095,6 +1324,13 @@ export async function updateItemCommercialSettingsAction(
         await db.update(itemRecordId).merge(mergePayload);
         await recalculateBudgetTotal(budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.update_commercial",
+            resourceType: "budget_item",
+            resourceId: itemId,
+            summary: "Configurações comerciais do item atualizadas",
+            metadata: { budgetId },
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -1114,8 +1350,11 @@ export async function clearScopeItemPriceAdjustmentsAction(
     budgetId: string,
     scope: { type: "section"; sectionId: string } | { type: "location"; locationId: string }
 ): Promise<{ success: boolean; error?: string; clearedCount?: number }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
@@ -1183,6 +1422,15 @@ export async function clearScopeItemPriceAdjustmentsAction(
 
         await recalculateBudgetTotal(budgetId);
         revalidatePath(budgetRevalidatePath(budgetId));
+        if (clearedCount > 0) {
+            await auditTenantAction({
+                action: "budget_item.clear_price_adjustments",
+                resourceType: "budget",
+                resourceId: budgetId,
+                summary: `Ajustes de preço limpos em ${clearedCount} item(ns)`,
+                metadata: { clearedCount, scopeType: scope.type },
+            });
+        }
         return { success: true, clearedCount };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -1201,12 +1449,15 @@ export async function clearScopeItemPriceAdjustmentsAction(
 export async function getBudgetUsedProductGroupIdsAction(
     budgetId: string
 ): Promise<{ success: boolean; data?: string[]; error?: string }> {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertBudgetInActiveTenant(budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
 
     const db = await getDb();
     try {
-        const budgetRecordId = requireRecordId("budget", budgetId);
+        const budgetRecordId = gate.budgetRecordId;
         const set = new Set<string>();
 
         const mergeGroupRows = (rows: Array<{ group_id: unknown }> | undefined) => {

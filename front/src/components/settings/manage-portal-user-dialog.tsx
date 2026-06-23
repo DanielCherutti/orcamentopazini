@@ -6,6 +6,7 @@ import type { PortalUserPublic } from "@/actions/portal-user-actions";
 import {
     resetPortalUserPasswordAction,
     setPortalUserActiveAction,
+    updatePortalUserTenantRoleAction,
 } from "@/actions/portal-user-actions";
 import { PasswordRequirementsHint } from "@/components/settings/password-requirements-hint";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +20,15 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import type { OrganizationMemberRole } from "@/types/tenant-types";
 
 type Props = {
     user: PortalUserPublic | null;
@@ -55,6 +64,29 @@ function ManagePortalUserPanel({
     const [pwOk, setPwOk] = useState(false);
     const [pwPending, startPwTransition] = useTransition();
     const [newPassword, setNewPassword] = useState("");
+
+    const initialRole: OrganizationMemberRole =
+        user.tenant_role === "admin" ? "admin" : "user";
+    const [role, setRole] = useState<OrganizationMemberRole>(initialRole);
+    const [roleError, setRoleError] = useState<string | null>(null);
+    const [rolePending, startRoleTransition] = useTransition();
+
+    function submitRole() {
+        if (role === initialRole) return;
+        setRoleError(null);
+        const fd = new FormData();
+        fd.set("userId", user.id);
+        fd.set("role", role);
+        startRoleTransition(async () => {
+            const r = await updatePortalUserTenantRoleAction(fd);
+            if (!r.success) {
+                setRoleError(r.error ?? "Erro");
+                return;
+            }
+            router.refresh();
+            onRequestClose();
+        });
+    }
 
     function submitStatus(wantActive: boolean) {
         setStatusError(null);
@@ -123,11 +155,57 @@ function ManagePortalUserPanel({
             <div className="space-y-4">
                 {user.pending_setup && (
                     <p className="text-sm rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-amber-950 dark:text-amber-50">
-                        Esta conta ainda não criou a senha pelo link do e-mail.
-                        Você pode definir uma senha abaixo para liberar o acesso
-                        sem depender do convite.
+                        Esta conta ainda não tem senha definida. Informe uma senha
+                        abaixo para liberar o acesso ao portal.
                     </p>
                 )}
+
+                <Separator />
+
+                <div>
+                    <h3 className="text-sm font-medium text-foreground mb-2">
+                        Papel nesta organização
+                    </h3>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                        <div className="flex-1 space-y-2">
+                            <Label htmlFor="modal-user-role">Papel</Label>
+                            <Select
+                                value={role}
+                                onValueChange={(v) => setRole(v as OrganizationMemberRole)}
+                                disabled={rolePending || !!isSelf}
+                            >
+                                <SelectTrigger id="modal-user-role">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="user">Usuário</SelectItem>
+                                    <SelectItem value="admin">Administrador</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <Button
+                            type="button"
+                            size="sm"
+                            disabled={
+                                rolePending || !!isSelf || role === initialRole
+                            }
+                            onClick={submitRole}
+                        >
+                            {rolePending ? "Salvando…" : "Salvar papel"}
+                        </Button>
+                    </div>
+                    {isSelf && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                            Você não pode alterar o seu próprio papel.
+                        </p>
+                    )}
+                    {roleError && (
+                        <p className="text-sm text-destructive mt-2">{roleError}</p>
+                    )}
+                </div>
+
+                <Separator />
+
                 <div>
                     <h3 className="text-sm font-medium text-foreground mb-2">
                         Acesso ao sistema

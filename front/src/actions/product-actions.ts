@@ -4,12 +4,15 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { Table } from "surrealdb";
-import { assertActionSession } from "@/actions/auth-actions";
+import { assertActionSession, assertWriteActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError, isDbConnectionError } from "@/lib/surreal";
+import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
+import { assertEntityInActiveTenant } from "@/lib/tenant-access";
+import { InvalidRecordIdError, recordIdToString, requireRecordId } from "@/lib/surreal-record-ids";
 import { Attachment } from "@/components/products/attachment-manager";
 import { saveFile } from "@/lib/upload";
-import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
 import { syncProductCatalogToDraftBudgetItemsAction } from "@/actions/budget-core-write-actions";
+import { auditTenantAction } from "@/lib/audit-log";
 
 // Type definition based on V1 Spec
 export type Product = {
@@ -27,6 +30,9 @@ export type Product = {
     group_ids?: string[];
     attachments?: Attachment[];
     created_at?: string;
+    /** Produto criado só para um orçamento — oculto do catálogo. */
+    is_temporary?: boolean;
+    source_budget_id?: string;
 };
 
 const TABLE_NAME = "product";
@@ -85,6 +91,10 @@ function serializeProduct(product: Record<string, unknown>): Product {
             ? JSON.parse(JSON.stringify(product.attachments))
             : [],
         created_at: product.created_at ? String(product.created_at) : undefined,
+        is_temporary: Boolean(product.is_temporary),
+        source_budget_id: product.source_budget_id
+            ? safeId(product.source_budget_id)
+            : undefined,
     };
 }
 
@@ -114,8 +124,12 @@ export async function getProductsAction(params?: {
 
     try {
         const db = await getDb();
-        let sql = `SELECT * FROM ${TABLE_NAME} WHERE company_id = $company_id`;
-        const queryParams: Record<string, string | number> = { company_id: DEFAULT_COMPANY_ID };
+        const tenantId = await requireActiveTenantId();
+        let sql = `SELECT * FROM ${TABLE_NAME} WHERE company_id = $company_id AND tenant_id = $tenantId AND (is_temporary IS NONE OR is_temporary = false)`;
+        const queryParams: Record<string, string | number | ReturnType<typeof tenantRecordId>> = {
+            company_id: DEFAULT_COMPANY_ID,
+            tenantId: tenantRecordId(tenantId),
+        };
 
 
 
@@ -186,13 +200,18 @@ export async function getProductAction(id: string) {
 
     const db = await getDb();
     try {
+        const tenantId = await requireActiveTenantId();
         const recordId = requireRecordId(TABLE_NAME, id);
 
-        // db.select precisa de RecordId; string é interpretada como nome de tabela
         const result = await db.select<Product>(recordId);
         const data = Array.isArray(result) ? result[0] : result;
 
         if (!data) return { success: false, error: "Produto não encontrado" };
+
+        const rowTenant = recordIdToString((data as unknown as Record<string, unknown>).tenant_id);
+        if (rowTenant && rowTenant !== tenantId) {
+            return { success: false, error: "Produto não encontrado" };
+        }
 
         return { success: true, data: serializeProduct(data) };
     } catch (error) {
@@ -217,7 +236,7 @@ const parsePrice = (value: string | number) => {
 };
 
 export async function createProductAction(formData: FormData) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
     const db = await getDb();
@@ -259,10 +278,15 @@ export async function createProductAction(formData: FormData) {
     const data = validated.data;
 
     try {
+        const tenantId = await requireActiveTenantId();
         // Check uniqueness
         const existing = await db.query<[Product[]]>(
-            `SELECT id FROM ${TABLE_NAME} WHERE code = $code AND company_id = $company_id`,
-            { code: data.code, company_id: DEFAULT_COMPANY_ID }
+            `SELECT id FROM ${TABLE_NAME} WHERE code = $code AND company_id = $company_id AND tenant_id = $tenantId`,
+            {
+                code: data.code,
+                company_id: DEFAULT_COMPANY_ID,
+                tenantId: tenantRecordId(tenantId),
+            },
         );
 
         if (existing[0] && existing[0].length > 0) {
@@ -280,6 +304,7 @@ export async function createProductAction(formData: FormData) {
             imageUrl: data.imageUrl || undefined,
             group_ids: groupRecordIds,
             company_id: DEFAULT_COMPANY_ID,
+            tenant_id: tenantRecordId(tenantId),
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
         });
@@ -311,10 +336,17 @@ export async function createProductAction(formData: FormData) {
 
         revalidatePath("/dashboard/products");
 
-        // Serialize return data
         const returnData = Array.isArray(created)
             ? created.map(serializeProduct)
             : serializeProduct(product);
+
+        await auditTenantAction({
+            action: "product.create",
+            resourceType: "product",
+            resourceId: newId,
+            summary: `Produto criado: ${data.code}`,
+            metadata: { code: data.code },
+        });
 
         return { success: true, data: returnData };
     } catch (error) {
@@ -328,8 +360,11 @@ export async function createProductAction(formData: FormData) {
 }
 
 export async function updateProductAction(id: string, formData: FormData) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const entityGate = await assertEntityInActiveTenant("product", id, "Produto não encontrado");
+    if (!entityGate.ok) return { success: false, error: entityGate.error };
 
     const db = await getDb();
 
@@ -405,6 +440,14 @@ export async function updateProductAction(id: string, formData: FormData) {
         const pathId = formattedId.includes(":") ? formattedId.split(":")[1] : formattedId;
         revalidatePath(`/dashboard/products/${pathId}`);
 
+        await auditTenantAction({
+            action: "product.update",
+            resourceType: "product",
+            resourceId: id,
+            summary: `Produto atualizado: ${data.code}`,
+            metadata: { code: data.code },
+        });
+
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -417,8 +460,11 @@ export async function updateProductAction(id: string, formData: FormData) {
 }
 
 export async function updateProductImageUrlAction(productId: string, imageUrl: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const entityGate = await assertEntityInActiveTenant("product", productId, "Produto não encontrado");
+    if (!entityGate.ok) return { success: false, error: entityGate.error };
 
     const db = await getDb();
     try {
@@ -442,6 +488,12 @@ export async function updateProductImageUrlAction(productId: string, imageUrl: s
         const pathId = String(recordId).includes(":") ? String(recordId).split(":")[1] : String(recordId);
         revalidatePath("/dashboard/products");
         revalidatePath(`/dashboard/products/${pathId}`);
+        await auditTenantAction({
+            action: "product.image_update",
+            resourceType: "product",
+            resourceId: productId,
+            summary: "Imagem do produto atualizada",
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {
@@ -479,14 +531,23 @@ export async function getNextProductCodeAction() {
 }
 
 export async function deleteProductAction(id: string) {
-    const auth = await assertActionSession();
+    const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+
+    const entityGate = await assertEntityInActiveTenant("product", id, "Produto não encontrado");
+    if (!entityGate.ok) return { success: false, error: entityGate.error };
 
     const db = await getDb();
     try {
         await db.delete(requireRecordId(TABLE_NAME, id));
 
         revalidatePath("/dashboard/products");
+        await auditTenantAction({
+            action: "product.delete",
+            resourceType: "product",
+            resourceId: id,
+            summary: "Produto excluído",
+        });
         return { success: true };
     } catch (error) {
         if (error instanceof InvalidRecordIdError) {

@@ -21,6 +21,7 @@ import {
 } from "@/lib/budgets/budget-package-types";
 import { normalizeAllUploadUrlsInValue, zipHasAssetFiles } from "@/lib/budgets/budget-package-urls";
 import { decodeZipUtf8Entry, parseZipBuffer } from "@/lib/budgets/budget-package-zip";
+import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
 
 export type ImportBudgetPackageResult =
     | { ok: true; budgetId: string; title: string }
@@ -461,6 +462,7 @@ export async function importBudgetPackage(
 
     const b = manifest.budget;
     const useCompositor = Boolean(b.use_compositor);
+    const tenantId = await requireActiveTenantId();
 
     const newBudgetRaw = await db.create(new Table("budget")).content({
         title: importTitle,
@@ -468,6 +470,7 @@ export async function importBudgetPackage(
         status: "draft",
         total_value: 0,
         client_id: clientRecordId,
+        tenant_id: tenantRecordId(tenantId),
         use_compositor: useCompositor,
         description: b.description,
         payment_terms: b.payment_terms,

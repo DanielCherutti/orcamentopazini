@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { listProductGroupsAction, getProductGroupProductsAction } from "@/actions/product-group-actions";
+import { listProductGroupsAction, getProductGroupProductCountsAction } from "@/actions/product-group-actions";
 import { ProductGroupsTable } from "@/components/products/groups/product-groups-table";
 import { DashboardContentCard, DashboardPageShell } from "@/components/layout/dashboard-page-shell";
 
@@ -14,14 +14,8 @@ export default async function ProductGroupsPage() {
   const res = await listProductGroupsAction();
   const groups = res.data ?? [];
 
-  // Count products per group
-  const productCounts: Record<string, number> = {};
-  await Promise.all(
-    groups.map(async (group) => {
-      const prodsRes = await getProductGroupProductsAction(group.id);
-      productCounts[group.id] = prodsRes.data?.length ?? 0;
-    })
-  );
+  const countsRes = await getProductGroupProductCountsAction(groups.map((g) => g.id));
+  const productCounts = countsRes.counts;
 
   return (
     <DashboardPageShell

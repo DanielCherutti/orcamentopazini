@@ -22,11 +22,11 @@ export function SearchInput() {
 
     return (
         <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/50" />
             <Input
                 type="search"
                 placeholder="Buscar Orçamentos..."
-                className="pl-9"
+                className="h-11 rounded-xl border-black/10 bg-white pl-9 shadow-sm dark:border-white/10 dark:bg-white/[0.04]"
                 onChange={(e) => handleSearch(e.target.value)}
                 defaultValue={searchParams.get("query")?.toString()}
             />

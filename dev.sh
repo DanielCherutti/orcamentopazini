@@ -12,4 +12,4 @@ export CHOKIDAR_USEPOLLING=true
 export CHOKIDAR_INTERVAL=1000
 
 echo "Starting Next.js dev server..."
-bun run dev
+npm run dev

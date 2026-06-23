@@ -8,6 +8,7 @@ import {
     passwordStrengthErrorMessages,
     PASSWORD_MAX_LENGTH,
 } from "@/lib/password-strength";
+import { PRODUCT_USER_AGENT } from "@/lib/product-brand";
 
 const HIBP_TIMEOUT_MS = 6000;
 
@@ -32,7 +33,7 @@ export async function isPasswordFoundInPwnedDatabase(
                 method: "GET",
                 signal: controller.signal,
                 headers: {
-                    "User-Agent": "PaziniPortal/1.0 (password-check)",
+                    "User-Agent": `${PRODUCT_USER_AGENT} (password-check)`,
                 },
             },
         );
