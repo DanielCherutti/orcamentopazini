@@ -12,7 +12,7 @@ import { verifySessionToken, type ImpersonationPayload } from "@/lib/session-tok
 import { tenantMatchesHost } from "@/lib/tenant-host";
 import { resolveTenantFromHost, resolveBrandingTenantFromHost } from "@/lib/tenant-host-resolve";
 
-/** Páginas acessíveis sem sessão completa (login, convite e seleção de tenant). */
+/** Páginas acesssíveis sem sessão completa (login, convite e seleção de tenant). */
 const PUBLIC_PAGE_PATHS = ["/", "/select-tenant", "/convite"];
 
 function getSessionSecret(): string | undefined {
