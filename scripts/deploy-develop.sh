@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Deploy do front Pazini no servidor (develop → produção).
+# Teste pipeline CI/CD — commit inofensivo para validar PR → merge → deploy.
 # Chamado pelo GitHub Actions após git pull em /root/docker/orcamentopazini.
 #
 # Pré-requisitos no servidor:
