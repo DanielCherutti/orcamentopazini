@@ -44,8 +44,18 @@ docker_bun() {
     "$@"
 }
 
-echo "[1/4] Instalando dependências..."
-docker_bun bun install --frozen-lockfile
+docker_npm() {
+  docker run --rm \
+    --network host \
+    -v "$FRONT_DIR:/app" \
+    -v "$UPLOADS_DIR:/app/uploads" \
+    -w /app \
+    node:22-bookworm-slim \
+    "$@"
+}
+
+echo "[1/4] Instalando dependências (npm ci, igual ao CI)..."
+docker_npm npm ci
 
 echo "[2/4] Build Next.js..."
 docker_bun bun run build
