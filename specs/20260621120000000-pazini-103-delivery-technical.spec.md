@@ -19,7 +19,8 @@ Após **aprovação do orçamento**, permitir documentar a instalação em campo
 - **Evidências** (`delivery_evidence`): fotos/documentos por área.
 - **Instalações** (`delivery_installation`): vínculo área ↔ equipamento técnico + TAG + quantidade.
 - **Export ZIP** com índice HTML, fotos, manuais, memorial de referência do DataBook, `equipamentos.csv` e **DataBook PDF formatado** (`databook/entrega-tecnica.pdf`).
-- **DataBook PDF** gerado pelo sistema (capa, sumário AD, checklist, equipamentos e fotos por área) — botão *Gerar DataBook PDF* no workspace; rota `/api/delivery-projects/[id]/pdf`.
+- **DataBook PDF** gerado pelo sistema — layout do **compositor próprio do projeto de entrega** (capa, cabeçalho, rodapé, seções e texto); conteúdo técnico automático: sumário AD, checklist, equipamentos e fotos por área.
+- **Compositor do DataBook** no workspace (`Compositor do DataBook`): mesmas ferramentas do orçamento (capa Word, cabeçalho/rodapé visual, sumário, seções, texto livre). Independente do compositor comercial do orçamento.
 - Menus: Equip. técnicos, **DataBooks**, Entrega técnica.
 - Botão no orçamento aprovado: escolher DataBook e criar projeto.
 
@@ -38,7 +39,7 @@ Após **aprovação do orçamento**, permitir documentar a instalação em campo
 | `delivery_project` | Projeto pós-aprovação (`budget_id` único; `databook_template_id`) |
 | `delivery_area` | Área AD com checklist JSON (cópia do DataBook) |
 | `delivery_evidence` | Arquivo/foto vinculado à área |
-| `delivery_installation` | Equipamento instalado na área |
+| `delivery_block` | Blocos do compositor do DataBook (capa, cabeçalho/rodapé, seções) |
 
 ## 4. Fluxo
 

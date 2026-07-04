@@ -164,12 +164,12 @@ export function ModelosManager({ initialModelos }: { initialModelos: Modelo[] })
             </TabsList>
           </Tabs>
 
-          <Link href={`/modelos/novo?tipo=${activeTipo}`} passHref legacyBehavior>
-            <Button className="h-9 gap-2 shadow-sm shrink-0 font-medium">
+          <Button asChild className="h-9 gap-2 shadow-sm shrink-0 font-medium">
+            <Link href={`/modelos/novo?tipo=${activeTipo}`}>
               <Plus className="h-4 w-4" />
               Novo {tipoLabels[activeTipo].toLowerCase()}
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
       </header>
 
@@ -255,17 +255,18 @@ export function ModelosManager({ initialModelos }: { initialModelos: Modelo[] })
                       <Trash2 className="h-3.5 w-3.5" />
                       Excluir
                     </Button>
-                    <Link href={`/modelos/${modelo.id}`} passHref legacyBehavior>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="h-8 gap-1.5 font-medium border"
-                        title="Editar modelo"
-                      >
+                    <Button
+                      asChild
+                      size="sm"
+                      variant="secondary"
+                      className="h-8 gap-1.5 font-medium border"
+                      title="Editar modelo"
+                    >
+                      <Link href={`/modelos/${modelo.id}`}>
                         <Pencil className="h-3.5 w-3.5" />
                         Editar
-                      </Button>
-                    </Link>
+                      </Link>
+                    </Button>
                   </div>
                 </div>
               );
@@ -286,12 +287,12 @@ export function ModelosManager({ initialModelos }: { initialModelos: Modelo[] })
                 : `Você ainda não criou nenhum modelo de ${tipoLabels[activeTipo].toLowerCase()}. Comece agora mesmo!`}
             </p>
             {!query && (
-              <Link href={`/modelos/novo?tipo=${activeTipo}`} passHref legacyBehavior>
-                <Button className="mt-5 h-9 gap-2 shadow-sm font-medium">
+              <Button asChild className="mt-5 h-9 gap-2 shadow-sm font-medium">
+                <Link href={`/modelos/novo?tipo=${activeTipo}`}>
                   <Plus className="h-4 w-4" />
                   Criar primeiro modelo
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             )}
           </div>
         )}

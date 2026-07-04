@@ -151,6 +151,7 @@ async function ensureSchema(instance: Surreal): Promise<void> {
             DEFINE TABLE IF NOT EXISTS delivery_area SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS delivery_evidence SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS delivery_installation SCHEMALESS;
+            DEFINE TABLE IF NOT EXISTS delivery_block SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS databook_template SCHEMALESS;
             DEFINE INDEX IF NOT EXISTS idx_portal_user_email ON portal_user FIELDS email UNIQUE;
             DEFINE INDEX IF NOT EXISTS idx_delivery_project_budget ON delivery_project FIELDS budget_id;

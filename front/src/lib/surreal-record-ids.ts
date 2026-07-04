@@ -34,6 +34,7 @@ const ALLOWED_TABLES = new Set([
     "technical_equipment",
     "delivery_project",
     "delivery_area",
+    "delivery_block",
     "delivery_evidence",
     "delivery_installation",
     "databook_template",

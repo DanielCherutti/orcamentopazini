@@ -26,6 +26,8 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DeliveryCompositor } from "@/components/delivery/delivery-compositor";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import {
@@ -255,6 +257,22 @@ export function DeliveryProjectWorkspace({
                 </div>
             </div>
 
+            <Tabs defaultValue="installation" className="flex flex-col flex-1 min-h-0 gap-4">
+                <TabsList className="w-fit">
+                    <TabsTrigger value="installation">Instalação e áreas AD</TabsTrigger>
+                    <TabsTrigger value="compositor">Compositor do DataBook</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="compositor" className="flex-1 min-h-[480px] mt-0 data-[state=inactive]:hidden">
+                    {project.id ? (
+                        <DeliveryCompositor
+                            projectId={project.id}
+                            documentTitle={project.title || "DataBook de entrega"}
+                        />
+                    ) : null}
+                </TabsContent>
+
+                <TabsContent value="installation" className="flex flex-col flex-1 min-h-0 gap-4 mt-0 data-[state=inactive]:hidden">
             <div className="grid gap-4 md:grid-cols-3">
                 <Card>
                     <CardHeader className="pb-2">
@@ -570,6 +588,8 @@ export function DeliveryProjectWorkspace({
                     </div>
                 ) : null}
             </div>
+                </TabsContent>
+            </Tabs>
         </div>
     );
 }

@@ -27,6 +27,8 @@ import {
 } from "@/components/ui/dialog";
 import { updateBlockAction } from "@/actions/budget-compositor-block-actions";
 import { getBudgetShellAction } from "@/actions/budget-actions";
+import { getDeliveryCompositorShellAction } from "@/actions/delivery-project-actions";
+import { useCompositorRuntime } from "./compositor-runtime-context";
 import { getCustomerAction } from "@/actions/client-actions";
 import type { BudgetBlock } from "@/types/budget-compositor-types";
 import type { CoverBlockProps } from "@/types/budget-compositor-types";
@@ -46,6 +48,7 @@ export function CompositorCoverBlock({
   budgetId: string;
   isReadOnly?: boolean;
 }) {
+  const { actions, kind } = useCompositorRuntime();
   const [props, setProps] = useState<CoverBlockProps>(() =>
     mergeCoverDocumentProps(block.props as Record<string, unknown>)
   );
@@ -87,18 +90,22 @@ export function CompositorCoverBlock({
 
   useEffect(() => {
     let cancelled = false;
-    getBudgetShellAction(budgetId).then((bRes) => {
+    const loader =
+        kind === "delivery"
+            ? getDeliveryCompositorShellAction(budgetId)
+            : getBudgetShellAction(budgetId);
+    loader.then((bRes) => {
       if (cancelled) return;
       if (bRes.success && bRes.data) setBudget(bRes.data as Budget);
     });
     return () => {
       cancelled = true;
     };
-  }, [budgetId]);
+  }, [budgetId, kind]);
 
   const persist = useDebouncedCallback(async (next: CoverBlockProps) => {
     if (isReadOnly) return;
-    const res = await updateBlockAction(block.id, budgetId, { props: next as Record<string, unknown> });
+    const res = await actions.updateBlockAction(block.id, budgetId, { props: next as Record<string, unknown> });
     if (!res.success) {
       toast.error(res.error || "Erro ao salvar capa");
     }

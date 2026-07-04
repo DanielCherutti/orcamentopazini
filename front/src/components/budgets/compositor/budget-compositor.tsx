@@ -14,6 +14,7 @@ import type { ScopeFigureEntry } from "@/components/budgets/compositor/composito
 import type { BudgetBlock, CompositorTree } from "@/types/budget-compositor-types";
 import type { BudgetItem, BudgetImage } from "@/types/budget-types";
 import { useLiveCompositor } from "@/hooks/use-live-compositor";
+import { CompositorRuntimeProvider } from "./compositor-runtime-context";
 
 interface BudgetCompositorProps {
   budgetId: string;
@@ -97,6 +98,7 @@ export function BudgetCompositor({
   const items: Record<string, BudgetItem[]> = tree?.items ?? {};
 
   return (
+    <CompositorRuntimeProvider kind="budget">
     <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* Sidebar: índice hierárquico */}
       {sidebarOpen && (
@@ -141,5 +143,6 @@ export function BudgetCompositor({
         />
       </div>
     </div>
+    </CompositorRuntimeProvider>
   );
 }

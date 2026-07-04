@@ -6,12 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
-    addBlockAction,
-    deleteBlockAction,
-    reorderBlocksAction,
-    updateBlockAction,
-    moveBlockToParentAction,
-} from "@/actions/budget-compositor-block-actions";
+    useCompositorRuntime,
+    isDeliveryCompositorBlockDisabled,
+    type CompositorKind,
+} from "./compositor-runtime-context";
 import { toast } from "@/lib/toast";
 import { useConfirmDialog } from "@/components/providers/confirm-dialog-provider";
 import type { BudgetBlock, BlockType } from "@/types/budget-compositor-types";
@@ -186,17 +184,25 @@ const ALL_OPTIONS: { type: BlockType; label: string; short: string }[] = [
   { type: "quote",    label: "Bloco Orçamento",  short: "ORÇAMENTO"  },
 ];
 
-function getAddOptions(parentType: string | null, hasScopeBlock: boolean, hasQuoteBlock: boolean): typeof ALL_OPTIONS {
+function getAddOptions(
+  parentType: string | null,
+  hasScopeBlock: boolean,
+  hasQuoteBlock: boolean,
+  kind: CompositorKind,
+): typeof ALL_OPTIONS {
+  const options =
+    kind === "delivery"
+      ? ALL_OPTIONS.filter((o) => !isDeliveryCompositorBlockDisabled(o.type, kind))
+      : ALL_OPTIONS;
   if (parentType === null) {
-    return ALL_OPTIONS.filter((o) => {
-      if (o.type === "scope") return !hasScopeBlock; // só se ainda não existe
-      if (o.type === "quote") return !hasQuoteBlock; // só se ainda não existe
+    return options.filter((o) => {
+      if (o.type === "scope") return !hasScopeBlock;
+      if (o.type === "quote") return !hasQuoteBlock;
       return o.type === "session";
     });
   }
-  if (parentType === "location") return ALL_OPTIONS.filter((o) => o.type === "section" || o.type === "text");
-  // session (e qualquer outro contêiner futuro): session, location, text
-  return ALL_OPTIONS.filter((o) => o.type !== "section" && o.type !== "scope" && o.type !== "quote");
+  if (parentType === "location") return options.filter((o) => o.type === "section" || o.type === "text");
+  return options.filter((o) => o.type !== "section" && o.type !== "scope" && o.type !== "quote");
 }
 
 /** Pré-visualização no portal: segue o ponteiro com o offset do clique (simétrico pra cima/baixo). */
@@ -268,11 +274,12 @@ interface InlineAdderProps {
 }
 
 function InlineAdder({ budgetId, parentId, parentType, depth, hasScopeBlock = false, hasQuoteBlock = false, onSuccess, onCancel }: InlineAdderProps) {
+  const { actions, kind } = useCompositorRuntime();
   const [selectedType, setSelectedType] = useState<BlockType | null>(null);
   const [label, setLabel] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const options = getAddOptions(parentType, hasScopeBlock, hasQuoteBlock);
+  const options = getAddOptions(parentType, hasScopeBlock, hasQuoteBlock, kind);
   const indentPx = (depth + 1) * 12 + 8;
 
   const handleCreate = async (overrideType?: BlockType, overrideLabel?: string) => {
@@ -280,7 +287,7 @@ function InlineAdder({ budgetId, parentId, parentType, depth, hasScopeBlock = fa
     const lbl = overrideLabel ?? label.trim();
     if (!type || !lbl) return;
     setLoading(true);
-    const result = await addBlockAction({ budgetId, parentId, type, label: lbl });
+    const result = await actions.addBlockAction({ budgetId, parentId, type, label: lbl });
     setLoading(false);
     if (result.success) {
       onSuccess();
@@ -417,6 +424,7 @@ interface BlockTreeNodeProps {
 }
 
 function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth, isReadOnly = false, autoEditId, onAutoEdit, onBlockCreated }: BlockTreeNodeProps) {
+  const { actions } = useCompositorRuntime();
   const confirmDialog = useConfirmDialog();
   const [collapsed, setCollapsed] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -443,7 +451,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
     setEditingLabel(false);
     const trimmed = labelDraft.trim();
     if (!trimmed || trimmed === block.label) { setLabelDraft(block.label || ""); return; }
-    const result = await updateBlockAction(block.id, budgetId, {
+    const result = await actions.updateBlockAction(block.id, budgetId, {
       label: normalizeLabel(trimmed, block),
     });
     if (!result.success) { toast.error(result.error || "Erro ao renomear"); setLabelDraft(block.label || ""); }
@@ -495,7 +503,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
     });
     if (!ok) return;
     setDeleting(true);
-    const result = await deleteBlockAction(block.id, budgetId);
+    const result = await actions.deleteBlockAction(block.id, budgetId);
     if (!result.success) {
       toast.error(result.error || "Erro ao remover");
       setDeleting(false);
@@ -596,7 +604,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
               e.stopPropagation();
               if (block.type === "session") {
                 setAddingSubSession(true);
-                const result = await addBlockAction({ budgetId, parentId: block.id, type: "session", label: "Seção" });
+                const result = await actions.addBlockAction({ budgetId, parentId: block.id, type: "session", label: "Seção" });
                 setAddingSubSession(false);
                 if (result.success) {
                   if (result.blockId) onBlockCreated?.(result.blockId);
@@ -700,6 +708,7 @@ export function CompositorSidebar({
   onRefresh,
   isReadOnly = false,
 }: CompositorSidebarProps) {
+  const { actions } = useCompositorRuntime();
   const [addingRootSession, setAddingRootSession] = useState(false);
   const [autoEditId, setAutoEditId] = useState<string | null>(null);
   const [childrenReg, setChildrenReg] = useState<ChildrenReg>(() => buildChildrenReg(roots));
@@ -769,7 +778,7 @@ export function CompositorSidebar({
       const targetBlock = flattenTree(roots).find((b) => b.id === targetParentId);
       if (targetBlock?.type === "scope") return;
 
-      moveBlockToParentAction(String(active.id), targetParentId, budgetId)
+      actions.moveBlockToParentAction(String(active.id), targetParentId, budgetId)
         .then((r) => {
           if (r.success) onRefresh();
           else { toast.error(r.error || "Erro ao mover seção"); onRefresh(); }
@@ -804,12 +813,12 @@ export function CompositorSidebar({
       if (oldIdx === -1 || newIdx === -1) return;
       const reordered = arrayMove(siblings, oldIdx, newIdx);
       setChildrenReg((prev) => ({ ...prev, [key]: reordered }));
-      reorderBlocksAction(reordered.map((b) => b.id), budgetId)
+      actions.reorderBlocksAction(reordered.map((b) => b.id), budgetId)
         .then((r) => { if (!r.success) onRefresh(); })
         .catch(() => onRefresh());
     } else {
       // Mover como irmão em outro pai (cross-parent)
-      moveBlockToParentAction(String(active.id), overParentId, budgetId)
+      actions.moveBlockToParentAction(String(active.id), overParentId, budgetId)
         .then((r) => {
           if (r.success) onRefresh();
           else { toast.error(r.error || "Erro ao mover seção"); onRefresh(); }
@@ -944,7 +953,7 @@ export function CompositorSidebar({
               disabled={addingRootSession}
               onClick={async () => {
                 setAddingRootSession(true);
-                const result = await addBlockAction({ budgetId, parentId: null, type: "session", label: "Seção" });
+                const result = await actions.addBlockAction({ budgetId, parentId: null, type: "session", label: "Seção" });
                 setAddingRootSession(false);
                 if (result.success) {
                   if (result.blockId) setAutoEditId(result.blockId);

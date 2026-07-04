@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { NewDatabookForm } from "./databook-forms";
+import { NewDatabookForm } from "../databook-forms";
 
 export const metadata: Metadata = {
     title: "Novo DataBook",

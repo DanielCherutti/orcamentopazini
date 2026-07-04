@@ -5,6 +5,7 @@ import { Table } from "surrealdb";
 import { assertActionSession, assertWriteActionSession } from "@/actions/auth-actions";
 import { assertBudgetInActiveTenant } from "@/lib/budget-tenant";
 import { resolveDatabookAreasForProject } from "@/actions/databook-template-actions";
+import { seedDeliveryCompositorBlocksAction } from "@/actions/delivery-compositor-block-actions";
 import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
 import { assertEntityInActiveTenant } from "@/lib/tenant-access";
@@ -20,6 +21,8 @@ import type {
     DeliveryAreaStatus,
     DeliveryEvidenceKind,
 } from "@/types/delivery-types";
+import type { Budget } from "@/types/budget-types";
+import { loadDeliveryProjectExportPayload } from "@/lib/delivery/delivery-project-export-payload";
 
 function serializeProject(row: Record<string, unknown>): DeliveryProject {
     const budget = row.budget_id as Record<string, unknown> | undefined;
@@ -383,6 +386,8 @@ export async function createDeliveryProjectFromBudgetAction(
             });
         }
 
+        await seedDeliveryCompositorBlocksAction(projectId);
+
         deliveryRevalidate(projectId);
         return { success: true, id: projectId, alreadyExists: false };
     } catch (error) {
@@ -582,4 +587,30 @@ export async function deleteDeliveryInstallationAction(installationId: string, p
     } catch {
         return { success: false, error: "Erro ao remover instalação" };
     }
+}
+
+/** Contexto de variáveis ({{orcamento.codigo}}, cliente etc.) no compositor do DataBook. */
+export async function getDeliveryCompositorShellAction(projectId: string): Promise<{
+    success: boolean;
+    data?: Budget;
+    error?: string;
+}> {
+    const auth = await assertActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const loaded = await loadDeliveryProjectExportPayload(projectId);
+    if (!loaded.ok) return { success: false, error: loaded.error };
+
+    const p = loaded.payload.project;
+    return {
+        success: true,
+        data: {
+            id: p.budget_id,
+            code: p.budget_code,
+            title: p.title,
+            client_id: p.client_id,
+            client_name: p.client_name,
+            use_compositor: true,
+        } as Budget,
+    };
 }
