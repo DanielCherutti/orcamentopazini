@@ -140,7 +140,7 @@ export async function getDeliveryProjectsAction(params?: {
     try {
         const db = await getDb();
         const tenantId = await requireActiveTenantId();
-        let sql = `SELECT * FROM delivery_project WHERE tenant_id = $tenantId FETCH budget_id, client_id`;
+        const sql = `SELECT * FROM delivery_project WHERE tenant_id = $tenantId FETCH budget_id, client_id`;
         const queryParams: Record<string, unknown> = {
             tenantId: tenantRecordId(tenantId),
         };

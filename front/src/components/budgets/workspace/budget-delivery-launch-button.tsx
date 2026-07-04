@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { HardHat, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -175,9 +176,9 @@ export function BudgetDeliveryLaunchButton({ budgetId }: BudgetDeliveryLaunchBut
                                 </Select>
                                 <p className="text-xs text-muted-foreground">
                                     Cadastre ou edite modelos em{" "}
-                                    <a href="/dashboard/databooks" className="underline">
+                                    <Link href="/dashboard/databooks" className="underline">
                                         Modelos de DataBook
-                                    </a>
+                                    </Link>
                                     .
                                 </p>
                             </div>
