@@ -13,8 +13,8 @@ Após **aprovação do orçamento**, permitir documentar a instalação em campo
 ### Dentro
 
 - **Catálogo de Equipamentos Técnicos** (`technical_equipment`): fabricante, modelo, categoria, manual PDF, ficha/certificado opcional.
-- **Cadastro de DataBooks** (`databook_template`): modelos reutilizáveis com áreas AD, checklist e memorial PDF de referência.
-- **Projeto de Entrega** (`delivery_project`): criado a partir de orçamento `approved`, 1:1 por orçamento, vinculado a um DataBook.
+- **Cadastro de DataBooks** (`databook_template`): modelos reutilizáveis com áreas AD, checklist e memorial PDF de referência (opcional).
+- **Projeto de Entrega** (`delivery_project`): criado a partir de orçamento `approved`, 1:1 por orçamento; pode usar um DataBook-modelo **ou começar do zero** (sem template).
 - **Áreas** (`delivery_area`): copiadas do DataBook escolhido; checklist editável no projeto.
 - **Evidências** (`delivery_evidence`): fotos/documentos por área.
 - **Instalações** (`delivery_installation`): vínculo área ↔ equipamento técnico + TAG + quantidade.
@@ -22,7 +22,7 @@ Após **aprovação do orçamento**, permitir documentar a instalação em campo
 - **DataBook PDF** gerado pelo sistema — layout do **compositor próprio do projeto de entrega** (capa, cabeçalho, rodapé, seções e texto); conteúdo técnico automático: sumário AD, checklist, equipamentos e fotos por área.
 - **Compositor do DataBook** no workspace (`Compositor do DataBook`): mesmas ferramentas do orçamento (capa Word, cabeçalho/rodapé visual, sumário, seções, texto livre). Independente do compositor comercial do orçamento.
 - Menus: Equip. técnicos, **DataBooks**, Entrega técnica.
-- Botão no orçamento aprovado: escolher DataBook e criar projeto.
+- Botão no orçamento aprovado: escolher **modelo de DataBook** ou **começar do zero**; CRUD de áreas AD no workspace do projeto.
 
 ### Fora (fases futuras)
 
@@ -44,15 +44,15 @@ Após **aprovação do orçamento**, permitir documentar a instalação em campo
 ## 4. Fluxo
 
 ```
-Cadastrar DataBook (áreas + checklist)
+Cadastrar DataBook (modelo) — opcional
         ↓
-budget.status = approved → escolher DataBook
+budget.status = approved → modelo OU começar do zero
         ↓
-createDeliveryProjectFromBudgetAction(budgetId, databookTemplateId)
+createDeliveryProjectFromBudgetAction(budgetId, { mode, databookTemplateId? })
         ↓
-equipe preenche checklist, fotos, instalações
+equipe define/edita áreas AD, checklist, fotos, instalações
         ↓
-export ZIP (inclui memorial de referência do DataBook + PDF formatado)
+export ZIP (memorial de referência só se houver modelo) + PDF formatado
 ```
 
 **Seed:** na primeira listagem de DataBooks, cria automaticamente o modelo **C.Vale — Adequação NR-12 / NR-35** (AD-01…AD-12) como padrão e, se existir `laudos tecnicos.pdf` na raiz do repositório, anexa como memorial de referência.
@@ -80,8 +80,8 @@ export ZIP (inclui memorial de referência do DataBook + PDF formatado)
 
 - [x] CRUD equipamento técnico com upload de manual PDF
 - [x] CRUD DataBook com áreas, checklist e PDF de referência
-- [x] Criar projeto só com orçamento aprovado; escolha de DataBook
-- [x] Áreas copiadas do DataBook; checklist editável no projeto
+- [x] Criar projeto só com orçamento aprovado; escolha de DataBook-modelo ou projeto em branco
+- [x] Áreas copiadas do modelo ou criadas manualmente no projeto; checklist editável
 - [x] Upload de evidências por área
 - [x] Vincular equipamento técnico à área
 - [x] Export ZIP com estrutura organizada

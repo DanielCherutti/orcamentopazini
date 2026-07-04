@@ -278,13 +278,13 @@ export function Sidebar({
                     {
                         href: "/dashboard/databooks",
                         icon: BookOpen,
-                        label: "DataBooks",
+                        label: "Modelos de DataBook",
                         active: isDatabooks,
                     },
                     {
                         href: "/delivery-projects",
                         icon: HardHat,
-                        label: "Projetos",
+                        label: "Projetos de entrega",
                         active: isDeliveryProjects,
                     },
                 ],

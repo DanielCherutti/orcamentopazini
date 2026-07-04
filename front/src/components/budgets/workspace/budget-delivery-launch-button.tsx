@@ -23,10 +23,12 @@ import {
 import {
     createDeliveryProjectFromBudgetAction,
     getDeliveryProjectByBudgetAction,
+    type DeliveryProjectCreationMode,
 } from "@/actions/delivery-project-actions";
 import { listDatabookTemplatesForSelectAction } from "@/actions/databook-template-actions";
 import { deliveryProjectUrl } from "@/lib/delivery/delivery-path";
 import { toast } from "@/lib/toast";
+import { cn } from "@/lib/utils";
 import type { DatabookTemplate } from "@/types/databook-template-types";
 
 interface BudgetDeliveryLaunchButtonProps {
@@ -39,6 +41,7 @@ export function BudgetDeliveryLaunchButton({ budgetId }: BudgetDeliveryLaunchBut
     const [dialogOpen, setDialogOpen] = useState(false);
     const [templates, setTemplates] = useState<DatabookTemplate[]>([]);
     const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+    const [creationMode, setCreationMode] = useState<DeliveryProjectCreationMode>("template");
 
     useEffect(() => {
         if (!dialogOpen) return;
@@ -54,15 +57,23 @@ export function BudgetDeliveryLaunchButton({ budgetId }: BudgetDeliveryLaunchBut
             router.push(deliveryProjectUrl(existingId));
             return;
         }
-        if (!selectedTemplateId) {
-            toast.error("Selecione um DataBook");
+        if (creationMode === "template" && !selectedTemplateId) {
+            toast.error("Selecione um DataBook ou comece do zero");
             return;
         }
         setLoading(true);
         try {
-            const res = await createDeliveryProjectFromBudgetAction(budgetId, selectedTemplateId);
+            const res = await createDeliveryProjectFromBudgetAction(budgetId, {
+                mode: creationMode,
+                databookTemplateId:
+                    creationMode === "template" ? selectedTemplateId : undefined,
+            });
             if (res.success && res.id) {
-                toast.success("Projeto de entrega criado");
+                toast.success(
+                    creationMode === "blank"
+                        ? "Projeto criado — adicione as áreas AD"
+                        : "Projeto de entrega criado",
+                );
                 setDialogOpen(false);
                 router.push(deliveryProjectUrl(res.id));
             } else {
@@ -87,6 +98,9 @@ export function BudgetDeliveryLaunchButton({ budgetId }: BudgetDeliveryLaunchBut
         }
     };
 
+    const canCreate =
+        creationMode === "blank" || (creationMode === "template" && !!selectedTemplateId);
+
     return (
         <>
             <Button size="sm" variant="secondary" disabled={loading} onClick={handleClick} title="Entrega técnica">
@@ -103,37 +117,83 @@ export function BudgetDeliveryLaunchButton({ budgetId }: BudgetDeliveryLaunchBut
                     <DialogHeader>
                         <DialogTitle>Abrir projeto de entrega</DialogTitle>
                         <DialogDescription>
-                            Escolha o DataBook que define as áreas e o checklist desta obra.
+                            Use um modelo pronto ou monte as áreas AD do zero neste projeto.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-2 py-2">
-                        <Label>DataBook</Label>
-                        <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Selecione..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {templates.map((t) => (
-                                    <SelectItem key={t.id} value={t.id!}>
-                                        {t.name}
-                                        {t.is_default ? " (padrão)" : ""}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                            Cadastre ou edite modelos em{" "}
-                            <a href="/dashboard/databooks" className="underline">
-                                DataBooks
-                            </a>
-                            .
-                        </p>
+                    <div className="space-y-4 py-2">
+                        <div className="space-y-2">
+                            <Label>Como deseja começar?</Label>
+                            <div className="grid gap-2 sm:grid-cols-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setCreationMode("template")}
+                                    className={cn(
+                                        "rounded-lg border p-3 text-left text-sm transition-colors",
+                                        creationMode === "template"
+                                            ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                                            : "hover:bg-muted/50",
+                                    )}
+                                >
+                                    <p className="font-medium">Usar modelo de DataBook</p>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        Copia áreas e checklist de um cadastro reutilizável.
+                                    </p>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setCreationMode("blank")}
+                                    className={cn(
+                                        "rounded-lg border p-3 text-left text-sm transition-colors",
+                                        creationMode === "blank"
+                                            ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                                            : "hover:bg-muted/50",
+                                    )}
+                                >
+                                    <p className="font-medium">Começar do zero</p>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        Projeto vazio; você cria as áreas AD no workspace.
+                                    </p>
+                                </button>
+                            </div>
+                        </div>
+
+                        {creationMode === "template" ? (
+                            <div className="space-y-2">
+                                <Label>DataBook</Label>
+                                <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Selecione..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {templates.map((t) => (
+                                            <SelectItem key={t.id} value={t.id!}>
+                                                {t.name}
+                                                {t.is_default ? " (padrão)" : ""}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <p className="text-xs text-muted-foreground">
+                                    Cadastre ou edite modelos em{" "}
+                                    <a href="/dashboard/databooks" className="underline">
+                                        Modelos de DataBook
+                                    </a>
+                                    .
+                                </p>
+                            </div>
+                        ) : (
+                            <p className="text-xs text-muted-foreground rounded-md border border-dashed p-3">
+                                Nenhum modelo será vinculado. Após criar o projeto, use a aba{" "}
+                                <strong>Instalação e áreas AD</strong> para adicionar áreas, checklist,
+                                fotos e equipamentos.
+                            </p>
+                        )}
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setDialogOpen(false)}>
                             Cancelar
                         </Button>
-                        <Button disabled={loading || !selectedTemplateId} onClick={() => openProject()}>
+                        <Button disabled={loading || !canCreate} onClick={() => openProject()}>
                             {loading ? "Criando..." : "Criar projeto"}
                         </Button>
                     </DialogFooter>

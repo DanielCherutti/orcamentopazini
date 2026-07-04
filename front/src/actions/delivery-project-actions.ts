@@ -290,10 +290,17 @@ export async function getDeliveryProjectDetailAction(projectId: string) {
     }
 }
 
+export type DeliveryProjectCreationMode = "template" | "blank";
+
 export async function createDeliveryProjectFromBudgetAction(
     budgetId: string,
-    databookTemplateId?: string,
+    options?: {
+        mode?: DeliveryProjectCreationMode;
+        databookTemplateId?: string;
+    },
 ) {
+    const mode = options?.mode ?? "template";
+    const databookTemplateId = options?.databookTemplateId;
     const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
@@ -338,23 +345,35 @@ export async function createDeliveryProjectFromBudgetAction(
             ? requireRecordId("client", recordIdToString(budget.client_id))
             : undefined;
 
-        const resolved = await resolveDatabookAreasForProject(databookTemplateId);
-        if (!resolved) {
-            return {
-                success: false,
-                error: "Nenhum DataBook disponível. Cadastre um em DataBooks.",
-            };
+        let resolved: Awaited<ReturnType<typeof resolveDatabookAreasForProject>> = null;
+        if (mode === "template") {
+            resolved = await resolveDatabookAreasForProject(databookTemplateId);
+            if (!resolved) {
+                return {
+                    success: false,
+                    error: "Nenhum DataBook disponível. Cadastre um em DataBooks ou comece do zero.",
+                };
+            }
         }
 
         const created = await db.create(new Table("delivery_project")).content({
             tenant_id: tenantRecordId(tenantId),
             budget_id: budgetGate.budgetRecordId,
             client_id: clientId,
-            databook_template_id: requireRecordId("databook_template", resolved.templateId),
-            databook_template_name: resolved.templateName,
+            ...(resolved
+                ? {
+                      databook_template_id: requireRecordId(
+                          "databook_template",
+                          resolved.templateId,
+                      ),
+                      databook_template_name: resolved.templateName,
+                      deadline_days: resolved.deadlineDays,
+                  }
+                : {
+                      deadline_days: 90,
+                  }),
             title: String(budget.title || budget.code || "Projeto de entrega"),
             status: "planning",
-            deadline_days: resolved.deadlineDays,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
         });
@@ -363,27 +382,29 @@ export async function createDeliveryProjectFromBudgetAction(
         const projectId = recordIdToString((projectRow as Record<string, unknown>).id);
         const projectRecordId = requireRecordId("delivery_project", projectId);
 
-        const areaTemplates = resolved.areas;
-        for (let i = 0; i < areaTemplates.length; i++) {
-            const template = areaTemplates[i];
-            const checklist: DeliveryChecklistItem[] = template.checklist.map((item) => ({
-                id: crypto.randomUUID(),
-                text: item.text,
-                done: false,
-            }));
+        if (resolved) {
+            const areaTemplates = resolved.areas;
+            for (let i = 0; i < areaTemplates.length; i++) {
+                const template = areaTemplates[i];
+                const checklist: DeliveryChecklistItem[] = template.checklist.map((item) => ({
+                    id: crypto.randomUUID(),
+                    text: item.text,
+                    done: false,
+                }));
 
-            await db.create(new Table("delivery_area")).content({
-                tenant_id: tenantRecordId(tenantId),
-                delivery_project_id: projectRecordId,
-                code: template.code,
-                title: template.title,
-                description: template.description ?? "",
-                status: "pending",
-                sort_order: i,
-                checklist,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-            });
+                await db.create(new Table("delivery_area")).content({
+                    tenant_id: tenantRecordId(tenantId),
+                    delivery_project_id: projectRecordId,
+                    code: template.code,
+                    title: template.title,
+                    description: template.description ?? "",
+                    status: "pending",
+                    sort_order: i,
+                    checklist,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                });
+            }
         }
 
         await seedDeliveryCompositorBlocksAction(projectId);
@@ -430,9 +451,107 @@ export async function updateDeliveryProjectAction(
     }
 }
 
+export async function createDeliveryAreaAction(payload: {
+    projectId: string;
+    code: string;
+    title: string;
+    description?: string;
+    checklist?: string[];
+}) {
+    const auth = await assertWriteActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const gate = await assertEntityInActiveTenant("delivery_project", payload.projectId);
+    if (!gate.ok) return { success: false, error: gate.error };
+
+    const code = payload.code.trim();
+    const title = payload.title.trim();
+    if (!code || !title) {
+        return { success: false, error: "Informe código e título da área." };
+    }
+
+    try {
+        const db = await getDb();
+        const tenantId = await requireActiveTenantId();
+        const projectRecordId = requireRecordId("delivery_project", payload.projectId);
+
+        const sortRes = await db.query<[Array<{ sort_order?: number }>]>(
+            `SELECT sort_order FROM delivery_area WHERE delivery_project_id = $pid ORDER BY sort_order DESC LIMIT 1`,
+            { pid: projectRecordId },
+        );
+        const nextSort = Number(sortRes[0]?.[0]?.sort_order ?? -1) + 1;
+
+        const checklist: DeliveryChecklistItem[] = (payload.checklist ?? [])
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .map((text) => ({
+                id: crypto.randomUUID(),
+                text,
+                done: false,
+            }));
+
+        const created = await db.create(new Table("delivery_area")).content({
+            tenant_id: tenantRecordId(tenantId),
+            delivery_project_id: projectRecordId,
+            code,
+            title,
+            description: payload.description?.trim() ?? "",
+            status: "pending",
+            sort_order: nextSort,
+            checklist,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        });
+
+        const row = Array.isArray(created) ? created[0] : created;
+        const areaId = recordIdToString((row as Record<string, unknown>).id);
+        deliveryRevalidate(payload.projectId);
+        return { success: true, id: areaId };
+    } catch {
+        return { success: false, error: "Erro ao criar área" };
+    }
+}
+
+export async function deleteDeliveryAreaAction(areaId: string, projectId: string) {
+    const auth = await assertWriteActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    try {
+        const db = await getDb();
+        const tenantId = await requireActiveTenantId();
+        const areaRecordId = requireRecordId("delivery_area", areaId);
+
+        const areaRes = await db.select(areaRecordId);
+        const area = (Array.isArray(areaRes) ? areaRes[0] : areaRes) as Record<
+            string,
+            unknown
+        >;
+        if (!area || !rowBelongsToTenant(area.tenant_id, tenantId)) {
+            return { success: false, error: "Área não encontrada" };
+        }
+
+        await db.query(
+            `DELETE delivery_evidence WHERE delivery_area_id = $aid`,
+            { aid: areaRecordId },
+        );
+        await db.query(
+            `DELETE delivery_installation WHERE delivery_area_id = $aid`,
+            { aid: areaRecordId },
+        );
+        await db.delete(areaRecordId);
+
+        deliveryRevalidate(projectId);
+        return { success: true };
+    } catch {
+        return { success: false, error: "Erro ao excluir área" };
+    }
+}
+
 export async function updateDeliveryAreaAction(
     areaId: string,
-    updates: Partial<Pick<DeliveryArea, "title" | "description" | "status" | "checklist">>,
+    updates: Partial<
+        Pick<DeliveryArea, "code" | "title" | "description" | "status" | "checklist">
+    >,
 ) {
     const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };

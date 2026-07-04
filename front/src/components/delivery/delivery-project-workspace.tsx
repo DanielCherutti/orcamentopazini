@@ -28,11 +28,21 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DeliveryCompositor } from "@/components/delivery/delivery-compositor";
+import { useConfirmDialog } from "@/components/providers/confirm-dialog-provider";
+import {
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import {
     addDeliveryEvidenceAction,
     addDeliveryInstallationAction,
+    createDeliveryAreaAction,
+    deleteDeliveryAreaAction,
     deleteDeliveryEvidenceAction,
     deleteDeliveryInstallationAction,
     updateDeliveryAreaAction,
@@ -84,15 +94,103 @@ export function DeliveryProjectWorkspace({
     equipmentOptions,
 }: DeliveryProjectWorkspaceProps) {
     const router = useRouter();
+    const confirm = useConfirmDialog();
     const [detail, setDetail] = useState(initial);
     const [selectedAreaId, setSelectedAreaId] = useState(initial.areas[0]?.id ?? "");
     const [evidenceKind, setEvidenceKind] = useState<DeliveryEvidenceKind>("photo_after");
     const [uploading, setUploading] = useState(false);
     const [pending, startTransition] = useTransition();
+    const [areaDialogOpen, setAreaDialogOpen] = useState(false);
+    const [newAreaCode, setNewAreaCode] = useState("");
+    const [newAreaTitle, setNewAreaTitle] = useState("");
+    const [newAreaChecklist, setNewAreaChecklist] = useState("");
 
     useEffect(() => {
         setDetail(initial);
+        setSelectedAreaId((current) => {
+            if (current && initial.areas.some((a) => a.id === current)) return current;
+            return initial.areas[0]?.id ?? "";
+        });
     }, [initial]);
+
+    const suggestNextAreaCode = useCallback(() => {
+        const nums = detail.areas
+            .map((a) => {
+                const m = a.code.match(/(\d+)\s*$/);
+                return m ? Number(m[1]) : 0;
+            })
+            .filter((n) => n > 0);
+        const next = (nums.length ? Math.max(...nums) : 0) + 1;
+        return `AD-${String(next).padStart(2, "0")}`;
+    }, [detail.areas]);
+
+    const openNewAreaDialog = () => {
+        setNewAreaCode(suggestNextAreaCode());
+        setNewAreaTitle("");
+        setNewAreaChecklist("");
+        setAreaDialogOpen(true);
+    };
+
+    const handleCreateArea = () => {
+        if (!project.id) return;
+        startTransition(async () => {
+            const res = await createDeliveryAreaAction({
+                projectId: project.id!,
+                code: newAreaCode,
+                title: newAreaTitle || "Nova área",
+                checklist: newAreaChecklist.split("\n"),
+            });
+            if (res.success && res.id) {
+                toast.success("Área criada");
+                setAreaDialogOpen(false);
+                setSelectedAreaId(res.id);
+                refresh();
+            } else {
+                toast.error(res.error || "Erro ao criar área");
+            }
+        });
+    };
+
+    const handleDeleteArea = async () => {
+        if (!project.id || !selectedArea?.id) return;
+        const ok = await confirm({
+            title: "Excluir área",
+            description: `Remover ${selectedArea.code} — ${selectedArea.title}? Evidências e equipamentos desta área também serão excluídos.`,
+            confirmLabel: "Excluir",
+            destructive: true,
+        });
+        if (!ok) return;
+        const res = await deleteDeliveryAreaAction(selectedArea.id, project.id);
+        if (res.success) {
+            toast.success("Área excluída");
+            setSelectedAreaId("");
+            refresh();
+        } else {
+            toast.error(res.error || "Erro ao excluir área");
+        }
+    };
+
+    const saveChecklistFromText = async (text: string) => {
+        if (!selectedArea?.id) return;
+        const lines = text
+            .split("\n")
+            .map((l) => l.trim())
+            .filter(Boolean);
+        const byText = new Map(selectedArea.checklist.map((item) => [item.text, item]));
+        const checklist = lines.map((line) => {
+            const existing = byText.get(line);
+            return existing ?? { id: crypto.randomUUID(), text: line, done: false };
+        });
+        const res = await updateDeliveryAreaAction(selectedArea.id, { checklist });
+        if (res.success) {
+            setDetail((d) => ({
+                ...d,
+                areas: d.areas.map((a) =>
+                    a.id === selectedArea.id ? { ...a, checklist } : a,
+                ),
+            }));
+        }
+    };
 
     const project = detail.project;
     const selectedArea = detail.areas.find((a) => a.id === selectedAreaId) ?? detail.areas[0];
@@ -220,8 +318,8 @@ export function DeliveryProjectWorkspace({
                         {project.budget_code ? `Orçamento ${project.budget_code}` : null}
                         {project.client_name ? ` · ${project.client_name}` : null}
                         {project.databook_template_name
-                            ? ` · DataBook: ${project.databook_template_name}`
-                            : null}
+                            ? ` · Modelo: ${project.databook_template_name}`
+                            : " · Projeto personalizado (sem modelo)"}
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -313,7 +411,22 @@ export function DeliveryProjectWorkspace({
             </div>
 
             <div className="flex flex-1 min-h-0 gap-4 flex-col lg:flex-row">
-                <aside className="w-full lg:w-64 shrink-0 space-y-1 overflow-y-auto max-h-[40vh] lg:max-h-none border rounded-lg p-2">
+                <aside className="w-full lg:w-64 shrink-0 flex flex-col gap-2 border rounded-lg p-2 max-h-[40vh] lg:max-h-none">
+                    <div className="flex items-center justify-between gap-2 px-1">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Áreas AD
+                        </p>
+                        <Button type="button" size="sm" variant="outline" onClick={openNewAreaDialog}>
+                            <Plus className="h-3.5 w-3.5 mr-1" />
+                            Nova
+                        </Button>
+                    </div>
+                    <div className="flex-1 space-y-1 overflow-y-auto min-h-0">
+                    {detail.areas.length === 0 ? (
+                        <p className="text-xs text-muted-foreground px-2 py-4 text-center">
+                            Nenhuma área. Clique em Nova para começar.
+                        </p>
+                    ) : null}
                     {detail.areas.map((area) => (
                         <button
                             key={area.id}
@@ -333,16 +446,47 @@ export function DeliveryProjectWorkspace({
                             </Badge>
                         </button>
                     ))}
+                    </div>
                 </aside>
 
                 {selectedArea ? (
                     <div className="flex-1 min-w-0 space-y-4 overflow-y-auto">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div>
-                                <h2 className="text-lg font-semibold">
-                                    {selectedArea.code} — {selectedArea.title}
-                                </h2>
+                            <div className="grid gap-2 sm:grid-cols-2 flex-1 min-w-0 max-w-xl">
+                                <div className="space-y-1">
+                                    <Label className="text-xs">Código</Label>
+                                    <Input
+                                        defaultValue={selectedArea.code}
+                                        key={`code-${selectedArea.id}`}
+                                        onBlur={async (e) => {
+                                            const code = e.target.value.trim();
+                                            if (!code || code === selectedArea.code) return;
+                                            const res = await updateDeliveryAreaAction(selectedArea.id!, {
+                                                code,
+                                            });
+                                            if (res.success) refresh();
+                                            else toast.error(res.error || "Erro ao salvar código");
+                                        }}
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-xs">Título</Label>
+                                    <Input
+                                        defaultValue={selectedArea.title}
+                                        key={`title-${selectedArea.id}`}
+                                        onBlur={async (e) => {
+                                            const title = e.target.value.trim();
+                                            if (!title || title === selectedArea.title) return;
+                                            const res = await updateDeliveryAreaAction(selectedArea.id!, {
+                                                title,
+                                            });
+                                            if (res.success) refresh();
+                                            else toast.error(res.error || "Erro ao salvar título");
+                                        }}
+                                    />
+                                </div>
                             </div>
+                            <div className="flex items-center gap-2">
                             <Select
                                 value={selectedArea.status}
                                 onValueChange={async (v) => {
@@ -363,6 +507,16 @@ export function DeliveryProjectWorkspace({
                                     ))}
                                 </SelectContent>
                             </Select>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                title="Excluir área"
+                                onClick={handleDeleteArea}
+                            >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                            </div>
                         </div>
 
                         <Card>
@@ -370,6 +524,11 @@ export function DeliveryProjectWorkspace({
                                 <CardTitle className="text-sm">Checklist</CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-2">
+                                {selectedArea.checklist.length === 0 ? (
+                                    <p className="text-sm text-muted-foreground">
+                                        Checklist vazio — edite os itens abaixo.
+                                    </p>
+                                ) : null}
                                 {selectedArea.checklist.map((item) => (
                                     <button
                                         key={item.id}
@@ -390,6 +549,15 @@ export function DeliveryProjectWorkspace({
                                         </span>
                                     </button>
                                 ))}
+                                <div className="space-y-1 pt-2 border-t">
+                                    <Label className="text-xs">Editar checklist (um item por linha)</Label>
+                                    <Textarea
+                                        key={`checklist-${selectedArea.id}-${selectedArea.checklist.length}`}
+                                        rows={Math.max(3, selectedArea.checklist.length)}
+                                        defaultValue={selectedArea.checklist.map((c) => c.text).join("\n")}
+                                        onBlur={(e) => void saveChecklistFromText(e.target.value)}
+                                    />
+                                </div>
                             </CardContent>
                         </Card>
 
@@ -586,10 +754,71 @@ export function DeliveryProjectWorkspace({
                             />
                         </div>
                     </div>
-                ) : null}
+                ) : (
+                    <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed p-8 text-center">
+                        <div className="space-y-3 max-w-sm">
+                            <p className="text-sm text-muted-foreground">
+                                Este projeto ainda não tem áreas AD. Adicione a primeira área para
+                                registrar checklist, fotos e equipamentos.
+                            </p>
+                            <Button type="button" onClick={openNewAreaDialog}>
+                                <Plus className="h-4 w-4 mr-2" />
+                                Adicionar área
+                            </Button>
+                        </div>
+                    </div>
+                )}
             </div>
                 </TabsContent>
             </Tabs>
+
+            <Dialog open={areaDialogOpen} onOpenChange={setAreaDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Nova área AD</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-3 py-2">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="space-y-1">
+                                <Label className="text-xs">Código</Label>
+                                <Input
+                                    value={newAreaCode}
+                                    onChange={(e) => setNewAreaCode(e.target.value)}
+                                    placeholder="AD-01"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-xs">Título</Label>
+                                <Input
+                                    value={newAreaTitle}
+                                    onChange={(e) => setNewAreaTitle(e.target.value)}
+                                    placeholder="Ex.: Sala de bombas"
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <Label className="text-xs">Checklist (opcional, um item por linha)</Label>
+                            <Textarea
+                                rows={4}
+                                value={newAreaChecklist}
+                                onChange={(e) => setNewAreaChecklist(e.target.value)}
+                                placeholder={"Instalação concluída\nTeste funcional\nEtiquetagem"}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setAreaDialogOpen(false)}>
+                            Cancelar
+                        </Button>
+                        <Button
+                            disabled={pending || !newAreaCode.trim()}
+                            onClick={handleCreateArea}
+                        >
+                            {pending ? "Salvando..." : "Criar área"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
