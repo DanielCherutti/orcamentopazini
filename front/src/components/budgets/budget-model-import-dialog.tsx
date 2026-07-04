@@ -184,9 +184,9 @@ export function BudgetModelImportDialog({
     <>
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogTrigger asChild>
-          <Button type="button" size="sm" variant="outline" disabled={disabled}>
-            <FileDown className="mr-1.5 h-3.5 w-3.5" />
-            Importar Modelo
+          <Button type="button" size="sm" variant="outline" disabled={disabled} title="Importar Modelo">
+            <FileDown className="h-3.5 w-3.5 xl:mr-1.5" />
+            <span className="hidden xl:inline">Importar Modelo</span>
           </Button>
         </DialogTrigger>
         <DialogContent className="sm:max-w-lg">

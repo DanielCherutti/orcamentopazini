@@ -3,15 +3,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+    BookOpen,
     Boxes,
     FileSpreadsheet,
     FileText,
+    HardHat,
     LayoutDashboard,
     LogOut,
     Package,
     Settings,
     UserCog,
     Users,
+    Wrench,
 } from "lucide-react";
 import { logoutAction } from "@/actions/auth-actions";
 import { useSidebar } from "./sidebar-context";
@@ -91,6 +94,9 @@ export function Sidebar({
         pathname.startsWith("/dashboard/products") &&
         !pathname.startsWith("/dashboard/products/groups");
     const isGroups = pathname.startsWith("/dashboard/products/groups");
+    const isTechnicalEquipment = pathname.startsWith("/dashboard/technical-equipment");
+    const isDatabooks = pathname.startsWith("/dashboard/databooks");
+    const isDeliveryProjects = pathname.startsWith("/delivery-projects");
     const isBudgets = pathname.startsWith("/budgets");
     const isCustomers = pathname.startsWith("/customers");
     const isModelos = pathname.startsWith("/modelos");
@@ -101,7 +107,25 @@ export function Sidebar({
         { href: "/dashboard", icon: LayoutDashboard, label: "Início", active: isDashboard },
         { href: "/dashboard/products", icon: Package, label: "Produtos", active: isProductCatalog },
         { href: "/dashboard/products/groups", icon: Boxes, label: "Grupos", active: isGroups },
+        {
+            href: "/dashboard/technical-equipment",
+            icon: Wrench,
+            label: "Equip. técnicos",
+            active: isTechnicalEquipment,
+        },
+        {
+            href: "/dashboard/databooks",
+            icon: BookOpen,
+            label: "DataBooks",
+            active: isDatabooks,
+        },
         { href: "/budgets", icon: FileSpreadsheet, label: "Orçamentos", active: isBudgets },
+        {
+            href: "/delivery-projects",
+            icon: HardHat,
+            label: "Entrega técnica",
+            active: isDeliveryProjects,
+        },
         { href: "/customers", icon: Users, label: "Clientes", active: isCustomers },
         { href: "/modelos", icon: FileText, label: "Modelos", active: isModelos },
         { href: "/settings", icon: Settings, label: "Configurações", active: isSettings },

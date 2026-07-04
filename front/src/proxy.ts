@@ -11,6 +11,28 @@ import {
 import { verifySessionToken, type ImpersonationPayload } from "@/lib/session-token";
 import { tenantMatchesHost } from "@/lib/tenant-host";
 import { resolveTenantFromHost, resolveBrandingTenantFromHost } from "@/lib/tenant-host-resolve";
+import { parseDeliveryProjectPathSegments } from "@/lib/delivery/delivery-path";
+
+function normalizeDeliveryProjectPathname(pathname: string): string | null {
+    const normalized = pathname.replace(/^\/delivery_projects(?=\/|$)/, "/delivery-projects");
+    const match = normalized.match(/^\/delivery-projects\/(.+)$/);
+    if (!match) return null;
+
+    const rest = decodeURIComponent(match[1]);
+    if (!rest) return null;
+
+    if (!rest.includes("/") && !rest.includes(":") && !rest.startsWith("delivery_project")) {
+        return null;
+    }
+
+    const segments = rest.split("/").filter(Boolean);
+    const { canonicalPath } = parseDeliveryProjectPathSegments(segments);
+    if (!canonicalPath) return null;
+
+    const target = `/delivery-projects/${canonicalPath}`;
+    if (target === normalized) return null;
+    return target;
+}
 
 /** Páginas acesssíveis sem sessão completa (login, convite e seleção de tenant). */
 const PUBLIC_PAGE_PATHS = ["/", "/select-tenant", "/convite"];
@@ -97,6 +119,13 @@ export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
     const hostHeader = request.headers.get("host");
     const hostResolved = await resolveTenantFromHost(hostHeader);
+
+    const deliveryProjectPath = normalizeDeliveryProjectPathname(pathname);
+    if (deliveryProjectPath) {
+        const url = request.nextUrl.clone();
+        url.pathname = deliveryProjectPath;
+        return NextResponse.redirect(url);
+    }
 
     if (pathname.startsWith("/_next")) {
         return NextResponse.next();
