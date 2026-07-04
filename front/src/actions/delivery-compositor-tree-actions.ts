@@ -34,7 +34,7 @@ async function loadDeliveryCompositorTreeData(
             await ensureDeliveryCompositorTocBlockAction(projectId, { skipRevalidate: true });
         }
 
-        const blocksRes = await db.query<[BudgetBlockFlat[]]>(
+        const blocksRes = await db.query<[Array<Record<string, unknown>>]>(
             `SELECT * FROM delivery_block
              WHERE delivery_project_id = $projectId AND deleted_at IS NONE
              ORDER BY order_index ASC`,
@@ -43,12 +43,11 @@ async function loadDeliveryCompositorTreeData(
 
         const blocks = (blocksRes[0] || [])
             .filter((b) => b.type !== "terms")
-            .map((b) => ({
-                ...b,
-                id: String(b.id),
-                budget_id: String(b.delivery_project_id ?? projectId),
-                delivery_project_id: String(b.delivery_project_id ?? projectId),
-                parent_id: b.parent_id ? String(b.parent_id) : null,
+            .map((row) => ({
+                ...row,
+                id: String(row.id),
+                budget_id: String(row.delivery_project_id ?? projectId),
+                parent_id: row.parent_id ? String(row.parent_id) : null,
             })) as BudgetBlockFlat[];
 
         return { success: true, blocks, items: {}, imagesByBlock: {} };

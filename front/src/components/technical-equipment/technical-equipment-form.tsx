@@ -19,7 +19,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { TechnicalEquipmentFileUpload } from "@/components/technical-equipment/technical-equipment-file-upload";
 import { TECHNICAL_EQUIPMENT_CATEGORIES } from "@/lib/technical-equipment/categories";
-import type { TechnicalEquipment, TechnicalEquipmentFile } from "@/types/technical-equipment-types";
+import type {
+    TechnicalEquipment,
+    TechnicalEquipmentCategory,
+    TechnicalEquipmentFile,
+} from "@/types/technical-equipment-types";
 
 function SubmitButton({ isEditing }: { isEditing: boolean }) {
     const { pending } = useFormStatus();
@@ -130,7 +134,12 @@ export function TechnicalEquipmentForm({
                             </div>
                             <div className="space-y-2">
                                 <Label>Categoria</Label>
-                                <Select value={category} onValueChange={setCategory}>
+                                <Select
+                                    value={category}
+                                    onValueChange={(v) =>
+                                        setCategory(v as TechnicalEquipmentCategory)
+                                    }
+                                >
                                     <SelectTrigger>
                                         <SelectValue />
                                     </SelectTrigger>

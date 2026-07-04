@@ -11,7 +11,12 @@ export async function assertDeliveryProjectInActiveTenant(
     projectId: string,
     db?: Surreal,
 ): Promise<DeliveryProjectTenantGate> {
-    const gate = await assertEntityInActiveTenant("delivery_project", projectId, db);
+    const gate = await assertEntityInActiveTenant(
+        "delivery_project",
+        projectId,
+        "Projeto não encontrado",
+        db,
+    );
     if (!gate.ok) return { ok: false, error: gate.error };
     try {
         return {
