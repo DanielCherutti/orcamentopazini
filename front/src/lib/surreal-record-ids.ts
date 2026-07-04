@@ -31,6 +31,13 @@ const ALLOWED_TABLES = new Set([
     "image_library",
     "proposal_settings",
     "modelos",
+    "technical_equipment",
+    "delivery_project",
+    "delivery_area",
+    "delivery_block",
+    "delivery_evidence",
+    "delivery_installation",
+    "databook_template",
 ]);
 
 const SUFFIX_RE = /^[A-Za-z0-9_-]+$/;

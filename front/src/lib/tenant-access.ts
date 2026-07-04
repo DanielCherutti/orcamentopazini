@@ -3,6 +3,7 @@ import { getDb } from "@/lib/surreal";
 import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
 import {
     InvalidRecordIdError,
+    canonicalTableRecordId,
     recordIdToString,
     requireRecordId,
 } from "@/lib/surreal-record-ids";
@@ -13,7 +14,9 @@ export function rowBelongsToActiveTenant(
 ): boolean {
     const rowTenant = recordIdToString(rowTenantId);
     if (!rowTenant) return true;
-    return rowTenant === activeTenantId;
+    const canonicalRow = canonicalTableRecordId("tenant", rowTenant);
+    const canonicalActive = canonicalTableRecordId("tenant", activeTenantId);
+    return canonicalRow === canonicalActive;
 }
 
 export type EntityTenantGate =
