@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import {
     createTechnicalEquipmentAction,
     updateTechnicalEquipmentAction,
-    type TechnicalEquipment,
 } from "@/actions/technical-equipment-actions";
+import type { TechnicalEquipment } from "@/types/technical-equipment-types";
 import { TechnicalEquipmentForm } from "@/components/technical-equipment/technical-equipment-form";
 import { toast } from "@/lib/toast";
 

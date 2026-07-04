@@ -68,10 +68,15 @@ export function DatabooksTable({ templates }: { templates: DatabookTemplate[] })
                             <td className="p-3 text-center tabular-nums">{t.areas.length}</td>
                             <td className="p-3 text-center hidden sm:table-cell">
                                 {t.reference_file ? (
-                                    <FileText
-                                        className="h-4 w-4 inline text-green-600"
+                                    <span
                                         title={t.reference_file.filename}
-                                    />
+                                        className="inline-flex"
+                                    >
+                                        <FileText
+                                            className="h-4 w-4 text-green-600"
+                                            aria-hidden
+                                        />
+                                    </span>
                                 ) : (
                                     <span className="text-xs text-muted-foreground">—</span>
                                 )}
