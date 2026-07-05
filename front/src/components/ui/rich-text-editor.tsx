@@ -162,7 +162,6 @@ function scheduleSetContent(editor: Editor, html: string, onApplied?: (next: str
   });
 }
 
-/** Evita flushSync do TipTap ao montar EditorContent durante o render do pai. */
 function TiptapEditorSurface({
   editor,
   className,
@@ -172,20 +171,6 @@ function TiptapEditorSurface({
   className?: string;
   style?: React.CSSProperties;
 }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    let active = true;
-    const timer = window.setTimeout(() => {
-      if (active) setMounted(true);
-    }, 0);
-    return () => {
-      active = false;
-      window.clearTimeout(timer);
-    };
-  }, [editor]);
-  if (!mounted) {
-    return <div className={className} style={style} aria-hidden />;
-  }
   return (
     <div className={className} style={style}>
       <EditorContent editor={editor} />
@@ -469,6 +454,7 @@ export function RichTextEditor({
 
   const editor = useEditor({
     immediatelyRender: false,
+    shouldRerenderOnTransaction: false,
     editable: !readOnly,
     extensions: [
       StarterKit.configure({
@@ -492,14 +478,14 @@ export function RichTextEditor({
       const html = editor.getHTML();
       const stored = normalizeStoredHtml(html);
       lastEmittedHtmlRef.current = stored;
-      onChange(stored);
+      queueMicrotask(() => onChange(stored));
       if (!shouldUseFloatingHeaderImages) return;
       const hoisted = getHoistedHtmlIfNeeded(html);
       if (!hoisted) return;
       const storedHoisted = normalizeStoredHtml(hoisted);
       scheduleSetContent(editor, hoisted, () => {
         lastEmittedHtmlRef.current = storedHoisted;
-        onChange(storedHoisted);
+        queueMicrotask(() => onChange(storedHoisted));
       });
     },
     onCreate: ({ editor }) => {

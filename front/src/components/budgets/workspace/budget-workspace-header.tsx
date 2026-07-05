@@ -4,20 +4,25 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { Budget } from "@/types/budget-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Save, Eye, Pencil, Lock, GitBranchPlus } from "lucide-react";
+import { ArrowLeft, Save, Eye, Pencil, Lock, GitBranchPlus, CircleCheck } from "lucide-react";
 import { updateBudgetAction } from "@/actions/budget-core-write-actions";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ClientSelector } from "./client-selector";
 import type { ActiveTab } from "@/components/budgets/workspace-context";
-import { canUseBudgetEmail, isBudgetEditableStatus } from "@/lib/budgets/budget-status";
+import {
+    canApproveBudget,
+    canUseBudgetEmail,
+    isBudgetEditableStatus,
+} from "@/lib/budgets/budget-status";
 import { canShowCreateRevisionButton, formatBudgetRevisionBadge } from "@/lib/budgets/budget-revision";
 import { budgetEditUrl } from "@/lib/budgets/budget-path";
 import { useBudgetsRepository } from "@/lib/budgets/use-budgets-repository";
 import { toast } from "@/lib/toast";
 import { useConfirmDialog } from "@/components/providers/confirm-dialog-provider";
 import { BudgetModelImportDialog } from "@/components/budgets/budget-model-import-dialog";
+import { BudgetDeliveryLaunchButton } from "@/components/budgets/workspace/budget-delivery-launch-button";
 
 interface BudgetWorkspaceHeaderProps {
     budget: Budget;
@@ -47,6 +52,7 @@ export function BudgetWorkspaceHeader({
     const [editingTitle, setEditingTitle] = useState(false);
     const [titleValue, setTitleValue] = useState(budget.title || "");
     const [creatingRevision, setCreatingRevision] = useState(false);
+    const [approving, setApproving] = useState(false);
     const titleInputRef = useRef<HTMLInputElement>(null);
     const revisionBadge = formatBudgetRevisionBadge(budget.revision_number);
 
@@ -94,6 +100,7 @@ export function BudgetWorkspaceHeader({
     const editable = isBudgetEditableStatus(budget.status);
     const emailEnabled = canUseBudgetEmail(budget.status);
     const canRevision = canShowCreateRevisionButton(budget, [budget]);
+    const canApprove = canApproveBudget(budget.status);
 
     const handleCreateRevision = async () => {
         if (!budget.id || creatingRevision) return;
@@ -115,10 +122,33 @@ export function BudgetWorkspaceHeader({
         toast.error(res.error || "Não foi possível criar a revisão.");
     };
 
+    const handleApprove = async () => {
+        if (!budget.id || approving) return;
+        const ok = await confirmDialog({
+            title: "Aprovar orçamento",
+            description:
+                "Confirmar que o cliente aprovou esta proposta? Depois disso você poderá abrir o projeto de entrega técnica.",
+            confirmLabel: "Aprovar",
+        });
+        if (!ok) return;
+        setApproving(true);
+        try {
+            const res = await updateBudgetAction(budget.id, { status: "approved" });
+            if (res.success) {
+                toast.success("Orçamento marcado como aprovado.");
+                await onBudgetRefresh?.();
+            } else {
+                toast.error(res.error || "Não foi possível aprovar o orçamento.");
+            }
+        } finally {
+            setApproving(false);
+        }
+    };
+
     return (
-        <header className="tenant-ops-command-bar flex h-12 shrink-0 items-stretch overflow-hidden">
+        <header className="tenant-ops-command-bar flex h-12 shrink-0 items-stretch min-w-0">
             {/* Left: back + title + status + total */}
-            <div className="flex items-center gap-2 px-3 shrink-0 min-w-0 max-w-[45%]">
+            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden px-3">
                 <Button variant="ghost" size="sm" className="h-8 shrink-0 gap-1.5 px-2" asChild>
                     <Link href="/budgets" title="Voltar para orçamentos">
                         <ArrowLeft className="h-4 w-4" />
@@ -186,13 +216,13 @@ export function BudgetWorkspaceHeader({
                     isReadOnly={!editable}
                 />
 
-                <span className="text-sm font-semibold text-foreground shrink-0 ml-1 tabular-nums">
+                <span className="ml-1 hidden shrink-0 text-sm font-semibold tabular-nums text-foreground lg:inline">
                     {formatCurrency(displayTotalValue)}
                 </span>
             </div>
 
             {/* Center: tabs */}
-            <div className="flex flex-1 items-stretch justify-center">
+            <div className="flex shrink-0 items-stretch border-x border-white/10">
                 {tabs.map((tab) => {
                     const tabDisabled = tab.id === "email" && !emailEnabled;
                     return (
@@ -203,13 +233,13 @@ export function BudgetWorkspaceHeader({
                             title={
                                 tabDisabled
                                     ? "Finalize o orçamento para enviar e-mail ao cliente"
-                                    : undefined
+                                    : tab.label
                             }
                             onClick={() => {
                                 if (!tabDisabled) onTabChange(tab.id);
                             }}
                             className={cn(
-                                "flex items-center gap-1.5 px-5 text-sm font-medium border-b-2 transition-colors",
+                                "flex items-center gap-1.5 px-3 text-sm font-medium border-b-2 transition-colors xl:px-4",
                                 tabDisabled &&
                                     "opacity-45 cursor-not-allowed hover:text-muted-foreground hover:border-transparent",
                                 !tabDisabled &&
@@ -219,23 +249,24 @@ export function BudgetWorkspaceHeader({
                             )}
                         >
                             {tab.icon}
-                            {tab.label}
+                            <span className="hidden xl:inline">{tab.label}</span>
                         </button>
                     );
                 })}
             </div>
 
-            {/* Right: actions */}
-            <div className="flex items-center gap-2 px-3 shrink-0">
+            {/* Right: actions — nunca cortar; rolagem horizontal só se a tela for muito estreita */}
+            <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto px-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {editable && onSave && (
                     <Button
                         size="sm"
                         onClick={onSave}
                         variant={hasChanges ? "default" : "outline"}
                         disabled={!hasChanges}
+                        title="Salvar"
                     >
-                        <Save className="h-3.5 w-3.5 mr-1.5" />
-                        Salvar
+                        <Save className="h-3.5 w-3.5 xl:mr-1.5" />
+                        <span className="hidden xl:inline">Salvar</span>
                     </Button>
                 )}
                 {editable && (
@@ -250,16 +281,38 @@ export function BudgetWorkspaceHeader({
                         variant="default"
                         disabled={creatingRevision}
                         onClick={handleCreateRevision}
+                        title="Criar revisão"
                     >
-                        <GitBranchPlus className="h-3.5 w-3.5 mr-1.5" />
-                        {creatingRevision ? "Criando…" : "Criar revisão"}
+                        <GitBranchPlus className="h-3.5 w-3.5 xl:mr-1.5" />
+                        <span className="hidden xl:inline">
+                            {creatingRevision ? "Criando…" : "Criar revisão"}
+                        </span>
                     </Button>
                 )}
+                {canApprove && onBudgetRefresh && (
+                    <Button
+                        size="sm"
+                        variant="default"
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                        disabled={approving}
+                        onClick={handleApprove}
+                        title="Aprovar orçamento"
+                    >
+                        <CircleCheck className="h-3.5 w-3.5 xl:mr-1.5" />
+                        <span className="hidden xl:inline">
+                            {approving ? "Aprovando…" : "Aprovar"}
+                        </span>
+                    </Button>
+                )}
+                {budget.status === "approved" && budget.id ? (
+                    <BudgetDeliveryLaunchButton budgetId={budget.id} />
+                ) : null}
                 {editable && onBudgetRefresh && (
                     <Button
                         size="sm"
                         variant="outline"
                         className="border-primary/40"
+                        title="Finalizar compositor"
                         onClick={async () => {
                             const ok = await confirmDialog({
                                 title: "Finalizar compositor",
@@ -277,14 +330,14 @@ export function BudgetWorkspaceHeader({
                             }
                         }}
                     >
-                        <Lock className="h-3.5 w-3.5 mr-1.5" />
-                        Finalizar
+                        <Lock className="h-3.5 w-3.5 xl:mr-1.5" />
+                        <span className="hidden xl:inline">Finalizar</span>
                     </Button>
                 )}
                 {onOpenPreview && (
-                    <Button size="sm" variant="outline" onClick={onOpenPreview}>
-                        <Eye className="h-3.5 w-3.5 mr-1.5" />
-                        Preview
+                    <Button size="sm" variant="outline" onClick={onOpenPreview} title="Preview PDF">
+                        <Eye className="h-3.5 w-3.5 xl:mr-1.5" />
+                        <span className="hidden xl:inline">Preview</span>
                     </Button>
                 )}
             </div>

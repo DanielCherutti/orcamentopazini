@@ -2,39 +2,63 @@
 
 import { useEffect } from "react";
 
-export function useLiveCompositor(budgetId: string, onRefresh: () => void) {
-  useEffect(() => {
-    const es = new EventSource(`/api/compositor/${budgetId}/live`);
-    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+const DEBOUNCE_MS = 600;
+const MIN_REFRESH_INTERVAL_MS = 1500;
 
-    const scheduleRefresh = () => {
-      if (refreshTimer) clearTimeout(refreshTimer);
-      refreshTimer = setTimeout(() => {
-        refreshTimer = null;
-        onRefresh();
-      }, 250);
-    };
+export function useLiveCompositor(
+    budgetId: string,
+    onRefresh: () => void,
+    enabled = true,
+) {
+    useEffect(() => {
+        if (!enabled || !budgetId) return;
 
-    es.onmessage = (e) => {
-      try {
-        const payload = JSON.parse(e.data) as { type: string };
-        if (payload.type === "block" || payload.type === "item") {
-          scheduleRefresh();
-        }
-      } catch {
-        // keepalive ou evento malformado — ignorar
-      }
-    };
+        const es = new EventSource(`/api/compositor/${budgetId}/live`);
+        let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+        let lastRefreshAt = 0;
+        let pending = false;
 
-    es.onerror = () => {
-      // EventSource reconecta automaticamente — sem lógica extra necessária
-    };
+        const runRefresh = () => {
+            pending = false;
+            lastRefreshAt = Date.now();
+            onRefresh();
+        };
 
-    return () => {
-      if (refreshTimer) clearTimeout(refreshTimer);
-      es.close();
-    };
-  // onRefresh é estável via useCallback no componente pai — excluir do dep array é seguro
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [budgetId]);
+        const scheduleRefresh = () => {
+            pending = true;
+            if (refreshTimer) return;
+
+            const elapsed = Date.now() - lastRefreshAt;
+            const wait = Math.max(DEBOUNCE_MS, MIN_REFRESH_INTERVAL_MS - elapsed);
+
+            refreshTimer = setTimeout(() => {
+                refreshTimer = null;
+                if (!pending) return;
+                runRefresh();
+            }, wait);
+        };
+
+        es.onmessage = (e) => {
+            try {
+                const payload = JSON.parse(e.data) as { type: string };
+                if (payload.type === "block" || payload.type === "item") {
+                    scheduleRefresh();
+                }
+            } catch {
+                // keepalive ou evento malformado — ignorar
+            }
+        };
+
+        es.onerror = () => {
+            // EventSource reconecta automaticamente
+        };
+
+        return () => {
+            pending = false;
+            if (refreshTimer) clearTimeout(refreshTimer);
+            es.close();
+        };
+        // onRefresh estável via useCallback no pai
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [budgetId, enabled]);
 }

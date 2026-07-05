@@ -24,6 +24,11 @@ export function canUseBudgetEmail(status: string | undefined | null): boolean {
     return status === "finalized" || status === "sent" || status === "approved";
 }
 
+/** Marcar proposta como aprovada pelo cliente (após finalizar ou enviar). */
+export function canApproveBudget(status: string | undefined | null): boolean {
+    return status === "finalized" || status === "sent";
+}
+
 /** Rótulos para exibição (pt-BR). */
 export function getBudgetStatusLabel(status: string): string {
     const labels: Record<string, string> = {

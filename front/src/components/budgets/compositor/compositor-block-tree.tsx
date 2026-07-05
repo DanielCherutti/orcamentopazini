@@ -38,6 +38,7 @@ import {
     reorderItemsInBlockAction,
 } from "@/actions/budget-compositor-block-items-actions";
 import { updateBlockAction } from "@/actions/budget-compositor-block-actions";
+import { useCompositorRuntime } from "./compositor-runtime-context";
 import { listProductGroupsAction, type ProductGroup } from "@/actions/product-group-actions";
 import { deleteBudgetImage } from "@/actions/budget-annotations";
 import { getScopeStatsAction } from "@/actions/budget-scope-actions";
@@ -711,6 +712,7 @@ function HeaderFooterRenderer({
     budgetId,
     isReadOnly,
 }: CompositorRendererProps) {
+    const { actions } = useCompositorRuntime();
     const persistedProps = mergeHeaderFooterProps(block.props as Record<string, unknown> | undefined);
     const [optimisticProps, setOptimisticProps] = useState<Partial<HeaderFooterBlockProps>>({});
     const props = { ...persistedProps, ...optimisticProps };
@@ -739,7 +741,7 @@ function HeaderFooterRenderer({
         patchQueueRef.current = patchQueueRef.current
             .catch(() => undefined)
             .then(async () => {
-                const res = await updateBlockAction(block.id, budgetId, {
+                const res = await actions.updateBlockAction(block.id, budgetId, {
                     props: patch as Record<string, unknown>,
                 });
                 if (!res.success) {

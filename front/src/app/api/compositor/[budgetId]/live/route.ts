@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSurrealPassword } from "@/lib/surreal-env";
 import { requireApiSession } from "@/lib/api-session";
 import { assertBudgetInActiveTenant } from "@/lib/budget-tenant";
+import { recordIdToString } from "@/lib/surreal-record-ids";
 
 export const dynamic = "force-dynamic";
 
@@ -22,9 +23,41 @@ const namespace = process.env.SURREAL_NS || process.env.SURREALDB_NS || "dreibox
 const database = process.env.SURREAL_DB || process.env.SURREALDB_DB || "pazini";
 const username = process.env.SURREAL_USER || process.env.SURREALDB_USER || "admin";
 
+function normalizeBudgetKey(value: unknown): string | null {
+  const raw = recordIdToString(value);
+  if (!raw) return null;
+  return raw.replace(/^budget:/, "");
+}
+
+/** Só emite eventos SSE para registros deste orçamento (evita refresh em cascata). */
+function recordBelongsToBudget(
+  rec: Record<string, unknown>,
+  budgetId: string,
+): boolean {
+  const needle = budgetId.replace(/^budget:/, "");
+  const matches = (value: unknown): boolean => {
+    const key = normalizeBudgetKey(value);
+    return key === needle;
+  };
+
+  if (matches(rec.budget_id)) return true;
+
+  const block = rec.block_id as Record<string, unknown> | undefined;
+  if (block && matches(block.budget_id)) return true;
+
+  const section = rec.section_id as Record<string, unknown> | undefined;
+  if (section) {
+    if (matches(section.budget_id)) return true;
+    const location = section.location_id as Record<string, unknown> | undefined;
+    if (location && matches(location.budget_id)) return true;
+  }
+
+  return false;
+}
+
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ budgetId: string }> }
+  { params }: { params: Promise<{ budgetId: string }> },
 ) {
   const session = await requireApiSession(req);
   if (!session.ok) return session.response;
@@ -68,16 +101,14 @@ export async function GET(
         return;
       }
 
-      let sub1: LiveSubscription | undefined;
-      let sub2: LiveSubscription | undefined;
+      let subBlocks: LiveSubscription | undefined;
 
       try {
-        sub1 = await db.live(new Table("budget_block"));
-        sub1.subscribe((msg) => {
+        subBlocks = await db.live(new Table("budget_block"));
+        subBlocks.subscribe((msg) => {
           try {
             const rec = msg.value as Record<string, unknown>;
-            const bid = String(rec?.budget_id ?? "");
-            if (!bid.includes(budgetId)) return;
+            if (!rec || !recordBelongsToBudget(rec, budgetId)) return;
             send(JSON.stringify({ type: "block", action: msg.action }));
           } catch {
             // ignore
@@ -87,30 +118,8 @@ export async function GET(
         console.error("[SSE] Falha ao abrir LIVE SELECT budget_block:", e);
       }
 
-      try {
-        sub2 = await db.live(new Table("budget_item"));
-        sub2.subscribe((msg) => {
-          try {
-            const rec = msg.value as Record<string, unknown>;
-            const bid =
-              String(rec?.budget_id ?? "") ||
-              String((rec?.block_id as Record<string, unknown> | undefined)?.budget_id ?? "") ||
-              String(
-                (
-                  (rec?.section_id as Record<string, unknown> | undefined)?.location_id as
-                    | Record<string, unknown>
-                    | undefined
-                )?.budget_id ?? ""
-              );
-            if (bid && !bid.includes(budgetId)) return;
-            send(JSON.stringify({ type: "item", action: msg.action }));
-          } catch {
-            // ignore
-          }
-        });
-      } catch (e) {
-        console.error("[SSE] Falha ao abrir LIVE SELECT budget_item:", e);
-      }
+      // budget_item removido: LIVE na tabela inteira gerava centenas de POSTs
+      // (qualquer item de qualquer orçamento disparava refresh nesta aba).
 
       const keepalive = setInterval(() => {
         try {
@@ -122,10 +131,21 @@ export async function GET(
 
       const cleanup = async () => {
         clearInterval(keepalive);
-        try { if (sub1) await sub1.kill(); } catch { /* ignore */ }
-        try { if (sub2) await sub2.kill(); } catch { /* ignore */ }
-        try { await db.close(); } catch { /* ignore */ }
-        try { controller.close(); } catch { /* ignore */ }
+        try {
+          if (subBlocks) await subBlocks.kill();
+        } catch {
+          /* ignore */
+        }
+        try {
+          await db.close();
+        } catch {
+          /* ignore */
+        }
+        try {
+          controller.close();
+        } catch {
+          /* ignore */
+        }
       };
 
       req.signal.addEventListener("abort", cleanup);

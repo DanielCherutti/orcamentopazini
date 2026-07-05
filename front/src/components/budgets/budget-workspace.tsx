@@ -90,7 +90,12 @@ export function BudgetWorkspace({
     const [environmentsExpanded, setEnvironmentsExpanded] = useState(false);
     const searchParams = useSearchParams();
     const [activeTab, setActiveTab] = useState<ActiveTab>("budget");
+    const [scopeMounted, setScopeMounted] = useState(false);
     const repo = useBudgetsRepository();
+
+    useEffect(() => {
+        if (activeTab === "scope") setScopeMounted(true);
+    }, [activeTab]);
 
     useEffect(() => {
         const tab = searchParams.get("tab");
@@ -196,33 +201,38 @@ export function BudgetWorkspace({
                         <BudgetEmailSyncProvider budgetId={budgetId} enabled={emailEnabled}>
                             {/* Conteúdo das abas */}
                             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                                {/* Aba Compositor */}
-                                <div className={cn("flex-1 flex min-h-0 overflow-hidden bg-white", activeTab !== 'budget' && "hidden")}>
-                                    <BudgetCompositor
-                                        key={`${budgetId}-${refreshCounter}`}
-                                        budgetId={budgetId}
-                                        budgetCode={budget.code}
-                                        compositorLabel={getCompositorPanelLabel(budget.compositor_label)}
-                                        onCompositorLabelChange={
-                                            isReadOnly ? undefined : handleCompositorLabelChange
-                                        }
-                                        isReadOnly={isReadOnly}
-                                    />
-                                </div>
+                                {/* Aba Compositor — montada só quando visível (evita SSE + actions em background) */}
+                                {activeTab === "budget" && (
+                                    <div className="flex-1 flex min-h-0 overflow-hidden bg-white">
+                                        <BudgetCompositor
+                                            key={`${budgetId}-${refreshCounter}`}
+                                            budgetId={budgetId}
+                                            budgetCode={budget.code}
+                                            compositorLabel={getCompositorPanelLabel(budget.compositor_label)}
+                                            onCompositorLabelChange={
+                                                isReadOnly ? undefined : handleCompositorLabelChange
+                                            }
+                                            isReadOnly={isReadOnly}
+                                            liveSyncEnabled
+                                        />
+                                    </div>
+                                )}
 
-                                {/* Aba Escopo — mantém montado para reutilizar cache ao voltar */}
-                                <div
-                                    className={cn(
-                                        "flex-1 flex min-h-0 overflow-hidden bg-white",
-                                        activeTab !== "scope" && "hidden",
-                                    )}
-                                >
-                                    <BudgetScope
-                                        key={budgetId}
-                                        budgetId={budgetId}
-                                        isReadOnly={isReadOnly}
-                                    />
-                                </div>
+                                {/* Aba Escopo — montada na primeira visita; cache de sessão ao voltar */}
+                                {(activeTab === "scope" || scopeMounted) && (
+                                    <div
+                                        className={cn(
+                                            "flex-1 flex min-h-0 overflow-hidden bg-white",
+                                            activeTab !== "scope" && "hidden",
+                                        )}
+                                    >
+                                        <BudgetScope
+                                            key={budgetId}
+                                            budgetId={budgetId}
+                                            isReadOnly={isReadOnly}
+                                        />
+                                    </div>
+                                )}
 
                                 {activeTab === 'quote' && (
                                     <div className="flex-1 flex min-h-0 overflow-hidden bg-white">

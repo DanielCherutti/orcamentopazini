@@ -8,6 +8,15 @@ const nextConfig: NextConfig = {
     root: process.cwd(),
   },
   output: "standalone",
+  async redirects() {
+    return [
+      {
+        source: "/delivery_projects",
+        destination: "/delivery-projects",
+        permanent: false,
+      },
+    ];
+  },
   /** Evita empacotar o motor PDF no bundle do Next (quebra renderToBuffer na rota API). */
   serverExternalPackages: [
     "@react-pdf/renderer",

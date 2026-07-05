@@ -14,6 +14,7 @@ import type { ScopeFigureEntry } from "@/components/budgets/compositor/composito
 import type { BudgetBlock, CompositorTree } from "@/types/budget-compositor-types";
 import type { BudgetItem, BudgetImage } from "@/types/budget-types";
 import { useLiveCompositor } from "@/hooks/use-live-compositor";
+import { CompositorRuntimeProvider } from "./compositor-runtime-context";
 
 interface BudgetCompositorProps {
   budgetId: string;
@@ -21,6 +22,8 @@ interface BudgetCompositorProps {
   compositorLabel: string;
   onCompositorLabelChange?: (label: string) => void | Promise<void>;
   isReadOnly?: boolean;
+  /** SSE de blocos ao vivo — desligar quando o compositor não está visível. */
+  liveSyncEnabled?: boolean;
 }
 
 export function BudgetCompositor({
@@ -29,6 +32,7 @@ export function BudgetCompositor({
   compositorLabel,
   onCompositorLabelChange,
   isReadOnly = false,
+  liveSyncEnabled = true,
 }: BudgetCompositorProps) {
   const [tree, setTree] = useState<CompositorTree | null>(null);
   const [imagesByBlock, setImagesByBlock] = useState<Record<string, BudgetImage[]>>({});
@@ -74,7 +78,7 @@ export function BudgetCompositor({
     }
   }, [budgetId]);
 
-  useLiveCompositor(budgetId, handleRefresh);
+  useLiveCompositor(budgetId, handleRefresh, liveSyncEnabled);
 
   const handleSelectBlock = useCallback((block: BudgetBlock) => {
     setSelectedId(block.id);
@@ -97,6 +101,7 @@ export function BudgetCompositor({
   const items: Record<string, BudgetItem[]> = tree?.items ?? {};
 
   return (
+    <CompositorRuntimeProvider kind="budget">
     <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* Sidebar: índice hierárquico */}
       {sidebarOpen && (
@@ -141,5 +146,6 @@ export function BudgetCompositor({
         />
       </div>
     </div>
+    </CompositorRuntimeProvider>
   );
 }
