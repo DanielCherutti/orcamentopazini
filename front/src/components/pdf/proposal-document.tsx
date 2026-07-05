@@ -331,6 +331,10 @@ const styles = StyleSheet.create({
         textAlign: 'right',
         marginBottom: 8,
     },
+    quoteNote: {
+        marginTop: 8,
+        marginBottom: 8,
+    },
     quoteHeaderBar: {
         borderBottomWidth: 1,
         borderBottomColor: '#e5e7eb',
@@ -962,6 +966,12 @@ function htmlHasVisibleText(raw: unknown): boolean {
     return plain.length > 0;
 }
 
+function htmlHasPdfRenderableContent(raw: unknown): boolean {
+    const html = String(raw ?? "");
+    if (!html.trim()) return false;
+    return htmlHasVisibleText(html) || htmlContainsPageBreak(html) || /<img\b/i.test(html);
+}
+
 function hasPrintableBlockContent(
     node: BudgetBlock,
     itemsByBlock: Record<string, BudgetItem[]>,
@@ -1491,9 +1501,10 @@ export const ProposalDocument = ({
     };
     const renderSessionPdfBlocks = (blocks: CoverPdfBlock[], rowKey: string) => {
         const renderedImageKeys = new Set<string>();
-        const nodes = blocks.map((b, i) => {
+        const nodes: React.ReactNode[] = [];
+        blocks.forEach((b, i) => {
             if (b.type === "pageBreak") {
-                return (
+                nodes.push(
                     <Text
                         key={`${rowKey}-pb-${i}`}
                         break
@@ -1502,12 +1513,13 @@ export const ProposalDocument = ({
                         {" "}
                     </Text>
                 );
+                return;
             }
             if (b.type === 'img') {
                 const src = proxyPdfImageSrc(b.src, settings.app_public_url, pdfEmbeddedImages) ?? b.src;
                 if (b.src?.trim()) renderedImageKeys.add(b.src.trim());
                 if (src?.trim()) renderedImageKeys.add(src.trim());
-                return (
+                nodes.push(
                     <View key={`${rowKey}-img-${i}`} style={resolveRichImageFrameStyle(b.align)}>
                         {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
                         <Image
@@ -1519,12 +1531,13 @@ export const ProposalDocument = ({
                         />
                     </View>
                 );
+                return;
             }
             const segs = splitCoverHtmlFragmentToSegments(b.content, { preserveEmptyParagraphs: true });
-            return segs.map((seg, j) => {
+            segs.forEach((seg, j) => {
                 const runs = seg.rawHtml ? parsePdfInlineRuns(seg.rawHtml) : [];
                 if (seg.kind === 'heading') {
-                    return (
+                    nodes.push(
                         <Text
                             key={`${rowKey}-h-${i}-${j}`}
                             style={seg.textAlign ? [styles.sessionRichHeading, { textAlign: seg.textAlign }] : styles.sessionRichHeading}
@@ -1541,11 +1554,13 @@ export const ProposalDocument = ({
                                 : seg.text}
                         </Text>
                     );
+                    return;
                 }
                 if (seg.isEmpty) {
-                    return <View key={`${rowKey}-sp-${i}-${j}`} style={styles.sessionRichParagraphSpacer} />;
+                    nodes.push(<View key={`${rowKey}-sp-${i}-${j}`} style={styles.sessionRichParagraphSpacer} />);
+                    return;
                 }
-                return (
+                nodes.push(
                     <Text
                         key={`${rowKey}-p-${i}-${j}`}
                         style={seg.textAlign ? [styles.sessionRichParagraph, { textAlign: seg.textAlign }] : styles.sessionRichParagraph}
@@ -1568,6 +1583,33 @@ export const ProposalDocument = ({
             });
         });
         return { nodes, renderedImageKeys };
+    };
+    const renderQuoteNote = (htmlRaw: string, rowKey: string) => {
+        if (!htmlHasPdfRenderableContent(htmlRaw)) return null;
+        const parts = splitSessionHtmlIntoPdfParts(htmlRaw);
+        if (parts.length === 0) return null;
+        return (
+            <View style={styles.quoteNote}>
+                {parts.map((part, idx) => {
+                    if (part.type === "pageBreak") {
+                        return (
+                            <Text
+                                key={`${rowKey}-pb-${idx}`}
+                                break
+                                style={{ fontSize: 0.1, lineHeight: 0.1, color: "#ffffff", opacity: 0 }}
+                            >
+                                {" "}
+                            </Text>
+                        );
+                    }
+                    return (
+                        <React.Fragment key={`${rowKey}-content-${idx}`}>
+                            {renderSessionPdfBlocks(part.blocks, `${rowKey}-${idx}`).nodes}
+                        </React.Fragment>
+                    );
+                })}
+            </View>
+        );
     };
     const rawValidity = Number(budget.validity_days ?? 15);
     const validityDays =
@@ -1720,6 +1762,8 @@ export const ProposalDocument = ({
         (budget as unknown as Record<string, unknown>).quote_show_sections ?? false
     );
     const quotePercents = readQuoteSplitPercents(budget);
+    const quoteNoteAbove = String((budget as unknown as Record<string, unknown>).quote_note_above ?? "");
+    const quoteNoteBelow = String((budget as unknown as Record<string, unknown>).quote_note_below ?? "");
 
     const tocRows = hasCompositorStructure
         ? filterIntroTocEntries(
@@ -1902,6 +1946,7 @@ export const ProposalDocument = ({
                 return (
                     <InnerPdfPage pageKey={keyBase} title="Orçamento" paginationProbeKey="quote" {...innerCommon}>
                         <Text style={styles.quoteBudgetCode}>{budgetCodeLabel}</Text>
+                        {renderQuoteNote(quoteNoteAbove, "quote-note-above")}
                         {quoteLocationsForPdf.length > 0 ? (
                             <View style={styles.quoteCard}>
                                 <View
@@ -2062,6 +2107,7 @@ export const ProposalDocument = ({
                                 Sem dados de orçamento para exibir.
                             </Text>
                         )}
+                        {renderQuoteNote(quoteNoteBelow, "quote-note-below")}
                     </InnerPdfPage>
                 );
             case "detail":
