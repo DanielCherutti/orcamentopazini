@@ -3,7 +3,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent, type Editor } from '@tiptap/react';
-import { Mark, Node as TiptapNode, mergeAttributes } from '@tiptap/core';
+import { Extension, Mark, Node as TiptapNode, mergeAttributes } from '@tiptap/core';
+import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import StarterKit from '@tiptap/starter-kit';
 import { ResizableImage } from '@/components/ui/resizable-image-extension';
 import TextAlign from '@tiptap/extension-text-align';
@@ -16,7 +18,7 @@ import {
   Bold, Italic, Underline as UnderlineIcon, List, ListOrdered,
   Heading1, Heading2, AlignLeft, AlignCenter, AlignRight, AlignJustify,
   ImagePlus, Table2, PanelTop, PanelBottom, Hash, ChevronDown, GripHorizontal,
-  Braces,
+  Braces, Pilcrow,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -25,6 +27,10 @@ import { WordPageClientLogo } from '@/components/budgets/compositor/word-page-cl
 import { WordPageWatermark } from '@/components/budgets/compositor/word-page-watermark';
 import { WORD_BAND_THREE_COLUMNS_HTML } from '@/lib/compositor/word-header-templates';
 import { TEMPLATE_VARIABLE_TOKENS } from '@/lib/model-variables';
+import {
+  DocumentFontPicker,
+  type DocumentFontOption,
+} from '@/components/ui/document-font-picker';
 
 interface RichTextEditorProps {
   value: string;
@@ -35,7 +41,7 @@ interface RichTextEditorProps {
   onEditorReady?: (insertImage: (url: string) => void) => void;
   persistenceKey?: string;
   /** Faixa tipo Microsoft Word (abas + grupos Fonte / Parágrafo / Estilos). */
-  variant?: 'default' | 'word';
+  variant?: 'default' | 'ribbon' | 'word';
   readOnly?: boolean;
   /**
    * Só `variant="word"`: imagens na “folha” A4 atrás do texto (capa do compositor).
@@ -197,6 +203,112 @@ const FontSizeMark = Mark.create({
   },
 });
 
+const FontFamilyMark = Mark.create({
+  name: "fontFamily",
+  addAttributes() {
+    return {
+      family: {
+        default: null,
+        parseHTML: (element) => (element as HTMLElement).style.fontFamily.replace(/^["']|["']$/g, "") || null,
+        renderHTML: (attributes) =>
+          attributes.family ? { style: `font-family: ${String(attributes.family)}` } : {},
+      },
+      url: {
+        default: null,
+        parseHTML: (element) => (element as HTMLElement).getAttribute("data-font-url"),
+        renderHTML: (attributes) => attributes.url ? { "data-font-url": String(attributes.url) } : {},
+      },
+    };
+  },
+  parseHTML() {
+    return [{ style: "font-family" }, { tag: "span[data-font-url]" }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ["span", mergeAttributes(HTMLAttributes), 0];
+  },
+});
+
+const formattingMarksPluginKey = new PluginKey<boolean>("formattingMarks");
+
+const FormattingMarksExtension = Extension.create({
+  name: "formattingMarks",
+  addKeyboardShortcuts() {
+    const toggle = () => {
+      const enabled = formattingMarksPluginKey.getState(this.editor.state) === true;
+      this.editor.view.dispatch(
+        this.editor.state.tr.setMeta(formattingMarksPluginKey, !enabled),
+      );
+      return true;
+    };
+    return {
+      "Mod-Shift-8": toggle,
+      "Mod-*": toggle,
+    };
+  },
+  addProseMirrorPlugins() {
+    return [
+      new Plugin<boolean>({
+        key: formattingMarksPluginKey,
+        state: {
+          init: () => false,
+          apply(transaction, previous) {
+            const next = transaction.getMeta(formattingMarksPluginKey);
+            return typeof next === "boolean" ? next : previous;
+          },
+        },
+        props: {
+          decorations(state) {
+            if (formattingMarksPluginKey.getState(state) !== true) return null;
+            const decorations: Decoration[] = [];
+            state.doc.descendants((node, position) => {
+              if (node.isText && node.text) {
+                for (let index = 0; index < node.text.length; index += 1) {
+                  const character = node.text[index];
+                  if (character === " " || character === "\u00a0") {
+                    decorations.push(
+                      Decoration.inline(position + index, position + index + 1, {
+                        class: "formatting-mark-space",
+                      }),
+                    );
+                  } else if (character === "\t") {
+                    decorations.push(
+                      Decoration.inline(position + index, position + index + 1, {
+                        class: "formatting-mark-tab",
+                      }),
+                    );
+                  }
+                }
+              }
+              if (node.type.name === "paragraph" || node.type.name === "heading") {
+                decorations.push(
+                  Decoration.widget(position + node.nodeSize - 1, () => {
+                    const mark = document.createElement("span");
+                    mark.className = "formatting-mark-widget";
+                    mark.textContent = "¶";
+                    mark.setAttribute("aria-hidden", "true");
+                    return mark;
+                  }),
+                );
+              } else if (node.type.name === "hardBreak") {
+                decorations.push(
+                  Decoration.widget(position + 1, () => {
+                    const mark = document.createElement("span");
+                    mark.className = "formatting-mark-widget";
+                    mark.textContent = "↵";
+                    mark.setAttribute("aria-hidden", "true");
+                    return mark;
+                  }),
+                );
+              }
+            });
+            return DecorationSet.create(state.doc, decorations);
+          },
+        },
+      }),
+    ];
+  },
+});
+
 const PageBreakNode = TiptapNode.create({
   name: "pageBreak",
   group: "block",
@@ -307,16 +419,19 @@ export function RichTextEditor({
     footerHeight: wordPageBands?.footerHeight ?? 40,
   });
   const [fontSizePx, setFontSizePx] = useState<number>(11);
+  const [fontFamily, setFontFamily] = useState("Arial");
   const [imageSelection, setImageSelection] = useState<{
     active: boolean;
     align: "left" | "center" | "right";
   }>({ active: false, align: "center" });
+  const [showFormattingMarks, setShowFormattingMarks] = useState(false);
   const [headerTemplateOpen, setHeaderTemplateOpen] = useState(false);
   const [footerTemplateOpen, setFooterTemplateOpen] = useState(false);
   const previewBandHeightsRef = useRef(previewBandHeights);
   const lastEmittedHtmlRef = useRef(initialEditorValue);
 
   const isWord = variant === 'word';
+  const isRibbon = variant === 'ribbon';
 
   useEffect(() => {
     if (bandDragRef.current) return;
@@ -346,6 +461,8 @@ export function RichTextEditor({
         heading: { levels: [1, 2, 3] },
       }),
       FontSizeMark,
+      FontFamilyMark,
+      FormattingMarksExtension,
       PageBreakNode,
       ResizableImage.configure({ inline: true }),
       TextAlign.configure({ types: ['heading', 'paragraph'], defaultAlignment: isWord ? 'left' : 'justify' }),
@@ -475,16 +592,22 @@ export function RichTextEditor({
   }, [isWord, readOnly]);
 
   useEffect(() => {
-    editor?.setEditable(!readOnly);
+    if (!editor || editor.isDestroyed) return;
+    editor.setEditable(!readOnly);
   }, [editor, readOnly]);
 
   useEffect(() => {
-    if (!editor) return;
+    if (!editor || editor.isDestroyed) return;
     const syncFontSize = () => {
+      if (editor.isDestroyed) return;
       const raw = String(editor.getAttributes('fontSize')?.size ?? '').trim();
       const parsed = parseInt(raw.replace(/[^\d.-]/g, ''), 10);
       if (Number.isFinite(parsed) && parsed >= 8 && parsed <= 96) {
         setFontSizePx(parsed);
+      }
+      const familyAttrs = editor.getAttributes("fontFamily");
+      if (familyAttrs.family) {
+        setFontFamily(String(familyAttrs.family));
       }
       const imageAttrs = editor.getAttributes("image");
       const align = imageAttrs.imageAlign === "left" || imageAttrs.imageAlign === "right"
@@ -494,13 +617,18 @@ export function RichTextEditor({
         active: editor.isActive("image"),
         align,
       });
+      const marksVisible = formattingMarksPluginKey.getState(editor.state) === true;
+      setShowFormattingMarks(marksVisible);
+      editor.view.dom.classList.toggle("show-formatting-marks", marksVisible);
     };
     syncFontSize();
     editor.on('selectionUpdate', syncFontSize);
     editor.on('update', syncFontSize);
+    editor.on('transaction', syncFontSize);
     return () => {
       editor.off('selectionUpdate', syncFontSize);
       editor.off('update', syncFontSize);
+      editor.off('transaction', syncFontSize);
     };
   }, [editor]);
 
@@ -510,7 +638,7 @@ export function RichTextEditor({
   }, [wordPageBands?.activeBand, previewBandHeights.headerHeight, previewBandHeights.footerHeight]);
 
   useEffect(() => {
-    if (!editor) return;
+    if (!editor || editor.isDestroyed) return;
     let cancelled = false;
     const stored = normalizeStoredHtml(value || "");
     const normalized = shouldUseFloatingHeaderImages
@@ -554,8 +682,15 @@ export function RichTextEditor({
     setFontSizePx(px);
     editor.chain().focus().setMark('fontSize', { size: `${px}px` }).run();
   };
+  const applyFontFamily = (font: DocumentFontOption) => {
+    setFontFamily(font.family);
+    editor.chain().focus().setMark("fontFamily", {
+      family: font.family,
+      url: font.url ?? null,
+    }).run();
+  };
 
-  const wc = isWord ? 'h-7 w-7 p-0' : undefined;
+  const wc = isWord || isRibbon ? 'h-7 w-7 p-0' : undefined;
   const setSelectedImageAlign = (align: "left" | "center" | "right") => {
     editor
       .chain()
@@ -650,6 +785,12 @@ export function RichTextEditor({
       .focus()
       .insertContent('<div data-page-break="true" class="editor-page-break"><span contenteditable="false">Quebra de página</span></div><p></p>')
       .run();
+  };
+  const toggleFormattingMarks = () => {
+    const next = !showFormattingMarks;
+    editor.view.dispatch(editor.state.tr.setMeta(formattingMarksPluginKey, next));
+    editor.view.dom.classList.toggle("show-formatting-marks", next);
+    setShowFormattingMarks(next);
   };
 
   const groupedVariables = TEMPLATE_VARIABLE_TOKENS.reduce<Record<string, typeof TEMPLATE_VARIABLE_TOKENS>>(
@@ -746,6 +887,17 @@ export function RichTextEditor({
 
   const paragraphTools = (
     <>
+      <Button
+        variant={showFormattingMarks ? "default" : "ghost"}
+        size="sm"
+        onClick={toggleFormattingMarks}
+        type="button"
+        title="Mostrar tudo (Ctrl+Shift+8)"
+        aria-pressed={showFormattingMarks}
+        className={wc}
+      >
+        <Pilcrow className="h-4 w-4" />
+      </Button>
       <Button
         variant={editor.isActive('heading', { level: 1 }) ? 'default' : 'ghost'}
         size="sm"
@@ -995,7 +1147,12 @@ export function RichTextEditor({
                 <div className="flex flex-wrap items-start gap-3 bg-white px-2 py-2">
                   <div className="flex min-w-0 flex-col gap-1 border-r border-neutral-200 pr-3">
                     <span className="text-[10px] font-medium text-neutral-500">Fonte</span>
-                    <div className="flex flex-wrap items-center gap-0.5">
+                  <div className="flex flex-wrap items-center gap-0.5">
+                      <DocumentFontPicker
+                        value={fontFamily}
+                        disabled={readOnly}
+                        onChange={applyFontFamily}
+                      />
                       {fontToolsBasic}
                       <div className="ml-1 flex items-center gap-1">
                         <Button
@@ -1475,6 +1632,123 @@ export function RichTextEditor({
               </div>
             </div>
           </div>
+      </div>
+    );
+  }
+
+  if (isRibbon) {
+    return (
+      <div className="relative min-w-0 overflow-visible rounded-md border border-[#c8c6c4] bg-white shadow-sm">
+        {hiddenImageInput}
+        <div className="sticky top-0 z-30 border-b border-[#c8c6c4] bg-[#f5f5f5] shadow-[0_2px_5px_rgba(0,0,0,0.12)]">
+          <div className="flex h-8 items-end gap-1 overflow-x-auto border-b border-[#dedede] bg-white px-2">
+            <span className="border-b-2 border-[#185abd] px-3 py-1.5 text-[11px] font-semibold text-[#185abd]">
+              Página Inicial
+            </span>
+            <span className="px-3 py-1.5 text-[11px] text-neutral-500">Inserir</span>
+            <span className="px-3 py-1.5 text-[11px] text-neutral-500">Layout</span>
+          </div>
+          <fieldset disabled={readOnly} className="contents">
+            <div className="flex min-w-max items-stretch gap-2 overflow-x-auto bg-[#f8f8f8] px-2 py-1.5">
+              <div className="flex flex-col justify-between border-r border-neutral-300 pr-2">
+                <div className="flex items-center gap-0.5">
+                  <DocumentFontPicker
+                    value={fontFamily}
+                    disabled={readOnly}
+                    onChange={applyFontFamily}
+                  />
+                  <input
+                    type="number"
+                    min={8}
+                    max={96}
+                    value={fontSizePx}
+                    onChange={(event) => {
+                      const value = Number(event.target.value);
+                      if (Number.isFinite(value)) setFontSizePx(clampFontSize(value));
+                    }}
+                    onBlur={() => applyFontSize(fontSizePx)}
+                    className="h-7 w-12 rounded-sm border border-neutral-300 bg-white px-1 text-center text-[11px]"
+                    aria-label="Tamanho da fonte"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0 text-xs"
+                    onClick={() => applyFontSize(fontSizePx + 1)}
+                    title="Aumentar fonte"
+                  >
+                    A+
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0 text-xs"
+                    onClick={() => applyFontSize(fontSizePx - 1)}
+                    title="Diminuir fonte"
+                  >
+                    A-
+                  </Button>
+                  {fontToolsBasic}
+                </div>
+                <span className="pt-0.5 text-center text-[9px] text-neutral-500">Fonte</span>
+              </div>
+
+              <div className="flex flex-col justify-between border-r border-neutral-300 pr-2">
+                <div className="flex items-center gap-0.5">{paragraphTools}</div>
+                <span className="pt-0.5 text-center text-[9px] text-neutral-500">Parágrafo</span>
+              </div>
+
+              <div className="flex flex-col justify-between border-r border-neutral-300 pr-2">
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 min-w-16 rounded-sm bg-white px-2 text-[10px] font-normal"
+                    onClick={() => editor.chain().focus().clearNodes().setParagraph().run()}
+                  >
+                    Normal
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 min-w-16 rounded-sm bg-white px-2 text-[10px] font-semibold"
+                    onClick={() => editor.chain().focus().clearNodes().toggleHeading({ level: 1 }).run()}
+                  >
+                    Título 1
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 min-w-16 rounded-sm bg-white px-2 text-[10px] font-semibold"
+                    onClick={() => editor.chain().focus().clearNodes().toggleHeading({ level: 2 }).run()}
+                  >
+                    Título 2
+                  </Button>
+                </div>
+                <span className="pt-0.5 text-center text-[9px] text-neutral-500">Estilos</span>
+              </div>
+
+              <div className="flex flex-col justify-between">
+                <div className="flex items-center gap-0.5">
+                  {imageToolbarButton}
+                  {imagePositionTools}
+                  {variableToolbarItem}
+                  {extraToolbarItems}
+                </div>
+                <span className="pt-0.5 text-center text-[9px] text-neutral-500">Inserir</span>
+              </div>
+            </div>
+          </fieldset>
+        </div>
+        <TiptapEditorSurface
+          editor={editor}
+          className="[&_.tiptap-content]:min-h-[300px] [&_.tiptap-content]:rounded-none [&_.tiptap-content]:border-0"
+        />
       </div>
     );
   }

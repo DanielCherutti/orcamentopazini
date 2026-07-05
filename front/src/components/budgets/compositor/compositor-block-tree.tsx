@@ -61,7 +61,10 @@ import { CompositorItemRow } from "./compositor-item-row";
 import { CompositorDocumentContext } from "./compositor-document-context";
 import { CompositorCoverBlock } from "./compositor-cover-block";
 import { HeaderFooterLayoutEditor } from "./header-footer-layout-editor";
-import { resolveHeaderFooterScopeMode } from "@/lib/compositor/header-footer-layout";
+import {
+    migrateHeaderFooterLayoutsForScopeMode,
+    resolveHeaderFooterScopeMode,
+} from "@/lib/compositor/header-footer-layout";
 import { CompositorTocBlock } from "./compositor-toc-block";
 import { CompositorFiguresBlock } from "./compositor-figures-block";
 import type { ScopeFigureEntry } from "./compositor-figures-utils";
@@ -782,7 +785,7 @@ function HeaderFooterRenderer({
             const nextHeaderHeight = Math.max(props.cover_header_height ?? 96, props.inner_header_height ?? 96);
             const nextFooterHeight = Math.max(props.cover_footer_height ?? 48, props.inner_footer_height ?? 40);
             void handlePatch({
-                header_footer_scope_mode: "all",
+                ...migrateHeaderFooterLayoutsForScopeMode(props, "all"),
                 cover_show_header_band: nextShowHeader,
                 inner_show_header_band: nextShowHeader,
                 cover_show_footer_band: nextShowFooter,
@@ -794,7 +797,7 @@ function HeaderFooterRenderer({
             });
             return;
         }
-        void handlePatch({ header_footer_scope_mode: "separate" });
+        void handlePatch(migrateHeaderFooterLayoutsForScopeMode(props, "separate"));
     };
 
     const renderPane = (key: "all" | "cover" | "inner") => {
@@ -1268,8 +1271,8 @@ function HeaderFooterRenderer({
                 </div>
                 <p className="mt-2 text-[11px] text-muted-foreground">
                     {scopeMode === "all"
-                        ? "O PDF usa uma única configuração para capa e páginas internas."
-                        : "O PDF usa configurações independentes para capa e páginas internas."}
+                        ? "O PDF usa uma única configuração. Ao separar, o layout atual será copiado para a capa e para as páginas internas."
+                        : "O PDF usa configurações independentes. Ao unificar, o layout da capa será usado como base para todas as páginas."}
                 </p>
             </div>
             {scopeMode === "all" ? (

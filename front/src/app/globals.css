@@ -1563,3 +1563,37 @@ html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface label {
 .auth-app .auth-destination-btn--platform .auth-destination-btn-sub {
   color: rgba(221, 214, 254, 0.72);
 }
+
+/* Marcas não imprimíveis do editor (Mostrar Tudo / Ctrl+Shift+8). */
+.tiptap.show-formatting-marks .formatting-mark-space {
+  background-image: radial-gradient(circle, #185abd 1px, transparent 1.35px);
+  background-position: center 68%;
+  background-repeat: no-repeat;
+  background-size: 4px 4px;
+}
+
+.tiptap.show-formatting-marks .formatting-mark-tab {
+  position: relative;
+  background: linear-gradient(#185abd, #185abd) center 68% / 80% 1px no-repeat;
+}
+
+.tiptap.show-formatting-marks .formatting-mark-tab::after {
+  position: absolute;
+  right: 0;
+  color: #185abd;
+  content: "›";
+  font-size: 0.8em;
+}
+
+.formatting-mark-widget {
+  display: inline;
+  margin-left: 1px;
+  color: #185abd;
+  font-family: Arial, sans-serif;
+  font-size: 0.78em;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+}

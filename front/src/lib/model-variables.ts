@@ -4,7 +4,7 @@ import type { Budget } from "@/types/budget-types";
 export type TemplateVariableToken = {
   token: string;
   label: string;
-  group: "Cliente" | "Orçamento" | "Campos personalizados";
+  group: "Cliente" | "Orçamento" | "Data e hora" | "Campos personalizados";
   description?: string;
 };
 
@@ -41,6 +41,18 @@ export const TEMPLATE_VARIABLE_TOKENS: TemplateVariableToken[] = [
     group: "Orçamento",
   },
   {
+    token: "{{data.atual}}",
+    label: "Data atual",
+    group: "Data e hora",
+    description: "Data por extenso no fuso de Brasília.",
+  },
+  {
+    token: "{{hora.atual}}",
+    label: "Hora atual",
+    group: "Data e hora",
+    description: "Horário atual no fuso de Brasília.",
+  },
+  {
     token: "{{cliente.adicional.inscricao_estadual}}",
     label: "Campo personalizado",
     group: "Campos personalizados",
@@ -59,6 +71,12 @@ export type TemplateVariableContext = {
   } | null;
   orcamento?: {
     codigo?: string | null;
+  } | null;
+  data?: {
+    atual?: string | null;
+  } | null;
+  hora?: {
+    atual?: string | null;
   } | null;
 };
 
@@ -97,8 +115,27 @@ export function formatCustomerAddress(customer?: CustomerFull | null): string {
 export function buildTemplateVariableContext(params: {
   customer?: CustomerFull | null;
   budget?: Pick<Budget, "code"> | null;
+  now?: Date;
+  timeZone?: string;
 }): TemplateVariableContext {
   const customer = params.customer;
+  const now = params.now ?? new Date();
+  const timeZone = params.timeZone?.trim() || process.env.APP_TIME_ZONE || "America/Sao_Paulo";
+  const currentDate = new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    timeZone,
+  })
+    .format(now)
+    .replace(/\s+de\s+/gi, " DE ")
+    .toLocaleUpperCase("pt-BR");
+  const currentTime = new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone,
+  }).format(now);
   return {
     cliente: {
       razao_social: customer?.razao_social || customer?.name || "",
@@ -110,6 +147,12 @@ export function buildTemplateVariableContext(params: {
     },
     orcamento: {
       codigo: params.budget?.code || "",
+    },
+    data: {
+      atual: currentDate,
+    },
+    hora: {
+      atual: currentTime,
     },
   };
 }
@@ -177,6 +220,8 @@ function resolveVariable(
   if (normalizedPath === "cliente.cnpj") return valueToString(context.cliente?.cnpj);
   if (normalizedPath === "cliente.endereco") return valueToString(context.cliente?.endereco);
   if (normalizedPath === "orcamento.codigo") return valueToString(context.orcamento?.codigo);
+  if (normalizedPath === "data.atual") return valueToString(context.data?.atual);
+  if (normalizedPath === "hora.atual") return valueToString(context.hora?.atual);
   if (normalizedPath.startsWith("cliente.adicional.")) {
     return lookupAdditionalValue(
       context.cliente?.adicional ?? {},
@@ -206,4 +251,3 @@ export function renderTemplateVariables(
     return resolvedOptions.escapeText ? escapeHtml(resolved) : resolved;
   });
 }
-

@@ -21,7 +21,8 @@ import {
 import type { CustomerFull, CustomerFormInput } from "@/actions/client-actions";
 import { lookupCnpjAction } from "@/actions/client-actions";
 import { normalizeAdditionalInfoKey } from "@/lib/model-variables";
-import { Image as ImageIcon, Plus, Trash2, Upload, X } from "lucide-react";
+import { Image as ImageIcon, Plus, Search, Trash2, Upload, X } from "lucide-react";
+import { LogoLibraryDialog } from "@/components/clients/logo-library-dialog";
 
 // ─── Mask helpers ────────────────────────────────────────────────────────────
 
@@ -104,6 +105,7 @@ export function CustomerForm({
     const [logoUrl, setLogoUrl] = useState(initialData?.logo_url ?? "");
     const [logoUploading, setLogoUploading] = useState(false);
     const [logoError, setLogoError] = useState<string | null>(null);
+    const [logoLibraryOpen, setLogoLibraryOpen] = useState(false);
     const [additionalFields, setAdditionalFields] = useState<Array<{ id: string; key: string; value: string }>>(
         () =>
             Object.entries(initialData?.informacoes_adicionais ?? {}).map(([key, value]) => ({
@@ -423,16 +425,28 @@ export function CustomerForm({
                         onChange={(e) => void handleLogoFileChange(e.target.files?.[0])}
                         disabled={busy || logoUploading}
                     />
-                    <Button
-                        type="button"
-                        variant="outline"
-                        className="rounded-sm"
-                        disabled={busy || logoUploading}
-                        onClick={() => logoInputRef.current?.click()}
-                    >
-                        <Upload className="mr-2 h-4 w-4" />
-                        {logoUploading ? "Enviando..." : "Enviar logo"}
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="rounded-sm"
+                            disabled={busy || logoUploading}
+                            onClick={() => setLogoLibraryOpen(true)}
+                        >
+                            <Search className="mr-2 h-4 w-4" />
+                            Buscar logotipo
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="rounded-sm"
+                            disabled={busy || logoUploading}
+                            onClick={() => logoInputRef.current?.click()}
+                        >
+                            <Upload className="mr-2 h-4 w-4" />
+                            {logoUploading ? "Enviando..." : "Enviar logo"}
+                        </Button>
+                    </div>
                 </div>
 
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -478,6 +492,16 @@ export function CustomerForm({
                     </div>
                 </div>
             </div>
+
+            <LogoLibraryDialog
+                open={logoLibraryOpen}
+                onOpenChange={setLogoLibraryOpen}
+                onSelect={(logo) => {
+                    setLogoUrl(logo.url);
+                    setValue("logo_url", logo.url, { shouldDirty: true });
+                    setLogoError(null);
+                }}
+            />
 
             {/* ── Endereço ── */}
             <div className="bg-card rounded-xl border border-border shadow-sm p-6 space-y-4">

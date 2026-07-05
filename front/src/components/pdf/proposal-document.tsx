@@ -22,6 +22,10 @@ import {
     type CoverPdfBlock,
 } from '@/lib/pdf/cover-pdf-blocks';
 import { stripHtmlToText } from '@/lib/pdf/html-to-plain-text';
+import {
+    parsePdfInlineRuns,
+    pdfInlineRunStyle,
+} from '@/lib/pdf/pdf-rich-text-runs';
 import { sanitizeCoverHtmlForPdf } from '@/lib/pdf/sanitize-inline-styles-for-pdf';
 import { sanitizeTextForPdf } from '@/lib/pdf/sanitize-pdf-text';
 import {
@@ -1518,13 +1522,23 @@ export const ProposalDocument = ({
             }
             const segs = splitCoverHtmlFragmentToSegments(b.content, { preserveEmptyParagraphs: true });
             return segs.map((seg, j) => {
+                const runs = seg.rawHtml ? parsePdfInlineRuns(seg.rawHtml) : [];
                 if (seg.kind === 'heading') {
                     return (
                         <Text
                             key={`${rowKey}-h-${i}-${j}`}
                             style={seg.textAlign ? [styles.sessionRichHeading, { textAlign: seg.textAlign }] : styles.sessionRichHeading}
                         >
-                            {seg.text}
+                            {runs.length
+                                ? runs.map((run, runIndex) => (
+                                      <Text
+                                          key={`${rowKey}-h-${i}-${j}-${runIndex}`}
+                                          style={pdfInlineRunStyle(run)}
+                                      >
+                                          {run.text}
+                                      </Text>
+                                  ))
+                                : seg.text}
                         </Text>
                     );
                 }
@@ -1536,9 +1550,19 @@ export const ProposalDocument = ({
                         key={`${rowKey}-p-${i}-${j}`}
                         style={seg.textAlign ? [styles.sessionRichParagraph, { textAlign: seg.textAlign }] : styles.sessionRichParagraph}
                     >
-                        {(seg.textAlign === 'center' || seg.textAlign === 'right')
-                            ? seg.text
-                            : `${ABNT_PARAGRAPH_INDENT}${seg.text}`}
+                        {seg.textAlign === 'center' || seg.textAlign === 'right'
+                            ? null
+                            : ABNT_PARAGRAPH_INDENT}
+                        {runs.length
+                            ? runs.map((run, runIndex) => (
+                                  <Text
+                                      key={`${rowKey}-p-${i}-${j}-${runIndex}`}
+                                      style={pdfInlineRunStyle(run)}
+                                  >
+                                      {run.text}
+                                  </Text>
+                              ))
+                            : seg.text}
                     </Text>
                 );
             });
