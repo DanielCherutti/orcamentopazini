@@ -128,6 +128,7 @@ async function ensureSchema(instance: Surreal): Promise<void> {
             DEFINE TABLE IF NOT EXISTS product_group SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS product_unit SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS image_library SCHEMALESS;
+            DEFINE TABLE IF NOT EXISTS font_library SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS client SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS modelos SCHEMALESS;
             DEFINE TABLE IF NOT EXISTS budget SCHEMALESS;
@@ -164,6 +165,7 @@ async function ensureSchema(instance: Surreal): Promise<void> {
             DEFINE INDEX IF NOT EXISTS idx_modelos_tipo ON modelos FIELDS tipo;
             DEFINE INDEX IF NOT EXISTS idx_budget_tenant ON budget FIELDS tenant_id;
             DEFINE INDEX IF NOT EXISTS idx_image_library_tenant ON image_library FIELDS tenant_id;
+            DEFINE INDEX IF NOT EXISTS idx_font_library_tenant ON font_library FIELDS tenant_id;
             DEFINE INDEX IF NOT EXISTS idx_proposal_settings_tenant ON proposal_settings FIELDS tenant_id;
             DEFINE INDEX IF NOT EXISTS idx_budget_item_budget_id ON budget_item FIELDS budget_id;
             DEFINE INDEX IF NOT EXISTS idx_budget_item_section_id ON budget_item FIELDS section_id;

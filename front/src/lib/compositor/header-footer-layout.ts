@@ -8,6 +8,10 @@ import type {
 export type HeaderFooterLayoutScope = "all" | "cover" | "inner";
 export type HeaderFooterScopeMode = "all" | "separate";
 export type HeaderFooterLayoutRegion = "header" | "footer";
+export type HeaderFooterSnapGuide = {
+  axis: "x" | "y";
+  position_pct: number;
+};
 export type HeaderFooterLayoutField =
   | "all_header_layout"
   | "all_footer_layout"
@@ -83,6 +87,71 @@ export function hasHeaderFooterLayoutContent(layout: HeaderFooterCanvasLayout | 
   return Boolean(layout?.elements?.length);
 }
 
+export function resolveHeaderFooterSelection(
+  selectedId: string | null,
+  layout: HeaderFooterCanvasLayout,
+): string | null {
+  if (selectedId && layout.elements.some((element) => element.id === selectedId)) {
+    return selectedId;
+  }
+  return layout.elements[0]?.id ?? null;
+}
+
+export function migrateHeaderFooterLayoutsForScopeMode(
+  props: HeaderFooterBlockProps,
+  mode: HeaderFooterScopeMode,
+): Pick<
+  HeaderFooterBlockProps,
+  | "header_footer_scope_mode"
+  | "all_header_layout"
+  | "all_footer_layout"
+  | "cover_header_layout"
+  | "cover_footer_layout"
+  | "inner_header_layout"
+  | "inner_footer_layout"
+> {
+  if (mode === "separate") {
+    const sharedHeader = normalizeHeaderFooterLayout(props.all_header_layout);
+    const sharedFooter = normalizeHeaderFooterLayout(props.all_footer_layout);
+    return {
+      header_footer_scope_mode: "separate",
+      all_header_layout: sharedHeader,
+      all_footer_layout: sharedFooter,
+      cover_header_layout: cloneHeaderFooterLayout(sharedHeader),
+      cover_footer_layout: cloneHeaderFooterLayout(sharedFooter),
+      inner_header_layout: cloneHeaderFooterLayout(sharedHeader),
+      inner_footer_layout: cloneHeaderFooterLayout(sharedFooter),
+    };
+  }
+
+  const currentSharedHeader = normalizeHeaderFooterLayout(props.all_header_layout);
+  const currentSharedFooter = normalizeHeaderFooterLayout(props.all_footer_layout);
+  const coverHeader = normalizeHeaderFooterLayout(props.cover_header_layout);
+  const coverFooter = normalizeHeaderFooterLayout(props.cover_footer_layout);
+  const innerHeader = normalizeHeaderFooterLayout(props.inner_header_layout);
+  const innerFooter = normalizeHeaderFooterLayout(props.inner_footer_layout);
+  const headerSource = hasHeaderFooterLayoutContent(coverHeader)
+    ? coverHeader
+    : hasHeaderFooterLayoutContent(innerHeader)
+      ? innerHeader
+      : currentSharedHeader;
+  const footerSource = hasHeaderFooterLayoutContent(coverFooter)
+    ? coverFooter
+    : hasHeaderFooterLayoutContent(innerFooter)
+      ? innerFooter
+      : currentSharedFooter;
+
+  return {
+    header_footer_scope_mode: "all",
+    all_header_layout: cloneHeaderFooterLayout(headerSource),
+    all_footer_layout: cloneHeaderFooterLayout(footerSource),
+    cover_header_layout: coverHeader,
+    cover_footer_layout: coverFooter,
+    inner_header_layout: innerHeader,
+    inner_footer_layout: innerFooter,
+  };
+}
+
 export function resolveHeaderFooterScopeMode(
   props: Pick<
     HeaderFooterBlockProps,
@@ -156,6 +225,7 @@ export function createHeaderFooterElement(
     z_index: zIndex,
     opacity: 1,
     font_size: 11,
+    font_family: "Arial",
     font_weight: "normal" as const,
     font_style: "normal" as const,
     text_align: "left" as const,
@@ -210,6 +280,142 @@ export function createHeaderFooterElement(
   };
 }
 
+export function snapHeaderFooterElement(params: {
+  element: HeaderFooterCanvasElement;
+  otherElements: HeaderFooterCanvasElement[];
+  mode: "move" | "resize";
+  thresholdXPct: number;
+  thresholdYPct: number;
+  gridEnabled?: boolean;
+  gridSizePct?: number;
+  snapEnabled?: boolean;
+}): { element: HeaderFooterCanvasElement; guides: HeaderFooterSnapGuide[] } {
+  if (params.snapEnabled === false) return { element: params.element, guides: [] };
+  const element = { ...params.element };
+  const gridSize = clampNum(params.gridSizePct, 1, 50, 5);
+  const xTargets = alignmentTargets(
+    params.otherElements,
+    "x",
+    params.gridEnabled === true,
+    gridSize,
+  );
+  const yTargets = alignmentTargets(
+    params.otherElements,
+    "y",
+    params.gridEnabled === true,
+    gridSize,
+  );
+  const guides: HeaderFooterSnapGuide[] = [];
+
+  if (params.mode === "move") {
+    const xAnchors = [element.x_pct, element.x_pct + element.width_pct / 2, element.x_pct + element.width_pct];
+    const yAnchors = [element.y_pct, element.y_pct + element.height_pct / 2, element.y_pct + element.height_pct];
+    const xMatch = closestAlignment(xAnchors, xTargets, params.thresholdXPct);
+    const yMatch = closestAlignment(yAnchors, yTargets, params.thresholdYPct);
+    if (xMatch) {
+      element.x_pct += xMatch.delta;
+      guides.push({ axis: "x", position_pct: xMatch.target });
+    }
+    if (yMatch) {
+      element.y_pct += yMatch.delta;
+      guides.push({ axis: "y", position_pct: yMatch.target });
+    }
+  } else {
+    const right = element.x_pct + element.width_pct;
+    const bottom = element.y_pct + element.height_pct;
+    const xMatch = closestAlignment([right], xTargets, params.thresholdXPct);
+    const yMatch = closestAlignment([bottom], yTargets, params.thresholdYPct);
+    if (xMatch) {
+      element.width_pct += xMatch.delta;
+      guides.push({ axis: "x", position_pct: xMatch.target });
+    }
+    if (yMatch) {
+      element.height_pct += yMatch.delta;
+      guides.push({ axis: "y", position_pct: yMatch.target });
+    }
+  }
+
+  return { element, guides };
+}
+
+export function nudgeHeaderFooterElement(params: {
+  element: HeaderFooterCanvasElement;
+  direction: "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown";
+  pixels?: number;
+  canvasWidth: number;
+  canvasHeight: number;
+}): HeaderFooterCanvasElement {
+  const pixels = Math.max(1, Math.min(100, Math.trunc(params.pixels ?? 1)));
+  const width = Math.max(1, params.canvasWidth);
+  const height = Math.max(1, params.canvasHeight);
+  const dx =
+    params.direction === "ArrowLeft"
+      ? -(pixels / width) * 100
+      : params.direction === "ArrowRight"
+        ? (pixels / width) * 100
+        : 0;
+  const dy =
+    params.direction === "ArrowUp"
+      ? -(pixels / height) * 100
+      : params.direction === "ArrowDown"
+        ? (pixels / height) * 100
+        : 0;
+  return {
+    ...params.element,
+    x_pct: clampNum(
+      params.element.x_pct + dx,
+      0,
+      Math.max(0, 100 - params.element.width_pct),
+      params.element.x_pct,
+    ),
+    y_pct: clampNum(
+      params.element.y_pct + dy,
+      0,
+      Math.max(0, 100 - params.element.height_pct),
+      params.element.y_pct,
+    ),
+  };
+}
+
+function alignmentTargets(
+  elements: HeaderFooterCanvasElement[],
+  axis: "x" | "y",
+  gridEnabled: boolean,
+  gridSize: number,
+): number[] {
+  const targets = new Set<number>([0, 50, 100]);
+  for (const element of elements) {
+    const start = axis === "x" ? element.x_pct : element.y_pct;
+    const size = axis === "x" ? element.width_pct : element.height_pct;
+    targets.add(start);
+    targets.add(start + size / 2);
+    targets.add(start + size);
+  }
+  if (gridEnabled) {
+    for (let position = 0; position <= 100; position += gridSize) {
+      targets.add(Math.min(100, position));
+    }
+  }
+  return [...targets];
+}
+
+function closestAlignment(
+  anchors: number[],
+  targets: number[],
+  threshold: number,
+): { delta: number; target: number } | null {
+  let best: { delta: number; target: number; distance: number } | null = null;
+  for (const target of targets) {
+    for (const anchor of anchors) {
+      const delta = target - anchor;
+      const distance = Math.abs(delta);
+      if (distance > threshold || (best && distance >= best.distance)) continue;
+      best = { delta, target, distance };
+    }
+  }
+  return best ? { delta: best.delta, target: best.target } : null;
+}
+
 function normalizeHeaderFooterElement(
   raw: HeaderFooterCanvasElement,
   fallbackIndex: number,
@@ -231,6 +437,15 @@ function normalizeHeaderFooterElement(
     font_size: clampNum(raw.font_size, 6, 96, 11),
     padding: clampNum(raw.padding, 0, 40, 4),
     columns: Array.isArray(raw.columns) ? raw.columns.map((c) => String(c)) : raw.columns,
+  };
+}
+
+function cloneHeaderFooterLayout(layout: HeaderFooterCanvasLayout): HeaderFooterCanvasLayout {
+  return {
+    version: 1,
+    elements: layout.elements.map((element, index) =>
+      normalizeHeaderFooterElement({ ...element }, index),
+    ),
   };
 }
 

@@ -9,6 +9,7 @@ import {
   Maximize2,
   Minimize2,
   RefreshCw,
+  Search,
   Settings2,
   SlidersHorizontal,
   Sparkles,
@@ -36,6 +37,12 @@ import { cn } from "@/lib/utils";
 import { mergeCoverDocumentProps } from "@/lib/budgets/cover-document";
 import { CompositorRichTextEditor } from "@/components/budgets/compositor/compositor-rich-text-editor";
 import { DEFAULT_CLIENT_LOGO_LAYOUT } from "@/lib/budgets/cover-client-logo-layout";
+import {
+  buildTemplateVariableContext,
+  renderTemplateVariables,
+  type TemplateVariableContext,
+} from "@/lib/model-variables";
+import { LogoLibraryDialog } from "@/components/clients/logo-library-dialog";
 
 export function CompositorCoverBlock({
   block,
@@ -51,7 +58,10 @@ export function CompositorCoverBlock({
   );
   const [budget, setBudget] = useState<Budget | null>(null);
   const [loadingClient, setLoadingClient] = useState(false);
+  const [clientPreviewContext, setClientPreviewContext] =
+    useState<TemplateVariableContext | null>(null);
   const [coverSettingsOpen, setCoverSettingsOpen] = useState(false);
+  const [logoLibraryOpen, setLogoLibraryOpen] = useState(false);
   const [coverExpanded, setCoverExpanded] = useState(false);
   const [coverMediaUploading, setCoverMediaUploading] = useState<
     null | "client_logo_url" | "cover_watermark_url" | "document_watermark_url"
@@ -145,7 +155,15 @@ export function CompositorCoverBlock({
   );
 
   const fillFromCustomer = async () => {
-    if (!budget?.client_id || isReadOnly) return;
+    if (isReadOnly) return;
+    if (clientPreviewContext) {
+      setClientPreviewContext(null);
+      return;
+    }
+    if (!budget?.client_id) {
+      toast.error("Selecione um cliente no orçamento antes de preencher.");
+      return;
+    }
     const cid =
       typeof budget.client_id === "object" && budget.client_id !== null && "id" in budget.client_id
         ? String((budget.client_id as { id: string }).id)
@@ -165,19 +183,29 @@ export function CompositorCoverBlock({
       const addr = c.address;
       const streetParts = [addr?.street, addr?.number, addr?.complement].filter(Boolean).join(", ");
       const municipality = [addr?.city || c.city, addr?.state].filter(Boolean).join(" - ");
+      setClientPreviewContext(buildTemplateVariableContext({ customer: c, budget }));
       patch({
-        client_legal_name: c.name || "",
-        client_trade_name: c.name || "",
+        client_legal_name: c.razao_social || c.name || "",
+        client_trade_name: c.nome_fantasia || c.name || "",
         client_cnpj: c.cnpj || "",
         client_municipality: municipality,
         client_address: streetParts || "",
         client_cep: addr?.cep || "",
       });
-      toast.success("Dados cadastrais preenchidos a partir do cliente.");
+      toast.success("Dados do cliente aplicados à pré-visualização.");
+    } catch {
+      toast.error("Não foi possível carregar os dados do cliente.");
     } finally {
       setLoadingClient(false);
     }
   };
+
+  const coverDocumentForEditor = clientPreviewContext
+    ? renderTemplateVariables(props.cover_document_html, clientPreviewContext, {
+        logoMode: "img",
+        escapeText: true,
+      })
+    : props.cover_document_html ?? "";
 
   const mediaPanel = (
     <div className="space-y-4 p-1">
@@ -200,6 +228,17 @@ export function CompositorCoverBlock({
             disabled={isReadOnly}
             className="h-8 min-w-0 flex-1 text-xs"
           />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 shrink-0 text-xs"
+            disabled={isReadOnly || coverMediaUploading === "client_logo_url"}
+            onClick={() => setLogoLibraryOpen(true)}
+          >
+            <Search className="mr-1.5 h-3.5 w-3.5" />
+            Buscar logotipo
+          </Button>
           <input
             ref={clientLogoFileRef}
             type="file"
@@ -378,7 +417,7 @@ export function CompositorCoverBlock({
               disabled={loadingClient}
             >
               <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", loadingClient && "animate-spin")} />
-              Preencher cliente
+              {clientPreviewContext ? "Voltar às variáveis" : "Preencher cliente"}
             </Button>
           )}
           <Button
@@ -457,13 +496,24 @@ export function CompositorCoverBlock({
         </DialogContent>
       </Dialog>
 
+      <LogoLibraryDialog
+        open={logoLibraryOpen}
+        onOpenChange={setLogoLibraryOpen}
+        onSelect={(logo) => {
+          patch({ client_logo_url: logo.url });
+          toast.success("Logotipo aplicado à capa.");
+        }}
+      />
+
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white dark:bg-neutral-950">
         <CompositorRichTextEditor
           budgetId={budgetId}
           variant="word"
-          readOnly={Boolean(isReadOnly)}
-          value={props.cover_document_html ?? ""}
-          onChange={(html) => patch({ cover_document_html: html })}
+          readOnly={Boolean(isReadOnly || clientPreviewContext)}
+          value={coverDocumentForEditor}
+          onChange={(html) => {
+            if (!clientPreviewContext) patch({ cover_document_html: html });
+          }}
           wordPageBottomLeftText={
             budget?.code?.trim()
               ? `Código do Orçamento: ${budget.code.trim()}`

@@ -150,6 +150,8 @@ export interface HeaderFooterCanvasElement {
   src?: string;
   columns?: string[];
   font_size?: number;
+  font_family?: string;
+  font_url?: string;
   font_weight?: "normal" | "bold";
   font_style?: "normal" | "italic";
   text_align?: HeaderFooterTextAlign;

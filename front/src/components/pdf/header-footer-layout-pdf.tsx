@@ -78,34 +78,36 @@ export function HeaderFooterPdfLayer({
 
   if (!visibleElements.length) return <View style={{ position: "absolute", opacity: 0, width: 0, height: 0 }} />;
 
-  const imageElements = visibleElements.filter((element) => element.type === "image");
-  const textElements = visibleElements.filter((element) => element.type !== "image");
-
   return (
     <View style={{ position: "absolute", left: 0, top: 0, width, height }}>
-      {imageElements.map((element) => (
-        <HeaderFooterPdfElement
-          key={element.id}
-          element={element}
-          width={width}
-          height={height}
-          appPublicUrl={appPublicUrl}
-          pdfEmbeddedImages={pdfEmbeddedImages}
-          pageNumbering={pageNumbering}
-          pageScope={pageScope}
-        />
-      ))}
-      {/* React-PDF drops text inside nested absolute boxes in fixed bands; text needs direct Text nodes. */}
-      {textElements.map((element) => (
-        <PositionedHeaderFooterText
-          key={element.id}
-          element={element}
-          width={width}
-          height={height}
-          pageNumbering={pageNumbering}
-          pageScope={pageScope}
-        />
-      ))}
+      {visibleElements.map((element) =>
+        element.type === "image" ? (
+          <HeaderFooterPdfElement
+            key={element.id}
+            element={element}
+            width={width}
+            height={height}
+            appPublicUrl={appPublicUrl}
+            pdfEmbeddedImages={pdfEmbeddedImages}
+            pageNumbering={pageNumbering}
+            pageScope={pageScope}
+          />
+        ) : (
+          /*
+           * React-PDF drops text inside nested absolute boxes in fixed bands, so text
+           * remains a direct node. Keeping it in this single map is also essential:
+           * siblings are painted in source order and must follow z_index across types.
+           */
+          <PositionedHeaderFooterText
+            key={element.id}
+            element={element}
+            width={width}
+            height={height}
+            pageNumbering={pageNumbering}
+            pageScope={pageScope}
+          />
+        ),
+      )}
     </View>
   );
 }
@@ -393,11 +395,20 @@ function textBoxStyle(element: HeaderFooterCanvasElement): Style {
   const fontSize = editorPxToPt(clamp(element.font_size ?? 11, 6, 96));
   return {
     fontSize,
+    fontFamily: pdfFontFamily(element.font_family),
     color: element.color || "#111827",
     fontWeight: element.font_weight === "bold" ? 700 : 400,
     fontStyle: element.font_style === "italic" ? "italic" : "normal",
     textAlign: element.text_align || "left",
   };
+}
+
+function pdfFontFamily(value: string | undefined): string {
+  const family = value?.trim();
+  if (!family || family === "Arial" || family === "Verdana") return "Helvetica";
+  if (family === "Times New Roman" || family === "Georgia") return "Times-Roman";
+  if (family === "Courier New") return "Courier";
+  return family;
 }
 
 function editorPxToPt(value: unknown): number {

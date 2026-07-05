@@ -20,6 +20,13 @@ export type LibraryImage = {
     created_at?: string;
 };
 
+export type ReusableLogo = {
+    id: string;
+    name: string;
+    url: string;
+    source: "customer" | "library";
+};
+
 const TABLE_NAME = "image_library";
 
 const createSchema = z.object({
@@ -92,6 +99,74 @@ export async function getLibraryImagesAction(params?: {
         console.error("Error fetching library images:", error);
         if (isTokenExpiredError(error)) resetDb();
         return { success: false, error: "Falha ao buscar imagens da biblioteca" };
+    }
+}
+
+export async function getReusableLogosAction(params?: {
+    query?: string;
+    limit?: number;
+}) {
+    const auth = await assertWriteActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    try {
+        const db = await getDb();
+        const tenantId = await requireActiveTenantId();
+        const tenantRecord = tenantRecordId(tenantId);
+        const [customerResult, libraryResult] = await Promise.all([
+            db.query<[Array<{ id?: unknown; name?: unknown; logo_url?: unknown }>]>(
+                `SELECT id, name, logo_url FROM client
+                 WHERE tenant_id = $tenantId AND logo_url != NONE
+                 ORDER BY name ASC LIMIT 500`,
+                { tenantId: tenantRecord },
+            ),
+            db.query<[Array<{ id?: unknown; name?: unknown; url?: unknown }>]>(
+                `SELECT id, name, url FROM ${TABLE_NAME}
+                 WHERE tenant_id = $tenantId
+                 ORDER BY created_at DESC LIMIT 500`,
+                { tenantId: tenantRecord },
+            ),
+        ]);
+
+        const safeId = (id: unknown): string => {
+            if (id && typeof id === "object" && "toString" in id) {
+                return String((id as { toString(): string }).toString());
+            }
+            return String(id ?? "");
+        };
+        const candidates: ReusableLogo[] = [
+            ...(customerResult[0] ?? []).map((row) => ({
+                id: `customer-${safeId(row.id)}`,
+                name: String(row.name ?? "Cliente"),
+                url: String(row.logo_url ?? "").trim(),
+                source: "customer" as const,
+            })),
+            ...(libraryResult[0] ?? []).map((row) => ({
+                id: `library-${safeId(row.id)}`,
+                name: String(row.name ?? "Imagem da biblioteca"),
+                url: String(row.url ?? "").trim(),
+                source: "library" as const,
+            })),
+        ];
+        const normalizedQuery = String(params?.query ?? "").trim().toLocaleLowerCase("pt-BR");
+        const seenUrls = new Set<string>();
+        const logos = candidates.filter((logo) => {
+            if (!logo.url || seenUrls.has(logo.url)) return false;
+            if (
+                normalizedQuery &&
+                !`${logo.name} ${logo.url}`.toLocaleLowerCase("pt-BR").includes(normalizedQuery)
+            ) {
+                return false;
+            }
+            seenUrls.add(logo.url);
+            return true;
+        });
+        const limit = Math.max(1, Math.min(200, Math.trunc(params?.limit ?? 80)));
+        return { success: true, data: toPlain(logos.slice(0, limit)) };
+    } catch (error) {
+        console.error("Error fetching reusable logos:", error);
+        if (isTokenExpiredError(error)) resetDb();
+        return { success: false, error: "Falha ao buscar logotipos" };
     }
 }
 

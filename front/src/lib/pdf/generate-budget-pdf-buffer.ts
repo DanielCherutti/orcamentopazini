@@ -12,6 +12,7 @@ import {
     buildPdfEmbeddedImagesMap,
     collectRawPdfImageUrlsForPdf,
 } from "@/lib/pdf/pdf-embed-images-server";
+import { registerCompositorPdfFonts } from "@/lib/pdf/pdf-custom-fonts-server";
 
 export type GenerateBudgetPdfResult =
     | { ok: true; buffer: Buffer; filename: string; budget: Budget; settings: ProposalSettings }
@@ -39,6 +40,7 @@ export async function generateBudgetPdfBuffer(
             ...loaded.settings,
             app_public_url: imagePublicBase ?? loaded.settings.app_public_url ?? "",
         };
+        await registerCompositorPdfFonts(loaded.compositorPdf);
 
         let pdfEmbeddedImages: Record<string, string> | undefined;
         try {

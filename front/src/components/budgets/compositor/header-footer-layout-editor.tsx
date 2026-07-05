@@ -14,7 +14,9 @@ import {
   Hash,
   Heading1,
   ImagePlus,
+  Grid3X3,
   Layers,
+  Magnet,
   SendToBack,
   Square,
   Trash2,
@@ -28,6 +30,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { TEMPLATE_VARIABLE_TOKENS } from "@/lib/model-variables";
+import { DocumentFontPicker } from "@/components/ui/document-font-picker";
 import type {
   HeaderFooterBlockProps,
   HeaderFooterCanvasElement,
@@ -42,7 +45,11 @@ import {
   headerFooterLayoutField,
   normalizeHeaderFooterLayout,
   normalizePageNumbering,
+  nudgeHeaderFooterElement,
+  resolveHeaderFooterSelection,
   resolveHeaderFooterScopeMode,
+  snapHeaderFooterElement,
+  type HeaderFooterSnapGuide,
   type HeaderFooterLayoutRegion,
   type HeaderFooterLayoutScope,
 } from "@/lib/compositor/header-footer-layout";
@@ -81,14 +88,21 @@ export function HeaderFooterLayoutEditor({
     normalizePageNumbering(props.page_numbering),
   );
   const [uploading, setUploading] = useState(false);
+  const [gridEnabled, setGridEnabled] = useState(true);
+  const [snapEnabled, setSnapEnabled] = useState(true);
+  const [snapGuides, setSnapGuides] = useState<HeaderFooterSnapGuide[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const bandRef = useRef<HTMLDivElement | null>(null);
+  const keyboardNudgeRef = useRef<{
+    layout: HeaderFooterCanvasLayout | null;
+    dirty: boolean;
+  }>({ layout: null, dirty: false });
   const pageNumbering = pageNumberingDraft;
 
   useEffect(() => {
     const next = normalizeHeaderFooterLayout(sourceLayout);
     setLayout(next);
-    setSelectedId(next.elements[0]?.id ?? null);
+    setSelectedId((currentId) => resolveHeaderFooterSelection(currentId, next));
     setPageNumberingDraft(normalizePageNumbering(sourcePageNumbering));
   }, [field, sourceLayout, sourcePageNumbering]);
 
@@ -124,6 +138,74 @@ export function HeaderFooterLayoutEditor({
       void onPatch({ [field]: next } as Partial<HeaderFooterBlockProps>);
     }
   };
+
+  useEffect(() => {
+    if (readOnly || !selectedId) return;
+
+    const commitKeyboardNudge = () => {
+      const pending = keyboardNudgeRef.current;
+      if (!pending.dirty || !pending.layout) return;
+      pending.dirty = false;
+      void onPatch({ [field]: pending.layout } as Partial<HeaderFooterBlockProps>);
+    };
+    const isEditingControl = (target: EventTarget | null) => {
+      const element = target instanceof HTMLElement ? target : null;
+      return Boolean(
+        element?.closest(
+          'input, textarea, select, [contenteditable="true"], [role="textbox"], [role="combobox"]',
+        ),
+      );
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key) ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey ||
+        isEditingControl(event.target)
+      ) {
+        return;
+      }
+      const band = bandRef.current;
+      if (!band) return;
+      const rect = band.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      event.preventDefault();
+      const pixels = event.shiftKey ? 10 : 1;
+      setSnapGuides([]);
+      setLayout((current) => {
+        const next: HeaderFooterCanvasLayout = {
+          version: 1,
+          elements: current.elements.map((element) =>
+            element.id === selectedId
+              ? nudgeHeaderFooterElement({
+                  element,
+                  direction: event.key as "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown",
+                  pixels,
+                  canvasWidth: rect.width,
+                  canvasHeight: rect.height,
+                })
+              : element,
+          ),
+        };
+        keyboardNudgeRef.current = { layout: next, dirty: true };
+        return next;
+      });
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+        commitKeyboardNudge();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      commitKeyboardNudge();
+    };
+  }, [field, onPatch, readOnly, selectedId]);
 
   const addElement = (
     type: HeaderFooterCanvasElement["type"],
@@ -251,7 +333,7 @@ export function HeaderFooterLayoutEditor({
         if (ev.pointerId !== pointerId) return;
         const dxPct = ((ev.clientX - startX) / rect.width) * 100;
         const dyPct = ((ev.clientY - startY) / rect.height) * 100;
-        latest =
+        const raw =
           mode === "move"
             ? normalizeElementBounds({
                 ...start,
@@ -263,6 +345,18 @@ export function HeaderFooterLayoutEditor({
                 width_pct: start.width_pct + dxPct,
                 height_pct: start.height_pct + dyPct,
               });
+        const snapped = snapHeaderFooterElement({
+          element: raw,
+          otherElements: layout.elements.filter((candidate) => candidate.id !== element.id),
+          mode,
+          thresholdXPct: (7 / Math.max(1, rect.width)) * 100,
+          thresholdYPct: (7 / Math.max(1, rect.height)) * 100,
+          gridEnabled,
+          gridSizePct: 5,
+          snapEnabled,
+        });
+        latest = normalizeElementBounds(snapped.element);
+        setSnapGuides(snapped.guides);
         setLayout((prev) => ({
           version: 1,
           elements: prev.elements.map((el) => (el.id === element.id ? latest : el)),
@@ -275,6 +369,7 @@ export function HeaderFooterLayoutEditor({
         target.removeEventListener("pointermove", onMove);
         target.removeEventListener("pointerup", onUp);
         target.removeEventListener("pointercancel", onUp);
+        setSnapGuides([]);
         const next = {
           version: 1 as const,
           elements: layout.elements.map((el) => (el.id === element.id ? latest : el)),
@@ -289,11 +384,30 @@ export function HeaderFooterLayoutEditor({
   };
 
   const bandPct = Math.min(34, Math.max(5, (Math.max(24, height) / PAGE_BASELINE_PX) * 100));
+  const customFontCss = layout.elements
+    .filter((element) => element.font_family && element.font_url)
+    .map(
+      (element) =>
+        `@font-face{font-family:"${cssString(element.font_family!)}";src:url("${cssString(element.font_url!)}");font-display:swap;}`,
+    )
+    .join("\n");
 
   return (
     <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]">
+      {customFontCss ? <style>{customFontCss}</style> : null}
       <div className="min-w-0 rounded-md border bg-card">
-        <div className="flex flex-wrap items-center gap-1.5 border-b bg-muted/25 p-2">
+        <div className="sticky top-0 z-30 border-b border-[#c8c6c4] bg-[#f5f5f5] shadow-[0_2px_5px_rgba(0,0,0,0.12)]">
+          <div className="flex h-8 items-end gap-1 overflow-x-auto border-b border-[#dedede] bg-white px-2">
+            <span className="border-b-2 border-[#185abd] px-3 py-1.5 text-[11px] font-semibold text-[#185abd]">
+              Página Inicial
+            </span>
+            <span className="px-3 py-1.5 text-[11px] text-neutral-500">Inserir</span>
+            <span className="px-3 py-1.5 text-[11px] text-neutral-500">Layout</span>
+            <span className="ml-auto px-2 py-1.5 text-[10px] text-neutral-400">
+              {region === "header" ? "Ferramentas de Cabeçalho" : "Ferramentas de Rodapé"}
+            </span>
+          </div>
+          <div className="flex min-w-max items-center gap-1 overflow-x-auto border-b bg-[#f8f8f8] px-2 py-1.5">
           <Button
             type="button"
             size="sm"
@@ -413,6 +527,26 @@ export function HeaderFooterLayoutEditor({
             </PopoverContent>
           </Popover>
           <div className="mx-1 h-6 w-px bg-border" />
+          <IconButton
+            title="Exibir grade de alinhamento"
+            active={gridEnabled}
+            disabled={readOnly}
+            onClick={() => setGridEnabled((current) => !current)}
+          >
+            <Grid3X3 className="h-4 w-4" />
+          </IconButton>
+          <IconButton
+            title="Encaixe automático"
+            active={snapEnabled}
+            disabled={readOnly}
+            onClick={() => {
+              setSnapEnabled((current) => !current);
+              setSnapGuides([]);
+            }}
+          >
+            <Magnet className="h-4 w-4" />
+          </IconButton>
+          <div className="mx-1 h-6 w-px bg-border" />
           <IconButton title="Trazer para frente" disabled={!selected || readOnly} onClick={() => changeLayer("front")}>
             <BringToFront className="h-4 w-4" />
           </IconButton>
@@ -431,6 +565,12 @@ export function HeaderFooterLayoutEditor({
           <IconButton title="Remover" disabled={!selected || readOnly} onClick={deleteSelected}>
             <Trash2 className="h-4 w-4" />
           </IconButton>
+          </div>
+          <div className="flex border-t border-neutral-200 bg-[#f8f8f8] px-3 py-0.5 text-[9px] text-neutral-500">
+            <span className="pr-52">Inserir elementos</span>
+            <span>Organizar e editar camadas</span>
+            <span className="ml-auto">Setas: 1 px · Shift + setas: 10 px</span>
+          </div>
         </div>
         <div className="overflow-auto bg-[#e7e6e6] p-4">
           <div
@@ -443,10 +583,45 @@ export function HeaderFooterLayoutEditor({
                 "absolute left-0 right-0 overflow-hidden bg-white ring-1 ring-inset ring-primary/40",
                 region === "header" ? "top-0" : "bottom-0",
               )}
-              style={{ height: `${bandPct}%` }}
-              onPointerDown={() => setSelectedId(null)}
+              style={{
+                height: `${bandPct}%`,
+                ...(gridEnabled
+                  ? {
+                      backgroundImage:
+                        "linear-gradient(to right, rgba(24,90,189,.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(24,90,189,.12) 1px, transparent 1px)",
+                      backgroundSize: "5% 5%",
+                    }
+                  : {}),
+              }}
+              onPointerDown={() => {
+                setSelectedId(null);
+                setSnapGuides([]);
+              }}
             >
               <div className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-dashed border-neutral-300" />
+              {snapGuides.map((guide) =>
+                guide.axis === "x" ? (
+                  <div
+                    key={`x-${guide.position_pct}`}
+                    className="pointer-events-none absolute bottom-0 top-0 z-[1000] border-l border-dashed border-fuchsia-500"
+                    style={{ left: `${guide.position_pct}%` }}
+                  >
+                    <span className="absolute left-1 top-1 rounded bg-fuchsia-600 px-1 py-0.5 text-[8px] font-semibold text-white">
+                      {Math.round(guide.position_pct)}
+                    </span>
+                  </div>
+                ) : (
+                  <div
+                    key={`y-${guide.position_pct}`}
+                    className="pointer-events-none absolute left-0 right-0 z-[1000] border-t border-dashed border-fuchsia-500"
+                    style={{ top: `${guide.position_pct}%` }}
+                  >
+                    <span className="absolute left-1 top-1 rounded bg-fuchsia-600 px-1 py-0.5 text-[8px] font-semibold text-white">
+                      {Math.round(guide.position_pct)}
+                    </span>
+                  </div>
+                ),
+              )}
               {sortedElements.map((element) => (
                 <HeaderFooterCanvasElementView
                   key={element.id}
@@ -471,7 +646,7 @@ export function HeaderFooterLayoutEditor({
         </div>
       </div>
 
-      <aside className="space-y-3 rounded-md border bg-card p-3">
+      <aside className="space-y-3 rounded-md border bg-card p-3 xl:sticky xl:top-2 xl:max-h-[calc(100vh-1rem)] xl:self-start xl:overflow-auto">
         <div className="space-y-2">
           <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             <Hash className="h-3.5 w-3.5" /> Numeração
@@ -617,6 +792,7 @@ function HeaderFooterCanvasElementView({
           backgroundColor: element.background_color || "transparent",
           borderColor: element.border_color || "transparent",
           fontSize: `${element.font_size ?? 11}px`,
+          fontFamily: element.font_family || "Arial",
           fontWeight: element.font_weight ?? "normal",
           fontStyle: element.font_style ?? "normal",
           textAlign: element.text_align ?? "left",
@@ -708,6 +884,14 @@ function ElementInspector({
         </Field>
       )}
       <div className="grid grid-cols-2 gap-2">
+        <div className="col-span-2 grid gap-1">
+          <span className="text-[11px] text-muted-foreground">Fonte</span>
+          <DocumentFontPicker
+            value={element.font_family}
+            disabled={readOnly}
+            onChange={(font) => onChange({ font_family: font.family, font_url: font.url })}
+          />
+        </div>
         <NumberField label="X" value={element.x_pct} disabled={readOnly} onChange={(v) => onChange({ x_pct: v })} />
         <NumberField label="Y" value={element.y_pct} disabled={readOnly} onChange={(v) => onChange({ y_pct: v })} />
         <NumberField label="Larg." value={element.width_pct} disabled={readOnly} onChange={(v) => onChange({ width_pct: v })} />
@@ -884,6 +1068,10 @@ function clamp(value: unknown, min: number, max: number): number {
 
 function safeColor(value: string | undefined, fallback: string): string {
   return /^#[0-9a-f]{6}$/i.test(value || "") ? value! : fallback;
+}
+
+function cssString(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
 function visibilityPatchFor(

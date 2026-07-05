@@ -87,7 +87,7 @@ interface CompositorRichTextEditorProps {
   placeholder?: string;
   persistenceKey?: string;
   galleryImages?: BudgetImage[];
-  variant?: "default" | "word";
+  variant?: "default" | "ribbon" | "word";
   readOnly?: boolean;
   /** Pré-visualização na folha A4 (capa): marca d’água e logomarca do cliente. */
   wordPageWatermarkUrl?: string;
@@ -132,7 +132,7 @@ export const CompositorRichTextEditor = memo(function CompositorRichTextEditor({
   placeholder,
   persistenceKey,
   galleryImages,
-  variant = "default",
+  variant = "ribbon",
   readOnly,
   wordPageWatermarkUrl,
   wordPageWatermarkOpacity,

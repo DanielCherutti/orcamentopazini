@@ -51,3 +51,17 @@ test("renderTemplateVariables returns empty strings for missing and null values"
   assert.equal(rendered, "ABCD");
 });
 
+test("renders current date and time variables in the configured timezone", () => {
+  const context = buildTemplateVariableContext({
+    now: new Date("2026-04-30T18:35:00.000Z"),
+    timeZone: "America/Sao_Paulo",
+  });
+
+  const rendered = renderTemplateVariables(
+    "{{data.atual}} às {{hora.atual}}",
+    context,
+    { escapeText: false },
+  );
+
+  assert.equal(rendered, "30 DE ABRIL DE 2026 às 15:35");
+});

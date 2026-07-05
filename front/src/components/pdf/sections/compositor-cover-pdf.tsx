@@ -29,6 +29,10 @@ import {
 } from "@/lib/pdf/cover-pdf-band-layout";
 import { stripHtmlToText } from "@/lib/pdf/html-to-plain-text";
 import {
+  parsePdfInlineRuns,
+  pdfInlineRunStyle,
+} from "@/lib/pdf/pdf-rich-text-runs";
+import {
   HeaderFooterPdfLayer,
   hasAnyHeaderFooterPdfLayout,
   renderTextWithPageNumbers,
@@ -178,59 +182,6 @@ const styles = StyleSheet.create({
     lineHeight: 1.3,
   },
 });
-
-type InlineRun = { text: string; bold: boolean; italic: boolean };
-
-function decodeBasicEntities(input: string): string {
-  return input
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, "\"")
-    .replace(/&#39;/g, "'");
-}
-
-function parseInlineRuns(html: string): InlineRun[] {
-  const runs: InlineRun[] = [];
-  let bold = false;
-  let italic = false;
-  const re = /<br\s*\/?>|<\/?(strong|b|em|i)\b[^>]*>|<[^>]+>/gi;
-  let last = 0;
-  let m: RegExpExecArray | null;
-
-  const pushText = (raw: string) => {
-    const t = decodeBasicEntities(raw.replace(/\s+/g, " "));
-    if (!t) return;
-    runs.push({ text: t, bold, italic });
-  };
-
-  while ((m = re.exec(html)) !== null) {
-    if (m.index > last) pushText(html.slice(last, m.index));
-    const tag = m[0].toLowerCase();
-    if (tag.startsWith("<br")) {
-      runs.push({ text: "\n", bold, italic });
-    } else if (tag.startsWith("<strong") || tag.startsWith("<b")) {
-      bold = true;
-    } else if (tag.startsWith("</strong") || tag.startsWith("</b")) {
-      bold = false;
-    } else if (tag.startsWith("<em") || tag.startsWith("<i")) {
-      italic = true;
-    } else if (tag.startsWith("</em") || tag.startsWith("</i")) {
-      italic = false;
-    }
-    last = m.index + m[0].length;
-  }
-  if (last < html.length) pushText(html.slice(last));
-  return runs;
-}
-
-function runFontFamily(run: InlineRun): string {
-  if (run.bold && run.italic) return theme.fonts.boldOblique;
-  if (run.bold) return theme.fonts.bold;
-  if (run.italic) return theme.fonts.oblique;
-  return theme.fonts.body;
-}
 
 function resolveClientLogoPdfBox(
   coverProps: CoverBlockProps,
@@ -616,7 +567,7 @@ export function CompositorCoverPdfPage({
                       : seg.level === 2
                         ? styles.coverHeading2
                         : styles.coverHeading3;
-                  const runs = seg.rawHtml ? parseInlineRuns(seg.rawHtml) : [];
+                  const runs = seg.rawHtml ? parsePdfInlineRuns(seg.rawHtml) : [];
                   return (
                     <Text
                       key={`${i}-${j}`}
@@ -624,7 +575,7 @@ export function CompositorCoverPdfPage({
                     >
                       {runs.length
                         ? runs.map((r, k) => (
-                            <Text key={`${i}-${j}-${k}`} style={{ fontFamily: runFontFamily(r) }}>
+                            <Text key={`${i}-${j}-${k}`} style={pdfInlineRunStyle(r)}>
                               {r.text}
                             </Text>
                           ))
@@ -636,7 +587,7 @@ export function CompositorCoverPdfPage({
                   return <View key={`${i}-${j}`} style={styles.coverParagraphSpacer} wrap={false} />;
                 }
                 const align = seg.textAlign;
-                const runs = seg.rawHtml ? parseInlineRuns(seg.rawHtml) : [];
+                const runs = seg.rawHtml ? parsePdfInlineRuns(seg.rawHtml) : [];
                 return (
                   <Text
                     key={`${i}-${j}`}
@@ -644,7 +595,7 @@ export function CompositorCoverPdfPage({
                   >
                     {runs.length
                       ? runs.map((r, k) => (
-                          <Text key={`${i}-${j}-${k}`} style={{ fontFamily: runFontFamily(r) }}>
+                          <Text key={`${i}-${j}-${k}`} style={pdfInlineRunStyle(r)}>
                             {r.text}
                           </Text>
                         ))
