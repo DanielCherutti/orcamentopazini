@@ -146,6 +146,12 @@ export function collectRawPdfImageUrlsForPdf(
     for (const src of collectCompositorHtmlImageUrls(compositorPdf)) {
         addUrl(set, src);
     }
+    for (const src of collectImgSrcFromHtml(String(budget.quote_note_above ?? ""))) {
+        addUrl(set, src);
+    }
+    for (const src of collectImgSrcFromHtml(String(budget.quote_note_below ?? ""))) {
+        addUrl(set, src);
+    }
     const imagesByBlock = compositorPdf?.imagesByBlock ?? {};
     for (const arr of Object.values(imagesByBlock)) {
         for (const img of arr ?? []) {
