@@ -22,6 +22,9 @@ export type CoverPdfTextSegment =
           /** HTML interno do bloco (para renderização rica no PDF). */
           rawHtml?: string;
           textAlign?: "left" | "center" | "right" | "justify";
+          lineHeight?: number;
+          marginTopPt?: number;
+          marginBottomPt?: number;
           isEmpty?: boolean;
       }
     | {
@@ -32,6 +35,9 @@ export type CoverPdfTextSegment =
           /** HTML interno do bloco (para renderização rica no PDF). */
           rawHtml?: string;
           textAlign?: "left" | "center" | "right" | "justify";
+          lineHeight?: number;
+          marginTopPt?: number;
+          marginBottomPt?: number;
       };
 
 function parseTextAlignFromAttrs(attrs: string): "left" | "center" | "right" | "justify" | undefined {
@@ -40,6 +46,18 @@ function parseTextAlignFromAttrs(attrs: string): "left" | "center" | "right" | "
         attrs.match(/\balign\s*=\s*["']?(left|center|right|justify)/i);
     if (!m) return undefined;
     return m[1].toLowerCase() as "left" | "center" | "right" | "justify";
+}
+
+function parseParagraphLayoutFromAttrs(attrs: string) {
+    const lineHeightRaw = attrs.match(/line-height\s*:\s*(\d*\.?\d+)/i)?.[1];
+    const lineHeight = Number(lineHeightRaw);
+    const marginTopRaw = attrs.match(/margin-top\s*:\s*([^;"']+)/i)?.[1];
+    const marginBottomRaw = attrs.match(/margin-bottom\s*:\s*([^;"']+)/i)?.[1];
+    return {
+        lineHeight: Number.isFinite(lineHeight) && lineHeight >= 0.8 && lineHeight <= 4 ? lineHeight : undefined,
+        marginTopPt: parseCssLengthToPt(marginTopRaw),
+        marginBottomPt: parseCssLengthToPt(marginBottomRaw),
+    };
 }
 
 function parseCssLengthToPt(raw: string | undefined): number | undefined {
@@ -142,6 +160,7 @@ export function splitCoverHtmlFragmentToSegments(
     while ((m = re.exec(html)) !== null) {
         const tag = m[1].toLowerCase();
         const attrs = m[2];
+        const paragraphLayout = parseParagraphLayoutFromAttrs(attrs);
         const inner = m[3];
         const preserveEmpty = options?.preserveEmptyParagraphs === true;
         const text = sanitizeTextForPdf(stripHtmlToText(inner));
@@ -153,6 +172,7 @@ export function splitCoverHtmlFragmentToSegments(
                         text: "",
                         rawHtml: inner,
                         textAlign: parseTextAlignFromAttrs(attrs),
+                        ...paragraphLayout,
                         isEmpty: true,
                     });
                 }
@@ -163,12 +183,20 @@ export function splitCoverHtmlFragmentToSegments(
                 text,
                 rawHtml: inner,
                 textAlign: parseTextAlignFromAttrs(attrs),
+                ...paragraphLayout,
                 isEmpty: false,
             });
         } else {
             if (!text.trim()) continue;
             const level = (tag === "h1" ? 1 : tag === "h2" ? 2 : 3) as 1 | 2 | 3;
-            segments.push({ kind: "heading", level, text, rawHtml: inner, textAlign: parseTextAlignFromAttrs(attrs) });
+            segments.push({
+                kind: "heading",
+                level,
+                text,
+                rawHtml: inner,
+                textAlign: parseTextAlignFromAttrs(attrs),
+                ...paragraphLayout,
+            });
         }
     }
     if (segments.length === 0) {

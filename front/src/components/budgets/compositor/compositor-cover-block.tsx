@@ -31,7 +31,7 @@ import { getBudgetShellAction } from "@/actions/budget-actions";
 import { getDeliveryCompositorShellAction } from "@/actions/delivery-project-actions";
 import { useCompositorRuntime } from "./compositor-runtime-context";
 import { getCustomerAction } from "@/actions/client-actions";
-import type { BudgetBlock } from "@/types/budget-compositor-types";
+import type { BudgetBlock, HeaderFooterBlockProps } from "@/types/budget-compositor-types";
 import type { CoverBlockProps } from "@/types/budget-compositor-types";
 import type { Budget } from "@/types/budget-types";
 import { toast } from "@/lib/toast";
@@ -45,6 +45,7 @@ import {
   type TemplateVariableContext,
 } from "@/lib/model-variables";
 import { LogoLibraryDialog } from "@/components/clients/logo-library-dialog";
+import { useCompositorDocument } from "./compositor-document-context";
 
 export function CompositorCoverBlock({
   block,
@@ -56,6 +57,9 @@ export function CompositorCoverBlock({
   isReadOnly?: boolean;
 }) {
   const { actions, kind } = useCompositorRuntime();
+  const documentContext = useCompositorDocument();
+  const pageLayoutProps = documentContext?.roots.find((root) => root.type === "header_footer")
+    ?.props as HeaderFooterBlockProps | undefined;
   const [props, setProps] = useState<CoverBlockProps>(() =>
     mergeCoverDocumentProps(block.props as Record<string, unknown>)
   );
@@ -526,6 +530,12 @@ export function CompositorCoverBlock({
               ? `Código do Orçamento: ${budget.code.trim()}`
               : undefined
           }
+          wordPageMarginsCm={{
+            top: pageLayoutProps?.page_margin_top_cm,
+            right: pageLayoutProps?.page_margin_right_cm,
+            bottom: pageLayoutProps?.page_margin_bottom_cm,
+            left: pageLayoutProps?.page_margin_left_cm,
+          }}
           wordPageWatermarkUrl={props.cover_watermark_url?.trim() || undefined}
           wordPageWatermarkOpacity={props.cover_watermark_opacity ?? 0.12}
           wordPageClientLogo={

@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { CompositorRichTextEditor } from "@/components/budgets/compositor/compositor-rich-text-editor";
+import { useDebouncedCallback } from "use-debounce";
 import {
     ChevronDown,
     ChevronRight,
@@ -155,6 +156,11 @@ function CollapsibleTextBlock({
     disabled: boolean;
 }) {
     const [open, setOpen] = useState(false);
+    const persistDebounced = useDebouncedCallback((html: string) => onPersist(html), 500);
+    const handleChange = (html: string) => {
+        onChange(html);
+        persistDebounced(html);
+    };
     return (
         <div className="overflow-hidden rounded-2xl border border-border/70 bg-card/80 shadow-sm ring-1 ring-black/[0.03] backdrop-blur-sm dark:ring-white/[0.04]">
             <button
@@ -177,14 +183,15 @@ function CollapsibleTextBlock({
                 <span className="text-foreground/90">{title}</span>
             </button>
             {open && (
-                <Textarea
+                <div className="max-h-[520px] min-h-[150px] overflow-auto border-t border-border/50 bg-muted/10">
+                  <CompositorRichTextEditor
                     value={value}
-                    onChange={(e) => onChange(e.target.value)}
-                    onBlur={(e) => onPersist(e.currentTarget.value)}
-                    disabled={disabled}
+                    onChange={handleChange}
+                    readOnly={disabled}
+                    variant="ribbon"
                     placeholder="Texto opcional…"
-                    className="min-h-[120px] resize-y rounded-none border-0 border-t border-border/50 bg-muted/20 px-4 py-3 text-sm focus-visible:ring-0"
-                />
+                  />
+                </div>
             )}
         </div>
     );

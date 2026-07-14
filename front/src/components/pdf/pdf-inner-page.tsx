@@ -17,6 +17,13 @@ import { pdfInnerRunningHeaderShouldShow } from "@/lib/pdf/pdf-proposal-header";
 import { proxyPdfImageSrc, type PdfEmbeddedImages } from "@/lib/pdf/pdf-image-src";
 import { sanitizeTextForPdf } from "@/lib/pdf/sanitize-pdf-text";
 import type { PdfInnerPageCommonProps } from "@/lib/pdf/pdf-compositor-document-shell";
+import {
+    centeredContainBox,
+    cmToPt,
+    documentUsableAreaPt,
+    normalizeDocumentMargins,
+    ptToCm,
+} from "@/lib/document-page-layout";
 
 export type PdfPaginationCollector = {
     segmentStartPages: Record<string, number>;
@@ -27,7 +34,6 @@ export const PDF_PAGE_H = 841.89;
 export const INNER_PAD = 35;
 const INNER_HEADER_RESERVE = 108;
 const INNER_FOOTER_RESERVE = 44;
-const INNER_PAGE_H = PDF_PAGE_H;
 const EDITOR_A4_HEIGHT_PX = 1122;
 const EDITOR_PX_TO_PT = PDF_PAGE_H / EDITOR_A4_HEIGHT_PX;
 
@@ -35,21 +41,6 @@ function editorBandHeightToPt(value: unknown, fallbackPx: number): number {
     const n = typeof value === "number" ? value : Number(value);
     const px = Number.isFinite(n) ? n : fallbackPx;
     return Math.max(18, Math.min(180, px * EDITOR_PX_TO_PT));
-}
-
-function resolvePdfWatermarkBox(
-    xPct: number,
-    yPct: number,
-    widthPct: number,
-    aspect: number,
-): { left: number; top: number; width: number; height: number } {
-    const safeAspect = aspect > 0 ? aspect : 1;
-    const wPct = Math.max(8, Math.min(95, widthPct));
-    const width = (wPct / 100) * PDF_PAGE_W;
-    const height = width / safeAspect;
-    const left = (xPct / 100) * PDF_PAGE_W;
-    const top = (yPct / 100) * PDF_PAGE_H;
-    return { left, top, width, height };
 }
 
 const styles = StyleSheet.create({
@@ -93,8 +84,6 @@ const styles = StyleSheet.create({
         right: INNER_PAD,
         minHeight: 98,
         paddingBottom: 8,
-        borderBottomWidth: 1,
-        borderBottomColor: "#e5e7eb",
     },
     runningFooterBand: {
         position: "absolute",
@@ -103,8 +92,6 @@ const styles = StyleSheet.create({
         right: INNER_PAD,
         minHeight: 36,
         paddingTop: 6,
-        borderTopWidth: 1,
-        borderTopColor: "#e5e7eb",
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
@@ -152,8 +139,6 @@ export function PdfInnerPage({
     innerHeaderHeight,
     innerFooterHeight,
     innerWatermarkScalePct,
-    innerWatermarkXPct,
-    innerWatermarkYPct,
     innerWatermarkWidthPct,
     innerWatermarkAspect,
     headerFooterProps,
@@ -200,19 +185,45 @@ export function PdfInnerPage({
     const footerReserve =
         showInnerFooterBand && hasInnerFooterContent ? customFooterReserve : 0;
 
-    const wmTop = headerReserve > 0 ? INNER_PAD + headerReserve : INNER_PAD;
-    const wmHeight = Math.max(40, INNER_PAGE_H - wmTop - (INNER_PAD + footerReserve));
+    const hasConfiguredMargins = [
+        headerFooterProps?.page_margin_top_cm,
+        headerFooterProps?.page_margin_right_cm,
+        headerFooterProps?.page_margin_bottom_cm,
+        headerFooterProps?.page_margin_left_cm,
+    ].some((value) => value !== undefined);
+    const legacyMarginCm = ptToCm(INNER_PAD);
+    const margins = normalizeDocumentMargins(
+        hasConfiguredMargins
+            ? {
+                  top: headerFooterProps?.page_margin_top_cm,
+                  right: headerFooterProps?.page_margin_right_cm,
+                  bottom: headerFooterProps?.page_margin_bottom_cm,
+                  left: headerFooterProps?.page_margin_left_cm,
+              }
+            : undefined,
+        { top: legacyMarginCm, right: legacyMarginCm, bottom: legacyMarginCm, left: legacyMarginCm },
+    );
+    const usableArea = documentUsableAreaPt({
+        margins,
+        headerPt: headerReserve,
+        footerPt: footerReserve,
+    });
+    const wmTop = usableArea.top;
+    const wmHeight = usableArea.height;
     const wmOpacity = Math.min(0.22, Math.max(docWatermarkOpacity, 0.08));
     const wmScale = Math.max(
         40,
         Math.min(220, Number.isFinite(innerWatermarkScalePct) ? Number(innerWatermarkScalePct) : 100),
     );
-    const wmBox = resolvePdfWatermarkBox(
-        Number(innerWatermarkXPct ?? 11),
-        Number(innerWatermarkYPct ?? 11),
-        Number(innerWatermarkWidthPct ?? 78),
-        Number(innerWatermarkAspect ?? 1),
-    );
+    const wmBox = centeredContainBox({
+        area: usableArea,
+        widthPercent: Number(innerWatermarkWidthPct ?? 78) * (wmScale / 100),
+        aspect: Number(innerWatermarkAspect ?? 1),
+    });
+    const pagePadTop = cmToPt(margins.top) + headerReserve;
+    const pagePadBottom = cmToPt(margins.bottom) + footerReserve;
+    const pagePadLeft = cmToPt(margins.left);
+    const pagePadRight = cmToPt(margins.right);
 
     return (
         <Page
@@ -223,9 +234,10 @@ export function PdfInnerPage({
                 styles.innerPageRoot,
                 styles.pageWithWatermark,
                 {
-                    paddingTop: INNER_PAD + headerReserve,
-                    paddingBottom: INNER_PAD + footerReserve,
-                    paddingHorizontal: INNER_PAD,
+                    paddingTop: pagePadTop,
+                    paddingBottom: pagePadBottom,
+                    paddingLeft: pagePadLeft,
+                    paddingRight: pagePadRight,
                 },
             ]}
         >
@@ -251,7 +263,6 @@ export function PdfInnerPage({
                                 top: wmBox.top,
                                 width: wmBox.width,
                                 height: wmBox.height,
-                                transform: `scale(${wmScale / 100})`,
                             },
                         ]}
                     />

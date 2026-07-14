@@ -619,11 +619,10 @@ function SceneImageCard({
                 <View
                     render={({ pageNumber }: { pageNumber: number }) => {
                         const key = `figure:${figureId}`;
-                        const prev = figurePageCollector.segmentStartPages[key];
-                        if (!Number.isFinite(prev) || pageNumber < prev) {
-                            // eslint-disable-next-line react-hooks/immutability -- coletor mutável usado pela primeira passada do React-PDF
-                            figurePageCollector.segmentStartPages[key] = pageNumber;
-                        }
+                        // O React-PDF pode chamar `render` durante paginações provisórias.
+                        // A última chamada corresponde à posição final deste cartão (não é `fixed`).
+                        // eslint-disable-next-line react-hooks/immutability -- coletor mutável usado pela primeira passada do React-PDF
+                        figurePageCollector.segmentStartPages[key] = pageNumber;
                         return null;
                     }}
                     /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-pdf */
@@ -636,11 +635,8 @@ function SceneImageCard({
                     style={{ fontSize: 0.1, lineHeight: 0.1, color: "#ffffff", opacity: 0 } as any}
                     render={({ pageNumber }) => {
                         const key = `figure:${figureId}`;
-                        const prev = figurePageCollector.segmentStartPages[key];
-                        if (!Number.isFinite(prev) || pageNumber < prev) {
-                            // eslint-disable-next-line react-hooks/immutability -- coletor mutável usado pela primeira passada do React-PDF
-                            figurePageCollector.segmentStartPages[key] = pageNumber;
-                        }
+                        // eslint-disable-next-line react-hooks/immutability -- fallback da coleta na paginação final
+                        figurePageCollector.segmentStartPages[key] = pageNumber;
                         return "";
                     }}
                 />

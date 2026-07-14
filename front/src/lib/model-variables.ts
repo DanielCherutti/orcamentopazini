@@ -36,6 +36,16 @@ export const TEMPLATE_VARIABLE_TOKENS: TemplateVariableToken[] = [
     group: "Cliente",
   },
   {
+    token: "{{cliente.cidade}}",
+    label: "Cidade",
+    group: "Cliente",
+  },
+  {
+    token: "{{cliente.bairro}}",
+    label: "Bairro",
+    group: "Cliente",
+  },
+  {
     token: "{{orcamento.codigo}}",
     label: "Código do orçamento",
     group: "Orçamento",
@@ -66,6 +76,8 @@ export type TemplateVariableContext = {
     nome_fantasia?: string | null;
     cnpj?: string | null;
     endereco?: string | null;
+    cidade?: string | null;
+    bairro?: string | null;
     logo?: string | null;
     adicional?: Record<string, unknown> | null;
   } | null;
@@ -142,6 +154,8 @@ export function buildTemplateVariableContext(params: {
       nome_fantasia: customer?.nome_fantasia || "",
       cnpj: customer?.cnpj || "",
       endereco: formatCustomerAddress(customer),
+      cidade: customer?.address?.city || customer?.city || "",
+      bairro: customer?.address?.neighborhood || "",
       logo: customer?.logo_url || "",
       adicional: customer?.informacoes_adicionais || {},
     },
@@ -219,6 +233,8 @@ function resolveVariable(
   if (normalizedPath === "cliente.nome_fantasia") return valueToString(context.cliente?.nome_fantasia);
   if (normalizedPath === "cliente.cnpj") return valueToString(context.cliente?.cnpj);
   if (normalizedPath === "cliente.endereco") return valueToString(context.cliente?.endereco);
+  if (normalizedPath === "cliente.cidade") return valueToString(context.cliente?.cidade);
+  if (normalizedPath === "cliente.bairro") return valueToString(context.cliente?.bairro);
   if (normalizedPath === "orcamento.codigo") return valueToString(context.orcamento?.codigo);
   if (normalizedPath === "data.atual") return valueToString(context.data?.atual);
   if (normalizedPath === "hora.atual") return valueToString(context.hora?.atual);
@@ -236,12 +252,28 @@ export function renderTemplateVariables(
   context: TemplateVariableContext,
   options?: RenderTemplateVariableOptions,
 ): string {
-  const source = String(input ?? "");
+  let source = String(input ?? "");
   if (!source.trim()) return source;
   const resolvedOptions: Required<RenderTemplateVariableOptions> = {
     logoMode: options?.logoMode ?? "img",
     escapeText: options?.escapeText ?? true,
   };
+  if (resolvedOptions.logoMode === "img") {
+    const logoUrl = safeLogoUrl(context.cliente?.logo);
+    source = source.replace(/<img\b[^>]*>/gi, (tag) => {
+      const srcMatch = tag.match(/\bsrc\s*=\s*(["'])(.*?)\1/i);
+      if (!srcMatch || !/\{\{\s*cliente\.logo\s*\}\}/i.test(srcMatch[2])) return tag;
+      if (!logoUrl) return "";
+      const withSource = tag.replace(srcMatch[0], `src=${srcMatch[1]}${escapeAttribute(logoUrl)}${srcMatch[1]}`);
+      if (/\bobject-fit\s*:/i.test(withSource)) return withSource;
+      if (/\bstyle\s*=\s*(["'])/i.test(withSource)) {
+        return withSource.replace(/\bstyle\s*=\s*(["'])/i, (_full, quote: string) =>
+          `style=${quote}object-fit: contain; max-width: 100%; `,
+        );
+      }
+      return withSource.replace(/\s*\/?\s*>$/, ' style="object-fit: contain; max-width: 100%;" />');
+    });
+  }
   return source.replace(VARIABLE_RE, (_full, path: string) => {
     const resolved = resolveVariable(path, context, resolvedOptions);
     if (!resolved) return "";

@@ -41,6 +41,13 @@ import {
   getLayoutsForPageScope,
   resolveHeaderFooterScopeMode,
 } from "@/lib/compositor/header-footer-layout";
+import {
+  DEFAULT_DOCUMENT_MARGINS_CM,
+  centeredContainBox,
+  cmToPt,
+  documentUsableAreaPt,
+  normalizeDocumentMargins,
+} from "@/lib/document-page-layout";
 
 /** Só URL HTTP(S) no HTML — nunca data URI (strings enormes quebram sanitize/split e o layout). */
 function rewriteImgSrcInHtml(html: string, publicBase?: string): string {
@@ -147,8 +154,6 @@ const styles = StyleSheet.create({
     right: BODY_PAD_H,
     minHeight: DEFAULT_COVER_HEADER_BAND_PT - 10,
     paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
     zIndex: 2,
   },
   coverFooterBand: {
@@ -158,8 +163,6 @@ const styles = StyleSheet.create({
     right: BODY_PAD_H,
     minHeight: DEFAULT_COVER_FOOTER_BAND_PT - 8,
     paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -210,27 +213,6 @@ function resolveClientLogoPdfBox(
   const top = padTop + (yPct / 100) * innerH;
 
   return { left, top, width: w, height: h };
-}
-
-function resolveWatermarkPdfBox(
-  xPct: number,
-  yPct: number,
-  widthPct: number,
-  aspect: number,
-): { left: number; top: number; width: number; height: number } {
-  const safeAspect = aspect > 0 ? aspect : 1;
-  const wPct = Math.max(8, Math.min(95, widthPct));
-  const x = Math.max(0, Math.min(100 - wPct, xPct));
-  const w = (wPct / 100) * PAGE_W;
-  const h = w / safeAspect;
-  const maxYPct = Math.max(0, 100 - (h / PAGE_H) * 100);
-  const y = Math.max(0, Math.min(maxYPct, yPct));
-  return {
-    left: (x / 100) * PAGE_W,
-    top: (y / 100) * PAGE_H,
-    width: w,
-    height: h,
-  };
 }
 
 function clampOpacity(value: number | undefined, fallback: number): number {
@@ -306,12 +288,6 @@ export function CompositorCoverPdfPage({
   const coverWatermarkScalePct = Math.max(
     40,
     Math.min(220, Number(headerFooterProps?.cover_watermark_scale_pct ?? 100) || 100),
-  );
-  const coverWatermarkBox = resolveWatermarkPdfBox(
-    Number(headerFooterProps?.cover_watermark_x_pct ?? 11),
-    Number(headerFooterProps?.cover_watermark_y_pct ?? 11),
-    Number(headerFooterProps?.cover_watermark_width_pct ?? 78),
-    Number(headerFooterProps?.cover_watermark_aspect ?? 1),
   );
   const wmResolved = proxyPdfImageSrc(
     coverWatermarkSource,
@@ -393,6 +369,44 @@ export function CompositorCoverPdfPage({
     ? (hasCoverFooterLayout ? footerReserve : BODY_PAD_V + footerReserve)
     : BODY_PAD_V;
 
+  const hasConfiguredMargins = [
+    headerFooterProps?.page_margin_top_cm,
+    headerFooterProps?.page_margin_right_cm,
+    headerFooterProps?.page_margin_bottom_cm,
+    headerFooterProps?.page_margin_left_cm,
+  ].some((value) => value !== undefined);
+  const margins = normalizeDocumentMargins(
+    hasConfiguredMargins
+      ? {
+          top: headerFooterProps?.page_margin_top_cm,
+          right: headerFooterProps?.page_margin_right_cm,
+          bottom: headerFooterProps?.page_margin_bottom_cm,
+          left: headerFooterProps?.page_margin_left_cm,
+        }
+      : undefined,
+    DEFAULT_DOCUMENT_MARGINS_CM,
+  );
+  const effectivePaddingTop = hasConfiguredMargins
+    ? cmToPt(margins.top) + (showCoverHeader ? headerReserve : 0)
+    : pagePaddingTop;
+  const effectivePaddingBottom = hasConfiguredMargins
+    ? cmToPt(margins.bottom) + (showCoverFooterBand ? footerReserve : 0)
+    : pagePaddingBottom;
+  const effectivePaddingLeft = hasConfiguredMargins ? cmToPt(margins.left) : BODY_PAD_H;
+  const effectivePaddingRight = hasConfiguredMargins ? cmToPt(margins.right) : BODY_PAD_H;
+  const coverUsableArea = documentUsableAreaPt({
+    margins,
+    headerPt: showCoverHeader ? headerReserve : 0,
+    footerPt: showCoverFooterBand ? footerReserve : 0,
+  });
+  const coverWatermarkBox = centeredContainBox({
+    area: coverUsableArea,
+    widthPercent:
+      Number(headerFooterProps?.cover_watermark_width_pct ?? 78) *
+      (coverWatermarkScalePct / 100),
+    aspect: Number(headerFooterProps?.cover_watermark_aspect ?? 1),
+  });
+
   /** Marca d’água não pode ocupar a página inteira: cobria cabeçalho/rodapé no PDF (ordem de pintura). */
   const clientLogoBox = resolveClientLogoPdfBox(
     coverProps,
@@ -407,7 +421,12 @@ export function CompositorCoverPdfPage({
       size="A4"
       style={[
         styles.page,
-        { paddingTop: pagePaddingTop, paddingBottom: pagePaddingBottom },
+        {
+          paddingTop: effectivePaddingTop,
+          paddingBottom: effectivePaddingBottom,
+          paddingLeft: effectivePaddingLeft,
+          paddingRight: effectivePaddingRight,
+        },
       ]}
     >
       {/* Marca d’água primeiro; cabeçalho/rodapé com zIndex maior para não ficarem ocultos. */}
@@ -425,7 +444,6 @@ export function CompositorCoverPdfPage({
                 top: coverWatermarkBox.top,
                 width: coverWatermarkBox.width,
                 height: coverWatermarkBox.height,
-                transform: `scale(${coverWatermarkScalePct / 100})`,
               },
             ]}
           />
@@ -560,6 +578,12 @@ export function CompositorCoverPdfPage({
           return (
             <React.Fragment key={`cover-txt-${i}`}>
               {segs.map((seg, j) => {
+                const paragraphStyle = {
+                  ...(seg.textAlign ? { textAlign: seg.textAlign } : {}),
+                  ...(seg.lineHeight ? { lineHeight: seg.lineHeight } : {}),
+                  ...(seg.marginTopPt ? { marginTop: seg.marginTopPt } : {}),
+                  ...(seg.marginBottomPt ? { marginBottom: seg.marginBottomPt } : {}),
+                };
                 if (seg.kind === "heading") {
                   const hs =
                     seg.level === 1
@@ -571,7 +595,7 @@ export function CompositorCoverPdfPage({
                   return (
                     <Text
                       key={`${i}-${j}`}
-                      style={seg.textAlign ? [hs, { textAlign: seg.textAlign }] : hs}
+                      style={[hs, paragraphStyle]}
                     >
                       {runs.length
                         ? runs.map((r, k) => (
@@ -586,12 +610,11 @@ export function CompositorCoverPdfPage({
                 if (seg.isEmpty) {
                   return <View key={`${i}-${j}`} style={styles.coverParagraphSpacer} wrap={false} />;
                 }
-                const align = seg.textAlign;
                 const runs = seg.rawHtml ? parsePdfInlineRuns(seg.rawHtml) : [];
                 return (
                   <Text
                     key={`${i}-${j}`}
-                    style={align ? [styles.coverText, { textAlign: align }] : styles.coverText}
+                    style={[styles.coverText, paragraphStyle]}
                   >
                     {runs.length
                       ? runs.map((r, k) => (

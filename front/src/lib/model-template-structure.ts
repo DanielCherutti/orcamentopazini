@@ -142,7 +142,7 @@ function defaultBudgetStructure(content?: string): ModelTemplateStructure {
         type: "session",
         label: "APRESENTAÇÃO",
         order_index: 2,
-        props: { description: "" },
+        props: { description: "", page_break_before: false },
       },
       {
         id: createId("texto"),

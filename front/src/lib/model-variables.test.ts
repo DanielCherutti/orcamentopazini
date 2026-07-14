@@ -42,6 +42,38 @@ test("renderTemplateVariables replaces required customer and budget variables", 
   assert.match(rendered, /<img src="\/api\/uploads\/customers\/pazini\/logos\/logo\.png"/);
 });
 
+test("renderTemplateVariables uses structured city and neighborhood fields", () => {
+  const context = buildTemplateVariableContext({
+    customer: {
+      name: "Cliente",
+      city: "Cidade legado",
+      address: { city: "Ponta Grossa", neighborhood: "Centro" },
+    } as never,
+  });
+
+  assert.equal(
+    renderTemplateVariables("{{cliente.cidade}} / {{cliente.bairro}}", context),
+    "Ponta Grossa / Centro",
+  );
+  assert.equal(
+    renderTemplateVariables("{{cliente.cidade}} / {{cliente.bairro}}", {
+      cliente: { cidade: null, bairro: null },
+    }),
+    " / ",
+  );
+});
+
+test("renderTemplateVariables preserves a client logo placeholder dimensions", () => {
+  const rendered = renderTemplateVariables(
+    '<p><img src="{{cliente.logo}}" width="240" height="90" style="width: 240px; height: 90px" /></p>',
+    { cliente: { logo: "/api/uploads/logo.png" } },
+  );
+  assert.match(rendered, /src="\/api\/uploads\/logo\.png"/);
+  assert.match(rendered, /width="240"/);
+  assert.match(rendered, /height="90"/);
+  assert.match(rendered, /object-fit: contain/);
+});
+
 test("renderTemplateVariables returns empty strings for missing and null values", () => {
   const rendered = renderTemplateVariables(
     "A{{cliente.razao_social}}B{{cliente.adicional.nao_existe}}C{{orcamento.codigo}}D",

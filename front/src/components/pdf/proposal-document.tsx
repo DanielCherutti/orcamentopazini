@@ -941,9 +941,11 @@ type PdfSegment =
     | { kind: "figures" }
     | { kind: "quote" }
     | { kind: "detail" }
-    | { kind: "session"; block: BudgetBlock };
+    | { kind: "sessions"; blocks: BudgetBlock[] };
 
 type SessionPdfContentPart = {
+    sessionRoot: BudgetBlock;
+    isFirstSessionPart: boolean;
     row: SessionPrintRow;
     rowIndex: number;
     partIndex: number;
@@ -1036,7 +1038,13 @@ function buildPdfSegmentsFromCompositorRoots(
             b.type === "session" &&
             hasPrintableSessionSubtree(b, itemsByBlock, imagesByBlock)
         ) {
-            segments.push({ kind: "session", block: b });
+            const previous = segments[segments.length - 1];
+            const shouldFlowWithPrevious = b.props?.page_break_before === false;
+            if (shouldFlowWithPrevious && previous?.kind === "sessions") {
+                previous.blocks.push(b);
+            } else {
+                segments.push({ kind: "sessions", blocks: [b] });
+            }
         }
     }
     if (!placedQuote && !placedDetail) {
@@ -1068,8 +1076,8 @@ function assignPdfSegmentPages(segments: PdfSegment[]): {
         } else if (seg.kind === "detail") {
             detailPage = p;
             p += 1;
-        } else if (seg.kind === "session") {
-            sessionPages.set(seg.block.id, p);
+        } else if (seg.kind === "sessions") {
+            seg.blocks.forEach((block) => sessionPages.set(block.id, p));
             p += 1;
         }
     }
@@ -1536,11 +1544,17 @@ export const ProposalDocument = ({
             const segs = splitCoverHtmlFragmentToSegments(b.content, { preserveEmptyParagraphs: true });
             segs.forEach((seg, j) => {
                 const runs = seg.rawHtml ? parsePdfInlineRuns(seg.rawHtml) : [];
+                const paragraphStyle = {
+                    ...(seg.textAlign ? { textAlign: seg.textAlign } : {}),
+                    ...(seg.lineHeight ? { lineHeight: seg.lineHeight } : {}),
+                    ...(seg.marginTopPt ? { marginTop: seg.marginTopPt } : {}),
+                    ...(seg.marginBottomPt ? { marginBottom: seg.marginBottomPt } : {}),
+                };
                 if (seg.kind === 'heading') {
                     nodes.push(
                         <Text
                             key={`${rowKey}-h-${i}-${j}`}
-                            style={seg.textAlign ? [styles.sessionRichHeading, { textAlign: seg.textAlign }] : styles.sessionRichHeading}
+                            style={[styles.sessionRichHeading, paragraphStyle]}
                         >
                             {runs.length
                                 ? runs.map((run, runIndex) => (
@@ -1563,7 +1577,7 @@ export const ProposalDocument = ({
                 nodes.push(
                     <Text
                         key={`${rowKey}-p-${i}-${j}`}
-                        style={seg.textAlign ? [styles.sessionRichParagraph, { textAlign: seg.textAlign }] : styles.sessionRichParagraph}
+                        style={[styles.sessionRichParagraph, paragraphStyle]}
                     >
                         {seg.textAlign === 'center' || seg.textAlign === 'right'
                             ? null
@@ -2124,26 +2138,28 @@ export const ProposalDocument = ({
                         />
                     </InnerPdfPage>
                 );
-            case "session": {
-                const sessionRoot = seg.block;
-                const rows = collectSessionPrintRows(
+            case "sessions": {
+                const sessionRoots = seg.blocks;
+                const sessionPages: SessionPdfContentPart[][] = [[]];
+                const currentSessionPage = () => sessionPages[sessionPages.length - 1];
+                sessionRoots.forEach((sessionRoot) => {
+                  const rows = collectSessionPrintRows(
                     sessionRoot,
                     compositorPdf?.items || {},
                     (compositorPdf?.imagesByBlock as Record<string, Array<{ url?: string; composed_url?: string }>>) || {}
-                );
-                const visibleRows = rows.filter((row, idx) => {
+                  );
+                  const visibleRows = rows.filter((row, idx) => {
                     const isRootSessionRow = idx === 0 && row.depth === 0;
                     if (!isRootSessionRow) return true;
                     return (
-                        htmlHasVisibleText(row.html) ||
-                        htmlContainsPageBreak(row.html) ||
-                        Boolean(row.extraText?.trim()) ||
-                        row.blockImageUrls.length > 0
+                      htmlHasVisibleText(row.html) ||
+                      htmlContainsPageBreak(row.html) ||
+                      Boolean(row.extraText?.trim()) ||
+                      row.blockImageUrls.length > 0
                     );
-                });
-                const sessionPages: SessionPdfContentPart[][] = [[]];
-                const currentSessionPage = () => sessionPages[sessionPages.length - 1];
-                visibleRows.forEach((row, idx) => {
+                  });
+                  let isFirstSessionPart = true;
+                  visibleRows.forEach((row, idx) => {
                     const rawParts = row.html?.trim()
                         ? splitSessionHtmlIntoPdfParts(row.html)
                         : [];
@@ -2163,6 +2179,8 @@ export const ProposalDocument = ({
                         }
 
                         currentSessionPage().push({
+                            sessionRoot,
+                            isFirstSessionPart,
                             row,
                             rowIndex: idx,
                             partIndex: partIdx,
@@ -2171,31 +2189,43 @@ export const ProposalDocument = ({
                             contentCount,
                             hasManualPageBreak,
                         });
+                        isFirstSessionPart = false;
                         contentIndex += 1;
                     });
+                  });
+                  if (visibleRows.length === 0) {
+                    currentSessionPage().push({
+                      sessionRoot,
+                      isFirstSessionPart: true,
+                      row: {
+                        depth: 0,
+                        title: sessionRoot.label || "Seção",
+                        html: "",
+                        extraText: "",
+                        blockImageUrls: [],
+                      },
+                      rowIndex: 0,
+                      partIndex: 0,
+                      blocks: [],
+                      contentIndex: 0,
+                      contentCount: 1,
+                      hasManualPageBreak: false,
+                    });
+                  }
                 });
                 const nonEmptySessionPages = sessionPages.filter((page) => page.length > 0);
                 return (
-                    <React.Fragment key={`session-fragment-${sessionRoot.id}`}>
+                    <React.Fragment key={`session-fragment-${sessionRoots.map((root) => root.id).join("-")}`}>
                         {(nonEmptySessionPages.length > 0 ? nonEmptySessionPages : [[]]).map((pageRows, pageIdx) => (
                             <InnerPdfPage
-                                key={`session-page-${sessionRoot.id}-${pageIdx}`}
-                                pageKey={`session-page-${sessionRoot.id}-${pageIdx}`}
+                                key={`session-page-${sessionRoots[0]?.id ?? "empty"}-${pageIdx}`}
+                                pageKey={`session-page-${sessionRoots[0]?.id ?? "empty"}-${pageIdx}`}
                                 title=""
-                                paginationProbeKey={pageIdx === 0 ? `session:${sessionRoot.id}` : undefined}
+                                paginationProbeKey={pageIdx === 0 ? `session:${sessionRoots[0]?.id ?? "empty"}` : undefined}
                                 {...innerCommon}
                             >
-                                {pageIdx === 0 ? (
-                                    <Text style={styles.sessionTitle}>
-                                        {sanitizeTextForPdf(
-                                            `${sessionRoot.number ? `${sessionRoot.number} ` : ""}${(sessionRoot.label || "Seção").trim()}`
-                                        )}
-                                    </Text>
-                                ) : null}
-                                {visibleRows.length === 0 ? (
-                                    <Text style={styles.sessionRowText}>Sem conteúdo textual nesta seção.</Text>
-                                ) : (
-                                    pageRows.map((item) => {
+                                {pageRows.map((item) => {
+                                        const sessionRoot = item.sessionRoot;
                                         const isRootSessionRow = item.rowIndex === 0 && item.row.depth === 0;
                                         const isFirstContentPart = item.contentIndex === 0;
                                         const isLastContentPart = item.contentIndex === item.contentCount - 1;
@@ -2230,6 +2260,24 @@ export const ProposalDocument = ({
                                                     ...(item.hasManualPageBreak ? [{ borderBottomWidth: 0 }] : []),
                                                 ]}
                                             >
+                                                {item.isFirstSessionPart ? (
+                                                  <>
+                                                    {paginationCollector ? (
+                                                      <Text
+                                                        style={{ position: "absolute", opacity: 0, fontSize: 0.1 }}
+                                                        render={({ pageNumber }) => {
+                                                          paginationCollector.segmentStartPages[`session:${sessionRoot.id}`] = pageNumber;
+                                                          return "";
+                                                        }}
+                                                      />
+                                                    ) : null}
+                                                    <Text style={styles.sessionTitle}>
+                                                      {sanitizeTextForPdf(
+                                                        `${sessionRoot.number ? `${sessionRoot.number} ` : ""}${(sessionRoot.label || "Seção").trim()}`
+                                                      )}
+                                                    </Text>
+                                                  </>
+                                                ) : null}
                                                 {!isRootSessionRow && isFirstContentPart ? (
                                                     <Text style={styles.sessionRowTitle}>
                                                         {sanitizeTextForPdf(item.row.title)}
@@ -2265,8 +2313,7 @@ export const ProposalDocument = ({
                                                 ) : null}
                                             </View>
                                         );
-                                    })
-                                )}
+                                    })}
                             </InnerPdfPage>
                         ))}
                     </React.Fragment>
