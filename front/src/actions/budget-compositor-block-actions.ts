@@ -427,13 +427,16 @@ export async function addBlockAction(params: {
             orderIndex = Date.now();
         }
 
+        const initialProps = type === "session" && !parentId && props.page_break_before === undefined
+            ? { ...props, page_break_before: false }
+            : props;
         const raw = await db.create(new Table("budget_block")).content({
             budget_id: budgetRecordId,
             ...(parentId ? { parent_id: requireRecordId("budget_block", parentId) } : {}),
             type,
             label,
             order_index: orderIndex,
-            props: sanitizeCompositorBlockPropsForPersistence(type, props),
+            props: sanitizeCompositorBlockPropsForPersistence(type, initialProps),
         });
         const created = Array.isArray(raw) ? raw[0] : raw;
 

@@ -61,6 +61,7 @@ import { CompositorItemRow } from "./compositor-item-row";
 import { CompositorDocumentContext } from "./compositor-document-context";
 import { CompositorCoverBlock } from "./compositor-cover-block";
 import { HeaderFooterLayoutEditor } from "./header-footer-layout-editor";
+import { DocumentMarginControls } from "./document-margin-controls";
 import {
     migrateHeaderFooterLayoutsForScopeMode,
     resolveHeaderFooterScopeMode,
@@ -99,7 +100,9 @@ function SessionRenderer({
     block,
     budgetId,
     onRefresh,
+    isReadOnly,
 }: CompositorRendererProps) {
+    const { actions } = useCompositorRuntime();
     const handleSaveLabel = useBlockLabel(block, budgetId, onRefresh);
     const { description, handleChange } = useBlockDescription(
         block,
@@ -141,6 +144,22 @@ function SessionRenderer({
                     placeholder="Descrição da seção..."
                 />
             </CollapsibleEditorSection>
+            {isRoot ? (
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Checkbox
+                        checked={block.props?.page_break_before !== false}
+                        disabled={isReadOnly}
+                        onCheckedChange={async (checked) => {
+                            const result = await actions.updateBlockAction(block.id, budgetId, {
+                                props: { page_break_before: checked === true },
+                            });
+                            if (!result.success) toast.error(result.error || "Erro ao salvar quebra de página");
+                            else onRefresh();
+                        }}
+                    />
+                    Iniciar esta seção em uma nova página
+                </label>
+            ) : null}
         </div>
     );
 }
@@ -1275,6 +1294,11 @@ function HeaderFooterRenderer({
                         : "O PDF usa configurações independentes. Ao unificar, o layout da capa será usado como base para todas as páginas."}
                 </p>
             </div>
+            <DocumentMarginControls
+                props={props}
+                disabled={isReadOnly}
+                onPatch={(patch) => void handlePatch(patch)}
+            />
             {scopeMode === "all" ? (
                 renderPane("all")
             ) : (

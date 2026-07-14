@@ -74,6 +74,11 @@ export interface CoverBlockProps {
 }
 
 export interface HeaderFooterBlockProps {
+  /** Margens do conteúdo em centímetros. Ausentes = layout legado. */
+  page_margin_top_cm?: number;
+  page_margin_right_cm?: number;
+  page_margin_bottom_cm?: number;
+  page_margin_left_cm?: number;
   /** Define se cabeçalho/rodapé usam uma configuração única ou configurações separadas por tipo de página. */
   header_footer_scope_mode?: "all" | "separate";
   /** Controle principal da faixa superior da capa no PDF (bloco header_footer). */
@@ -256,6 +261,8 @@ export const DEFAULT_COVER_PROPS: CoverBlockProps = {
 export interface SessionBlockProps {
   collapsed?: boolean;
   description?: string; // HTML gerado pelo Tiptap
+  /** `undefined` preserva o comportamento legado: iniciar em nova página. */
+  page_break_before?: boolean;
 }
 
 export interface TextBlockProps {

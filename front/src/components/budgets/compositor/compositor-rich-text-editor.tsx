@@ -10,6 +10,7 @@ import { toast } from "@/lib/toast";
 import { getProductsAction } from "@/actions/product-actions";
 import type { Product } from "@/actions/product-actions";
 import type { BudgetImage } from "@/types/budget-types";
+import type { DocumentMarginsCm } from "@/lib/document-page-layout";
 
 // Inline mini product search (sem usar ProductSelector que tem seu próprio Popover interno)
 import {
@@ -104,6 +105,7 @@ interface CompositorRichTextEditorProps {
   };
   /** Texto fixo no canto inferior esquerdo da folha (ex.: código do orçamento). */
   wordPageBottomLeftText?: string;
+  wordPageMarginsCm?: Partial<DocumentMarginsCm>;
   wordPageClientLogo?: {
     url: string;
     readOnly: boolean;
@@ -139,6 +141,7 @@ export const CompositorRichTextEditor = memo(function CompositorRichTextEditor({
   wordPageWatermarkScalePct,
   wordPageWatermarkLayout,
   wordPageBottomLeftText,
+  wordPageMarginsCm,
   wordPageClientLogo,
   wordPageBands,
 }: CompositorRichTextEditorProps) {
@@ -300,6 +303,7 @@ export const CompositorRichTextEditor = memo(function CompositorRichTextEditor({
       wordPageWatermarkScalePct={wordPageWatermarkScalePct}
       wordPageWatermarkLayout={wordPageWatermarkLayout}
       wordPageBottomLeftText={wordPageBottomLeftText}
+      wordPageMarginsCm={wordPageMarginsCm}
       wordPageClientLogo={wordPageClientLogo}
       wordPageBands={wordPageBands}
     />

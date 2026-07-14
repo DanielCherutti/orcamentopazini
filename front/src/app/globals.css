@@ -320,6 +320,13 @@
   padding-right: 8mm;
 }
 
+.tiptap-content.word-page-margins:not(.word-band-mode) {
+  padding-top: var(--word-margin-top, 1.8cm);
+  padding-right: var(--word-margin-right, 2.2cm);
+  padding-bottom: var(--word-margin-bottom, 1.8cm);
+  padding-left: var(--word-margin-left, 2.2cm);
+}
+
 .tiptap-content.word-band-mode table.word-header-cols {
   position: relative;
   z-index: 1;

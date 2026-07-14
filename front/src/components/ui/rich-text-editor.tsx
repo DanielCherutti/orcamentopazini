@@ -31,6 +31,7 @@ import {
   DocumentFontPicker,
   type DocumentFontOption,
 } from '@/components/ui/document-font-picker';
+import { normalizeDocumentMargins, type DocumentMarginsCm } from '@/lib/document-page-layout';
 
 interface RichTextEditorProps {
   value: string;
@@ -73,6 +74,7 @@ interface RichTextEditorProps {
   };
   /** Só `variant="word"`: texto fixo no canto inferior esquerdo da folha. */
   wordPageBottomLeftText?: string;
+  wordPageMarginsCm?: Partial<DocumentMarginsCm>;
   /** Guias visuais de cabeçalho/corpo/rodapé no modo Word. */
   wordPageBands?: {
     headerHeight: number;
@@ -228,6 +230,38 @@ const FontFamilyMark = Mark.create({
   },
 });
 
+const ParagraphSpacingExtension = Extension.create({
+  name: "paragraphSpacing",
+  addGlobalAttributes() {
+    return [{
+      types: ["paragraph", "heading", "listItem"],
+      attributes: {
+        lineHeight: {
+          default: null,
+          parseHTML: (element) => (element as HTMLElement).style.lineHeight || null,
+          renderHTML: (attributes) => attributes.lineHeight
+            ? { style: `line-height: ${String(attributes.lineHeight)}` }
+            : {},
+        },
+        spaceBefore: {
+          default: null,
+          parseHTML: (element) => (element as HTMLElement).style.marginTop || null,
+          renderHTML: (attributes) => attributes.spaceBefore
+            ? { style: `margin-top: ${String(attributes.spaceBefore)}` }
+            : {},
+        },
+        spaceAfter: {
+          default: null,
+          parseHTML: (element) => (element as HTMLElement).style.marginBottom || null,
+          renderHTML: (attributes) => attributes.spaceAfter
+            ? { style: `margin-bottom: ${String(attributes.spaceAfter)}` }
+            : {},
+        },
+      },
+    }];
+  },
+});
+
 const formattingMarksPluginKey = new PluginKey<boolean>("formattingMarks");
 
 const FormattingMarksExtension = Extension.create({
@@ -357,24 +391,44 @@ function RulerCorner() {
 function RulerHorizontal({ className }: { className?: string }) {
   return (
     <div
-      className={cn('h-6 shrink-0 border border-l-0 border-neutral-500/45 bg-[#e8e8e8]', className)}
+      className={cn('relative h-6 shrink-0 overflow-hidden border border-l-0 border-neutral-500/45 bg-[#e8e8e8]', className)}
       style={{
         backgroundImage:
-          'repeating-linear-gradient(90deg, #e8e8e8 0px, #e8e8e8 7px, #b0b0b0 7px, #e8e8e8 8px)',
+          'repeating-linear-gradient(90deg, transparent 0, transparent calc(0.47619% - 1px), #b0b0b0 calc(0.47619% - 1px), #b0b0b0 0.47619%)',
       }}
-    />
+    >
+      {Array.from({ length: 22 }, (_, cm) => (
+        <span
+          key={cm}
+          className="absolute bottom-0 -translate-x-1/2 text-[8px] leading-none text-neutral-600"
+          style={{ left: `${(cm / 21) * 100}%` }}
+        >
+          {cm}
+        </span>
+      ))}
+    </div>
   );
 }
 
 function RulerVertical({ className }: { className?: string }) {
   return (
     <div
-      className={cn('w-6 shrink-0 self-stretch border border-t-0 border-neutral-500/45 bg-[#e8e8e8]', className)}
+      className={cn('relative w-6 shrink-0 self-stretch overflow-hidden border border-t-0 border-neutral-500/45 bg-[#e8e8e8]', className)}
       style={{
         backgroundImage:
-          'repeating-linear-gradient(180deg, #e8e8e8 0px, #e8e8e8 7px, #b0b0b0 7px, #e8e8e8 8px)',
+          'repeating-linear-gradient(180deg, transparent 0, transparent calc(0.3367% - 1px), #b0b0b0 calc(0.3367% - 1px), #b0b0b0 0.3367%)',
       }}
-    />
+    >
+      {Array.from({ length: 30 }, (_, cm) => (
+        <span
+          key={cm}
+          className="absolute right-0 -translate-y-1/2 text-[8px] leading-none text-neutral-600"
+          style={{ top: `${(cm / 29.7) * 100}%` }}
+        >
+          {cm}
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -393,6 +447,7 @@ export function RichTextEditor({
   wordPageWatermarkLayout,
   wordPageClientLogo,
   wordPageBottomLeftText,
+  wordPageMarginsCm,
   wordPageBands,
   valueNormalize,
 }: RichTextEditorProps) {
@@ -419,7 +474,14 @@ export function RichTextEditor({
     footerHeight: wordPageBands?.footerHeight ?? 40,
   });
   const [fontSizePx, setFontSizePx] = useState<number>(11);
+  const [fontSizeMixed, setFontSizeMixed] = useState(false);
   const [fontFamily, setFontFamily] = useState("Arial");
+  const [lineHeightValue, setLineHeightValue] = useState("1.0");
+  const [lineHeightMixed, setLineHeightMixed] = useState(false);
+  const [spaceBeforePt, setSpaceBeforePt] = useState(0);
+  const [spaceAfterPt, setSpaceAfterPt] = useState(0);
+  const [spaceBeforeMixed, setSpaceBeforeMixed] = useState(false);
+  const [spaceAfterMixed, setSpaceAfterMixed] = useState(false);
   const [imageSelection, setImageSelection] = useState<{
     active: boolean;
     align: "left" | "center" | "right";
@@ -429,9 +491,11 @@ export function RichTextEditor({
   const [footerTemplateOpen, setFooterTemplateOpen] = useState(false);
   const previewBandHeightsRef = useRef(previewBandHeights);
   const lastEmittedHtmlRef = useRef(initialEditorValue);
+  const lastEditorSelectionRef = useRef<{ from: number; to: number } | null>(null);
 
   const isWord = variant === 'word';
   const isRibbon = variant === 'ribbon';
+  const wordMargins = normalizeDocumentMargins(wordPageMarginsCm);
 
   useEffect(() => {
     if (bandDragRef.current) return;
@@ -462,6 +526,7 @@ export function RichTextEditor({
       }),
       FontSizeMark,
       FontFamilyMark,
+      ParagraphSpacingExtension,
       FormattingMarksExtension,
       PageBreakNode,
       ResizableImage.configure({ inline: true }),
@@ -581,6 +646,7 @@ export function RichTextEditor({
       attributes: {
         class: cn(
           'tiptap-content focus:outline-none w-full text-neutral-900',
+          isWord && 'word-page-margins',
           isWord
             ? wordPageBands
               ? "word-band-mode py-[1mm] text-[11pt] leading-snug"
@@ -600,7 +666,22 @@ export function RichTextEditor({
     if (!editor || editor.isDestroyed) return;
     const syncFontSize = () => {
       if (editor.isDestroyed) return;
-      const raw = String(editor.getAttributes('fontSize')?.size ?? '').trim();
+      const { from, to } = editor.state.selection;
+      const selectedSizes = new Set<string>();
+      if (from !== to) {
+        editor.state.doc.nodesBetween(from, to, (node) => {
+          if (!node.isText || !node.text?.length) return;
+          const mark = node.marks.find((candidate) => candidate.type.name === 'fontSize');
+          selectedSizes.add(String(mark?.attrs.size ?? '11px').trim());
+        });
+      }
+      const mixed = selectedSizes.size > 1;
+      setFontSizeMixed(mixed);
+      const raw = String(
+        selectedSizes.size > 0
+          ? selectedSizes.values().next().value
+          : editor.getAttributes('fontSize')?.size ?? '11px',
+      ).trim();
       const parsed = parseInt(raw.replace(/[^\d.-]/g, ''), 10);
       if (Number.isFinite(parsed) && parsed >= 8 && parsed <= 96) {
         setFontSizePx(parsed);
@@ -620,6 +701,32 @@ export function RichTextEditor({
       const marksVisible = formattingMarksPluginKey.getState(editor.state) === true;
       setShowFormattingMarks(marksVisible);
       editor.view.dom.classList.toggle("show-formatting-marks", marksVisible);
+
+      const paragraphAttrs = new Set<string>();
+      const beforeAttrs = new Set<string>();
+      const afterAttrs = new Set<string>();
+      const collectBlock = (node: { type: { name: string }; attrs: Record<string, unknown> }) => {
+        if (!["paragraph", "heading", "listItem"].includes(node.type.name)) return;
+        paragraphAttrs.add(String(node.attrs.lineHeight ?? "1.0"));
+        beforeAttrs.add(String(node.attrs.spaceBefore ?? "0pt"));
+        afterAttrs.add(String(node.attrs.spaceAfter ?? "0pt"));
+      };
+      if (from === to) {
+        for (let depth = editor.state.selection.$from.depth; depth >= 0; depth -= 1) {
+          collectBlock(editor.state.selection.$from.node(depth));
+        }
+      } else {
+        editor.state.doc.nodesBetween(from, to, collectBlock);
+      }
+      const firstLineHeight = paragraphAttrs.values().next().value;
+      const firstBefore = beforeAttrs.values().next().value;
+      const firstAfter = afterAttrs.values().next().value;
+      setLineHeightMixed(paragraphAttrs.size > 1);
+      setSpaceBeforeMixed(beforeAttrs.size > 1);
+      setSpaceAfterMixed(afterAttrs.size > 1);
+      if (firstLineHeight) setLineHeightValue(String(firstLineHeight));
+      if (firstBefore) setSpaceBeforePt(Number.parseFloat(String(firstBefore)) || 0);
+      if (firstAfter) setSpaceAfterPt(Number.parseFloat(String(firstAfter)) || 0);
     };
     syncFontSize();
     editor.on('selectionUpdate', syncFontSize);
@@ -677,17 +784,62 @@ export function RichTextEditor({
   };
 
   const clampFontSize = (n: number) => Math.max(8, Math.min(96, Math.round(n)));
+  const rememberEditorSelection = () => {
+    const { from, to } = editor.state.selection;
+    lastEditorSelectionRef.current = { from, to };
+  };
+  const preserveSelectionOnToolbarPointerDown = (event: React.PointerEvent<HTMLElement>) => {
+    rememberEditorSelection();
+    const target = event.target as HTMLElement;
+    if (target.closest('[data-preserve-editor-selection="true"]')) {
+      event.preventDefault();
+    }
+  };
+  const restoreEditorSelection = () => {
+    const selection = lastEditorSelectionRef.current;
+    if (!selection) return editor.chain().focus();
+
+    const maxPosition = editor.state.doc.content.size;
+    const from = Math.max(0, Math.min(selection.from, maxPosition));
+    const to = Math.max(from, Math.min(selection.to, maxPosition));
+    return editor.chain().focus().setTextSelection({ from, to });
+  };
   const applyFontSize = (n: number) => {
     const px = clampFontSize(n);
     setFontSizePx(px);
-    editor.chain().focus().setMark('fontSize', { size: `${px}px` }).run();
+    setFontSizeMixed(false);
+    restoreEditorSelection().setMark('fontSize', { size: `${px}px` }).run();
   };
   const applyFontFamily = (font: DocumentFontOption) => {
     setFontFamily(font.family);
-    editor.chain().focus().setMark("fontFamily", {
+    restoreEditorSelection().setMark("fontFamily", {
       family: font.family,
       url: font.url ?? null,
     }).run();
+  };
+  const applyParagraphAttributes = (attributes: Record<string, string>) => {
+    restoreEditorSelection()
+      .updateAttributes("paragraph", attributes)
+      .updateAttributes("heading", attributes)
+      .updateAttributes("listItem", attributes)
+      .run();
+  };
+  const applyLineHeight = (value: string) => {
+    setLineHeightValue(value);
+    setLineHeightMixed(false);
+    applyParagraphAttributes({ lineHeight: value });
+  };
+  const applyParagraphSpace = (kind: "before" | "after", value: number) => {
+    const pt = Math.max(0, Math.min(72, Math.round(value)));
+    if (kind === "before") {
+      setSpaceBeforePt(pt);
+      setSpaceBeforeMixed(false);
+      applyParagraphAttributes({ spaceBefore: `${pt}pt` });
+    } else {
+      setSpaceAfterPt(pt);
+      setSpaceAfterMixed(false);
+      applyParagraphAttributes({ spaceAfter: `${pt}pt` });
+    }
   };
 
   const wc = isWord || isRibbon ? 'h-7 w-7 p-0' : undefined;
@@ -828,7 +980,16 @@ export function RichTextEditor({
                   key={item.token}
                   type="button"
                   className="w-full rounded-md border bg-background p-2 text-left hover:bg-muted/50"
-                  onClick={() => editor.chain().focus().insertContent(item.token).run()}
+                  onClick={() => {
+                    const chain = restoreEditorSelection();
+                    if (item.token === "{{cliente.logo}}") {
+                      chain.insertContent(
+                        '<img src="{{cliente.logo}}" alt="Logo do cliente" width="180" height="80" style="width: 180px; height: 80px; object-fit: contain" />',
+                      ).run();
+                    } else {
+                      chain.insertContent(item.token).run();
+                    }
+                  }}
                 >
                   <div className="text-xs font-medium">{item.label}</div>
                   <code className="mt-0.5 block truncate text-[11px] text-muted-foreground">
@@ -846,27 +1007,30 @@ export function RichTextEditor({
   const fontToolsBasic = (
     <>
       <Button
+        data-preserve-editor-selection="true"
         variant={editor.isActive("bold") ? "default" : "ghost"}
         size="sm"
-        onClick={() => editor.chain().focus().toggleBold().run()}
+        onClick={() => restoreEditorSelection().toggleBold().run()}
         type="button"
         className={wc}
       >
         <Bold className="h-4 w-4" />
       </Button>
       <Button
+        data-preserve-editor-selection="true"
         variant={editor.isActive("italic") ? "default" : "ghost"}
         size="sm"
-        onClick={() => editor.chain().focus().toggleItalic().run()}
+        onClick={() => restoreEditorSelection().toggleItalic().run()}
         type="button"
         className={wc}
       >
         <Italic className="h-4 w-4" />
       </Button>
       <Button
+        data-preserve-editor-selection="true"
         variant={editor.isActive("underline") ? "default" : "ghost"}
         size="sm"
-        onClick={() => editor.chain().focus().toggleUnderline().run()}
+        onClick={() => restoreEditorSelection().toggleUnderline().run()}
         type="button"
         className={wc}
       >
@@ -898,6 +1062,83 @@ export function RichTextEditor({
       >
         <Pilcrow className="h-4 w-4" />
       </Button>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className={wc}
+            title="Espaçamento de linha e parágrafo"
+          >
+            <span className="text-[11px] font-semibold">↕</span>
+            <ChevronDown className="h-3 w-3" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-64 space-y-3 p-3">
+          <label className="block space-y-1 text-xs text-muted-foreground">
+            <span>Espaçamento entre linhas</span>
+            <select
+              className="h-8 w-full rounded border border-input bg-background px-2 text-xs text-foreground"
+              value={lineHeightMixed ? "" : lineHeightValue}
+              onChange={(event) => applyLineHeight(event.target.value)}
+            >
+              {lineHeightMixed ? <option value="">? — valores diferentes</option> : null}
+              {["1.0", "1.15", "1.5", "2.0", "2.5", "3.0"].map((value) => (
+                <option key={value} value={value}>{value}</option>
+              ))}
+            </select>
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="space-y-1 text-xs text-muted-foreground">
+              <span>Antes</span>
+              <div className="relative">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={spaceBeforeMixed ? "?" : spaceBeforePt}
+                  onFocus={(event) => spaceBeforeMixed && event.currentTarget.select()}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    if (Number.isFinite(value)) {
+                      setSpaceBeforeMixed(false);
+                      setSpaceBeforePt(value);
+                    }
+                  }}
+                  onBlur={() => {
+                    if (!spaceBeforeMixed) applyParagraphSpace("before", spaceBeforePt);
+                  }}
+                  className="h-8 w-full rounded border border-input bg-background px-2 pr-7 text-xs text-foreground"
+                />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px]">pt</span>
+              </div>
+            </label>
+            <label className="space-y-1 text-xs text-muted-foreground">
+              <span>Depois</span>
+              <div className="relative">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={spaceAfterMixed ? "?" : spaceAfterPt}
+                  onFocus={(event) => spaceAfterMixed && event.currentTarget.select()}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    if (Number.isFinite(value)) {
+                      setSpaceAfterMixed(false);
+                      setSpaceAfterPt(value);
+                    }
+                  }}
+                  onBlur={() => {
+                    if (!spaceAfterMixed) applyParagraphSpace("after", spaceAfterPt);
+                  }}
+                  className="h-8 w-full rounded border border-input bg-background px-2 pr-7 text-xs text-foreground"
+                />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px]">pt</span>
+              </div>
+            </label>
+          </div>
+        </PopoverContent>
+      </Popover>
       <Button
         variant={editor.isActive('heading', { level: 1 }) ? 'default' : 'ghost'}
         size="sm"
@@ -1120,7 +1361,10 @@ export function RichTextEditor({
     return (
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-white">
         {hiddenImageInput}
-        <div className="relative z-30 shrink-0 border-b border-[#d0cece] bg-[#f3f2f1] shadow-[0_1px_0_#c6c6c6]">
+        <div
+          className="relative z-30 shrink-0 border-b border-[#d0cece] bg-[#f3f2f1] shadow-[0_1px_0_#c6c6c6]"
+          onPointerDownCapture={preserveSelectionOnToolbarPointerDown}
+        >
             <div
               className="flex h-9 min-h-9 items-end gap-0 overflow-x-auto border-b border-neutral-200/80 bg-white px-0.5"
               role="tablist"
@@ -1156,6 +1400,7 @@ export function RichTextEditor({
                       {fontToolsBasic}
                       <div className="ml-1 flex items-center gap-1">
                         <Button
+                          data-preserve-editor-selection="true"
                           type="button"
                           variant="outline"
                           size="sm"
@@ -1165,25 +1410,15 @@ export function RichTextEditor({
                         >
                           A-
                         </Button>
-                        <input
-                          type="number"
-                          min={8}
-                          max={96}
-                          value={fontSizePx}
-                          onChange={(e) => {
-                            const n = Number(e.target.value);
-                            if (!Number.isFinite(n)) return;
-                            setFontSizePx(clampFontSize(n));
-                          }}
-                          onBlur={(e) => {
-                            const n = Number(e.target.value);
-                            if (!Number.isFinite(n)) return;
-                            applyFontSize(n);
-                          }}
-                          className="h-7 w-14 rounded border border-input bg-background px-2 text-[11px]"
-                          aria-label="Tamanho da fonte (px)"
-                        />
+                        <output
+                          className="flex h-7 w-14 select-none items-center rounded border border-input bg-muted/30 px-2 text-[11px] text-foreground"
+                          aria-label="Tamanho atual da fonte (px)"
+                          title="Use A- e A+ para alterar o tamanho"
+                        >
+                          {fontSizeMixed ? "?" : fontSizePx}
+                        </output>
                         <Button
+                          data-preserve-editor-selection="true"
                           type="button"
                           variant="outline"
                           size="sm"
@@ -1456,8 +1691,22 @@ export function RichTextEditor({
                 style={{
                   width: "100%",
                   aspectRatio: "210 / 297",
-                }}
+                  "--word-margin-top": `${wordMargins.top}cm`,
+                  "--word-margin-right": `${wordMargins.right}cm`,
+                  "--word-margin-bottom": `${wordMargins.bottom}cm`,
+                  "--word-margin-left": `${wordMargins.left}cm`,
+                } as React.CSSProperties}
               >
+                <div
+                  className="pointer-events-none absolute z-[34] border border-dotted border-blue-400/45"
+                  style={{
+                    top: "var(--word-margin-top)",
+                    right: "var(--word-margin-right)",
+                    bottom: "var(--word-margin-bottom)",
+                    left: "var(--word-margin-left)",
+                  }}
+                  aria-hidden
+                />
                 {isWord && wordPageBottomLeftText?.trim() ? (
                   <div
                     className="pointer-events-none absolute z-[30] select-none text-[9pt] leading-snug text-neutral-700"
@@ -1640,7 +1889,10 @@ export function RichTextEditor({
     return (
       <div className="relative min-w-0 overflow-visible rounded-md border border-[#c8c6c4] bg-white shadow-sm">
         {hiddenImageInput}
-        <div className="sticky top-0 z-30 border-b border-[#c8c6c4] bg-[#f5f5f5] shadow-[0_2px_5px_rgba(0,0,0,0.12)]">
+        <div
+          className="sticky top-0 z-30 border-b border-[#c8c6c4] bg-[#f5f5f5] shadow-[0_2px_5px_rgba(0,0,0,0.12)]"
+          onPointerDownCapture={preserveSelectionOnToolbarPointerDown}
+        >
           <div className="flex h-8 items-end gap-1 overflow-x-auto border-b border-[#dedede] bg-white px-2">
             <span className="border-b-2 border-[#185abd] px-3 py-1.5 text-[11px] font-semibold text-[#185abd]">
               Página Inicial
@@ -1657,20 +1909,15 @@ export function RichTextEditor({
                     disabled={readOnly}
                     onChange={applyFontFamily}
                   />
-                  <input
-                    type="number"
-                    min={8}
-                    max={96}
-                    value={fontSizePx}
-                    onChange={(event) => {
-                      const value = Number(event.target.value);
-                      if (Number.isFinite(value)) setFontSizePx(clampFontSize(value));
-                    }}
-                    onBlur={() => applyFontSize(fontSizePx)}
-                    className="h-7 w-12 rounded-sm border border-neutral-300 bg-white px-1 text-center text-[11px]"
-                    aria-label="Tamanho da fonte"
-                  />
+                  <output
+                    className="flex h-7 w-12 select-none items-center justify-center rounded-sm border border-neutral-300 bg-neutral-100 px-1 text-center text-[11px] text-neutral-800"
+                    aria-label="Tamanho atual da fonte"
+                    title="Use A- e A+ para alterar o tamanho"
+                  >
+                    {fontSizeMixed ? "?" : fontSizePx}
+                  </output>
                   <Button
+                    data-preserve-editor-selection="true"
                     type="button"
                     variant="ghost"
                     size="sm"
@@ -1681,6 +1928,7 @@ export function RichTextEditor({
                     A+
                   </Button>
                   <Button
+                    data-preserve-editor-selection="true"
                     type="button"
                     variant="ghost"
                     size="sm"
@@ -1758,7 +2006,10 @@ export function RichTextEditor({
       {hiddenImageInput}
       <div className="space-y-2">
         <fieldset disabled={readOnly} className="contents">
-          <div className="flex flex-wrap gap-2 rounded-md border bg-muted/20 p-2">
+          <div
+            className="flex flex-wrap gap-2 rounded-md border bg-muted/20 p-2"
+            onPointerDownCapture={preserveSelectionOnToolbarPointerDown}
+          >
             {onUploadImage ? (
               allTools
             ) : (

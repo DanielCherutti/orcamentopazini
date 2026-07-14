@@ -43,6 +43,7 @@ function ResizableImageComponent({ node, selected, updateAttributes, editor, get
   const height: number | null = node.attrs.height ?? null;
   const naturalWidth = Number(node.attrs.naturalWidth ?? 0);
   const naturalHeight = Number(node.attrs.naturalHeight ?? 0);
+  const isClientLogoPlaceholder = /\{\{\s*cliente\.logo\s*\}\}/i.test(String(node.attrs.src ?? ""));
   const floating = Boolean(node.attrs.floating);
   const inWordBand = Boolean(editor?.view.dom.closest(".word-band-mode"));
   const useBandOverlay = inWordBand;
@@ -222,36 +223,64 @@ function ResizableImageComponent({ node, selected, updateAttributes, editor, get
       style={useBandOverlay ? frameStyle : flowFrameStyle}
       className={useBandOverlay ? "word-floating-overlay" : undefined}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        ref={imgRef}
-        data-drag-handle=""
-        data-floating={effectiveFloating || useBandOverlay ? "true" : undefined}
-        data-image-align={imageAlign}
-        src={node.attrs.src}
-        alt={node.attrs.alt ?? ""}
-        title={node.attrs.title ?? undefined}
-        draggable={false}
-        onLoad={(event) => {
-          const image = event.currentTarget;
-          if (!naturalWidth && !naturalHeight && image.naturalWidth > 0 && image.naturalHeight > 0) {
-            updateAttributes({
-              naturalWidth: image.naturalWidth,
-              naturalHeight: image.naturalHeight,
-            });
-          }
-        }}
-        onClick={selectNodeOnClick}
-        onPointerDown={startMove}
-        style={{
-          display: "block",
-          width: "100%",
-          height: draftRect.height ? "100%" : "auto",
-          objectFit: "contain",
-          cursor: effectiveFloating || useBandOverlay ? "move" : "default",
-          userSelect: "none",
-        }}
-      />
+      {isClientLogoPlaceholder ? (
+        <div
+          data-drag-handle=""
+          data-client-logo-placeholder="true"
+          onClick={selectNodeOnClick}
+          onPointerDown={startMove}
+          style={{
+            display: "flex",
+            width: "100%",
+            height: draftRect.height ? "100%" : 80,
+            minHeight: 48,
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            border: "1px dashed #94a3b8",
+            borderRadius: 4,
+            background: "#f8fafc",
+            color: "#475569",
+            fontSize: 13,
+            cursor: effectiveFloating || useBandOverlay ? "move" : "default",
+            userSelect: "none",
+          }}
+        >
+          <span aria-hidden style={{ fontSize: 18 }}>▧</span>
+          <span>Logo do cliente</span>
+        </div>
+      ) : (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          ref={imgRef}
+          data-drag-handle=""
+          data-floating={effectiveFloating || useBandOverlay ? "true" : undefined}
+          data-image-align={imageAlign}
+          src={node.attrs.src}
+          alt={node.attrs.alt ?? ""}
+          title={node.attrs.title ?? undefined}
+          draggable={false}
+          onLoad={(event) => {
+            const image = event.currentTarget;
+            if (!naturalWidth && !naturalHeight && image.naturalWidth > 0 && image.naturalHeight > 0) {
+              updateAttributes({
+                naturalWidth: image.naturalWidth,
+                naturalHeight: image.naturalHeight,
+              });
+            }
+          }}
+          onClick={selectNodeOnClick}
+          onPointerDown={startMove}
+          style={{
+            display: "block",
+            width: "100%",
+            height: draftRect.height ? "100%" : "auto",
+            objectFit: "contain",
+            cursor: effectiveFloating || useBandOverlay ? "move" : "default",
+            userSelect: "none",
+          }}
+        />
+      )}
       {showHandles &&
         (Object.keys(HANDLE_STYLE) as HandleDir[]).map((dir) => (
           <span

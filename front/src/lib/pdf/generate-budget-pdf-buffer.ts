@@ -53,22 +53,35 @@ export async function generateBudgetPdfBuffer(
             pdfEmbeddedImages = undefined;
         }
 
-        const paginationCollector: ProposalPaginationCollector = { segmentStartPages: {} };
-        const firstPassElement = React.createElement(ProposalDocument, {
-            budget: loaded.budget,
-            settings: settingsForPdf,
-            compositorPdf: loaded.compositorPdf,
-            omitDocumentWatermark: process.env.PDF_OMIT_DOC_WATERMARK === "1",
-            paginationCollector,
-            ...(pdfEmbeddedImages && Object.keys(pdfEmbeddedImages).length > 0
-                ? { pdfEmbeddedImages }
-                : {}),
-        });
-        await renderToBuffer(firstPassElement as Parameters<typeof renderToBuffer>[0]);
-
-        const resolvedPagination: ProposalResolvedPagination = {
-            segmentStartPages: paginationCollector.segmentStartPages,
-        };
+        let resolvedPagination: ProposalResolvedPagination | undefined;
+        // A Lista de Figuras também ocupa páginas e pode deslocar figuras. Repagina até o
+        // mapa estabilizar, com limite curto para nunca criar um loop durante a exportação.
+        for (let pass = 0; pass < 3; pass += 1) {
+            const paginationCollector: ProposalPaginationCollector = { segmentStartPages: {} };
+            const probeElement = React.createElement(ProposalDocument, {
+                budget: loaded.budget,
+                settings: settingsForPdf,
+                compositorPdf: loaded.compositorPdf,
+                omitDocumentWatermark: process.env.PDF_OMIT_DOC_WATERMARK === "1",
+                paginationCollector,
+                ...(resolvedPagination ? { resolvedPagination } : {}),
+                ...(pdfEmbeddedImages && Object.keys(pdfEmbeddedImages).length > 0
+                    ? { pdfEmbeddedImages }
+                    : {}),
+            });
+            await renderToBuffer(probeElement as Parameters<typeof renderToBuffer>[0]);
+            const next: ProposalResolvedPagination = {
+                segmentStartPages: { ...paginationCollector.segmentStartPages },
+            };
+            if (resolvedPagination && paginationMapsEqual(
+                resolvedPagination.segmentStartPages ?? {},
+                next.segmentStartPages ?? {},
+            )) {
+                resolvedPagination = next;
+                break;
+            }
+            resolvedPagination = next;
+        }
         const element = React.createElement(ProposalDocument, {
             budget: loaded.budget,
             settings: settingsForPdf,
@@ -102,4 +115,10 @@ export async function generateBudgetPdfBuffer(
             error: detail ? `Falha ao gerar PDF: ${detail}` : "Falha ao gerar PDF da proposta",
         };
     }
+}
+
+function paginationMapsEqual(a: Record<string, number>, b: Record<string, number>): boolean {
+    const aKeys = Object.keys(a);
+    const bKeys = Object.keys(b);
+    return aKeys.length === bKeys.length && aKeys.every((key) => a[key] === b[key]);
 }

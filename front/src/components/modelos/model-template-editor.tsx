@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CompositorRichTextEditor } from "@/components/budgets/compositor/compositor-rich-text-editor";
 import { HeaderFooterLayoutEditor } from "@/components/budgets/compositor/header-footer-layout-editor";
+import { DocumentMarginControls } from "@/components/budgets/compositor/document-margin-controls";
 import {
   DEFAULT_COVER_PROPS,
   DEFAULT_HEADER_FOOTER_PROPS,
@@ -32,6 +33,11 @@ import {
 } from "@/lib/model-template-structure";
 import { cn } from "@/lib/utils";
 import type { ModeloTipo } from "@/actions/model-actions";
+import {
+  migrateHeaderFooterLayoutsForScopeMode,
+  resolveHeaderFooterScopeMode,
+  type HeaderFooterLayoutScope,
+} from "@/lib/compositor/header-footer-layout";
 
 export function ModelTemplateEditor({
   tipo,
@@ -126,6 +132,7 @@ function HeaderFooterModelEditor({
           />
         </label>
       </div>
+      <DocumentMarginControls props={structure.props} onPatch={patch} />
       <HeaderFooterLayoutEditor
         scope="all"
         region={region}
@@ -203,7 +210,9 @@ function BudgetModelEditor({
       type,
       label: defaultBlockLabel(type),
       order_index: siblings.length,
-      props: type === "text" ? { content: "<p>Novo conteúdo</p>" } : { description: "" },
+      props: type === "text"
+        ? { content: "<p>Novo conteúdo</p>" }
+        : { description: "", page_break_before: false },
     };
     updateBlocks([...structure.blocks, block]);
     setSelectedId(id);
@@ -321,6 +330,7 @@ function BudgetBlockEditor({
   onPatch: (patch: Record<string, unknown>) => void;
 }) {
   const [band, setBand] = useState<"header" | "footer">("header");
+  const [pageScope, setPageScope] = useState<HeaderFooterLayoutScope>("all");
 
   if (block.type === "cover") {
     const props = { ...DEFAULT_COVER_PROPS, ...block.props } as CoverBlockProps;
@@ -340,9 +350,19 @@ function BudgetBlockEditor({
 
   if (block.type === "header_footer") {
     const props = { ...DEFAULT_HEADER_FOOTER_PROPS, ...block.props } as HeaderFooterBlockProps;
+    const scopeMode = resolveHeaderFooterScopeMode(props);
+    const effectiveScope = scopeMode === "all" ? "all" : pageScope === "all" ? "cover" : pageScope;
     const height = band === "header"
-      ? Math.max(props.cover_header_height ?? 96, props.inner_header_height ?? 96)
-      : Math.max(props.cover_footer_height ?? 48, props.inner_footer_height ?? 40);
+      ? effectiveScope === "cover"
+        ? props.cover_header_height ?? 96
+        : effectiveScope === "inner"
+          ? props.inner_header_height ?? 96
+          : Math.max(props.cover_header_height ?? 96, props.inner_header_height ?? 96)
+      : effectiveScope === "cover"
+        ? props.cover_footer_height ?? 48
+        : effectiveScope === "inner"
+          ? props.inner_footer_height ?? 40
+          : Math.max(props.cover_footer_height ?? 48, props.inner_footer_height ?? 40);
     return (
       <div className="space-y-4 p-4 lg:p-5">
         <Tabs value={band} onValueChange={(value) => setBand(value as "header" | "footer")}>
@@ -351,8 +371,64 @@ function BudgetBlockEditor({
             <TabsTrigger value="footer">Rodapé</TabsTrigger>
           </TabsList>
         </Tabs>
+        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-background p-3">
+          <Button
+            type="button"
+            size="sm"
+            variant={scopeMode === "all" ? "default" : "outline"}
+            onClick={() => onPatch(migrateHeaderFooterLayoutsForScopeMode(props, "all") as Record<string, unknown>)}
+          >
+            Todas as páginas iguais
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={scopeMode === "separate" ? "default" : "outline"}
+            onClick={() => {
+              onPatch(migrateHeaderFooterLayoutsForScopeMode(props, "separate") as Record<string, unknown>);
+              setPageScope("cover");
+            }}
+          >
+            Separar capa e páginas internas
+          </Button>
+          {scopeMode === "separate" ? (
+            <Tabs value={effectiveScope} onValueChange={(value) => setPageScope(value as "cover" | "inner")}>
+              <TabsList>
+                <TabsTrigger value="cover">Capa</TabsTrigger>
+                <TabsTrigger value="inner">Páginas internas</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          ) : null}
+        </div>
+        <div className="flex items-center gap-2 rounded-md border bg-background p-3">
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            Altura do {band === "header" ? "cabeçalho" : "rodapé"}
+            <Input
+              type="number"
+              min={24}
+              max={240}
+              className="h-8 w-20"
+              value={height}
+              onChange={(event) => {
+                const value = Math.max(24, Math.min(240, Number(event.target.value) || 24));
+                onPatch(band === "header"
+                  ? effectiveScope === "cover"
+                    ? { cover_header_height: value }
+                    : effectiveScope === "inner"
+                      ? { inner_header_height: value }
+                      : { cover_header_height: value, inner_header_height: value }
+                  : effectiveScope === "cover"
+                    ? { cover_footer_height: value }
+                    : effectiveScope === "inner"
+                      ? { inner_footer_height: value }
+                      : { cover_footer_height: value, inner_footer_height: value });
+              }}
+            />
+          </label>
+        </div>
+        <DocumentMarginControls props={props} onPatch={(patch) => onPatch(patch as Record<string, unknown>)} />
         <HeaderFooterLayoutEditor
-          scope="all"
+          scope={effectiveScope}
           region={band}
           props={props}
           height={height}
@@ -379,6 +455,16 @@ function BudgetBlockEditor({
   const field = block.type === "session" ? "description" : "content";
   return (
     <div className="min-h-[560px] p-4 lg:p-6">
+      {block.type === "session" ? (
+        <label className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={block.props.page_break_before !== false}
+            onChange={(event) => onPatch({ page_break_before: event.target.checked })}
+          />
+          Iniciar esta seção em uma nova página
+        </label>
+      ) : null}
       <CompositorRichTextEditor
         value={String(block.props[field] ?? "")}
         onChange={(value) => onPatch({ [field]: value })}
