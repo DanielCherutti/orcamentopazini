@@ -13,6 +13,7 @@ import {
     collectRawPdfImageUrlsForPdf,
 } from "@/lib/pdf/pdf-embed-images-server";
 import { registerCompositorPdfFonts } from "@/lib/pdf/pdf-custom-fonts-server";
+import { budgetPdfFilename } from "@/lib/pdf/pdf-filename";
 
 export type GenerateBudgetPdfResult =
     | { ok: true; buffer: Buffer; filename: string; budget: Budget; settings: ProposalSettings }
@@ -94,9 +95,7 @@ export async function generateBudgetPdfBuffer(
         });
 
         const buffer = await renderToBuffer(element as Parameters<typeof renderToBuffer>[0]);
-        const code = loaded.budget.code?.trim() || "proposta";
-        const safeFile = code.replace(/[^\w.-]+/g, "_").slice(0, 80) || "proposta";
-        const filename = `proposta-${safeFile}.pdf`;
+        const filename = budgetPdfFilename(loaded.budget.title);
 
         return {
             ok: true,

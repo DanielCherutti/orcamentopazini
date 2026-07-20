@@ -22,7 +22,7 @@ export function normalizeMoney(value: unknown): number {
 
 export function normalizeQty(value: unknown): number {
     const n = Number(value ?? 1);
-    if (!Number.isFinite(n) || n < 1) return 1;
+    if (!Number.isFinite(n) || n <= 0) return 1;
     return n;
 }
 

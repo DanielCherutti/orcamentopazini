@@ -39,8 +39,8 @@ export const budgetItemSchema = z.object({
     id: z.string().optional(),
     section_id: z.string().optional(), // Linked when added to specific section (legado)
     block_id: z.string().optional(),   // Linked to budget_block type='section' (compositor)
-    product_id: z.union([z.string(), z.object({ id: z.string().optional(), description: z.string().optional(), name: z.string().optional(), unit: z.string().optional(), image: z.string().optional() })]),
-    quantity: z.number().min(1, "Quantidade mínima é 1"),
+    product_id: z.union([z.string(), z.object({ id: z.string().optional(), description: z.string().optional(), name: z.string().optional(), code: z.string().optional(), ncm: z.string().optional(), unit: z.string().optional(), image: z.string().optional() })]),
+    quantity: z.number().positive("Quantidade deve ser maior que zero"),
     unit_price: z.number().min(0),
     labor_cost: z.number().min(0).default(0), // Mão de obra unitária (copiada do produto)
     total: z.number().min(0),
@@ -148,6 +148,7 @@ export const budgetSchema = z.object({
 export type BudgetItem = z.infer<typeof budgetItemSchema> & {
     // Relationships for UI display
     product_code?: string;
+    product_ncm?: string;
     product_name?: string;
     product_unit?: string;
     product_image?: string;

@@ -150,6 +150,15 @@ export function ProductsTable({ initialProducts, initialMeta }: ProductsTablePro
                                 </div>
                             </th>
                             <th
+                                className="h-11 w-[120px] cursor-pointer px-4 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-[rgb(var(--primary-rgb)/0.08)] group"
+                                onClick={() => handleSort("ncm")}
+                            >
+                                <div className="flex items-center">
+                                    NCM
+                                    {getSortIcon("ncm")}
+                                </div>
+                            </th>
+                            <th
                                 className="h-11 w-[88px] cursor-pointer px-4 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-[rgb(var(--primary-rgb)/0.08)] group"
                                 onClick={() => handleSort("unit")}
                             >
@@ -208,6 +217,7 @@ export function ProductsTable({ initialProducts, initialMeta }: ProductsTablePro
                                     </td>
                                     <td className="p-4">{product.code}</td>
                                     <td className="p-4">{product.description}</td>
+                                    <td className="p-4 font-mono">{product.ncm || "—"}</td>
                                     <td className="p-4 text-center">{product.unit}</td>
                                     <td className="p-4">
                                         {product.equipmentPrice.toLocaleString("pt-BR", {
@@ -239,7 +249,7 @@ export function ProductsTable({ initialProducts, initialMeta }: ProductsTablePro
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={7} className="p-12 text-center text-muted-foreground">
+                                <td colSpan={8} className="p-12 text-center text-muted-foreground">
                                     {query
                                         ? `Nenhum produto encontrado para "${query}"`
                                         : "Nenhum produto cadastrado"}

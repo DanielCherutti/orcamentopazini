@@ -512,8 +512,10 @@ export function SectionDetail({
                 ) : (
                     <>
                         {items.length > 0 && (
-                            <div className="grid grid-cols-12 gap-2 px-2 py-1 text-xs text-muted-foreground font-medium">
-                                <div className="col-span-3">Produto</div>
+                            <div className="grid grid-cols-[repeat(14,minmax(0,1fr))] gap-2 px-2 py-1 text-xs text-muted-foreground font-medium">
+                                <div className="col-span-1">Cód.</div>
+                                <div className="col-span-2">Produto</div>
+                                <div className="col-span-1">NCM</div>
                                 <div className="col-span-2 text-center">Qtd / un.</div>
                                 <div className="col-span-1 text-right">Equipto.</div>
                                 <div className="col-span-2 text-right">Ajuste de Preço</div>
@@ -542,6 +544,7 @@ export function SectionDetail({
                         <ScopeItemCreator
                             sectionId={sectionId}
                             budgetId={budgetId}
+                            items={items}
                             onSuccess={refreshSectionAndScope}
                         />
                         <ScopeGroupAdder

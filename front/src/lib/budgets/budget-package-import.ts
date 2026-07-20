@@ -180,6 +180,7 @@ async function resolveProductIdMap(
 
         const embedded: Record<string, unknown> = {
             code: item.product_code ?? item.code,
+            ncm: item.product_ncm ?? item.ncm,
             description: item.product_name ?? item.description ?? "Produto importado",
             unit: item.product_unit ?? item.unit,
             imageUrl: item.product_image_url ?? item.imageUrl,

@@ -198,8 +198,6 @@ const styles = StyleSheet.create({
     /** Título da seção (faixa de empresa fixa fica acima, igual à capa). */
     segmentHeader: {
         marginBottom: 14,
-        borderBottomWidth: 2,
-        borderBottomColor: theme.colors.secondary,
         paddingBottom: 5,
     },
     runningHeaderBand: {
@@ -209,8 +207,6 @@ const styles = StyleSheet.create({
         right: INNER_PAD,
         minHeight: 98,
         paddingBottom: 8,
-        borderBottomWidth: 1,
-        borderBottomColor: '#e5e7eb',
     },
     runningFooterBand: {
         position: 'absolute',
@@ -219,8 +215,6 @@ const styles = StyleSheet.create({
         right: INNER_PAD,
         minHeight: 36,
         paddingTop: 6,
-        borderTopWidth: 1,
-        borderTopColor: '#e5e7eb',
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
@@ -270,8 +264,6 @@ const styles = StyleSheet.create({
     },
     sessionRow: {
         marginBottom: 8,
-        borderBottomWidth: 0.5,
-        borderBottomColor: theme.colors.border,
         paddingBottom: 6,
     },
     sessionRowTitle: {
@@ -962,7 +954,10 @@ function htmlHasVisibleText(raw: unknown): boolean {
         .replace(/<style[\s\S]*?<\/style>/gi, " ")
         .replace(/<script[\s\S]*?<\/script>/gi, " ")
         .replace(/<[^>]+>/g, " ")
-        .replace(/&nbsp;/gi, " ")
+        .replace(/&(?:nbsp|ensp|emsp|thinsp|zwnj|zwj|ZeroWidthSpace);/gi, " ")
+        .replace(/&#(?:160|8192|8193|8201|8203|8204|8205);/gi, " ")
+        .replace(/&#x(?:a0|2000|2001|2009|200b|200c|200d);/gi, " ")
+        .replace(/[\u00a0\u2000-\u200d\u2060\ufeff]/g, " ")
         .replace(/\s+/g, " ")
         .trim();
     return plain.length > 0;
@@ -987,13 +982,13 @@ function hasPrintableBlockContent(
     if (hasImages) return true;
 
     if (node.type === "session" || node.type === "location" || node.type === "terms") {
-        return htmlHasVisibleText(node.props?.description) || htmlContainsPageBreak(node.props?.description);
+        return htmlHasVisibleText(node.props?.description);
     }
     if (node.type === "text") {
-        return htmlHasVisibleText(node.props?.content) || htmlContainsPageBreak(node.props?.content);
+        return htmlHasVisibleText(node.props?.content);
     }
     if (node.type === "section") {
-        if (htmlHasVisibleText(node.props?.description) || htmlContainsPageBreak(node.props?.description)) return true;
+        if (htmlHasVisibleText(node.props?.description)) return true;
         const count = itemsByBlock[node.id]?.length ?? 0;
         return count > 0;
     }
@@ -1549,6 +1544,13 @@ export const ProposalDocument = ({
                     ...(seg.lineHeight ? { lineHeight: seg.lineHeight } : {}),
                     ...(seg.marginTopPt ? { marginTop: seg.marginTopPt } : {}),
                     ...(seg.marginBottomPt ? { marginBottom: seg.marginBottomPt } : {}),
+                    ...(seg.marginLeftPt || seg.listMarker
+                        ? { marginLeft: (seg.marginLeftPt ?? 0) + (seg.listMarker ? (seg.listDepth ?? 1) * 12 : 0) }
+                        : {}),
+                    ...(seg.marginRightPt ? { marginRight: seg.marginRightPt } : {}),
+                    ...(seg.textIndentPt || seg.listMarker
+                        ? { textIndent: (seg.textIndentPt ?? 0) - (seg.listMarker ? 10 : 0) }
+                        : {}),
                 };
                 if (seg.kind === 'heading') {
                     nodes.push(
@@ -1579,9 +1581,12 @@ export const ProposalDocument = ({
                         key={`${rowKey}-p-${i}-${j}`}
                         style={[styles.sessionRichParagraph, paragraphStyle]}
                     >
-                        {seg.textAlign === 'center' || seg.textAlign === 'right'
-                            ? null
-                            : ABNT_PARAGRAPH_INDENT}
+                        {seg.listMarker ? `${seg.listMarker} ` : null}
+                        {!seg.listMarker
+                            ? (seg.textAlign === 'center' || seg.textAlign === 'right'
+                                ? null
+                                : ABNT_PARAGRAPH_INDENT)
+                            : null}
                         {runs.length
                             ? runs.map((run, runIndex) => (
                                   <Text
@@ -2148,15 +2153,12 @@ export const ProposalDocument = ({
                     compositorPdf?.items || {},
                     (compositorPdf?.imagesByBlock as Record<string, Array<{ url?: string; composed_url?: string }>>) || {}
                   );
-                  const visibleRows = rows.filter((row, idx) => {
-                    const isRootSessionRow = idx === 0 && row.depth === 0;
-                    if (!isRootSessionRow) return true;
-                    return (
+                  const visibleRows = rows.filter((row) => {
+                    const hasRowContent =
                       htmlHasVisibleText(row.html) ||
-                      htmlContainsPageBreak(row.html) ||
                       Boolean(row.extraText?.trim()) ||
-                      row.blockImageUrls.length > 0
-                    );
+                      row.blockImageUrls.some((url) => url.trim().length > 0);
+                    return hasRowContent;
                   });
                   let isFirstSessionPart = true;
                   visibleRows.forEach((row, idx) => {
@@ -2193,30 +2195,12 @@ export const ProposalDocument = ({
                         contentIndex += 1;
                     });
                   });
-                  if (visibleRows.length === 0) {
-                    currentSessionPage().push({
-                      sessionRoot,
-                      isFirstSessionPart: true,
-                      row: {
-                        depth: 0,
-                        title: sessionRoot.label || "Seção",
-                        html: "",
-                        extraText: "",
-                        blockImageUrls: [],
-                      },
-                      rowIndex: 0,
-                      partIndex: 0,
-                      blocks: [],
-                      contentIndex: 0,
-                      contentCount: 1,
-                      hasManualPageBreak: false,
-                    });
-                  }
                 });
                 const nonEmptySessionPages = sessionPages.filter((page) => page.length > 0);
+                if (nonEmptySessionPages.length === 0) return null;
                 return (
                     <React.Fragment key={`session-fragment-${sessionRoots.map((root) => root.id).join("-")}`}>
-                        {(nonEmptySessionPages.length > 0 ? nonEmptySessionPages : [[]]).map((pageRows, pageIdx) => (
+                        {nonEmptySessionPages.map((pageRows, pageIdx) => (
                             <InnerPdfPage
                                 key={`session-page-${sessionRoots[0]?.id ?? "empty"}-${pageIdx}`}
                                 pageKey={`session-page-${sessionRoots[0]?.id ?? "empty"}-${pageIdx}`}
@@ -2257,7 +2241,6 @@ export const ProposalDocument = ({
                                                 style={[
                                                     styles.sessionRow,
                                                     { marginLeft: safeLayoutIndentDepth(item.row.depth, 5) * 10 },
-                                                    ...(item.hasManualPageBreak ? [{ borderBottomWidth: 0 }] : []),
                                                 ]}
                                             >
                                                 {item.isFirstSessionPart ? (

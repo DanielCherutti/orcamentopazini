@@ -14,6 +14,8 @@ import {
 import { type PdfEmbeddedImages, proxyPdfImageSrc } from '@/lib/pdf/pdf-image-src';
 import { stripHtmlToText } from '@/lib/pdf/html-to-plain-text';
 import { sanitizeTextForPdf } from '@/lib/pdf/sanitize-pdf-text';
+import { splitCoverHtmlFragmentToSegments } from '@/lib/pdf/cover-pdf-blocks';
+import { parsePdfInlineRuns, pdfInlineRunStyle } from '@/lib/pdf/pdf-rich-text-runs';
 const styles = StyleSheet.create({
     locationBlock: {
         marginBottom: 20
@@ -88,6 +90,23 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontFamily: theme.fonts.bold,
         color: theme.colors.primary,
+    },
+    sectionDescription: {
+        marginTop: 6,
+    },
+    sectionDescriptionParagraph: {
+        fontSize: 9,
+        color: theme.colors.text,
+        lineHeight: 1.4,
+        marginBottom: 5,
+        textAlign: 'justify',
+    },
+    sectionDescriptionHeading: {
+        fontSize: 10,
+        color: theme.colors.text,
+        fontFamily: theme.fonts.bold,
+        lineHeight: 1.3,
+        marginBottom: 4,
     },
     sceneGrid: {
         width: '100%',
@@ -238,7 +257,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     colCode: { flex: 6, paddingRight: 4 },
-    colDesc: { flex: 20, paddingRight: 5 },
+    colDesc: { flex: 17, paddingRight: 5 },
+    colNcm: { flex: 7, paddingRight: 4 },
     colQty: { flex: 4, textAlign: 'center' },
     colUnit: { flex: 3, textAlign: 'center' },
     colMoney: { flex: 7, textAlign: 'right' },
@@ -274,6 +294,58 @@ function singleLinePdfLabel(input: unknown): string {
     return String(input ?? '')
         .replace(/\s+/g, ' ')
         .trim();
+}
+
+function renderSectionDescription(rawHtml: unknown, keyPrefix: string): React.ReactNode {
+    const html = String(rawHtml ?? '');
+    if (!stripHtmlToText(html).trim()) return null;
+
+    const segments = splitCoverHtmlFragmentToSegments(html);
+    if (segments.length === 0) return null;
+
+    return (
+        <View style={styles.sectionDescription}>
+            {segments.map((segment, segmentIndex) => {
+                const runs = segment.rawHtml ? parsePdfInlineRuns(segment.rawHtml) : [];
+                const layoutStyle = {
+                    ...(segment.textAlign ? { textAlign: segment.textAlign } : {}),
+                    ...(segment.lineHeight ? { lineHeight: segment.lineHeight } : {}),
+                    ...(segment.marginTopPt ? { marginTop: segment.marginTopPt } : {}),
+                    ...(segment.marginBottomPt ? { marginBottom: segment.marginBottomPt } : {}),
+                    ...(segment.marginLeftPt || segment.listMarker
+                        ? { marginLeft: (segment.marginLeftPt ?? 0) + (segment.listMarker ? (segment.listDepth ?? 1) * 12 : 0) }
+                        : {}),
+                    ...(segment.marginRightPt ? { marginRight: segment.marginRightPt } : {}),
+                    ...(segment.textIndentPt || segment.listMarker
+                        ? { textIndent: (segment.textIndentPt ?? 0) - (segment.listMarker ? 10 : 0) }
+                        : {}),
+                };
+                return (
+                    <Text
+                        key={`${keyPrefix}-description-${segmentIndex}`}
+                        style={[
+                            segment.kind === 'heading'
+                                ? styles.sectionDescriptionHeading
+                                : styles.sectionDescriptionParagraph,
+                            layoutStyle,
+                        ]}
+                    >
+                        {segment.listMarker ? `${segment.listMarker} ` : null}
+                        {runs.length
+                            ? runs.map((run, runIndex) => (
+                                  <Text
+                                      key={`${keyPrefix}-description-${segmentIndex}-${runIndex}`}
+                                      style={pdfInlineRunStyle(run)}
+                                  >
+                                      {run.text}
+                                  </Text>
+                              ))
+                            : segment.text}
+                    </Text>
+                );
+            })}
+        </View>
+    );
 }
 
 function getLocationAssemblyMode(location: BudgetLocation): LocationAssemblyMode {
@@ -369,6 +441,20 @@ function itemLabel(item: BudgetItem): string {
     return best || clean(item.product_name) || 'Produto';
 }
 
+function itemNcm(item: BudgetItem): string {
+    const clean = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+    const row = item as unknown as Record<string, unknown>;
+    const pidObj =
+        typeof item.product_id === 'object' && item.product_id
+            ? (item.product_id as Record<string, unknown>)
+            : undefined;
+    const pd =
+        row.product_data && typeof row.product_data === 'object'
+            ? (row.product_data as Record<string, unknown>)
+            : undefined;
+    return clean(item.product_ncm) || clean(row.product_ncm) || clean(pd?.ncm) || clean(pidObj?.ncm) || '—';
+}
+
 function itemUnit(item: BudgetItem): string {
     const clean = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
     const row = item as unknown as Record<string, unknown>;
@@ -457,6 +543,9 @@ function SectionItemsTable({
                                     </Text>
                                 ) : null}
                             </Text>
+                            <Text style={[styles.textSmall, styles.colNcm]}>
+                                {sanitizeTextForPdf(itemNcm(item))}
+                            </Text>
                             <Text style={[styles.textSmall, styles.colQty]}>
                                 {sanitizeTextForPdf(String(item.quantity ?? '').trim())}
                             </Text>
@@ -533,6 +622,7 @@ function SectionTableHeader({
         <View style={styles.tableHeader}>
             <Text style={[styles.textSmall, styles.textBold, styles.colCode]}>CÓDIGO</Text>
             <Text style={[styles.textSmall, styles.textBold, styles.colDesc]}>DESCRIÇÃO</Text>
+            <Text style={[styles.textSmall, styles.textBold, styles.colNcm]}>NCM</Text>
             <Text style={[styles.textSmall, styles.textBold, styles.colQty]}>QTD</Text>
             <Text style={[styles.textSmall, styles.textBold, styles.colUnit]}>UN</Text>
             {showCosts && laborCols ? (
@@ -890,6 +980,7 @@ export function BudgetTable({
             const laborCols = showCosts && sectionWantsLaborSplitOnPrint(sec);
             const sceneList = filterSceneImages(sec.images);
             const secId = String(sec.id ?? `sec-${secIdx}`);
+            const sectionDescription = renderSectionDescription(sec.description, `${locId}-${secId}`);
             const sectionTitleLead = (
                 <View
                     style={styles.sectionHeaderWrap}
@@ -902,6 +993,7 @@ export function BudgetTable({
                     <Text style={styles.sectionHeaderText}>
                         {sanitizeTextForPdf(`${secNum} — ${secLabel}`)}
                     </Text>
+                    {sectionDescription}
                 </View>
             );
 

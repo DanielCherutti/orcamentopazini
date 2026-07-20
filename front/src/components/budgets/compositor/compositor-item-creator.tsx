@@ -57,7 +57,6 @@ export function CompositorItemCreator({ blockId, budgetId, onSuccess }: Composit
       <div className="col-span-4 md:col-span-2 flex items-center gap-1 min-w-0">
         <QuantityTextInput
           value={quantity}
-          min={1}
           onValueChange={setQuantity}
           onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); }}
           className="flex h-8 min-w-0 flex-1 rounded-md border border-input bg-transparent px-2 py-1 text-center text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"

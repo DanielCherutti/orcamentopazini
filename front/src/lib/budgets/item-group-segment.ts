@@ -10,8 +10,12 @@ const INSTANCE_SEP = ":::";
 export function getBudgetItemGroupSegmentKey(item: BudgetItem): string | null {
     const rec = item as Record<string, unknown>;
     const gid = rec.group_id as string | undefined;
-    if (gid == null || gid === "") return null;
     const inst = rec.group_instance_id as string | undefined;
+    const groupName = String(rec.group_name ?? "").trim();
+    // Grupos temporários existem apenas no orçamento: não possuem `product_group`,
+    // mas usam uma instância própria e um nome desnormalizado.
+    if ((gid == null || gid === "") && inst && groupName) return `temporary${INSTANCE_SEP}${inst}`;
+    if (gid == null || gid === "") return null;
     if (inst != null && inst !== "") return `${String(gid)}${INSTANCE_SEP}${inst}`;
     return String(gid);
 }

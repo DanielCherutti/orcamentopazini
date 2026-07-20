@@ -582,8 +582,15 @@ export function CompositorCoverPdfPage({
                   ...(seg.textAlign ? { textAlign: seg.textAlign } : {}),
                   ...(seg.lineHeight ? { lineHeight: seg.lineHeight } : {}),
                   ...(seg.marginTopPt ? { marginTop: seg.marginTopPt } : {}),
-                  ...(seg.marginBottomPt ? { marginBottom: seg.marginBottomPt } : {}),
-                };
+                ...(seg.marginBottomPt ? { marginBottom: seg.marginBottomPt } : {}),
+                ...(seg.marginLeftPt || seg.listMarker
+                  ? { marginLeft: (seg.marginLeftPt ?? 0) + (seg.listMarker ? (seg.listDepth ?? 1) * 12 : 0) }
+                  : {}),
+                ...(seg.marginRightPt ? { marginRight: seg.marginRightPt } : {}),
+                ...(seg.textIndentPt || seg.listMarker
+                  ? { textIndent: (seg.textIndentPt ?? 0) - (seg.listMarker ? 10 : 0) }
+                  : {}),
+              };
                 if (seg.kind === "heading") {
                   const hs =
                     seg.level === 1
@@ -616,6 +623,7 @@ export function CompositorCoverPdfPage({
                     key={`${i}-${j}`}
                     style={[styles.coverText, paragraphStyle]}
                   >
+                    {seg.listMarker ? `${seg.listMarker} ` : null}
                     {runs.length
                       ? runs.map((r, k) => (
                           <Text key={`${i}-${j}-${k}`} style={pdfInlineRunStyle(r)}>

@@ -1,5 +1,8 @@
 import { Table, StringRecordId } from "surrealdb";
-import { buildDuplicatedBudgetItemContent } from "@/actions/budget-hierarchy-helpers";
+import {
+    buildDuplicatedBudgetItemContent,
+    recalculateBudgetTotal,
+} from "@/actions/budget-hierarchy-helpers";
 
 type BudgetDb = Awaited<ReturnType<typeof import("@/lib/surreal").getDb>>;
 
@@ -316,19 +319,12 @@ export async function updateCoverRevisionLabel(
 }
 
 export async function recalculateBudgetTotalValue(
-    db: BudgetDb,
+    _db: BudgetDb,
     budgetRecordId: StringRecordId,
-    useCompositor: boolean
+    _useCompositor: boolean
 ) {
-    const totalRes = useCompositor
-        ? await db.query<[{ grand_total: number }[]]>(
-              "SELECT math::sum(total) as grand_total FROM budget_item WHERE block_id.budget_id = $budgetId GROUP ALL",
-              { budgetId: budgetRecordId }
-          )
-        : await db.query<[{ grand_total: number }[]]>(
-              "SELECT math::sum(total) as grand_total FROM budget_item WHERE section_id.budget_id = $budgetId GROUP ALL",
-              { budgetId: budgetRecordId }
-          );
-    const grandTotal = totalRes[0]?.[0]?.grand_total || 0;
-    await db.update(budgetRecordId).merge({ total_value: grandTotal });
+    // O valor comercial é calculado pelas Adequações, inclusive em orçamentos com Compositor.
+    // Reutilizar o cálculo oficial evita que revisões nasçam com R$ 0,00 por consultarem
+    // apenas itens ligados a `block_id`.
+    await recalculateBudgetTotal(String(budgetRecordId));
 }

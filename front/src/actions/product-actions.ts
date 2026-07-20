@@ -13,12 +13,14 @@ import { Attachment } from "@/components/products/attachment-manager";
 import { saveFile } from "@/lib/upload";
 import { syncProductCatalogToDraftBudgetItemsAction } from "@/actions/budget-core-write-actions";
 import { auditTenantAction } from "@/lib/audit-log";
+import { isValidNcm, normalizeNcm } from "@/lib/products/ncm";
 
 // Type definition based on V1 Spec
 export type Product = {
     id?: string;
     company_id: number;
     code: string;
+    ncm: string;
     description: string;
     detailedDescription?: string;
     unit: string;
@@ -41,6 +43,7 @@ const DEFAULT_COMPANY_ID = 0;
 // Schema for Validation
 const productSchema = z.object({
     code: z.string().min(1, "O código é obrigatório"),
+    ncm: z.string().refine(isValidNcm, "O NCM deve conter exatamente 8 dígitos"),
     description: z.string().min(1, "A descrição é obrigatória"),
     unit: z.string().min(1, "A unidade é obrigatória"),
     equipmentPrice: z.number().min(0, "O preço não pode ser negativo"),
@@ -76,6 +79,7 @@ function serializeProduct(product: Record<string, unknown>): Product {
         id: safeId(product.id),
         company_id: Number(product.company_id || 0),
         code: String(product.code || ''),
+        ncm: String(product.ncm || ''),
         description: String(product.description || ''),
         detailedDescription: product.detailedDescription ? String(product.detailedDescription) : undefined,
         unit: String(product.unit || ''),
@@ -135,7 +139,7 @@ export async function getProductsAction(params?: {
 
         if (search) {
             // Case-insensitive: compara em minúsculas nos dois lados
-            sql += ` AND (string::lowercase(code) CONTAINS string::lowercase($search) OR string::lowercase(description) CONTAINS string::lowercase($search))`;
+            sql += ` AND (string::lowercase(code) CONTAINS string::lowercase($search) OR string::lowercase(description) CONTAINS string::lowercase($search) OR ncm CONTAINS $search)`;
             queryParams.search = search;
         }
 
@@ -244,6 +248,7 @@ export async function createProductAction(formData: FormData) {
     // Raw data extraction
     const rawData = {
         code: formData.get("code") as string,
+        ncm: normalizeNcm(formData.get("ncm")),
         description: formData.get("description") as string,
         detailedDescription: formData.get("detailedDescription") as string,
         unit: formData.get("unit") as string,
@@ -371,6 +376,7 @@ export async function updateProductAction(id: string, formData: FormData) {
     // Raw data extraction (similar to create)
     const rawData = {
         code: formData.get("code") as string,
+        ncm: normalizeNcm(formData.get("ncm")),
         description: formData.get("description") as string,
         detailedDescription: formData.get("detailedDescription") as string,
         unit: formData.get("unit") as string,
@@ -426,6 +432,7 @@ export async function updateProductAction(id: string, formData: FormData) {
 
         const syncBudgets = await syncProductCatalogToDraftBudgetItemsAction(id, {
             code: data.code,
+            ncm: data.ncm,
             description: data.description,
             unit: data.unit,
             equipmentPrice: data.equipmentPrice,
@@ -475,6 +482,7 @@ export async function updateProductImageUrlAction(productId: string, imageUrl: s
         if (p) {
             const syncRes = await syncProductCatalogToDraftBudgetItemsAction(productId, {
                 code: String(p.code ?? ""),
+                ncm: String(p.ncm ?? ""),
                 description: String(p.description ?? ""),
                 unit: String(p.unit ?? ""),
                 equipmentPrice: Number(p.equipmentPrice ?? 0),

@@ -53,7 +53,7 @@ export function CompositorItemRow({
         useSortable({ id: item.id! });
 
     const handleQtyCommit = async () => {
-        if (qty === item.quantity || qty < 1) return;
+        if (qty === item.quantity || !Number.isFinite(qty) || qty <= 0) return;
         setSaving(true);
         const result = await updateItemQuantityInBlockAction(
             item.id!,
@@ -129,7 +129,6 @@ export function CompositorItemRow({
             <div className="col-span-4 md:col-span-2 flex items-center justify-center gap-1">
                 <QuantityTextInput
                     value={qty}
-                    min={1}
                     disabled={saving || isReadOnly}
                     onValueChange={(n) => !isReadOnly && setQty(n)}
                     onBlur={() => !isReadOnly && void handleQtyCommit()}

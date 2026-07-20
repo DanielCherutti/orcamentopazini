@@ -36,6 +36,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { normalizeNcm } from "@/lib/products/ncm";
 
 function SubmitButton({ isEditing }: { isEditing: boolean }) {
     const { pending } = useFormStatus();
@@ -60,13 +61,16 @@ interface ProductFormProps {
     errors?: Record<string, string[] | undefined>;
     generalError?: string;
     onDelete?: () => Promise<void>;
+    /** Permite reutilizar o formulário em modais sem navegar no histórico da página. */
+    onCancel?: () => void;
 }
 
 const formatPrice = (value: number) =>
     new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(value);
 
-export function ProductForm({ initialData, defaultCode, action, errors, generalError, onDelete }: ProductFormProps) {
+export function ProductForm({ initialData, defaultCode, action, errors, generalError, onDelete, onCancel }: ProductFormProps) {
     const [code, setCode] = useState(initialData?.code || defaultCode || "");
+    const [ncm, setNcm] = useState(initialData?.ncm || "");
     const [description, setDescription] = useState(initialData?.description || "");
     const [unit, setUnit] = useState(initialData?.unit || "");
     const [imageUrl, setImageUrl] = useState(initialData?.imageUrl || "");
@@ -103,6 +107,7 @@ export function ProductForm({ initialData, defaultCode, action, errors, generalE
     useEffect(() => {
         if (!initialData || !productId) return;
         setCode(initialData.code || "");
+        setNcm(initialData.ncm || "");
         setDescription(initialData.description || "");
         setUnit(initialData.unit || "");
         setImageUrl(initialData.imageUrl || "");
@@ -153,6 +158,7 @@ export function ProductForm({ initialData, defaultCode, action, errors, generalE
 
     const handleFormAction = async (formData: FormData) => {
         formData.set("code", code);
+        formData.set("ncm", ncm);
         formData.set("description", description);
         formData.set("unit", unit);
         formData.set("equipmentPrice", equipPrice);
@@ -197,11 +203,26 @@ export function ProductForm({ initialData, defaultCode, action, errors, generalE
                     <TabsContent value="basic">
                     <Card>
                         <CardContent className="space-y-4 pt-6">
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-4 sm:grid-cols-3">
                                 <div className="space-y-2">
                                     <Label htmlFor="code" className={getError("code") ? "text-red-500" : ""}>Código *</Label>
                                     <Input id="code" name="code" value={code} onChange={(e) => setCode(e.target.value)} required className={getError("code") ? "border-red-500" : ""} />
                                     {getError("code") && <p className="text-sm text-red-500">{getError("code")}</p>}
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="ncm" className={getError("ncm") ? "text-red-500" : ""}>NCM *</Label>
+                                    <Input
+                                        id="ncm"
+                                        name="ncm"
+                                        value={ncm}
+                                        onChange={(e) => setNcm(normalizeNcm(e.target.value))}
+                                        inputMode="numeric"
+                                        maxLength={8}
+                                        placeholder="00000000"
+                                        required
+                                        className={getError("ncm") ? "border-red-500" : ""}
+                                    />
+                                    {getError("ncm") && <p className="text-sm text-red-500">{getError("ncm")}</p>}
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="unit" className={getError("unit") ? "text-red-500" : ""}>Unidade *</Label>
@@ -363,7 +384,13 @@ export function ProductForm({ initialData, defaultCode, action, errors, generalE
                 )}
 
                 <div className="flex gap-4">
-                    <Button variant="outline" type="button" onClick={() => window.history.back()}>Cancelar</Button>
+                    <Button
+                        variant="outline"
+                        type="button"
+                        onClick={onCancel ?? (() => window.history.back())}
+                    >
+                        Cancelar
+                    </Button>
                     <SubmitButton isEditing={!!initialData?.id} />
                 </div>
             </div>

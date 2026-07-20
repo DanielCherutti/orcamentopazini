@@ -73,8 +73,6 @@ const styles = StyleSheet.create({
     },
     segmentHeader: {
         marginBottom: 14,
-        borderBottomWidth: 2,
-        borderBottomColor: theme.colors.secondary,
         paddingBottom: 5,
     },
     runningHeaderBand: {

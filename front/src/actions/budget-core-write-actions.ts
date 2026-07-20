@@ -518,6 +518,7 @@ async function isDraftBudgetForProductStickerRow(
 /** Dados do catálogo propagados para itens de compositor e figurinhas em fotos (só `draft`). */
 export type ProductCatalogSyncSnapshot = {
     code: string;
+    ncm: string;
     description: string;
     unit: string;
     equipmentPrice: number;
@@ -544,6 +545,7 @@ export async function syncProductCatalogToDraftBudgetItemsAction(
         const productName =
             snapshot.description.trim() || snapshot.code.trim() || "Produto";
         const productUnit = snapshot.unit.trim();
+        const productNcm = snapshot.ncm.trim();
         const unitPrice = snapshot.equipmentPrice;
         const laborCost = snapshot.assemblyPrice;
 
@@ -564,11 +566,13 @@ export async function syncProductCatalogToDraftBudgetItemsAction(
             const status = String(budget.status ?? "");
             if (!isBudgetEditableStatus(status)) continue;
 
-            const qty = Math.max(1, Number(item.quantity || 1));
+            const rawQty = Number(item.quantity ?? 1);
+            const qty = Number.isFinite(rawQty) && rawQty > 0 ? rawQty : 1;
             const newTotal = (unitPrice + laborCost) * qty;
 
             const curName = String(item.product_name ?? "");
             const curCode = String(item.product_code ?? "");
+            const curNcm = String(item.product_ncm ?? "");
             const curUnit = String(item.product_unit ?? "");
             const curU = Number(item.unit_price ?? 0);
             const curL = Number(item.labor_cost ?? 0);
@@ -578,6 +582,7 @@ export async function syncProductCatalogToDraftBudgetItemsAction(
             const unchanged =
                 curName === productName &&
                 curCode === productCode &&
+                curNcm === productNcm &&
                 curUnit === productUnit &&
                 curU === unitPrice &&
                 curL === laborCost &&
@@ -589,6 +594,7 @@ export async function syncProductCatalogToDraftBudgetItemsAction(
                 await db.update(itemRecordId).merge({
                     product_name: productName,
                     ...(productCode ? { product_code: productCode } : {}),
+                    product_ncm: productNcm,
                     product_unit: productUnit,
                     unit_price: unitPrice,
                     labor_cost: laborCost,
@@ -712,10 +718,12 @@ export async function syncProductPricesToDraftBudgetsAction(
             return { success: false, updatedItems: 0, error: "Produto não encontrado" };
         }
         const code = String(p.code ?? "");
+        const ncm = String(p.ncm ?? "");
         const description = String(p.description ?? "");
         const unit = String(p.unit ?? "");
         const res = await syncProductCatalogToDraftBudgetItemsAction(productId, {
             code,
+            ncm,
             description,
             unit,
             equipmentPrice: unitPrice,

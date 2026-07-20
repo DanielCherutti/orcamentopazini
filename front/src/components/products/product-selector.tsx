@@ -251,6 +251,9 @@ export function ProductSelector({
                                                         <span className="sel-strong font-semibold text-foreground">
                                                             {product.unit}
                                                         </span>
+                                                        <span className="sel-strong font-mono text-foreground">
+                                                            NCM: {product.ncm || "—"}
+                                                        </span>
                                                         <span className="min-w-0">
                                                             Eq: {formatCurrency(product.equipmentPrice)} · Mont:{" "}
                                                             {formatCurrency(product.assemblyPrice)}
@@ -268,7 +271,7 @@ export function ProductSelector({
                                                         </span>
                                                     </div>
                                                     <div className="mt-1 flex justify-between gap-2 text-xs text-muted-foreground">
-                                                        <span>{product.unit}</span>
+                                                        <span>{product.unit} · NCM: {product.ncm || "—"}</span>
                                                         <span className="truncate text-right">
                                                             Eq: {formatCurrency(product.equipmentPrice)} + Mont:{" "}
                                                             {formatCurrency(product.assemblyPrice)}

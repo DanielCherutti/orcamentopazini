@@ -97,6 +97,9 @@ export function serializeBudgetEntity<T extends DbEntity>(item: T): T {
       if (po?.code != null && String(po.code).trim() !== "" && !newItem.product_code) {
         newItem.product_code = String(po.code).trim();
       }
+      if (po?.ncm != null && String(po.ncm).trim() !== "" && !newItem.product_ncm) {
+        newItem.product_ncm = String(po.ncm).trim();
+      }
     } else {
       const pid = recordIdToString(newItem.product_id);
       if (pid) {
@@ -126,4 +129,3 @@ export function serializeBudgetEntity<T extends DbEntity>(item: T): T {
 
   return newItem as T;
 }
-

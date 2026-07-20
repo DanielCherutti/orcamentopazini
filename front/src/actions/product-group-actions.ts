@@ -359,13 +359,14 @@ export async function getProductGroupProductsAction(groupId: string) {
 
     const products = await withDbRetry(async (db) => {
       const result = await db.query(
-        `SELECT id, code, description, unit, equipmentPrice, assemblyPrice, imageUrl FROM product WHERE tenant_id = $tenantId AND group_ids CONTAINS $groupId`,
+        `SELECT id, code, ncm, description, unit, equipmentPrice, assemblyPrice, imageUrl FROM product WHERE tenant_id = $tenantId AND group_ids CONTAINS $groupId`,
         { tenantId: tenantRecordId(tenantId), groupId: groupRecordId },
       );
       const rawProducts = Array.isArray(result[0]) ? result[0] : [];
       return rawProducts.map((p: Record<string, unknown>) => ({
         id: recordIdToString(p.id),
         code: p.code as string,
+        ncm: String(p.ncm ?? ""),
         description: p.description as string,
         unit: p.unit as string,
         equipmentPrice: p.equipmentPrice as number,

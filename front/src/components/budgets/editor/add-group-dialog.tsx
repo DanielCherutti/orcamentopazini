@@ -148,7 +148,7 @@ export function AddGroupDialog({
   const setQuantity = useCallback((groupIdx: number, productId: string, qty: number) => {
     setQuantities((prev) => {
       const next = new Map(prev);
-      next.set(ckey(groupIdx, productId), Math.max(1, qty));
+      next.set(ckey(groupIdx, productId), Number.isFinite(qty) && qty > 0 ? qty : 1);
       return next;
     });
   }, []);
@@ -385,7 +385,6 @@ export function AddGroupDialog({
                               </div>
                               <QuantityTextInput
                                 value={quantities.get(ckey(idx, p.id)) ?? 1}
-                                min={1}
                                 disabled={!isSelectedHere}
                                 onValueChange={(n) => setQuantity(idx, p.id, n)}
                                 onClick={(e) => e.stopPropagation()}
