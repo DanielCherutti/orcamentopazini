@@ -110,6 +110,18 @@ function ScopeItemRowInner({
             productFallback?.description ??
             productFallback?.name ??
             productFallback?.code) as string | undefined;
+    const productCode = String(
+        (item as Record<string, unknown>).product_code ??
+            productData?.code ??
+            productFallback?.code ??
+            "—"
+    ).trim() || "—";
+    const productNcm = String(
+        (item as Record<string, unknown>).product_ncm ??
+            productData?.ncm ??
+            productFallback?.ncm ??
+            "—"
+    ).trim() || "—";
     const productUnit = (
         (item as Record<string, unknown>).product_unit as string | undefined ??
         (productData?.unit as string | undefined) ??
@@ -159,7 +171,7 @@ function ScopeItemRowInner({
     );
 
     const handleQtyChange = (val: number) => {
-        if (val < 1) return;
+        if (!Number.isFinite(val) || val <= 0) return;
         setQty(val);
         if (qtyDebounce.current) clearTimeout(qtyDebounce.current);
         qtyDebounce.current = setTimeout(() => {
@@ -194,10 +206,13 @@ function ScopeItemRowInner({
         <div className={cn("space-y-2", indented && "ml-4")}>
             <div
                 className={cn(
-                    "grid grid-cols-12 gap-2 items-center px-2 py-1.5 rounded-md border bg-background text-sm"
+                    "grid grid-cols-[repeat(14,minmax(0,1fr))] gap-2 items-center px-2 py-1.5 rounded-md border bg-background text-sm"
                 )}
             >
-                <div className="col-span-3 flex items-center gap-1.5 min-w-0">
+                <div className="col-span-1 truncate text-[11px] font-mono" title={productCode}>
+                    {productCode}
+                </div>
+                <div className="col-span-2 flex items-center gap-1.5 min-w-0">
                     {selectionEnabled && (
                         <Checkbox
                             checked={selected}
@@ -224,6 +239,9 @@ function ScopeItemRowInner({
                         </span>
                     ) : null}
                 </div>
+                <div className="col-span-1 truncate text-[11px] font-mono" title={productNcm}>
+                    {productNcm}
+                </div>
                 <div className="col-span-2 flex items-center justify-center gap-1 min-w-0">
                 {isReadOnly ? (
                     <span className="text-xs tabular-nums">
@@ -236,7 +254,6 @@ function ScopeItemRowInner({
                     <>
                         <QuantityTextInput
                             value={qty}
-                            min={1}
                             onValueChange={handleQtyChange}
                             className="w-11 shrink-0 text-center border border-input rounded text-xs h-6 bg-background"
                             aria-label="Quantidade"

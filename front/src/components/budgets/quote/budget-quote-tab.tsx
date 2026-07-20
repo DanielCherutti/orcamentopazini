@@ -140,6 +140,7 @@ interface BudgetQuoteTabProps {
     budgetId: string;
     isReadOnly: boolean;
     onBudgetRefresh?: () => void | Promise<void>;
+    onTotalChange?: (total: number) => void;
 }
 
 function CollapsibleTextBlock({
@@ -197,7 +198,12 @@ function CollapsibleTextBlock({
     );
 }
 
-export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: BudgetQuoteTabProps) {
+export function BudgetQuoteTab({
+    budgetId,
+    isReadOnly,
+    onBudgetRefresh,
+    onTotalChange,
+}: BudgetQuoteTabProps) {
     const [loading, setLoading] = useState(true);
     const [budget, setBudget] = useState<Budget | null>(null);
     const [quoteLocations, setQuoteLocations] = useState<BudgetQuoteTabLocationBreakdown[]>([]);
@@ -347,6 +353,10 @@ export function BudgetQuoteTab({ budgetId, isReadOnly, onBudgetRefresh }: Budget
             grand: Math.round((eq + as) * 100) / 100,
         };
     }, [tableRows, showSections]);
+
+    useEffect(() => {
+        if (!loading && budget) onTotalChange?.(totals.grand);
+    }, [budget, loading, onTotalChange, totals.grand]);
 
     const quoteTableBodyRows = useMemo(() => {
         let locIndex = 0;

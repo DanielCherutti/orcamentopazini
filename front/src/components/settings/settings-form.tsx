@@ -7,7 +7,6 @@ import {
     testImapConnectionAction,
     updateProposalSettingsAction,
 } from "@/actions/settings-actions";
-import { BrandAssetUploadField } from "@/components/platform/brand-asset-upload-field";
 import { TenantAppearanceSettings } from "@/components/settings/tenant-appearance-settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,8 +33,16 @@ export function SettingsForm({ initialSettings }: { initialSettings: ProposalSet
         e.preventDefault();
         setIsLoading(true);
         try {
+            const {
+                company_name: _companyName,
+                company_logo_url: _companyLogoUrl,
+                company_favicon_url: _companyFaviconUrl,
+                primary_color: _primaryColor,
+                secondary_color: _secondaryColor,
+                ...editableSettings
+            } = formData;
             const res = await updateProposalSettingsAction({
-                ...formData,
+                ...editableSettings,
                 smtp_pass_new: smtpPassNew.trim() || undefined,
                 imap_pass_new: imapPassNew.trim() || undefined,
             });
@@ -82,89 +89,6 @@ export function SettingsForm({ initialSettings }: { initialSettings: ProposalSet
             </div>
 
             <TenantAppearanceSettings />
-
-            {/* Identidade Visual */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Identidade Visual</CardTitle>
-                    <CardDescription>
-                        Defina como sua marca aparece nas propostas. A <strong>cor primária</strong> e a{" "}
-                        <strong>cor secundária</strong> também atualizam o painel interno, o menu lateral e a tela de
-                        login (após salvar).
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <Label>Nome da Empresa (Exibição)</Label>
-                            <Input
-                                value={formData.company_name || ""}
-                                onChange={e => setFormData({ ...formData, company_name: e.target.value })}
-                            />
-                        </div>
-                        <BrandAssetUploadField
-                            id="settings-logo"
-                            label="Logo"
-                            value={formData.company_logo_url || ""}
-                            onChange={(url) =>
-                                setFormData({ ...formData, company_logo_url: url })
-                            }
-                            asset="logo"
-                            uploadUrl="/api/upload/library"
-                            hint="JPG, PNG, GIF ou WEBP (até 5 MB). Salve após o upload."
-                        />
-                        <BrandAssetUploadField
-                            id="settings-favicon"
-                            label="Favicon (opcional)"
-                            value={formData.company_favicon_url || ""}
-                            onChange={(url) =>
-                                setFormData({ ...formData, company_favicon_url: url })
-                            }
-                            asset="favicon"
-                            uploadUrl="/api/upload/library"
-                            hint="PNG ou ICO (até 512 KB). Ícone da aba do navegador."
-                        />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label>Cor Primária (Hex)</Label>
-                            <div className="flex gap-2">
-                                <div className="relative">
-                                    <Input
-                                        type="color"
-                                        className="w-12 h-10 p-1 cursor-pointer absolute opacity-0"
-                                        value={formData.primary_color || "#000000"}
-                                        onChange={e => setFormData({ ...formData, primary_color: e.target.value })}
-                                    />
-                                    <div className="w-12 h-10 rounded border" style={{ backgroundColor: formData.primary_color }}></div>
-                                </div>
-                                <Input
-                                    value={formData.primary_color || ""}
-                                    onChange={e => setFormData({ ...formData, primary_color: e.target.value })}
-                                />
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Cor Secundária (Hex)</Label>
-                            <div className="flex gap-2">
-                                <div className="relative">
-                                    <Input
-                                        type="color"
-                                        className="w-12 h-10 p-1 cursor-pointer absolute opacity-0"
-                                        value={formData.secondary_color || "#000000"}
-                                        onChange={e => setFormData({ ...formData, secondary_color: e.target.value })}
-                                    />
-                                    <div className="w-12 h-10 rounded border" style={{ backgroundColor: formData.secondary_color }}></div>
-                                </div>
-                                <Input
-                                    value={formData.secondary_color || ""}
-                                    onChange={e => setFormData({ ...formData, secondary_color: e.target.value })}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
 
             {/* Dados usados pelo PDF; liga/desliga e layout ficam no compositor. */}
             <Card>

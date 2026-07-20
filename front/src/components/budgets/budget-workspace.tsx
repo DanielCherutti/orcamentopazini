@@ -87,6 +87,7 @@ export function BudgetWorkspace({
     const [useLightScopeRead] = useState(Boolean(initialUseLightScopeRead));
     const [hasChanges, setHasChanges] = useState(false);
     const [refreshCounter, setRefreshCounter] = useState(0);
+    const [liveQuoteTotal, setLiveQuoteTotal] = useState<number | null>(null);
     const [environmentsExpanded, setEnvironmentsExpanded] = useState(false);
     const searchParams = useSearchParams();
     const [activeTab, setActiveTab] = useState<ActiveTab>("budget");
@@ -108,6 +109,7 @@ export function BudgetWorkspace({
 
     useEffect(() => {
         setBudget(initialBudget);
+        setLiveQuoteTotal(null);
     }, [initialBudget]);
 
     const isReadOnly = !isBudgetEditableStatus(budget.status);
@@ -172,6 +174,7 @@ export function BudgetWorkspace({
                     {/* Barra unificada: back + título + abas + ações */}
                     <BudgetWorkspaceHeader
                         budget={budget}
+                        liveTotalValue={liveQuoteTotal}
                         hasChanges={hasChanges}
                         onSave={handleSave}
                         onOpenPreview={() => window.open(pdfUrl, "_blank")}
@@ -240,6 +243,7 @@ export function BudgetWorkspace({
                                             budgetId={budgetId}
                                             isReadOnly={isReadOnly}
                                             onBudgetRefresh={handleRefresh}
+                                            onTotalChange={setLiveQuoteTotal}
                                         />
                                     </div>
                                 )}

@@ -48,6 +48,9 @@ export async function addItemToBlockAction(
 ): Promise<{ success: boolean; error?: string }> {
     const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+        return { success: false, error: "Quantidade deve ser maior que zero" };
+    }
 
     const gate = await assertBudgetChildInActiveTenant("budget_block", blockId, budgetId);
     if (!gate.ok) return { success: false, error: gate.error };
@@ -64,12 +67,20 @@ export async function addItemToBlockAction(
 
         const unitPrice = Number(product.equipmentPrice || 0);
         const laborCost = Number(product.assemblyPrice || 0);
+        const productName = String(product.description || product.code || "");
+        const productCode = String(product.code ?? "").trim();
+        const productNcm = String(product.ncm ?? "").trim();
+        const productUnit = String(product.unit ?? "").trim();
         const orderIndex = await nextOrderIndex(db, blockId);
 
         await db.create(new Table("budget_item")).content({
             block_id: requireRecordId("budget_block", blockId),
             budget_id: requireRecordId("budget", budgetId),
             product_id: productRecordId,
+            product_name: productName,
+            ...(productCode ? { product_code: productCode } : {}),
+            ...(productNcm ? { product_ncm: productNcm } : {}),
+            ...(productUnit ? { product_unit: productUnit } : {}),
             quantity,
             unit_price: unitPrice,
             labor_cost: laborCost,
@@ -143,12 +154,23 @@ export async function addGroupToBlockAction(
 
             const unitPrice = Number(product.equipmentPrice || 0);
             const laborCost = Number(product.assemblyPrice || 0);
-            const quantity = Math.max(1, normalizedQty[productId] ?? 1);
+            const productName = String(product.description || product.code || "");
+            const productCode = String(product.code ?? "").trim();
+            const productNcm = String(product.ncm ?? "").trim();
+            const productUnit = String(product.unit ?? "").trim();
+            const requestedQuantity = Number(normalizedQty[productId] ?? 1);
+            const quantity = Number.isFinite(requestedQuantity) && requestedQuantity > 0
+                ? requestedQuantity
+                : 1;
 
             await db.create(new Table("budget_item")).content({
                 block_id: requireRecordId("budget_block", blockId),
                 budget_id: requireRecordId("budget", budgetId),
                 product_id: requireRecordId("product", productId),
+                product_name: productName,
+                ...(productCode ? { product_code: productCode } : {}),
+                ...(productNcm ? { product_ncm: productNcm } : {}),
+                ...(productUnit ? { product_unit: productUnit } : {}),
                 quantity,
                 unit_price: unitPrice,
                 labor_cost: laborCost,
@@ -231,6 +253,9 @@ export async function updateItemQuantityInBlockAction(
 ): Promise<{ success: boolean; error?: string }> {
     const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+        return { success: false, error: "Quantidade deve ser maior que zero" };
+    }
 
     const gate = await assertBudgetChildInActiveTenant("budget_item", itemId, budgetId);
     if (!gate.ok) return { success: false, error: gate.error };

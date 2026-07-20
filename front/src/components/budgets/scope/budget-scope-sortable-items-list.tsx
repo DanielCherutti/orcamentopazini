@@ -153,6 +153,11 @@ function ReadOnlyGroupBlock({
                 <span className="min-w-0 flex-1 px-1 text-center text-xs font-semibold uppercase leading-snug tracking-wide text-muted-foreground [overflow-wrap:anywhere] break-words">
                     {seg.name}
                 </span>
+                {seg.id.startsWith("temporary:::") ? (
+                    <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-800">
+                        Temp.
+                    </span>
+                ) : null}
                 <div className="h-0.5 min-w-6 flex-1 rounded-full bg-muted-foreground/35" />
             </div>
             <div className="mx-2 mb-1 rounded-bl-md border-s-[3px] border-primary/40 ps-2.5">
@@ -607,6 +612,11 @@ function SortableGroup({
                 <span className="min-w-0 flex-1 px-1 text-center text-xs font-semibold uppercase leading-snug tracking-wide text-muted-foreground [overflow-wrap:anywhere] break-words">
                     {seg.name}
                 </span>
+                {seg.id.startsWith("temporary:::") ? (
+                    <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-800">
+                        Temp.
+                    </span>
+                ) : null}
                 <div className="h-0.5 min-w-6 flex-1 rounded-full bg-muted-foreground/35" />
             </div>
             {/* Itens com trilho à esquerda para fechar visualmente com o rodapé */}

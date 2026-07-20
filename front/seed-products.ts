@@ -192,6 +192,7 @@ async function seedProducts() {
                 company_id: DEFAULT_COMPANY_ID,
                 tenant_id: new StringRecordId(DEFAULT_TENANT_RECORD_ID),
                 code,
+                ncm: String(73000000 + i),
                 description: `${description} ${category.name}`,
                 detailedDescription: generateDetailedDescription(description, category.name),
                 unit,

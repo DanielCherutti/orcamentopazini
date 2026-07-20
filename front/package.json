@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --import tsx --test src/lib/model-variables.test.ts src/lib/model-template-structure.test.ts src/lib/document-page-layout.test.ts src/components/budgets/budget-model-import-dialog.test.tsx",
+    "test": "node --import tsx --test src/lib/model-variables.test.ts src/lib/model-template-structure.test.ts src/lib/document-page-layout.test.ts src/lib/budgets/item-group-segment.test.ts src/lib/budgets/scope-pricing.test.ts src/lib/pdf/cover-pdf-blocks.test.ts src/lib/pdf/pdf-filename.test.ts src/lib/products/ncm.test.ts src/components/budgets/budget-model-import-dialog.test.tsx src/components/dashboard/dashboard-welcome-logo.test.tsx",
     "test:quote-breakdown": "tsx scripts/quote-breakdown-regression.ts",
     "test:tenant-isolation": "tsx scripts/tenant-isolation-regression.ts",
     "test:platform-license": "tsx scripts/platform-license-enforcement-regression.ts",

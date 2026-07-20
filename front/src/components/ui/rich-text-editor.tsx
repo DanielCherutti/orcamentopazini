@@ -257,6 +257,27 @@ const ParagraphSpacingExtension = Extension.create({
             ? { style: `margin-bottom: ${String(attributes.spaceAfter)}` }
             : {},
         },
+        leftIndent: {
+          default: null,
+          parseHTML: (element) => (element as HTMLElement).style.marginLeft || null,
+          renderHTML: (attributes) => attributes.leftIndent
+            ? { style: `margin-left: ${String(attributes.leftIndent)}` }
+            : {},
+        },
+        rightIndent: {
+          default: null,
+          parseHTML: (element) => (element as HTMLElement).style.marginRight || null,
+          renderHTML: (attributes) => attributes.rightIndent
+            ? { style: `margin-right: ${String(attributes.rightIndent)}` }
+            : {},
+        },
+        firstLineIndent: {
+          default: null,
+          parseHTML: (element) => (element as HTMLElement).style.textIndent || null,
+          renderHTML: (attributes) => attributes.firstLineIndent
+            ? { style: `text-indent: ${String(attributes.firstLineIndent)}` }
+            : {},
+        },
       },
     }];
   },
@@ -388,15 +409,93 @@ function RulerCorner() {
   return <div className="h-6 w-6 shrink-0 border border-neutral-500/45 bg-[#d8d8d8]" />;
 }
 
-function RulerHorizontal({ className }: { className?: string }) {
+type ParagraphRulerValues = {
+  leftIndentCm: number;
+  rightIndentCm: number;
+  firstLineIndentCm: number;
+};
+
+function cssLengthToCm(raw: unknown): number {
+  const value = String(raw ?? "").trim().toLowerCase();
+  const match = value.match(/^(-?\d*\.?\d+)\s*(cm|mm|in|pt|px)?$/);
+  if (!match) return 0;
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount)) return 0;
+  switch (match[2] || "px") {
+    case "cm": return amount;
+    case "mm": return amount / 10;
+    case "in": return amount * 2.54;
+    case "pt": return amount * (2.54 / 72);
+    default: return amount * (2.54 / 96);
+  }
+}
+
+function RulerHorizontal({
+  className,
+  margins,
+  values,
+  disabled,
+  onChange,
+  onDragStart,
+}: {
+  className?: string;
+  margins: DocumentMarginsCm;
+  values: ParagraphRulerValues;
+  disabled: boolean;
+  onChange: (kind: keyof ParagraphRulerValues, value: number) => void;
+  onDragStart: () => void;
+}) {
+  const rulerRef = useRef<HTMLDivElement>(null);
+  const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+  const usableWidth = Math.max(1, 21 - margins.left - margins.right);
+  const left = clamp(values.leftIndentCm, 0, usableWidth - values.rightIndentCm);
+  const right = clamp(values.rightIndentCm, 0, usableWidth - left);
+  const first = clamp(values.firstLineIndentCm, -left, usableWidth - left - right);
+  const toPercent = (cm: number) => `${(clamp(cm, 0, 21) / 21) * 100}%`;
+
+  const startDrag = (kind: keyof ParagraphRulerValues) => (event: React.PointerEvent) => {
+    if (disabled) return;
+    event.preventDefault();
+    event.stopPropagation();
+    onDragStart();
+    const pointerId = event.pointerId;
+    const move = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== pointerId) return;
+      const rect = rulerRef.current?.getBoundingClientRect();
+      if (!rect?.width) return;
+      const pageCm = clamp(((moveEvent.clientX - rect.left) / rect.width) * 21, 0, 21);
+      let next = 0;
+      if (kind === "leftIndentCm") {
+        next = clamp(pageCm - margins.left, 0, usableWidth - right);
+      } else if (kind === "rightIndentCm") {
+        next = clamp(21 - margins.right - pageCm, 0, usableWidth - left);
+      } else {
+        next = clamp(pageCm - margins.left - left, -left, usableWidth - left - right);
+      }
+      onChange(kind, Math.round(next * 10) / 10);
+    };
+    const up = (upEvent: PointerEvent) => {
+      if (upEvent.pointerId !== pointerId) return;
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", up, true);
+      window.removeEventListener("pointercancel", up, true);
+    };
+    window.addEventListener("pointermove", move, { capture: true });
+    window.addEventListener("pointerup", up, { capture: true });
+    window.addEventListener("pointercancel", up, { capture: true });
+  };
+
   return (
     <div
+      ref={rulerRef}
       className={cn('relative h-6 shrink-0 overflow-hidden border border-l-0 border-neutral-500/45 bg-[#e8e8e8]', className)}
       style={{
         backgroundImage:
           'repeating-linear-gradient(90deg, transparent 0, transparent calc(0.47619% - 1px), #b0b0b0 calc(0.47619% - 1px), #b0b0b0 0.47619%)',
       }}
     >
+      <div className="absolute inset-y-0 left-0 bg-neutral-400/35" style={{ width: toPercent(margins.left) }} />
+      <div className="absolute inset-y-0 right-0 bg-neutral-400/35" style={{ width: toPercent(margins.right) }} />
       {Array.from({ length: 22 }, (_, cm) => (
         <span
           key={cm}
@@ -406,6 +505,40 @@ function RulerHorizontal({ className }: { className?: string }) {
           {cm}
         </span>
       ))}
+      <button
+        type="button"
+        disabled={disabled}
+        aria-label="Recuo da primeira linha"
+        title={`Recuo da primeira linha: ${first.toFixed(1)} cm`}
+        onPointerDown={startDrag("firstLineIndentCm")}
+        className="absolute top-0 z-20 h-3 w-3 -translate-x-1/2 cursor-ew-resize border-0 bg-transparent p-0 disabled:cursor-default"
+        style={{ left: toPercent(margins.left + left + first) }}
+      >
+        <span className="block h-0 w-0 border-x-[6px] border-t-[7px] border-x-transparent border-t-[#555]" />
+      </button>
+      <button
+        type="button"
+        disabled={disabled}
+        aria-label="Recuo esquerdo"
+        title={`Recuo esquerdo: ${left.toFixed(1)} cm`}
+        onPointerDown={startDrag("leftIndentCm")}
+        className="absolute bottom-0 z-20 h-3.5 w-3 -translate-x-1/2 cursor-ew-resize border-0 bg-transparent p-0 disabled:cursor-default"
+        style={{ left: toPercent(margins.left + left) }}
+      >
+        <span className="mx-auto block h-0 w-0 border-x-[6px] border-b-[7px] border-x-transparent border-b-[#555]" />
+        <span className="mx-auto block h-1.5 w-3 bg-[#555]" />
+      </button>
+      <button
+        type="button"
+        disabled={disabled}
+        aria-label="Recuo direito"
+        title={`Recuo direito: ${right.toFixed(1)} cm`}
+        onPointerDown={startDrag("rightIndentCm")}
+        className="absolute bottom-0 z-20 h-3 w-3 -translate-x-1/2 cursor-ew-resize border-0 bg-transparent p-0 disabled:cursor-default"
+        style={{ left: toPercent(21 - margins.right - right) }}
+      >
+        <span className="block h-0 w-0 border-x-[6px] border-b-[8px] border-x-transparent border-b-[#555]" />
+      </button>
     </div>
   );
 }
@@ -482,6 +615,11 @@ export function RichTextEditor({
   const [spaceAfterPt, setSpaceAfterPt] = useState(0);
   const [spaceBeforeMixed, setSpaceBeforeMixed] = useState(false);
   const [spaceAfterMixed, setSpaceAfterMixed] = useState(false);
+  const [paragraphRuler, setParagraphRuler] = useState<ParagraphRulerValues>({
+    leftIndentCm: 0,
+    rightIndentCm: 0,
+    firstLineIndentCm: 0,
+  });
   const [imageSelection, setImageSelection] = useState<{
     active: boolean;
     align: "left" | "center" | "right";
@@ -705,11 +843,17 @@ export function RichTextEditor({
       const paragraphAttrs = new Set<string>();
       const beforeAttrs = new Set<string>();
       const afterAttrs = new Set<string>();
+      const leftIndentAttrs = new Set<string>();
+      const rightIndentAttrs = new Set<string>();
+      const firstLineIndentAttrs = new Set<string>();
       const collectBlock = (node: { type: { name: string }; attrs: Record<string, unknown> }) => {
         if (!["paragraph", "heading", "listItem"].includes(node.type.name)) return;
         paragraphAttrs.add(String(node.attrs.lineHeight ?? "1.0"));
         beforeAttrs.add(String(node.attrs.spaceBefore ?? "0pt"));
         afterAttrs.add(String(node.attrs.spaceAfter ?? "0pt"));
+        leftIndentAttrs.add(String(node.attrs.leftIndent ?? "0cm"));
+        rightIndentAttrs.add(String(node.attrs.rightIndent ?? "0cm"));
+        firstLineIndentAttrs.add(String(node.attrs.firstLineIndent ?? "0cm"));
       };
       if (from === to) {
         for (let depth = editor.state.selection.$from.depth; depth >= 0; depth -= 1) {
@@ -727,6 +871,11 @@ export function RichTextEditor({
       if (firstLineHeight) setLineHeightValue(String(firstLineHeight));
       if (firstBefore) setSpaceBeforePt(Number.parseFloat(String(firstBefore)) || 0);
       if (firstAfter) setSpaceAfterPt(Number.parseFloat(String(firstAfter)) || 0);
+      setParagraphRuler({
+        leftIndentCm: cssLengthToCm(leftIndentAttrs.values().next().value),
+        rightIndentCm: cssLengthToCm(rightIndentAttrs.values().next().value),
+        firstLineIndentCm: cssLengthToCm(firstLineIndentAttrs.values().next().value),
+      });
     };
     syncFontSize();
     editor.on('selectionUpdate', syncFontSize);
@@ -840,6 +989,17 @@ export function RichTextEditor({
       setSpaceAfterMixed(false);
       applyParagraphAttributes({ spaceAfter: `${pt}pt` });
     }
+  };
+  const applyParagraphRuler = (kind: keyof ParagraphRulerValues, value: number) => {
+    const next = { ...paragraphRuler, [kind]: value };
+    setParagraphRuler(next);
+    const attr =
+      kind === "leftIndentCm"
+        ? "leftIndent"
+        : kind === "rightIndentCm"
+          ? "rightIndent"
+          : "firstLineIndent";
+    applyParagraphAttributes({ [attr]: `${value.toFixed(1)}cm` });
   };
 
   const wc = isWord || isRibbon ? 'h-7 w-7 p-0' : undefined;
@@ -1642,7 +1802,14 @@ export function RichTextEditor({
                 <RulerCorner />
               </div>
               <div className="col-start-2 row-start-1 min-w-0">
-                <RulerHorizontal className="w-full" />
+                <RulerHorizontal
+                  className="w-full"
+                  margins={wordMargins}
+                  values={paragraphRuler}
+                  disabled={readOnly}
+                  onDragStart={rememberEditorSelection}
+                  onChange={applyParagraphRuler}
+                />
               </div>
               <div className="col-start-1 row-start-2 flex w-6 shrink-0 self-stretch">
                 <RulerVertical className="min-h-0 flex-1" />

@@ -192,7 +192,6 @@ function HeaderFooterPdfElement({
             style={{
               flex: 1,
               padding: editorPxToPt(element.padding ?? 4),
-              ...(index < columns.length - 1 ? { borderRightWidth: 0.5, borderRightColor: "#d1d5db" } : {}),
             }}
           >
             {renderTextWithPageNumbers(column, textStyle, pageNumbering, pageScope)}
@@ -266,8 +265,6 @@ function PositionedHeaderFooterText({
     return (
       <>
         {columns.map((column, index) => {
-          const dividerStyle =
-            index < columns.length - 1 ? { borderRightWidth: 0.5, borderRightColor: "#d1d5db" } : {};
           return (
             <Text
               key={`${element.id}-col-${index}`}
@@ -277,7 +274,6 @@ function PositionedHeaderFooterText({
                   ...box,
                   left: Number(box.left ?? 0) + columnWidth * index,
                   width: columnWidth,
-                  ...dividerStyle,
                 },
               ]}
             >

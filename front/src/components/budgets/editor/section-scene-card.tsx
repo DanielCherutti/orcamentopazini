@@ -42,7 +42,7 @@ function ItemQuantityRow({ item, onDelete, onUpdateQuantity, formatCurrency }: I
     }
 
     const handleQtyCommit = async () => {
-        if (qty === item.quantity || qty < 1) return;
+        if (qty === item.quantity || !Number.isFinite(qty) || qty <= 0) return;
         setSaving(true);
         await onUpdateQuantity(item.id!, qty);
         setSaving(false);
@@ -60,7 +60,6 @@ function ItemQuantityRow({ item, onDelete, onUpdateQuantity, formatCurrency }: I
             <div className="col-span-4 md:col-span-2 flex items-center justify-center gap-1">
                 <QuantityTextInput
                     value={qty}
-                    min={1}
                     disabled={saving}
                     onValueChange={setQty}
                     onBlur={handleQtyCommit}
@@ -289,7 +288,7 @@ export function SectionSceneCard({ section, budget_id, sectionNumber, onRefresh 
     };
 
     const handleUpdateQuantity = useCallback(async (itemId: string, quantity: number) => {
-        if (quantity < 1) return;
+        if (!Number.isFinite(quantity) || quantity <= 0) return;
         const res = await repo.updateItemQuantity(itemId, budget_id, quantity);
         if (res.success) {
             onRefresh();

@@ -64,10 +64,12 @@ async function createBudgetItemInSection(
     laborCost: number,
     quantity: number,
     productUnit?: string,
-    productCode?: string
+    productCode?: string,
+    productNcm?: string,
 ): Promise<string> {
     const unitLabel = productUnit?.trim();
     const codeLabel = productCode?.trim();
+    const ncmLabel = productNcm?.trim();
     const orderIndex = await nextSectionItemOrderIndex(db, sectionId);
     const computedTotal = computeItemSubtotal({
         quantity,
@@ -83,6 +85,7 @@ async function createBudgetItemInSection(
         product_id: requireRecordId("product", productId),
         product_name: productName,
         ...(codeLabel ? { product_code: codeLabel } : {}),
+        ...(ncmLabel ? { product_ncm: ncmLabel } : {}),
         ...(unitLabel ? { product_unit: unitLabel } : {}),
         quantity,
         unit_price: unitPrice,
@@ -180,6 +183,7 @@ async function serializeBudgetItemsFromRawQueryRows(
                 (it as Record<string, unknown>).product_data = {
                     id: String(product.id),
                     code: product.code,
+                    ncm: product.ncm,
                     description: product.description ?? product.name,
                     name: product.name,
                     unit: product.unit,
@@ -200,6 +204,9 @@ async function serializeBudgetItemsFromRawQueryRows(
         }
         if (!r.product_code && pd?.code != null && String(pd.code).trim() !== "") {
             r.product_code = String(pd.code).trim();
+        }
+        if (!r.product_ncm && pd?.ncm != null && String(pd.ncm).trim() !== "") {
+            r.product_ncm = String(pd.ncm).trim();
         }
         const u = pd?.unit;
         if (u != null && String(u).trim() !== "" && !r.product_unit) {
@@ -295,6 +302,7 @@ async function hydrateLightItemsProductData(
                 const normalized: Record<string, unknown> = {
                     id: String(p.id ?? `product:${clean}`),
                     code: p.code,
+                    ncm: p.ncm,
                     description: p.description ?? p.name ?? "",
                     name: p.name,
                     unit: p.unit,
@@ -328,6 +336,9 @@ async function hydrateLightItemsProductData(
             if (!row.product_code && mergedPd.code != null && String(mergedPd.code).trim() !== "") {
                 row.product_code = String(mergedPd.code).trim();
             }
+            if (!row.product_ncm && mergedPd.ncm != null && String(mergedPd.ncm).trim() !== "") {
+                row.product_ncm = String(mergedPd.ncm).trim();
+            }
         } else if (pid && row.product_name) {
             row.product_id = {
                 id: pid,
@@ -339,7 +350,7 @@ async function hydrateLightItemsProductData(
     });
 }
 
-/** Preenche `product_code` nos itens do escopo (PDF e itens antigos sem código gravado). */
+/** Preenche código e NCM nos itens do escopo (PDF e itens antigos sem snapshot gravado). */
 export async function enrichBudgetLocationsProductCodes(
     db: Awaited<ReturnType<typeof getDb>>,
     locations: BudgetLocation[] | undefined
@@ -363,7 +374,9 @@ export async function enrichBudgetLocationsProductCodes(
     const productKeys = new Set<string>();
     for (const item of items) {
         const row = item as unknown as Record<string, unknown>;
-        if (row.product_code && String(row.product_code).trim() !== "") continue;
+        const hasCode = row.product_code && String(row.product_code).trim() !== "";
+        const hasNcm = row.product_ncm && String(row.product_ncm).trim() !== "";
+        if (hasCode && hasNcm) continue;
         const pid = extractProductId(row.product_id);
         if (!pid) continue;
         const canon = canonicalTableRecordId("product", pid);
@@ -376,27 +389,38 @@ export async function enrichBudgetLocationsProductCodes(
             .filter(Boolean);
         if (recordIds.length > 0) {
             try {
-                const res = await db.query<[Array<{ id: unknown; code?: unknown }>]>(
-                    `SELECT id, code FROM product WHERE id INSIDE $ids`,
+                const res = await db.query<[Array<{ id: unknown; code?: unknown; ncm?: unknown }>]>(
+                    `SELECT id, code, ncm FROM product WHERE id INSIDE $ids`,
                     { ids: recordIds }
                 );
                 const codeByProductId = new Map<string, string>();
+                const ncmByProductId = new Map<string, string>();
                 for (const p of res[0] ?? []) {
                     const id = recordIdToString(p.id);
                     const code = String(p.code ?? "").trim();
-                    if (!id || !code) continue;
-                    codeByProductId.set(id, code);
-                    codeByProductId.set(canonicalTableRecordId("product", id), code);
+                    const ncm = String(p.ncm ?? "").trim();
+                    if (!id) continue;
+                    if (code) {
+                        codeByProductId.set(id, code);
+                        codeByProductId.set(canonicalTableRecordId("product", id), code);
+                    }
+                    if (ncm) {
+                        ncmByProductId.set(id, ncm);
+                        ncmByProductId.set(canonicalTableRecordId("product", id), ncm);
+                    }
                 }
                 for (const item of items) {
                     const row = item as unknown as Record<string, unknown>;
-                    if (row.product_code && String(row.product_code).trim() !== "") continue;
                     const pid = extractProductId(row.product_id);
                     if (!pid) continue;
                     const code =
                         codeByProductId.get(pid) ??
                         codeByProductId.get(canonicalTableRecordId("product", pid));
                     if (code) row.product_code = code;
+                    const ncm =
+                        ncmByProductId.get(pid) ??
+                        ncmByProductId.get(canonicalTableRecordId("product", pid));
+                    if (ncm && !String(row.product_ncm ?? "").trim()) row.product_ncm = ncm;
                 }
             } catch (error) {
                 console.warn("enrichBudgetLocationsProductCodes batch lookup:", error);
@@ -671,6 +695,9 @@ export async function getBudgetItemsGroupedByBudgetIdLightAction(budgetId: strin
 export async function addItemAction(sectionId: string, budgetId: string, productId: string, quantity: number) {
     const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+        return { success: false, error: "Quantidade deve ser maior que zero" };
+    }
 
     const gate = await assertBudgetChildInActiveTenant("budget_section", sectionId, budgetId);
     if (!gate.ok) return { success: false, error: gate.error };
@@ -687,6 +714,7 @@ export async function addItemAction(sectionId: string, budgetId: string, product
         const productName = String(product.description || product.code || "");
         const productCode = String(product.code ?? "").trim();
         const productUnit = String((product as Record<string, unknown>).unit ?? "").trim();
+        const productNcm = String((product as Record<string, unknown>).ncm ?? "").trim();
 
         const newItemId = await createBudgetItemInSection(
             db,
@@ -698,7 +726,8 @@ export async function addItemAction(sectionId: string, budgetId: string, product
             laborCost,
             quantity,
             productUnit || undefined,
-            productCode || undefined
+            productCode || undefined,
+            productNcm || undefined,
         );
 
         await recalculateBudgetTotal(budgetId);
@@ -761,7 +790,7 @@ export async function addTemporaryProductToSectionAction(
         };
     }
 
-    if (!Number.isFinite(quantity) || quantity < 1) {
+    if (!Number.isFinite(quantity) || quantity <= 0) {
         return { success: false, error: "Quantidade inválida" };
     }
 
@@ -781,6 +810,7 @@ export async function addTemporaryProductToSectionAction(
             description: productInput.description.trim(),
             detailedDescription: productInput.detailedDescription?.trim() || undefined,
             unit: productInput.unit.trim(),
+            ncm: productInput.ncm,
             equipmentPrice: productInput.equipmentPrice,
             assemblyPrice,
             assemblyPriceType: productInput.assemblyPriceType ?? "fixed",
@@ -818,6 +848,7 @@ export async function addTemporaryProductToSectionAction(
             quantity,
             productInput.unit.trim(),
             code,
+            productInput.ncm,
         );
 
         await recalculateBudgetTotal(budgetId);
@@ -885,10 +916,14 @@ export async function addGroupToSectionAction(
 
             const unitPrice = Number(product.equipmentPrice || 0);
             const laborCost = Number(product.assemblyPrice || 0);
-            const quantity = Math.max(1, normalizedQty[productId] ?? 1);
+            const requestedQuantity = Number(normalizedQty[productId] ?? 1);
+            const quantity = Number.isFinite(requestedQuantity) && requestedQuantity > 0
+                ? requestedQuantity
+                : 1;
             const productName = String(product.description || product.code || "");
             const productCode = String(product.code ?? "").trim();
             const productUnit = String(product.unit ?? "").trim();
+            const productNcm = String(product.ncm ?? "").trim();
 
             await db.create(new Table("budget_item")).content({
                 section_id: requireRecordId("budget_section", sectionId),
@@ -896,6 +931,7 @@ export async function addGroupToSectionAction(
                 product_id: requireRecordId("product", productId),
                 product_name: productName,
                 ...(productCode ? { product_code: productCode } : {}),
+                ...(productNcm ? { product_ncm: productNcm } : {}),
                 ...(productUnit ? { product_unit: productUnit } : {}),
                 quantity,
                 unit_price: unitPrice,
@@ -951,6 +987,89 @@ export async function addGroupToSectionAction(
         console.error("Error adding group to section:", error);
         if (isTokenExpiredError(error)) resetDb();
         return { success: false, error: "Falha ao adicionar grupo", addedCount: 0 };
+    }
+}
+
+/** Agrupa itens já existentes apenas neste orçamento, sem criar um grupo no catálogo. */
+export async function createTemporaryGroupInSectionAction(
+    sectionId: string,
+    budgetId: string,
+    rawGroupName: string,
+    rawItemIds: string[],
+): Promise<{ success: boolean; error?: string; groupedCount?: number }> {
+    const auth = await assertWriteActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const groupName = rawGroupName.trim().replace(/\s+/g, " ");
+    if (groupName.length < 2 || groupName.length > 120) {
+        return { success: false, error: "Informe um nome entre 2 e 120 caracteres." };
+    }
+    const itemIds = [...new Set(rawItemIds.map((id) => canonicalTableRecordId("budget_item", id)).filter(Boolean))];
+    if (itemIds.length === 0) {
+        return { success: false, error: "Selecione ao menos um produto para o grupo." };
+    }
+
+    const sectionGate = await assertBudgetChildInActiveTenant("budget_section", sectionId, budgetId);
+    if (!sectionGate.ok) return { success: false, error: sectionGate.error };
+
+    const db = await getDb();
+    try {
+        const sectionRecordId = requireRecordId("budget_section", sectionId);
+        const budgetRecordId = requireRecordId("budget", budgetId);
+        const itemRecordIds = itemIds.map((id) => requireRecordId("budget_item", id));
+        const rows = await db.query<[Array<{ id: unknown; section_id?: unknown; budget_id?: unknown }>]>(
+            `SELECT id, section_id, budget_id FROM budget_item
+             WHERE section_id = $sectionId AND budget_id = $budgetId AND deleted_at IS NONE
+             ORDER BY order_index ASC, created_at ASC`,
+            { sectionId: sectionRecordId, budgetId: budgetRecordId },
+        );
+        const sectionItemIds = (rows[0] ?? []).map((row) => canonicalTableRecordId("budget_item", row.id));
+        const selectedSet = new Set(itemIds);
+        const validIds = sectionItemIds.filter((id) => selectedSet.has(id));
+
+        if (validIds.length !== itemRecordIds.length) {
+            return { success: false, error: "Um ou mais produtos não pertencem a este trecho." };
+        }
+
+        const groupInstanceId = crypto.randomUUID();
+        const firstSelectedIndex = sectionItemIds.findIndex((id) => selectedSet.has(id));
+        const orderedIds = [
+            ...sectionItemIds.slice(0, firstSelectedIndex).filter((id) => !selectedSet.has(id)),
+            ...validIds,
+            ...sectionItemIds.slice(firstSelectedIndex).filter((id) => !selectedSet.has(id)),
+        ];
+        for (const [index, orderedId] of orderedIds.entries()) {
+            const itemId = requireRecordId("budget_item", orderedId);
+            if (selectedSet.has(orderedId)) {
+                await db.query(
+                    `UPDATE $item SET
+                        group_id = NONE,
+                        group_name = $groupName,
+                        group_instance_id = $groupInstanceId,
+                        order_index = $orderIndex`,
+                    { item: itemId, groupName, groupInstanceId, orderIndex: index * 10 },
+                );
+            } else {
+                await db.update(itemId).merge({ order_index: index * 10 });
+            }
+        }
+
+        revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.create_temporary_group",
+            resourceType: "budget_section",
+            resourceId: sectionId,
+            summary: `Grupo temporário criado (${validIds.length} item(ns))`,
+            metadata: { budgetId, groupName, groupedCount: validIds.length },
+        });
+        return { success: true, groupedCount: validIds.length };
+    } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
+        console.error("createTemporaryGroupInSectionAction error:", error);
+        if (isTokenExpiredError(error)) resetDb();
+        return { success: false, error: "Falha ao criar grupo temporário" };
     }
 }
 
@@ -1049,6 +1168,9 @@ export async function deleteBudgetItemsBulkAction(
 export async function updateItemQuantityAction(itemId: string, budgetId: string, quantity: number) {
     const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+        return { success: false, error: "Quantidade deve ser maior que zero" };
+    }
 
     const gate = await assertBudgetChildInActiveTenant("budget_item", itemId, budgetId);
     if (!gate.ok) return { success: false, error: gate.error };

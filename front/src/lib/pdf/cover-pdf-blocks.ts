@@ -25,6 +25,11 @@ export type CoverPdfTextSegment =
           lineHeight?: number;
           marginTopPt?: number;
           marginBottomPt?: number;
+          marginLeftPt?: number;
+          marginRightPt?: number;
+          textIndentPt?: number;
+          listMarker?: string;
+          listDepth?: number;
           isEmpty?: boolean;
       }
     | {
@@ -38,6 +43,11 @@ export type CoverPdfTextSegment =
           lineHeight?: number;
           marginTopPt?: number;
           marginBottomPt?: number;
+          marginLeftPt?: number;
+          marginRightPt?: number;
+          textIndentPt?: number;
+          listMarker?: string;
+          listDepth?: number;
       };
 
 function parseTextAlignFromAttrs(attrs: string): "left" | "center" | "right" | "justify" | undefined {
@@ -53,23 +63,32 @@ function parseParagraphLayoutFromAttrs(attrs: string) {
     const lineHeight = Number(lineHeightRaw);
     const marginTopRaw = attrs.match(/margin-top\s*:\s*([^;"']+)/i)?.[1];
     const marginBottomRaw = attrs.match(/margin-bottom\s*:\s*([^;"']+)/i)?.[1];
+    const marginLeftRaw = attrs.match(/margin-left\s*:\s*([^;"']+)/i)?.[1];
+    const marginRightRaw = attrs.match(/margin-right\s*:\s*([^;"']+)/i)?.[1];
+    const textIndentRaw = attrs.match(/text-indent\s*:\s*([^;"']+)/i)?.[1];
     return {
         lineHeight: Number.isFinite(lineHeight) && lineHeight >= 0.8 && lineHeight <= 4 ? lineHeight : undefined,
         marginTopPt: parseCssLengthToPt(marginTopRaw),
         marginBottomPt: parseCssLengthToPt(marginBottomRaw),
+        marginLeftPt: parseCssLengthToPt(marginLeftRaw),
+        marginRightPt: parseCssLengthToPt(marginRightRaw),
+        textIndentPt: parseCssLengthToPt(textIndentRaw, true),
     };
 }
 
-function parseCssLengthToPt(raw: string | undefined): number | undefined {
+function parseCssLengthToPt(raw: string | undefined, allowNegative = false): number | undefined {
     if (!raw) return undefined;
     const v = raw.trim().toLowerCase();
     if (!v) return undefined;
-    const m = v.match(/^(-?\d*\.?\d+)\s*(px|pt)?$/i);
+    const m = v.match(/^(-?\d*\.?\d+)\s*(px|pt|cm|mm|in)?$/i);
     if (!m) return undefined;
     const n = Number(m[1]);
-    if (!Number.isFinite(n) || n <= 0) return undefined;
+    if (!Number.isFinite(n) || (allowNegative ? n === 0 : n <= 0)) return undefined;
     const unit = (m[2] || "px").toLowerCase();
     if (unit === "pt") return n;
+    if (unit === "cm") return n * (72 / 2.54);
+    if (unit === "mm") return n * (72 / 25.4);
+    if (unit === "in") return n * 72;
     return n * 0.75; // 1px ~ 0.75pt
 }
 
@@ -156,14 +175,62 @@ export function splitCoverHtmlFragmentToSegments(
 ): CoverPdfTextSegment[] {
     const segments: CoverPdfTextSegment[] = [];
     const re = /<(p|div|h1|h2|h3)\b([^>]*)>([\s\S]*?)<\/\1>/gi;
+    const listStack: Array<{
+        kind: "ul" | "ol";
+        counter: number;
+        pendingMarker?: string;
+    }> = [];
+    let cursor = 0;
+    const scanListTags = (fragment: string) => {
+        const tagRe = /<\s*(\/?)\s*(ul|ol|li)\b([^>]*)>/gi;
+        let tagMatch: RegExpExecArray | null;
+        while ((tagMatch = tagRe.exec(fragment)) !== null) {
+            const closing = tagMatch[1] === "/";
+            const name = tagMatch[2].toLowerCase() as "ul" | "ol" | "li";
+            const attrs = tagMatch[3] ?? "";
+            if (name === "ul" || name === "ol") {
+                if (closing) {
+                    listStack.pop();
+                } else {
+                    const start = name === "ol" ? Number(attrs.match(/\bstart\s*=\s*["']?(\d+)/i)?.[1] ?? 1) : 1;
+                    listStack.push({ kind: name, counter: Math.max(0, start - 1) });
+                }
+                continue;
+            }
+            const active = listStack[listStack.length - 1];
+            if (!active) continue;
+            if (closing) {
+                active.pendingMarker = undefined;
+                continue;
+            }
+            const explicitValue = Number(attrs.match(/\bvalue\s*=\s*["']?(\d+)/i)?.[1]);
+            if (active.kind === "ol") {
+                active.counter = Number.isFinite(explicitValue) && explicitValue > 0
+                    ? explicitValue
+                    : active.counter + 1;
+                active.pendingMarker = `${active.counter}.`;
+            } else {
+                const bullets = ["•", "◦", "▪"];
+                active.pendingMarker = bullets[(listStack.length - 1) % bullets.length];
+            }
+        }
+    };
     let m: RegExpExecArray | null;
     while ((m = re.exec(html)) !== null) {
+        scanListTags(html.slice(cursor, m.index));
+        cursor = re.lastIndex;
         const tag = m[1].toLowerCase();
         const attrs = m[2];
         const paragraphLayout = parseParagraphLayoutFromAttrs(attrs);
         const inner = m[3];
         const preserveEmpty = options?.preserveEmptyParagraphs === true;
         const text = sanitizeTextForPdf(stripHtmlToText(inner));
+        const activeList = listStack[listStack.length - 1];
+        const listMarker = activeList?.pendingMarker;
+        const listLayout = listMarker
+            ? { listMarker, listDepth: Math.max(1, listStack.length) }
+            : {};
+        if (listMarker && activeList) activeList.pendingMarker = undefined;
         if (tag === "p" || tag === "div") {
             if (!text.trim()) {
                 if (preserveEmpty) {
@@ -183,6 +250,7 @@ export function splitCoverHtmlFragmentToSegments(
                 text,
                 rawHtml: inner,
                 textAlign: parseTextAlignFromAttrs(attrs),
+                ...listLayout,
                 ...paragraphLayout,
                 isEmpty: false,
             });

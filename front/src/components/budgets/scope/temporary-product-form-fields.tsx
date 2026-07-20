@@ -18,6 +18,7 @@ import {
     generateTemporaryProductCode,
     type TemporaryProductInput,
 } from "@/lib/products/temporary-product";
+import { normalizeNcm } from "@/lib/products/ncm";
 
 const formatPrice = (value: number) =>
     new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(value);
@@ -40,6 +41,7 @@ type Props = {
 export function createEmptyTemporaryProductValues(): TemporaryProductFormValues {
     return {
         code: generateTemporaryProductCode(),
+        ncm: "",
         description: "",
         unit: "",
         equipmentPrice: 0,
@@ -88,7 +90,7 @@ export function TemporaryProductFormFields({ values, onChange, errors, disabled 
                 Produto usado só neste orçamento — não entra no catálogo geral.
             </p>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-3">
                 <div className="space-y-2">
                     <Label htmlFor="temp-product-code">Código</Label>
                     <Input
@@ -99,6 +101,19 @@ export function TemporaryProductFormFields({ values, onChange, errors, disabled 
                         placeholder="TMP-…"
                     />
                     {errors?.code && <p className="text-xs text-destructive">{errors.code}</p>}
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="temp-product-ncm">NCM *</Label>
+                    <Input
+                        id="temp-product-ncm"
+                        value={values.ncm}
+                        onChange={(e) => patch({ ncm: normalizeNcm(e.target.value) })}
+                        inputMode="numeric"
+                        maxLength={8}
+                        placeholder="00000000"
+                        disabled={disabled}
+                    />
+                    {errors?.ncm && <p className="text-xs text-destructive">{errors.ncm}</p>}
                 </div>
                 <div className="space-y-2">
                     <Label>Unidade *</Label>

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateBudgetPdfBuffer } from "@/lib/pdf/generate-budget-pdf-buffer";
+import { inlinePdfContentDisposition } from "@/lib/pdf/pdf-filename";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,7 +21,7 @@ export async function GET(
         status: 200,
         headers: {
             "Content-Type": "application/pdf",
-            "Content-Disposition": `inline; filename="${result.filename}"`,
+            "Content-Disposition": inlinePdfContentDisposition(result.filename),
             "Cache-Control": "private, no-store",
         },
     });

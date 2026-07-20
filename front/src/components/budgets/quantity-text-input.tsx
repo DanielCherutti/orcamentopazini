@@ -24,7 +24,7 @@ type QuantityTextInputProps = {
 export function QuantityTextInput({
     value,
     onValueChange,
-    min = 1,
+    min = 0.000001,
     disabled,
     className,
     id,

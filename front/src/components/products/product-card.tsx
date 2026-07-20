@@ -67,7 +67,11 @@ export function ProductCard({ product }: ProductCardProps) {
                 </div>
 
                 {/* Details Grid */}
-                <div className="grid grid-cols-3 gap-3 pt-2 border-t">
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t sm:grid-cols-4">
+                    <div>
+                        <p className="text-xs text-muted-foreground">NCM</p>
+                        <p className="text-sm font-medium font-mono">{product.ncm || "—"}</p>
+                    </div>
                     <div>
                         <p className="text-xs text-muted-foreground">Unidade</p>
                         <p className="text-sm font-medium">{product.unit}</p>

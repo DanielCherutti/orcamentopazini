@@ -1,7 +1,9 @@
 import { z } from "zod";
+import { isValidNcm } from "@/lib/products/ncm";
 
 export const temporaryProductInputSchema = z.object({
     code: z.string().trim().optional(),
+    ncm: z.string().refine(isValidNcm, "O NCM deve conter exatamente 8 dígitos"),
     description: z.string().trim().min(1, "A descrição é obrigatória"),
     unit: z.string().trim().min(1, "A unidade é obrigatória"),
     equipmentPrice: z.number().min(0, "O preço não pode ser negativo"),

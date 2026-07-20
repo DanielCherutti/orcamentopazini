@@ -26,6 +26,8 @@ import { BudgetDeliveryLaunchButton } from "@/components/budgets/workspace/budge
 
 interface BudgetWorkspaceHeaderProps {
     budget: Budget;
+    /** Total calculado ao vivo pela tabela da aba Orçamento. */
+    liveTotalValue?: number | null;
     hasChanges?: boolean;
     onSave?: () => void;
     onOpenPreview?: () => void;
@@ -38,6 +40,7 @@ interface BudgetWorkspaceHeaderProps {
 
 export function BudgetWorkspaceHeader({
     budget,
+    liveTotalValue,
     hasChanges = false,
     onSave,
     onOpenPreview,
@@ -75,10 +78,10 @@ export function BudgetWorkspaceHeader({
     const formatCurrency = (value: number) =>
         new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 
-    /** Total persistido (soma do escopo). Vara % / Desconto % da aba Orçamento não entram neste valor. */
+    /** Durante a edição, reflete imediatamente vara/desconto e os valores exibidos na tabela. */
     const displayTotalValue = useMemo(
-        () => Number(budget.total_value ?? 0),
-        [budget.total_value]
+        () => Number(liveTotalValue ?? budget.total_value ?? 0),
+        [budget.total_value, liveTotalValue]
     );
 
     const getStatusBadge = (status: string) => {

@@ -35,6 +35,8 @@ export function buildDuplicatedBudgetItemContent(item: Record<string, unknown>):
     if (item.group_name != null) content.group_name = item.group_name;
     if (item.group_instance_id != null) content.group_instance_id = item.group_instance_id;
     if (item.product_name != null) content.product_name = item.product_name;
+    if (item.product_code != null) content.product_code = item.product_code;
+    if (item.product_ncm != null) content.product_ncm = item.product_ncm;
     if (item.product_unit != null) content.product_unit = item.product_unit;
     if (item.notes != null) content.notes = item.notes;
     if (item.observation_text != null) content.observation_text = item.observation_text;

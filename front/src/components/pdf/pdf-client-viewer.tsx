@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { budgetPdfApiUrl } from "@/lib/budgets/budget-path";
 
 interface PdfClientViewerProps {
@@ -16,69 +16,33 @@ type Phase = "loading" | "ready" | "error";
 export function PdfClientViewer({ budgetId }: PdfClientViewerProps) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [progress, setProgress] = useState(0);
-  const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pdfUrl = budgetPdfApiUrl(budgetId);
 
   useEffect(() => {
-    setPhase("loading");
-    setProgress(0);
-    setObjectUrl(null);
-    setErrorMessage(null);
-
-    const ac = new AbortController();
-    const url = budgetPdfApiUrl(budgetId);
-    const blobUrlRef: { current: string | null } = { current: null };
-
     const sim = setInterval(() => {
       setProgress((p) => (p >= 88 ? p : p + 1));
     }, 420);
-
-    (async () => {
-      try {
-        const res = await fetch(url, { credentials: "include", signal: ac.signal });
-        const ct = res.headers.get("content-type") ?? "";
-
-        if (!res.ok) {
-          let msg = `Erro ${res.status}`;
-          try {
-            const j = (await res.json()) as { error?: string; detail?: string };
-            msg = j.detail || j.error || msg;
-          } catch {
-            /* ignore */
-          }
-          throw new Error(msg);
-        }
-
-        if (!ct.includes("application/pdf")) {
-          throw new Error("A resposta não é um PDF.");
-        }
-
-        const blob = await res.blob();
-        if (ac.signal.aborted) return;
-
-        const u = URL.createObjectURL(blob);
-        blobUrlRef.current = u;
-        setObjectUrl(u);
-        setProgress(100);
-        setPhase("ready");
-      } catch (e) {
-        if (ac.signal.aborted) return;
-        setErrorMessage(e instanceof Error ? e.message : "Falha ao carregar o PDF.");
-        setPhase("error");
-      } finally {
-        clearInterval(sim);
-      }
-    })();
+    progressTimerRef.current = sim;
 
     return () => {
-      ac.abort();
       clearInterval(sim);
-      if (blobUrlRef.current) {
-        URL.revokeObjectURL(blobUrlRef.current);
-        blobUrlRef.current = null;
-      }
+      progressTimerRef.current = null;
     };
   }, [budgetId]);
+
+  const handlePdfLoad = () => {
+    if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+    setProgress(100);
+    setPhase("ready");
+  };
+
+  const handlePdfError = () => {
+    if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+    setErrorMessage("Falha ao carregar o PDF.");
+    setPhase("error");
+  };
 
   return (
     <div className="flex h-[calc(100vh-64px)] w-full flex-col bg-slate-100">
@@ -128,11 +92,15 @@ export function PdfClientViewer({ budgetId }: PdfClientViewerProps) {
         </div>
       ) : null}
 
-      {phase === "ready" && objectUrl ? (
+      {phase !== "error" ? (
         <iframe
           title="Pré-visualização do PDF"
-          src={objectUrl}
-          className="min-h-0 w-full flex-1 border-none bg-white shadow-inner"
+          src={pdfUrl}
+          onLoad={handlePdfLoad}
+          onError={handlePdfError}
+          className={`min-h-0 w-full flex-1 border-none bg-white shadow-inner ${
+            phase === "loading" ? "hidden" : ""
+          }`}
         />
       ) : null}
     </div>

@@ -1,4 +1,8 @@
+"use client";
+
 import Image from "next/image";
+import { DraftingCompass } from "lucide-react";
+import { useState } from "react";
 
 const DEFAULT_LOGO = "/logo.jpeg";
 
@@ -26,22 +30,49 @@ export function DashboardWelcomeLogo({
 }) {
   const raw = typeof logoUrl === "string" ? logoUrl.trim() : "";
   const src = raw || DEFAULT_LOGO;
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const failed = failedSrc === src;
+  const loaded = loadedSrc === src && !failed;
+  const imageClassName = `h-full w-full object-contain p-1.5 transition-opacity duration-200 ${
+    loaded ? "opacity-100" : "opacity-0"
+  }`;
 
   return (
-    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-border/60 bg-muted/40">
-      {shouldUsePlainImg(src) ? (
+    <div
+      className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-border/60 bg-muted/40"
+      data-logo-state={failed ? "fallback" : loaded ? "ready" : "loading"}
+      role={failed && alt ? "img" : undefined}
+      aria-label={failed && alt ? alt : undefined}
+    >
+      <div
+        className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/15 via-muted/60 to-secondary/15 text-primary"
+        aria-hidden="true"
+        data-testid="platform-logo-fallback"
+      >
+        <DraftingCompass className="h-8 w-8" strokeWidth={1.8} />
+      </div>
+      {!failed && shouldUsePlainImg(src) ? (
         // eslint-disable-next-line @next/next/no-img-element -- URL externa, upload ou Data URI da configuração
-        <img src={src} alt={alt} className="h-full w-full object-contain p-1.5" />
-      ) : (
+        <img
+          src={src}
+          alt={alt}
+          className={imageClassName}
+          onLoad={() => setLoadedSrc(src)}
+          onError={() => setFailedSrc(src)}
+        />
+      ) : !failed ? (
         <Image
           src={src}
           alt={alt}
           fill
-          className="object-contain p-1.5"
+          className={imageClassName}
           sizes="64px"
           priority
+          onLoad={() => setLoadedSrc(src)}
+          onError={() => setFailedSrc(src)}
         />
-      )}
+      ) : null}
     </div>
   );
 }
