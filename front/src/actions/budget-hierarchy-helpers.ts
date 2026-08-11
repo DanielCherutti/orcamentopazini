@@ -1,12 +1,42 @@
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
 import { recordIdToString, safeStringRecordId } from "@/lib/surreal-record-ids";
 import {
+    applyQuoteRowAdjustments,
     computeItemSubtotal,
     computeLocationAssemblyTotal,
     sectionHasOwnAssembly,
     type LocationAssemblyMode,
     type ScopePricingItem,
 } from "@/lib/budgets/scope-pricing";
+
+function readQuoteSplitPercentsFromRecord(r: Record<string, unknown>): {
+    markupEquip: number;
+    discountEquip: number;
+    markupAsm: number;
+    discountAsm: number;
+} {
+    const legM = Number(r.quote_markup_percent ?? 0);
+    const legD = Number(r.quote_discount_percent ?? 0);
+    const hasExplicitSplit =
+        r.quote_markup_equipment_percent !== undefined ||
+        r.quote_discount_equipment_percent !== undefined ||
+        r.quote_markup_assembly_percent !== undefined ||
+        r.quote_discount_assembly_percent !== undefined;
+    if (hasExplicitSplit) {
+        return {
+            markupEquip: Number(r.quote_markup_equipment_percent ?? 0),
+            discountEquip: Number(r.quote_discount_equipment_percent ?? 0),
+            markupAsm: Number(r.quote_markup_assembly_percent ?? 0),
+            discountAsm: Number(r.quote_discount_assembly_percent ?? 0),
+        };
+    }
+    return {
+        markupEquip: legM,
+        discountEquip: legD,
+        markupAsm: legM,
+        discountAsm: legD,
+    };
+}
 
 /**
  * Monta o conteúdo de uma nova linha `budget_item` a partir de uma existente (duplicação).
@@ -255,27 +285,29 @@ export async function recalculateBudgetTotal(budgetId: string) {
             itemsByLocationFallback.set(locationId, locItems);
         }
 
-        let grandTotal = 0;
+        let equipmentTotal = 0;
+        let assemblyTotal = 0;
         for (const [sectionId, cfg] of sectionConfig.entries()) {
             if (!cfg.hasOwnAssembly) continue;
             const items = itemsBySection.get(sectionId) ?? [];
             const itemSubtotal = items.reduce((sum, item) => sum + computeItemSubtotal(item), 0);
-            const assemblyTotal = computeLocationAssemblyTotal(cfg.mode, cfg.value, items);
-            grandTotal += itemSubtotal + assemblyTotal;
+            const assembly = computeLocationAssemblyTotal(cfg.mode, cfg.value, items);
+            equipmentTotal += itemSubtotal;
+            assemblyTotal += assembly;
         }
 
         for (const [locationId, items] of itemsByLocationFallback.entries()) {
             const itemSubtotal = items.reduce((sum, item) => sum + computeItemSubtotal(item), 0);
             const cfg = locationConfig.get(locationId) ?? { mode: "percent", value: 0 };
-            const assemblyTotal = computeLocationAssemblyTotal(cfg.mode, cfg.value, items);
-            grandTotal += itemSubtotal + assemblyTotal;
+            const assembly = computeLocationAssemblyTotal(cfg.mode, cfg.value, items);
+            equipmentTotal += itemSubtotal;
+            assemblyTotal += assembly;
         }
 
         for (const [sectionId, cfg] of sectionConfig.entries()) {
             if (!cfg.hasOwnAssembly) continue;
             if (itemsBySection.has(sectionId)) continue;
-            const assemblyTotal = computeLocationAssemblyTotal(cfg.mode, cfg.value, []);
-            grandTotal += assemblyTotal;
+            assemblyTotal += computeLocationAssemblyTotal(cfg.mode, cfg.value, []);
         }
 
         for (const [locationId, cfg] of locationConfig.entries()) {
@@ -286,12 +318,25 @@ export async function recalculateBudgetTotal(budgetId: string) {
                 (sid) => !sectionConfig.get(sid)?.hasOwnAssembly
             );
             if (!hasAnyFallbackSection) continue;
-            const assemblyTotal = computeLocationAssemblyTotal(cfg.mode, cfg.value, []);
-            grandTotal += assemblyTotal;
+            assemblyTotal += computeLocationAssemblyTotal(cfg.mode, cfg.value, []);
         }
 
+        const budgetRaw = await db.select(budgetRecordId);
+        const budgetRow = (
+            Array.isArray(budgetRaw) ? budgetRaw[0] : budgetRaw
+        ) as Record<string, unknown> | undefined;
+        const quotePercents = readQuoteSplitPercentsFromRecord(budgetRow ?? {});
+        const commercial = applyQuoteRowAdjustments(
+            equipmentTotal,
+            assemblyTotal,
+            quotePercents.markupEquip,
+            quotePercents.discountEquip,
+            quotePercents.markupAsm,
+            quotePercents.discountAsm
+        );
+
         await db.update(budgetRecordId).merge({
-            total_value: grandTotal,
+            total_value: commercial.lineTotal,
             updated_at: new Date().toISOString(),
         });
     } catch (e) {

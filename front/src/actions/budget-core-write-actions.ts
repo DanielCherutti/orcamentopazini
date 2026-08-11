@@ -203,6 +203,18 @@ export async function updateBudgetAction(budgetId: string, updates: Partial<Budg
 
         await db.update(budgetRecordId).merge(safeUpdates);
 
+        const quotePercentKeys = [
+            "quote_markup_percent",
+            "quote_discount_percent",
+            "quote_markup_equipment_percent",
+            "quote_discount_equipment_percent",
+            "quote_markup_assembly_percent",
+            "quote_discount_assembly_percent",
+        ];
+        if (quotePercentKeys.some((key) => key in safeUpdates)) {
+            await recalculateBudgetTotal(budgetId);
+        }
+
         revalidatePath(budgetRevalidatePath(budgetId));
         revalidatePath("/budgets");
 

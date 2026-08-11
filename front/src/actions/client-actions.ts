@@ -158,6 +158,45 @@ function serializeCustomer(record: Record<string, unknown>): CustomerFull {
     };
 }
 
+const CLIENT_SEARCH_LIMIT = 300;
+
+function normalizeClientSearch(value: unknown): string {
+    if (value == null) return "";
+    return String(value)
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+}
+
+function clientMatchesSearch(
+    client: {
+        name?: unknown;
+        razao_social?: unknown;
+        nome_fantasia?: unknown;
+        email?: unknown;
+        city?: unknown;
+        cnpj?: unknown;
+        address?: { city?: unknown } | null;
+    },
+    search: string
+): boolean {
+    if (!search) return true;
+    const haystack = normalizeClientSearch(
+        [
+            client.name,
+            client.razao_social,
+            client.nome_fantasia,
+            client.email,
+            client.city,
+            client.cnpj,
+            client.address?.city,
+        ]
+            .filter((part) => part != null && String(part).trim() !== "")
+            .join(" ")
+    );
+    return haystack.includes(search);
+}
+
 export async function searchClientsAction(query: string) {
     const auth = await assertActionSession();
     if (!auth.ok) return { success: false, error: auth.error, data: [] };
@@ -165,36 +204,50 @@ export async function searchClientsAction(query: string) {
     const db = await getDb();
     try {
         const tenantId = await requireActiveTenantId();
+        // Busca no app (JS): CONTAINS + string::lowercase em campos NONE quebra a query no Surreal.
         const sql = `
             SELECT * FROM client
-            WHERE
-                tenant_id = $tenantId
-                AND (
-                string::lowercase(name) CONTAINS string::lowercase($query)
-                OR string::lowercase(email) CONTAINS string::lowercase($query)
-                OR string::lowercase(city) CONTAINS string::lowercase($query)
-                OR string::lowercase(address.city) CONTAINS string::lowercase($query)
-                OR string::lowercase(nome_fantasia) CONTAINS string::lowercase($query)
-                OR string::lowercase(cnpj) CONTAINS string::lowercase($query)
-                )
-            LIMIT 10
+            WHERE tenant_id = $tenantId
         `;
 
-        const result = await db.query<[Client[]]>(sql, { query, tenantId: tenantRecordId(tenantId) });
-        const data = result[0]?.map((c) => ({
-            id: String(c.id),
-            name: c.name,
-            email: c.email,
-            city: c.city,
-            cnpj: c.cnpj,
-            details: c.city && c.cnpj ? `${c.city} - ${c.cnpj}` : c.city || c.cnpj || ""
-        })) || [];
+        const result = await db.query<[Record<string, unknown>[]]>(sql, {
+            tenantId: tenantRecordId(tenantId),
+        });
+        const search = normalizeClientSearch(query.trim());
+        const collator = new Intl.Collator("pt-BR", { sensitivity: "base" });
+
+        const data = (result[0] || [])
+            .filter((c) => clientMatchesSearch(c, search))
+            .map((c) => {
+                const city = c.city != null ? String(c.city) : undefined;
+                const addressCity =
+                    c.address && typeof c.address === "object" && "city" in c.address
+                        ? (c.address as { city?: unknown }).city != null
+                            ? String((c.address as { city?: unknown }).city)
+                            : undefined
+                        : undefined;
+                const resolvedCity = city || addressCity;
+                const cnpj = c.cnpj != null ? String(c.cnpj) : undefined;
+                return {
+                    id: String(c.id),
+                    name: String(c.name || c.razao_social || ""),
+                    email: c.email != null ? String(c.email) : undefined,
+                    city: resolvedCity,
+                    cnpj,
+                    details:
+                        resolvedCity && cnpj
+                            ? `${resolvedCity} - ${cnpj}`
+                            : resolvedCity || cnpj || "",
+                };
+            })
+            .sort((a, b) => collator.compare(a.name, b.name))
+            .slice(0, CLIENT_SEARCH_LIMIT);
 
         return { success: true, data };
     } catch (error) {
         console.error("Error searching clients:", error);
         if (isTokenExpiredError(error)) resetDb();
-        return { success: false, error: "Falha ao buscar clientes" };
+        return { success: false, error: "Falha ao buscar clientes", data: [] };
     }
 }
 
