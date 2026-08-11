@@ -19,7 +19,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover";
-import { searchClientsAction, type Client } from "@/actions/client-actions";
+import { getCustomerAction, searchClientsAction, type Client } from "@/actions/client-actions";
 
 interface ClientSelectorProps {
     value?: string;
@@ -32,42 +32,66 @@ export function ClientSelector({ value, onSelect, onClientSelect, error }: Clien
     const [open, setOpen] = React.useState(false);
     const [clients, setClients] = React.useState<Client[]>([]);
     const [loading, setLoading] = React.useState(false);
+    const [searchValue, setSearchValue] = React.useState("");
+    const [selectedLabel, setSelectedLabel] = React.useState<string | null>(null);
+    const requestIdRef = React.useRef(0);
 
-    const handleSearch = useDebouncedCallback(async (term: string) => {
+    const doSearch = React.useCallback(async (term: string) => {
+        const requestId = ++requestIdRef.current;
         setLoading(true);
-        const { success, data } = await searchClientsAction(term);
-        if (success && data) {
-            setClients(data);
+        try {
+            const { success, data } = await searchClientsAction(term);
+            if (requestId !== requestIdRef.current) return;
+            setClients(success && data ? data : []);
+        } finally {
+            if (requestId === requestIdRef.current) {
+                setLoading(false);
+            }
         }
-        setLoading(false);
+    }, []);
+
+    const handleSearch = useDebouncedCallback((term: string) => {
+        doSearch(term);
     }, 300);
 
     React.useEffect(() => {
-        handleSearch("");
-    }, [handleSearch]);
+        if (!open) return;
+        setSearchValue("");
+        doSearch("");
+    }, [open, doSearch]);
 
     React.useEffect(() => {
-        if (value) {
-            const found = clients.find((client) => client.id === value);
-            if (!found && !loading) {
-                handleSearch("");
-            }
+        if (!value) {
+            setSelectedLabel(null);
+            return;
         }
-    }, [value, handleSearch, loading]);
 
-    React.useEffect(() => {
-        if (value) {
-            const found = clients.find((client) => client.id === value);
-            if (!found) {
-                handleSearch("");
-            }
+        const found = clients.find((client) => client.id === value);
+        if (found) {
+            setSelectedLabel(found.name);
+            return;
         }
-    }, [value, handleSearch]);
 
-    // If ID is provided but we don't have client name, we might want to fetch it.
-    // Simplifying: we trust the parent or just show ID if name missing for now,
-    // or rely on the list being populated. Since we don't have 'getClient(id)' yet,
-    // we assume the user picks from the list.
+        let cancelled = false;
+        getCustomerAction(value).then((res) => {
+            if (!cancelled && res.success && res.data) {
+                setSelectedLabel(res.data.name);
+            }
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [value, clients]);
+
+    const handleValueChange = (term: string) => {
+        setSearchValue(term);
+        if (!term.trim()) {
+            handleSearch.cancel();
+            doSearch("");
+        } else {
+            handleSearch(term);
+        }
+    };
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
@@ -79,37 +103,37 @@ export function ClientSelector({ value, onSelect, onClientSelect, error }: Clien
                     className={cn("w-full justify-between", error && "border-red-500", !value && "text-muted-foreground")}
                 >
                     {value
-                        ? clients.find((client) => client.id === value)?.name || "Cliente selecionado"
+                        ? selectedLabel || clients.find((client) => client.id === value)?.name || "Cliente selecionado"
                         : "Selecione um cliente..."}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[300px] p-0">
                 <Command shouldFilter={false}>
-                    {/* We handle filtering server-side */}
                     <CommandInput
                         placeholder="Buscar cliente..."
-                        onValueChange={handleSearch}
+                        value={searchValue}
+                        onValueChange={handleValueChange}
                     />
                     <CommandList>
-                        {loading && <div className="py-6 text-center text-sm text-muted-foreground">Buscando...</div>}
-                        {!loading && clients.length === 0 && (
-                            <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
+                        {loading && (
+                            <div className="py-6 text-center text-sm text-muted-foreground">Buscando...</div>
                         )}
-                        {!loading && (
+                        {!loading && clients.length === 0 && (
+                            <div className="py-6 text-center text-sm text-muted-foreground">
+                                Nenhum cliente encontrado.
+                            </div>
+                        )}
+                        {!loading && clients.length > 0 && (
                             <CommandGroup>
                                 {clients.map((client) => (
                                     <CommandItem
                                         key={client.id}
-                                        value={client.id}
-                                        onSelect={(currentValue) => {
-                                            onSelect(currentValue); // Keep passing ID string to satisfy controller for now if only ID needed
-                                            // But we want to pass full object to parent for mock logic
-                                            // Let's rely on parent finding it, or better: change prop signature.
-                                            // Keeping signature standard for now, but exporting clients state? No.
-                                            // Parent can't access `clients` state here.
-                                            // Let's modify onClientSelect prop if possible.
+                                        value={`${client.name} ${client.email || ""} ${client.cnpj || ""} ${client.id}`}
+                                        onSelect={() => {
+                                            onSelect(client.id);
                                             if (onClientSelect) onClientSelect(client);
+                                            setSelectedLabel(client.name);
                                             setOpen(false);
                                         }}
                                     >
@@ -121,7 +145,9 @@ export function ClientSelector({ value, onSelect, onClientSelect, error }: Clien
                                         />
                                         <div className="flex flex-col">
                                             <span>{client.name}</span>
-                                            {client.email && <span className="text-xs text-muted-foreground">{client.email}</span>}
+                                            {client.email && (
+                                                <span className="text-xs text-muted-foreground">{client.email}</span>
+                                            )}
                                             {(client.city || client.cnpj) && (
                                                 <span className="text-xs text-muted-foreground">
                                                     {[client.city, client.cnpj].filter(Boolean).join(" - ")}
