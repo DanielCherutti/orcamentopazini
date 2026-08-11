@@ -109,8 +109,21 @@ export function BudgetWorkspace({
 
     useEffect(() => {
         setBudget(initialBudget);
-        setLiveQuoteTotal(null);
+        // Mantém o total comercial ao revalidar: a aba Orçamento pode ainda não ter reenviado o live.
+        setLiveQuoteTotal((prev) => {
+            const persisted = Number(initialBudget.total_value ?? 0);
+            if (prev == null) return null;
+            if (Number.isFinite(persisted) && Math.abs(persisted - prev) < 0.005) return null;
+            return prev;
+        });
     }, [initialBudget]);
+
+    const handleQuoteTotalChange = useCallback((total: number) => {
+        setLiveQuoteTotal(total);
+        setBudget((prev) =>
+            Number(prev.total_value ?? 0) === total ? prev : { ...prev, total_value: total }
+        );
+    }, []);
 
     const isReadOnly = !isBudgetEditableStatus(budget.status);
     const emailEnabled = canUseBudgetEmail(budget.status);
@@ -243,7 +256,7 @@ export function BudgetWorkspace({
                                             budgetId={budgetId}
                                             isReadOnly={isReadOnly}
                                             onBudgetRefresh={handleRefresh}
-                                            onTotalChange={setLiveQuoteTotal}
+                                            onTotalChange={handleQuoteTotalChange}
                                         />
                                     </div>
                                 )}
