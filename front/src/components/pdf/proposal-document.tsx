@@ -437,6 +437,39 @@ const styles = StyleSheet.create({
         paddingHorizontal: 8,
         color: '#78350f',
     },
+    quoteGrandTotalRow: {
+        flexDirection: 'row',
+        borderTopWidth: 2,
+        borderTopColor: '#93c5fd',
+        backgroundColor: '#eff6ff',
+        paddingVertical: 8,
+        paddingHorizontal: 4,
+        alignItems: 'center',
+        marginTop: 2,
+    },
+    quoteGrandTotalLabel: {
+        flex: 1,
+        fontSize: 8,
+        fontFamily: theme.fonts.bold,
+        textTransform: 'uppercase',
+        textAlign: 'right',
+        color: '#1e3a8a',
+        letterSpacing: 0.6,
+        paddingRight: 8,
+    },
+    quoteGrandTotalValue: {
+        width: QUOTE_MONEY_COL_W * 2,
+        fontSize: 10,
+        fontFamily: theme.fonts.bold,
+        textAlign: 'right',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        color: '#0f172a',
+        backgroundColor: '#ffffff',
+        borderWidth: 1,
+        borderColor: '#cbd5e1',
+        borderRadius: 4,
+    },
     quoteFooterLabelsRow: {
         flexDirection: 'row',
         backgroundColor: '#fffbeb',
@@ -2116,6 +2149,17 @@ export const ProposalDocument = ({
                                                 <View style={{ flex: 1 }} />
                                                 <Text style={styles.quoteFooterLabel}>Equipamentos</Text>
                                                 <Text style={styles.quoteFooterLabel}>Montagem</Text>
+                                            </View>
+                                            <View
+                                                style={styles.quoteGrandTotalRow}
+                                                wrap={false}
+                                                minPresenceAhead={24}
+                                            >
+                                                <Text style={{ width: 32 }} />
+                                                <Text style={styles.quoteGrandTotalLabel}>Total obra</Text>
+                                                <Text style={styles.quoteGrandTotalValue}>
+                                                    {formatMoney(totals.equipment + totals.assembly)}
+                                                </Text>
                                             </View>
                                         </>
                                     );

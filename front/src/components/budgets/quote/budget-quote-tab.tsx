@@ -621,6 +621,22 @@ export function BudgetQuoteTab({
                                                 Montagem
                                             </td>
                                         </tr>
+                                        <tr className="border-t-2 border-primary/25 bg-gradient-to-r from-primary/[0.08] via-primary/[0.04] to-transparent dark:border-primary/30">
+                                            <td
+                                                colSpan={2}
+                                                className="px-4 py-3.5 text-right text-xs font-bold uppercase tracking-wider text-foreground"
+                                            >
+                                                Total obra
+                                            </td>
+                                            <td
+                                                colSpan={2}
+                                                className="px-4 py-3.5 text-right"
+                                            >
+                                                <span className="inline-flex min-w-[11rem] items-center justify-end rounded-lg border border-border/80 bg-background px-3 py-2 text-sm font-bold tabular-nums text-foreground shadow-sm">
+                                                    {formatCurrency(totals.grand)}
+                                                </span>
+                                            </td>
+                                        </tr>
                                     </tfoot>
                                 )}
                             </table>
