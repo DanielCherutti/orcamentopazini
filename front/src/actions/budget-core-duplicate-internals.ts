@@ -144,7 +144,7 @@ export async function duplicateCompositorBlocks(
     maps: BudgetDuplicationMaps = createBudgetDuplicationMaps()
 ) {
     const blocksRes = await db.query<[Array<Record<string, unknown>>]>(
-        "SELECT * FROM budget_block WHERE budget_id = $budgetId ORDER BY order_index ASC",
+        "SELECT * FROM budget_block WHERE budget_id = $budgetId AND deleted_at IS NONE ORDER BY order_index ASC",
         { budgetId: originalBudgetRecordId }
     );
     const flatBlocks = blocksRes[0] || [];
@@ -214,7 +214,7 @@ export async function duplicateBudgetScopeHierarchy(
     maps: BudgetDuplicationMaps = createBudgetDuplicationMaps()
 ) {
     const locationsRes = await db.query<[Array<Record<string, unknown>>]>(
-        "SELECT * FROM budget_location WHERE budget_id = $budgetId ORDER BY created_at ASC",
+        "SELECT * FROM budget_location WHERE budget_id = $budgetId AND deleted_at IS NONE ORDER BY created_at ASC",
         { budgetId: originalBudgetRecordId }
     );
     const locations = locationsRes?.[0] || [];
@@ -245,7 +245,7 @@ export async function duplicateBudgetScopeHierarchy(
         const origLocRecordId = new StringRecordId(origLocId);
 
         const sectionsRes = await db.query<[Array<Record<string, unknown>>]>(
-            "SELECT * FROM budget_section WHERE location_id = $locId ORDER BY created_at ASC",
+            "SELECT * FROM budget_section WHERE location_id = $locId AND deleted_at IS NONE ORDER BY created_at ASC",
             { locId: origLocRecordId }
         );
         const sections = sectionsRes?.[0] || [];
@@ -303,7 +303,7 @@ export async function updateCoverRevisionLabel(
     revisionLabel: string
 ) {
     const coverRes = await db.query<[Array<Record<string, unknown>>]>(
-        "SELECT * FROM budget_block WHERE budget_id = $budgetId AND type = 'cover' LIMIT 1",
+        "SELECT * FROM budget_block WHERE budget_id = $budgetId AND type = 'cover' AND deleted_at IS NONE LIMIT 1",
         { budgetId: budgetRecordId }
     );
     const cover = coverRes?.[0]?.[0];

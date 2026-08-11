@@ -72,6 +72,13 @@ async function getNextRevisionNumber(
     return max + 1;
 }
 
+function budgetUpdatedAtMs(row: Record<string, unknown>): number {
+    const raw = row.updated_at ?? row.created_at;
+    if (raw == null) return 0;
+    const ms = new Date(String(raw)).getTime();
+    return Number.isFinite(ms) ? ms : 0;
+}
+
 /** Última versão finalizada da proposta (para copiar conteúdo ao criar revisão a partir da raiz). */
 async function resolveRevisionSourceBudget(
     db: Awaited<ReturnType<typeof getDb>>,
@@ -84,14 +91,31 @@ async function resolveRevisionSourceBudget(
 
     const rootBudgetId = resolveRelationId(clicked.root_budget_id) || String(clicked.id);
     const rootBudgetRecordId = requireRecordId("budget", rootBudgetId);
+    const rootNorm = recordIdToString(rootBudgetRecordId);
 
+    // Busca ampla + normalização de ID: root_budget_id pode vir como RecordId ou string.
     const familyRes = await db.query<[Array<Record<string, unknown>>]>(
         `SELECT * FROM budget WHERE id = $rootId OR root_budget_id = $rootId`,
         { rootId: rootBudgetRecordId }
     );
-    const family = familyRes?.[0] || [];
+    const familyRaw = familyRes?.[0] || [];
+    const familyById = new Map<string, Record<string, unknown>>();
+    for (const row of familyRaw) {
+        const id = recordIdToString(row.id);
+        if (id) familyById.set(id, row);
+    }
 
-    const candidates = family.filter(
+    const allWithRoot = await db.query<[Array<Record<string, unknown>>]>(
+        `SELECT * FROM budget WHERE root_budget_id IS NOT NONE`
+    );
+    for (const row of allWithRoot?.[0] || []) {
+        if (recordIdToString(row.root_budget_id) === rootNorm) {
+            const id = recordIdToString(row.id);
+            if (id) familyById.set(id, row);
+        }
+    }
+
+    const candidates = [...familyById.values()].filter(
         (row) =>
             !isBudgetEditableStatus(String(row.status)) &&
             canCreateBudgetRevision(String(row.status))
@@ -101,11 +125,13 @@ async function resolveRevisionSourceBudget(
         return { sourceRecordId: clickedRecordId, source: clicked };
     }
 
-    candidates.sort(
-        (a, b) => Number(b.revision_number ?? 0) - Number(a.revision_number ?? 0)
-    );
+    candidates.sort((a, b) => {
+        const revDiff = Number(b.revision_number ?? 0) - Number(a.revision_number ?? 0);
+        if (revDiff !== 0) return revDiff;
+        return budgetUpdatedAtMs(b) - budgetUpdatedAtMs(a);
+    });
     const latest = candidates[0];
-    const latestId = String(latest.id);
+    const latestId = recordIdToString(latest.id);
     return {
         sourceRecordId: requireRecordId("budget", latestId),
         source: latest,
@@ -116,11 +142,29 @@ async function familyHasDraftRevision(
     db: Awaited<ReturnType<typeof getDb>>,
     rootBudgetRecordId: StringRecordId
 ): Promise<boolean> {
-    const familyRes = await db.query<[Array<{ status?: string }>]>(
-        `SELECT status FROM budget WHERE id = $rootId OR root_budget_id = $rootId`,
+    const rootNorm = recordIdToString(rootBudgetRecordId);
+    const familyRes = await db.query<[Array<{ status?: string; id?: unknown; root_budget_id?: unknown }>]>(
+        `SELECT status, id, root_budget_id FROM budget WHERE id = $rootId OR root_budget_id = $rootId`,
         { rootId: rootBudgetRecordId }
     );
-    return (familyRes?.[0] || []).some((row) => isBudgetEditableStatus(String(row.status)));
+    const seen = new Set<string>();
+    for (const row of familyRes?.[0] || []) {
+        const id = recordIdToString(row.id);
+        if (id) seen.add(id);
+        if (isBudgetEditableStatus(String(row.status))) return true;
+    }
+
+    const allWithRoot = await db.query<
+        [Array<{ status?: string; id?: unknown; root_budget_id?: unknown }>]
+    >(`SELECT status, id, root_budget_id FROM budget WHERE root_budget_id IS NOT NONE`);
+    for (const row of allWithRoot?.[0] || []) {
+        if (recordIdToString(row.root_budget_id) !== rootNorm) continue;
+        const id = recordIdToString(row.id);
+        if (id && seen.has(id)) continue;
+        if (isBudgetEditableStatus(String(row.status))) return true;
+    }
+
+    return false;
 }
 
 /** Indica se este orçamento pode originar uma nova revisão (ex.: aba E-mail). */
