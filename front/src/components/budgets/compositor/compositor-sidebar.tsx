@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, createContext, useContext, useMemo, type CSSProperties } from "react";
-import { ChevronRight, ChevronDown, MapPin, Layers, FileText, Plus, Trash2, FolderOpen, GripVertical, Map as MapIcon, BookOpen, ListOrdered, ImageIcon, Table2, LayoutTemplate } from "lucide-react";
+import { ChevronRight, ChevronDown, MapPin, Layers, FileText, Plus, Trash2, FolderOpen, GripVertical, Map as MapIcon, BookOpen, ListOrdered, ImageIcon, Table2, LayoutTemplate, Package, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -162,6 +162,9 @@ const BLOCK_ICONS: Record<string, React.ReactNode> = {
   cover:    <BookOpen className="h-3.5 w-3.5 shrink-0 text-primary" />,
   toc:      <ListOrdered className="h-3.5 w-3.5 shrink-0 text-primary" />,
   figures:  <ImageIcon className="h-3.5 w-3.5 shrink-0 text-primary" />,
+  databook_figures: <ImageIcon className="h-3.5 w-3.5 shrink-0 text-primary" />,
+  databook_installations: <Package className="h-3.5 w-3.5 shrink-0 text-primary" />,
+  databook_attachments: <Paperclip className="h-3.5 w-3.5 shrink-0 text-primary" />,
   quote:    <Table2 className="h-3.5 w-3.5 shrink-0 text-primary" />,
   session:  <FolderOpen className="h-3.5 w-3.5 shrink-0" />,
   location: <MapPin className="h-3.5 w-3.5 shrink-0" />,
@@ -253,7 +256,7 @@ function SidebarDragPreview({
           (block.type === "session" || isScope || isHeaderFooter || isQuote || block.type === "toc" || block.type === "figures") && "uppercase"
         )}
       >
-        {isScope ? getScopeBlockLabel(block.label) : isHeaderFooter ? "CABEÇALHO E RODAPÉ" : isQuote ? "ORÇAMENTO" : block.type === "toc" ? "SUMÁRIO" : block.type === "figures" ? "LISTA DE FIGURAS" : (block.label || `(${block.type})`)}
+        {isScope ? getScopeBlockLabel(block.label) : isHeaderFooter ? "CABEÇALHO E RODAPÉ" : isQuote ? "ORÇAMENTO" : block.type === "toc" ? "SUMÁRIO" : block.type === "figures" || block.type === "databook_figures" ? "LISTA DE FIGURAS" : block.type === "databook_installations" ? "INSTALAÇÕES E PRODUTOS" : block.type === "databook_attachments" ? "APÊNDICES E ANEXOS" : (block.label || `(${block.type})`)}
       </span>
     </div>
   );
@@ -467,6 +470,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
   const isCover = block.type === "cover";
   const isToc = block.type === "toc";
   const isFigures = block.type === "figures";
+  const isDatabookAutomatic = ["databook_figures", "databook_installations", "databook_attachments"].includes(block.type);
   const isSelected = selectedId === block.id;
   const isExpandable = (block.type === "session" || block.type === "location") && !isScope && !isHeaderFooter && !isQuote;
   const canAdd = (block.type === "session" || block.type === "location") && !isScope && !isHeaderFooter && !isQuote;
@@ -563,7 +567,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
         )}
 
         {/* Label — duplo-clique para editar */}
-        {editingLabel && !isReadOnly && !isHeaderFooter && !isQuote && !isCover && !isToc && !isFigures ? (
+        {editingLabel && !isReadOnly && !isHeaderFooter && !isQuote && !isCover && !isToc && !isFigures && !isDatabookAutomatic ? (
           <input
             ref={labelInputRef}
             value={labelDraft}
@@ -583,7 +587,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
               (block.type === "session" || isScope || isHeaderFooter || isQuote || isCover || isToc || isFigures) && "uppercase"
             )}
             onDoubleClick={(e) => {
-              if (!isReadOnly && !isHeaderFooter && !isQuote && !isCover && !isToc && !isFigures) {
+              if (!isReadOnly && !isHeaderFooter && !isQuote && !isCover && !isToc && !isFigures && !isDatabookAutomatic) {
                 e.stopPropagation();
                 setLabelDraft(
                   isScope ? getScopeBlockLabel(block.label) : (block.label || ""),
@@ -592,7 +596,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
               }
             }}
           >
-            {isScope ? getScopeBlockLabel(block.label) : isHeaderFooter ? "CABEÇALHO E RODAPÉ" : isQuote ? "ORÇAMENTO" : isCover ? "CAPA" : isToc ? "SUMÁRIO" : isFigures ? "LISTA DE FIGURAS" : (block.label || `(${block.type})`)}
+            {isScope ? getScopeBlockLabel(block.label) : isHeaderFooter ? "CABEÇALHO E RODAPÉ" : isQuote ? "ORÇAMENTO" : isCover ? "CAPA" : isToc ? "SUMÁRIO" : isFigures || block.type === "databook_figures" ? "LISTA DE FIGURAS" : block.type === "databook_installations" ? "INSTALAÇÕES E PRODUTOS" : block.type === "databook_attachments" ? "APÊNDICES E ANEXOS" : (block.label || `(${block.type})`)}
           </span>
         )}
 
@@ -632,7 +636,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
         )}
 
         {/* Botão excluir — oculto em isReadOnly e scope */}
-        {!isReadOnly && !isScope && !isHeaderFooter && !isQuote && !isCover && !isToc && !isFigures && (
+        {!isReadOnly && !isScope && !isHeaderFooter && !isQuote && !isCover && !isToc && !isFigures && !isDatabookAutomatic && (
           <button
             disabled={deleting}
             onClick={handleDelete}

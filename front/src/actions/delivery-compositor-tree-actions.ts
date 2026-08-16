@@ -5,8 +5,9 @@ import {
     ensureDeliveryCompositorCoverBlockAction,
     ensureDeliveryCompositorHeaderFooterBlockAction,
     ensureDeliveryCompositorTocBlockAction,
+    ensureDatabookAutomaticSectionsAction,
 } from "@/actions/delivery-compositor-block-actions";
-import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
+import { getDb, resetDb, isTokenExpiredError, toPlain } from "@/lib/surreal";
 import { assertDeliveryProjectInActiveTenant } from "@/lib/delivery/delivery-compositor-tenant";
 import type { BudgetBlockFlat } from "@/types/budget-compositor-types";
 
@@ -32,6 +33,7 @@ async function loadDeliveryCompositorTreeData(
             await ensureDeliveryCompositorCoverBlockAction(projectId, { skipRevalidate: true });
             await ensureDeliveryCompositorHeaderFooterBlockAction(projectId, { skipRevalidate: true });
             await ensureDeliveryCompositorTocBlockAction(projectId, { skipRevalidate: true });
+            await ensureDatabookAutomaticSectionsAction(projectId, { skipRevalidate: true });
         }
 
         const blocksRes = await db.query<[Array<Record<string, unknown>>]>(
@@ -50,7 +52,7 @@ async function loadDeliveryCompositorTreeData(
                 parent_id: row.parent_id ? String(row.parent_id) : null,
             })) as BudgetBlockFlat[];
 
-        return { success: true, blocks, items: {}, imagesByBlock: {} };
+        return toPlain({ success: true, blocks, items: {}, imagesByBlock: {} });
     } catch (error) {
         console.error("loadDeliveryCompositorTreeData:", error);
         if (isTokenExpiredError(error)) resetDb();

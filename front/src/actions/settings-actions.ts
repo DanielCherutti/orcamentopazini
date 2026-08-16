@@ -5,7 +5,6 @@ import { assertActionSession, assertWriteActionSession } from "@/actions/auth-ac
 import {
   BRAND_DEFAULT_PRIMARY,
   BRAND_DEFAULT_SECONDARY,
-  normalizeHex,
 } from "@/lib/branding-theme";
 import { getHostDisplayBranding } from "@/lib/host-branding";
 import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
@@ -64,8 +63,10 @@ export type PublicProposalBranding = {
 };
 
 const PROPOSAL_SETTINGS_DEFAULTS: ProposalSettings = {
-  company_name: "Minha empresa de engenharia",
-  company_header_subtitle: "Engenharia",
+  // Identidade visual nunca deve ser inventada no PDF. Enquanto a organização
+  // não configurar esses campos, o cabeçalho permanece sem nome/subtítulo.
+  company_name: "",
+  company_header_subtitle: "",
   introduction_text: `Prezado Cliente,
 
 É com satisfação que apresentamos nossa proposta comercial para execução do seu projeto de engenharia.
@@ -107,6 +108,15 @@ export async function getProposalSettingsAction() {
 
         const raw = result[0]?.[0] || { ...PROPOSAL_SETTINGS_DEFAULTS };
         const plain = toPlain(raw) as Record<string, unknown>;
+
+        // Compatibilidade com organizações criadas quando estes textos de
+        // demonstração eram persistidos como se fossem dados reais.
+        if (String(plain.company_name ?? "").trim().toLocaleLowerCase("pt-BR") === "minha empresa de engenharia") {
+            plain.company_name = "";
+        }
+        if (String(plain.company_header_subtitle ?? "").trim().toLocaleLowerCase("pt-BR") === "engenharia") {
+            plain.company_header_subtitle = "";
+        }
 
         const smtp_pass_configured =
             typeof plain.smtp_pass === "string" && plain.smtp_pass.length > 0;

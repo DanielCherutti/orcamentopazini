@@ -68,7 +68,7 @@ export function DeliveryCompositor({ projectId, documentTitle }: DeliveryComposi
 
     return (
         <CompositorRuntimeProvider kind="delivery">
-            <div className="flex flex-1 min-h-0 overflow-hidden border rounded-lg bg-background">
+            <div className="flex h-full flex-1 min-h-0 overflow-hidden border rounded-lg bg-background">
                 {sidebarOpen && (
                     <CompositorSidebar
                         roots={roots}

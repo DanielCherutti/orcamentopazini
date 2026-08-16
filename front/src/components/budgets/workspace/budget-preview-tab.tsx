@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Eye, Printer, Download } from "lucide-react";
 import type { Budget } from "@/types/budget-types";
 import { budgetPdfApiUrl, budgetPdfUrl } from "@/lib/budgets/budget-path";
+import { DocumentGenerationProgress } from "@/components/documents/document-generation-progress";
 
 interface BudgetPreviewTabProps {
   budget: Budget;
@@ -87,6 +88,7 @@ export function BudgetPreviewTab({ budget }: BudgetPreviewTabProps) {
           Defina o cliente na aba <strong>Dados</strong> antes de exportar/baixar o PDF.
         </Alert>
       ) : null}
+      {!isClientMissing ? <DocumentGenerationProgress documentType="budget" documentId={budgetId} /> : null}
 
       <div className="overflow-hidden rounded-xl border bg-card">
         <div className="h-[80vh] min-h-[400px] w-full">

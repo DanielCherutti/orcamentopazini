@@ -717,6 +717,30 @@ export async function getDeliveryCompositorShellAction(projectId: string): Promi
     const auth = await assertActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
 
+    if (projectId.startsWith("databook:")) {
+        const gate = await assertEntityInActiveTenant("databook", projectId);
+        if (!gate.ok) return { success: false, error: gate.error };
+        const db = await getDb();
+        const rows = await db.query<[Array<Record<string, unknown>>]>(
+            "SELECT * FROM $id FETCH client_id",
+            { id: requireRecordId("databook", projectId) },
+        );
+        const row = rows[0]?.[0];
+        if (!row) return { success: false, error: "DataBook não encontrado" };
+        const client = row.client_id as Record<string, unknown> | undefined;
+        return {
+            success: true,
+            data: {
+                id: projectId,
+                code: String(row.code ?? ""),
+                title: String(row.title ?? ""),
+                client_id: client?.id ? recordIdToString(client.id) : recordIdToString(row.client_id),
+                client_name: client?.name ? String(client.name) : undefined,
+                use_compositor: true,
+            } as Budget,
+        };
+    }
+
     const loaded = await loadDeliveryProjectExportPayload(projectId);
     if (!loaded.ok) return { success: false, error: loaded.error };
 

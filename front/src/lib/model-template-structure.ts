@@ -23,7 +23,7 @@ export type ModelTemplateStructure =
   | { version: 1; kind: "cover"; props: CoverBlockProps }
   | { version: 1; kind: "budget"; blocks: ModelTemplateBlock[] };
 
-type ModeloTipo = "cabecalho" | "rodape" | "capa" | "orcamento_completo";
+type ModeloTipo = "cabecalho" | "rodape" | "capa" | "orcamento_completo" | "databook_completo";
 
 function createId(prefix: string): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -181,6 +181,28 @@ export function createModelTemplateStructure(tipo: ModeloTipo, legacyContent = "
     return structure;
   }
   if (tipo === "capa") return defaultCoverStructure(legacyContent);
+  if (tipo === "databook_completo") {
+    const structure = defaultBudgetStructure(legacyContent);
+    if (structure.kind === "budget") {
+      structure.blocks = structure.blocks
+        .filter((block) => block.type !== "quote")
+        .map((block) =>
+          block.type === "cover"
+            ? {
+                ...block,
+                props: {
+                  ...block.props,
+                  main_title: "DATABOOK TÉCNICO",
+                  subtitle: "Documentação de instalação e inspeção",
+                  cover_document_html:
+                    '<h1 style="text-align:center">DATABOOK TÉCNICO</h1><p style="text-align:center">{{cliente.razao_social}}</p>',
+                },
+              }
+            : block,
+        );
+    }
+    return structure;
+  }
   return defaultBudgetStructure(legacyContent);
 }
 
@@ -220,7 +242,7 @@ export function normalizeModelTemplateStructure(
     };
   }
 
-  if (tipo === "orcamento_completo" && source.kind === "budget" && Array.isArray(source.blocks)) {
+  if ((tipo === "orcamento_completo" || tipo === "databook_completo") && source.kind === "budget" && Array.isArray(source.blocks)) {
     const blocks = source.blocks
       .filter(isRecord)
       .map((block, index): ModelTemplateBlock | null => {
