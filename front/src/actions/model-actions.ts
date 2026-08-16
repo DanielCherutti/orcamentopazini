@@ -28,7 +28,7 @@ import {
   type ModelTemplateStructure,
 } from "@/lib/model-template-structure";
 
-const modeloTipos = ["cabecalho", "rodape", "capa", "orcamento_completo"] as const;
+const modeloTipos = ["cabecalho", "rodape", "capa", "orcamento_completo", "databook_completo"] as const;
 export type ModeloTipo = (typeof modeloTipos)[number];
 
 export type Modelo = {

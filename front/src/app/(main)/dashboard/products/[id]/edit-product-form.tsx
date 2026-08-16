@@ -6,8 +6,19 @@ import { ProductForm } from "@/components/products/product-form";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import type { ProductDatabookConfig } from "@/actions/product-databook-actions";
+import type { ProductManual } from "@/types/databook-types";
+import { ProductDatabookPanel } from "@/components/products/product-databook-panel";
 
-export function EditProductForm({ product }: { product: Product }) {
+export function EditProductForm({
+    product,
+    databookConfig,
+    manuals,
+}: {
+    product: Product;
+    databookConfig?: ProductDatabookConfig;
+    manuals?: ProductManual[];
+}) {
     const [fieldErrors, setFieldErrors] = useState<Record<string, string[] | undefined>>({});
     const [generalError, setGeneralError] = useState("");
     const router = useRouter();
@@ -49,7 +60,26 @@ export function EditProductForm({ product }: { product: Product }) {
             onDelete={handleDelete}
             errors={fieldErrors}
             generalError={generalError}
+            databookContent={
+                product.id && databookConfig ? (
+                    <ProductDatabookPanel
+                        productId={product.id}
+                        initialConfig={databookConfig}
+                        initialManuals={manuals ?? []}
+                        view="table"
+                    />
+                ) : undefined
+            }
+            manualsContent={
+                product.id && databookConfig ? (
+                    <ProductDatabookPanel
+                        productId={product.id}
+                        initialConfig={databookConfig}
+                        initialManuals={manuals ?? []}
+                        view="manuals"
+                    />
+                ) : undefined
+            }
         />
     );
 }
-

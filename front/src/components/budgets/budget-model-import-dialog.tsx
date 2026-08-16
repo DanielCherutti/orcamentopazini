@@ -37,6 +37,7 @@ const tipoLabels: Record<ModeloTipo, string> = {
   rodape: "Rodapé",
   capa: "Capa",
   orcamento_completo: "Orçamento pronto",
+  databook_completo: "DataBook completo",
 };
 
 const tipos: ModeloTipo[] = ["capa", "cabecalho", "rodape", "orcamento_completo"];
@@ -330,4 +331,3 @@ export function BudgetModelImportDialog({
     </>
   );
 }
-

@@ -203,7 +203,7 @@ export function Sidebar({
         !pathname.startsWith("/dashboard/products/groups");
     const isGroups = pathname.startsWith("/dashboard/products/groups");
     const isTechnicalEquipment = pathname.startsWith("/dashboard/technical-equipment");
-    const isDatabooks = pathname.startsWith("/dashboard/databooks");
+    const isDatabookDocuments = pathname.startsWith("/dashboard/databook-documents");
     const isDeliveryProjects = pathname.startsWith("/delivery-projects");
     const isBudgets = pathname.startsWith("/budgets");
     const isCustomers = pathname.startsWith("/customers");
@@ -251,6 +251,12 @@ export function Sidebar({
                         active: isBudgets,
                     },
                     {
+                        href: "/dashboard/databook-documents",
+                        icon: BookOpen,
+                        label: "DataBooks",
+                        active: isDatabookDocuments,
+                    },
+                    {
                         href: "/customers",
                         icon: Users,
                         label: "Clientes",
@@ -274,12 +280,6 @@ export function Sidebar({
                         icon: Wrench,
                         label: "Equip. técnicos",
                         active: isTechnicalEquipment,
-                    },
-                    {
-                        href: "/dashboard/databooks",
-                        icon: BookOpen,
-                        label: "Modelos de DataBook",
-                        active: isDatabooks,
                     },
                     {
                         href: "/delivery-projects",
@@ -316,7 +316,7 @@ export function Sidebar({
             isCustomers,
             isModelos,
             isTechnicalEquipment,
-            isDatabooks,
+            isDatabookDocuments,
             isDeliveryProjects,
             isSettings,
             isUsers,

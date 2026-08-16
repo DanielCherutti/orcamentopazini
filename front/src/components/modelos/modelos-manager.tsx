@@ -31,15 +31,17 @@ const tipoLabels: Record<ModeloTipo, string> = {
   rodape: "Rodapé",
   capa: "Capa",
   orcamento_completo: "Orçamento",
+  databook_completo: "DataBook",
 };
 
-const tipos: ModeloTipo[] = ["cabecalho", "rodape", "capa", "orcamento_completo"];
+const tipos: ModeloTipo[] = ["cabecalho", "rodape", "capa", "orcamento_completo", "databook_completo"];
 
 const tipoIcons = {
   cabecalho: LayoutPanelTop,
   rodape: PanelBottom,
   capa: ImageIcon,
   orcamento_completo: FileText,
+  databook_completo: FileText,
 } satisfies Record<ModeloTipo, typeof FileText>;
 
 const tipoDecorations: Record<ModeloTipo, { border: string; bg: string; text: string; gradient: string }> = {
@@ -67,6 +69,12 @@ const tipoDecorations: Record<ModeloTipo, { border: string; bg: string; text: st
     text: "text-indigo-500",
     gradient: "from-indigo-500/20 to-transparent",
   },
+  databook_completo: {
+    border: "border-violet-500/20 hover:border-violet-500/40",
+    bg: "bg-violet-500/5",
+    text: "text-violet-500",
+    gradient: "from-violet-500/20 to-transparent",
+  },
 };
 
 export function ModelosManager({ initialModelos }: { initialModelos: Modelo[] }) {
@@ -89,7 +97,7 @@ export function ModelosManager({ initialModelos }: { initialModelos: Modelo[] })
     () =>
       tipos.reduce<Record<ModeloTipo, number>>(
         (acc, tipo) => ({ ...acc, [tipo]: modelos.filter((modelo) => modelo.tipo === tipo).length }),
-        { cabecalho: 0, rodape: 0, capa: 0, orcamento_completo: 0 },
+        { cabecalho: 0, rodape: 0, capa: 0, orcamento_completo: 0, databook_completo: 0 },
       ),
     [modelos],
   );

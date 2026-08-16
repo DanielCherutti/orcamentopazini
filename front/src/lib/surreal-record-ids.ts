@@ -38,6 +38,15 @@ const ALLOWED_TABLES = new Set([
     "delivery_evidence",
     "delivery_installation",
     "databook_template",
+    "databook",
+    "databook_section",
+    "databook_installation",
+    "databook_installation_product",
+    "databook_media",
+    "databook_attachment",
+    "product_databook_config",
+    "product_manual",
+    "document_generation_job",
 ]);
 
 const SUFFIX_RE = /^[A-Za-z0-9_-]+$/;

@@ -16,7 +16,12 @@ import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids"
 import { DEFAULT_HEADER_FOOTER_PROPS } from "@/types/budget-compositor-types";
 
 const USER_ADDABLE_BLOCK_TYPES = new Set(["session", "text"]);
-const PROTECTED_ROOT_TYPES = new Set(["cover", "header_footer", "toc"]);
+const DATABOOK_AUTO_SECTIONS = [
+    { type: "databook_figures", label: "LISTA DE FIGURAS" },
+    { type: "databook_installations", label: "INSTALAÇÕES E PRODUTOS" },
+    { type: "databook_attachments", label: "APÊNDICES E ANEXOS" },
+] as const;
+const PROTECTED_ROOT_TYPES = new Set(["cover", "header_footer", "toc", ...DATABOOK_AUTO_SECTIONS.map((section) => section.type)]);
 
 type RootBlockRow = { id: unknown; order_index: number; type: string; props?: Record<string, unknown> };
 
@@ -218,10 +223,43 @@ export async function ensureDeliveryCompositorTocBlockAction(
     }
 }
 
+export async function ensureDatabookAutomaticSectionsAction(
+    projectId: string,
+    options?: { skipRevalidate?: boolean },
+): Promise<{ success: boolean; error?: string }> {
+    const auth = await assertWriteActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+    const gate = await assertDeliveryProjectInActiveTenant(projectId);
+    if (!gate.ok) return { success: false, error: gate.error };
+    try {
+        const db = await getDb();
+        const projectRecordId = gate.projectRecordId;
+        let roots = await listRootBlocks(db, projectRecordId);
+        for (const section of DATABOOK_AUTO_SECTIONS) {
+            if (roots.some((root) => root.type === section.type)) continue;
+            await db.create(new Table("delivery_block")).content({
+                delivery_project_id: projectRecordId,
+                type: section.type,
+                label: section.label,
+                order_index: roots.length,
+                props: { automatic: true },
+            });
+            roots = await listRootBlocks(db, projectRecordId);
+        }
+        if (!options?.skipRevalidate) revalidatePath(deliveryProjectRevalidatePath(projectId));
+        return { success: true };
+    } catch (error) {
+        console.error("ensureDatabookAutomaticSectionsAction:", error);
+        if (isTokenExpiredError(error)) resetDb();
+        return { success: false, error: "Erro ao garantir seções automáticas do DataBook" };
+    }
+}
+
 export async function seedDeliveryCompositorBlocksAction(projectId: string) {
     await ensureDeliveryCompositorCoverBlockAction(projectId, { skipRevalidate: true });
     await ensureDeliveryCompositorHeaderFooterBlockAction(projectId, { skipRevalidate: true });
     await ensureDeliveryCompositorTocBlockAction(projectId, { skipRevalidate: true });
+    await ensureDatabookAutomaticSectionsAction(projectId, { skipRevalidate: true });
 }
 
 export async function addDeliveryBlockAction(params: {

@@ -419,6 +419,7 @@ export function CompositorCoverPdfPage({
   return (
     <Page
       size="A4"
+      orientation="portrait"
       style={[
         styles.page,
         {

@@ -227,6 +227,7 @@ export function PdfInnerPage({
         <Page
             key={pageKey}
             size="A4"
+            orientation="portrait"
             wrap={wrap}
             style={[
                 styles.innerPageRoot,

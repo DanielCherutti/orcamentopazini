@@ -60,7 +60,7 @@ export function ModelTemplateEditor({
   if (tipo === "capa" && structure.kind === "cover") {
     return <CoverModelEditor structure={structure} onChange={onChange} />;
   }
-  if (tipo === "orcamento_completo" && structure.kind === "budget") {
+  if ((tipo === "orcamento_completo" || tipo === "databook_completo") && structure.kind === "budget") {
     return <BudgetModelEditor structure={structure} onChange={onChange} />;
   }
 

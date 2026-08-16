@@ -10,6 +10,7 @@ import type { CompositorPdfPayload } from "@/components/pdf/compositor-pdf-types
 import type { Budget } from "@/types/budget-types";
 import { renderCompositorPdfVariables } from "@/lib/budget-template-rendering";
 import { buildTemplateVariableContext } from "@/lib/model-variables";
+import { getDeliveryCompositorShellAction } from "@/actions/delivery-project-actions";
 
 export type DeliveryCompositorPdfPayloadResult =
     | {
@@ -29,10 +30,9 @@ export async function loadDeliveryCompositorPdfPayload(
         return { ok: false, status: 401, error: auth.error };
     }
 
-    const loaded = await loadDeliveryProjectExportPayload(rawProjectId);
-    if (!loaded.ok) {
-        return { ok: false, status: loaded.status, error: loaded.error };
-    }
+    const isStandaloneDatabook = rawProjectId.startsWith("databook:");
+    const loaded = isStandaloneDatabook ? null : await loadDeliveryProjectExportPayload(rawProjectId);
+    if (loaded && !loaded.ok) return { ok: false, status: loaded.status, error: loaded.error };
 
     const [settingsRes, treeRes] = await Promise.all([
         getProposalSettingsAction(),
@@ -60,21 +60,29 @@ export async function loadDeliveryCompositorPdfPayload(
         app_public_url: appPublicUrl || fromSettings || "",
     };
 
-    const project = loaded.payload.project;
+    const shellResult = isStandaloneDatabook
+        ? await getDeliveryCompositorShellAction(rawProjectId)
+        : null;
+    if (isStandaloneDatabook && (!shellResult?.success || !shellResult.data)) {
+        return { ok: false, status: 404, error: shellResult?.error ?? "DataBook não encontrado" };
+    }
+    const project = loaded?.ok ? loaded.payload.project : null;
+    const standaloneShell = shellResult?.data;
+    const clientId = project?.client_id ?? (standaloneShell?.client_id ? String(standaloneShell.client_id) : undefined);
     let customerForVariables: CustomerFull | null = null;
-    if (project.client_id) {
-        const customerRes = await getCustomerAction(String(project.client_id));
+    if (clientId) {
+        const customerRes = await getCustomerAction(clientId);
         if (customerRes.success && customerRes.data) {
             customerForVariables = customerRes.data;
         }
     }
 
-    const budgetShell: Budget = {
-        id: project.budget_id,
-        code: project.budget_code,
-        title: project.title,
-        client_id: project.client_id,
-        client_name: project.client_name,
+    const budgetShell: Budget = standaloneShell ?? {
+        id: project?.budget_id,
+        code: project?.budget_code,
+        title: project?.title,
+        client_id: project?.client_id,
+        client_name: project?.client_name,
         use_compositor: true,
     } as Budget;
 

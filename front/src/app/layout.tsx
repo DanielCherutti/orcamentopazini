@@ -1,17 +1,6 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import { PRODUCT_NAME, PRODUCT_TAGLINE } from "@/lib/product-brand";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: {
@@ -33,7 +22,11 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className="antialiased"
+        style={{
+          "--font-geist-sans": "Inter, ui-sans-serif, system-ui, sans-serif",
+          "--font-geist-mono": "ui-monospace, SFMono-Regular, Menlo, monospace",
+        } as React.CSSProperties}
         suppressHydrationWarning
       >
         {children}

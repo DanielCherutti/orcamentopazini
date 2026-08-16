@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useSyncExternalStore } from "react";
+import { useState, useEffect, useSyncExternalStore, type ReactNode } from "react";
 import { Product } from "@/actions/product-actions";
 import { useFormStatus } from "react-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -63,12 +63,14 @@ interface ProductFormProps {
     onDelete?: () => Promise<void>;
     /** Permite reutilizar o formulário em modais sem navegar no histórico da página. */
     onCancel?: () => void;
+    databookContent?: ReactNode;
+    manualsContent?: ReactNode;
 }
 
 const formatPrice = (value: number) =>
     new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(value);
 
-export function ProductForm({ initialData, defaultCode, action, errors, generalError, onDelete, onCancel }: ProductFormProps) {
+export function ProductForm({ initialData, defaultCode, action, errors, generalError, onDelete, onCancel, databookContent, manualsContent }: ProductFormProps) {
     const [code, setCode] = useState(initialData?.code || defaultCode || "");
     const [ncm, setNcm] = useState(initialData?.ncm || "");
     const [description, setDescription] = useState(initialData?.description || "");
@@ -194,10 +196,12 @@ export function ProductForm({ initialData, defaultCode, action, errors, generalE
 
             {tabsMounted ? (
                 <Tabs defaultValue="basic" className="w-full">
-                    <TabsList className="grid w-full grid-cols-3">
+                    <TabsList className={`grid w-full ${manualsContent ? "grid-cols-5" : databookContent ? "grid-cols-4" : "grid-cols-3"}`}>
                         <TabsTrigger value="basic">Básico</TabsTrigger>
                         <TabsTrigger value="description">Descrição Detalhada</TabsTrigger>
                         <TabsTrigger value="attachments">Anexos</TabsTrigger>
+                        {manualsContent ? <TabsTrigger value="manuals">Manuais</TabsTrigger> : null}
+                        {databookContent ? <TabsTrigger value="databook">Tabela do DataBook</TabsTrigger> : null}
                     </TabsList>
 
                     <TabsContent value="basic">
@@ -339,6 +343,17 @@ export function ProductForm({ initialData, defaultCode, action, errors, generalE
                         </CardContent>
                     </Card>
                 </TabsContent>
+                {manualsContent ? (
+                    <TabsContent value="manuals">
+                        {manualsContent}
+                    </TabsContent>
+                ) : null}
+
+                {databookContent ? (
+                    <TabsContent value="databook">
+                        {databookContent}
+                    </TabsContent>
+                ) : null}
             </Tabs>
             ) : (
                 <div className="w-full space-y-4">
