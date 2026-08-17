@@ -32,8 +32,6 @@ export interface ScopeSection {
   costs_display_mode?: "location" | "section" | "general";
   price_adjustment_enabled?: boolean;
   price_adjustment_input_mode?: "percent" | "fixed";
-  general_price_adjustment_mode?: "percent" | "fixed";
-  general_price_adjustment_value?: number;
   assembly_mode?: "percent" | "fixed" | "manual";
   assembly_value?: number;
   order_index: number;
@@ -49,8 +47,6 @@ export interface ScopeLocation {
   costs_display_mode?: "location" | "section" | "general";
   price_adjustment_enabled?: boolean;
   price_adjustment_input_mode?: "percent" | "fixed";
-  general_price_adjustment_mode?: "percent" | "fixed";
-  general_price_adjustment_value?: number;
   assembly_mode?: "percent" | "fixed" | "manual";
   assembly_value?: number;
   order_index: number;

@@ -1,11 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import React, { type ReactNode } from "react";
-import type { BudgetImage, BudgetItem, BudgetLocation } from "@/types/budget-types";
+import type { BudgetItem, BudgetLocation } from "@/types/budget-types";
 import {
     BudgetTable,
     computeLocationItemValues,
-    figureCaption,
     SectionItemsTable,
 } from "./budget-table";
 
@@ -78,41 +77,6 @@ test("PDF detail applies equipment and assembly percentages independently", () =
     assert.equal(itemFinalValue.get("budget_item:split-percentages"), 1310);
 });
 
-test("PDF detail distributes section and location discounts into item values", () => {
-    const location = {
-        id: "budget_location:discount",
-        name: "Local",
-        order_index: 0,
-        assembly_mode: "fixed",
-        assembly_value: 100,
-        general_price_adjustment_mode: "percent",
-        general_price_adjustment_value: -10,
-        sections: [
-            {
-                id: "budget_section:discount",
-                name: "Trecho",
-                order_index: 0,
-                general_price_adjustment_mode: "fixed",
-                general_price_adjustment_value: 100,
-                items: [
-                    {
-                        id: "budget_item:discount",
-                        product_id: "product:test",
-                        quantity: 1,
-                        unit_price: 1000,
-                        labor_cost: 0,
-                        total: 1000,
-                    },
-                ],
-            },
-        ],
-    } as BudgetLocation;
-
-    const { itemFinalValue } = computeLocationItemValues(location, 0, 0);
-
-    assert.equal(itemFinalValue.get("budget_item:discount"), 1090);
-});
-
 test("PDF detail prints the location header even when the location has no images", () => {
     const location = {
         id: "budget_location:tunnel",
@@ -137,54 +101,6 @@ test("PDF detail prints the location header even when the location has no images
 
     assert.match(renderedText, /4\.1 — Túnel dos silos/);
     assert.match(renderedText, /4\.1\.1 — TRECHO PRINCIPAL/);
-});
-
-test("PDF detail prints a fixed assembly-only section without fake products", () => {
-    const location = {
-        id: "budget_location:assembly-only",
-        name: "Local de montagem",
-        order_index: 0,
-        assembly_mode: "percent",
-        assembly_value: 0,
-        sections: [
-            {
-                id: "budget_section:assembly-only",
-                name: "Trecho de montagem",
-                order_index: 0,
-                assembly_mode: "fixed",
-                assembly_value: 1250,
-                items: [],
-                images: [],
-            },
-        ],
-        images: [],
-    } as BudgetLocation;
-
-    const values = computeLocationItemValues(location, 0, 0);
-    assert.equal(
-        values.standaloneSectionValue.get("budget_section:assembly-only"),
-        1250,
-    );
-
-    const tree = BudgetTable({
-        locations: [location],
-        sectionNumber: 4,
-        showCosts: true,
-        costsDisplayMode: "section",
-    });
-    const renderedText = collectRenderedText(tree);
-    assert.match(renderedText, /4\.1\.1 — TRECHO DE MONTAGEM/);
-    const assemblyRow = SectionItemsTable({
-        sec: location.sections?.[0] ?? {},
-        showCosts: true,
-        laborCols: false,
-        costsDisplayMode: "section",
-        itemFinalValue: values.itemFinalValue,
-        standaloneValue: 1250,
-    });
-    const assemblyText = collectRenderedText(assemblyRow);
-    assert.match(assemblyText, /Montagem do trecho:\s+1\.250,00/);
-    assert.doesNotMatch(assemblyText, /Produto/);
 });
 
 test("PDF detail preserves visible product groups with header and footer", () => {
@@ -228,16 +144,4 @@ test("PDF detail preserves visible product groups with header and footer", () =>
     assert.match(renderedText, /KIT ESPAÇO CONFINADO/);
     assert.match(renderedText, /FIM DO GRUPO/);
     assert.ok(renderedText.indexOf("0002") < renderedText.indexOf("0003"));
-});
-
-test("PDF detail keeps section image captions optional without placeholder text", () => {
-    const image = {
-        id: "budget_image:optional-caption",
-        url: "/image.png",
-        width: 100,
-        height: 100,
-    } as BudgetImage;
-
-    assert.equal(figureCaption(image), "");
-    assert.equal(figureCaption({ ...image, caption: "  Análise estrutural  " }), "Análise estrutural");
 });

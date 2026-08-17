@@ -48,7 +48,6 @@ import {
 } from "@/lib/budgets/budget-scope-session-cache";
 import type { BudgetItem } from "@/types/budget-types";
 import { budgetItemsFromGroupedBySectionId } from "@/lib/budgets/budget-section-items-grouped";
-import { SignedNumberInput } from "./signed-number-input";
 
 export type { BudgetScopeProps, Selection } from "./budget-scope-types";
 
@@ -99,9 +98,6 @@ export function BudgetScope({
     const [priceAdjustmentEnabled, setPriceAdjustmentEnabled] = useState(false);
     const [priceAdjustmentInputMode, setPriceAdjustmentInputMode] =
         useState<PriceAdjustmentMode>("fixed");
-    const [generalAdjustmentMode, setGeneralAdjustmentMode] =
-        useState<PriceAdjustmentMode>("percent");
-    const [generalAdjustmentValue, setGeneralAdjustmentValue] = useState(0);
     const [assemblyMode, setAssemblyMode] = useState<LocationAssemblyMode>("percent");
     const [assemblyValue, setAssemblyValue] = useState(0);
     const [costConfigOpen, setCostConfigOpen] = useState(false);
@@ -254,8 +250,8 @@ export function BudgetScope({
             `${scopeDataVersion}|${locations
                 .map(
                     (loc) =>
-                        `${loc.id}:${loc.assembly_mode ?? "percent"}:${loc.assembly_value ?? 0}:${loc.general_price_adjustment_mode ?? "percent"}:${loc.general_price_adjustment_value ?? 0}:${loc.sections
-                            .map((sec) => `${sec.id}:${sec.assembly_mode ?? ""}:${sec.assembly_value ?? ""}:${sec.general_price_adjustment_mode ?? "percent"}:${sec.general_price_adjustment_value ?? 0}`)
+                        `${loc.id}:${loc.assembly_mode ?? "percent"}:${loc.assembly_value ?? 0}:${loc.sections
+                            .map((sec) => `${sec.id}:${sec.assembly_mode ?? ""}:${sec.assembly_value ?? ""}`)
                             .join(",")}`
                 )
                 .join("|")}|${quoteMarkupPercent}:${quoteDiscountPercent}:${quoteAssemblyMarkupPercent}:${quoteAssemblyDiscountPercent}`,
@@ -324,8 +320,6 @@ export function BudgetScope({
                         location: {
                             assembly_mode: loc.assembly_mode,
                             assembly_value: loc.assembly_value,
-                            general_price_adjustment_mode: loc.general_price_adjustment_mode,
-                            general_price_adjustment_value: loc.general_price_adjustment_value,
                         },
                         sections: loc.sections,
                         items: itemsWithSection,
@@ -418,17 +412,6 @@ export function BudgetScope({
             (target as unknown as Record<string, unknown>).price_adjustment_input_mode ?? "fixed"
         );
         setPriceAdjustmentInputMode(paModeRaw === "percent" ? "percent" : "fixed");
-        const generalModeRaw = String(
-            (target as unknown as Record<string, unknown>).general_price_adjustment_mode ??
-                "percent"
-        );
-        setGeneralAdjustmentMode(generalModeRaw === "fixed" ? "fixed" : "percent");
-        setGeneralAdjustmentValue(
-            Number(
-                (target as unknown as Record<string, unknown>)
-                    .general_price_adjustment_value ?? 0
-            )
-        );
         const modeRaw = String(
             (target as unknown as Record<string, unknown>).assembly_mode ?? "percent"
         );
@@ -447,8 +430,6 @@ export function BudgetScope({
                 costs_display_mode?: CostDisplayMode;
                 price_adjustment_enabled?: boolean;
                 price_adjustment_input_mode?: PriceAdjustmentMode;
-                general_price_adjustment_mode?: PriceAdjustmentMode;
-                general_price_adjustment_value?: number;
                 assembly_mode?: LocationAssemblyMode;
                 assembly_value?: number;
             }
@@ -760,70 +741,6 @@ export function BudgetScope({
                                                     >
                                                         R$
                                                     </button>
-                                                </div>
-                                                <div className="w-full space-y-1.5 border-t pt-2">
-                                                    <p className="text-[11px] font-medium text-muted-foreground">
-                                                        Ajuste geral do {selected?.type === "location" ? "local" : "trecho"}
-                                                    </p>
-                                                    <div className="grid grid-cols-[auto_auto_minmax(0,1fr)] gap-2">
-                                                        <button
-                                                            type="button"
-                                                            className={cn(
-                                                                toggleBtnClass,
-                                                                generalAdjustmentMode === "percent"
-                                                                    ? "border-primary bg-primary/10 text-primary"
-                                                                    : "border-border bg-background text-foreground hover:bg-muted"
-                                                            )}
-                                                            onClick={async () => {
-                                                                const previousMode = generalAdjustmentMode;
-                                                                setGeneralAdjustmentMode("percent");
-                                                                const ok = await saveCommercialConfig({
-                                                                    general_price_adjustment_mode: "percent",
-                                                                });
-                                                                if (!ok) setGeneralAdjustmentMode(previousMode);
-                                                            }}
-                                                            disabled={!selected}
-                                                        >
-                                                            %
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            className={cn(
-                                                                toggleBtnClass,
-                                                                generalAdjustmentMode === "fixed"
-                                                                    ? "border-primary bg-primary/10 text-primary"
-                                                                    : "border-border bg-background text-foreground hover:bg-muted"
-                                                            )}
-                                                            onClick={async () => {
-                                                                const previousMode = generalAdjustmentMode;
-                                                                setGeneralAdjustmentMode("fixed");
-                                                                const ok = await saveCommercialConfig({
-                                                                    general_price_adjustment_mode: "fixed",
-                                                                });
-                                                                if (!ok) setGeneralAdjustmentMode(previousMode);
-                                                            }}
-                                                            disabled={!selected}
-                                                        >
-                                                            R$
-                                                        </button>
-                                                        <SignedNumberInput
-                                                            value={generalAdjustmentValue}
-                                                            onValueCommit={async (value) => {
-                                                                setGeneralAdjustmentValue(value);
-                                                                const ok = await saveCommercialConfig({
-                                                                    general_price_adjustment_value: value,
-                                                                });
-                                                                if (!ok) await loadLocations();
-                                                            }}
-                                                            disabled={!selected}
-                                                            className="h-8 min-w-0 rounded-md border bg-background px-2 text-right text-xs tabular-nums"
-                                                            aria-label={`Ajuste geral do ${selected?.type === "location" ? "local" : "trecho"}`}
-                                                            placeholder="0 ou -10"
-                                                        />
-                                                    </div>
-                                                    <p className="text-[10px] text-muted-foreground">
-                                                        Use valor negativo para desconto.
-                                                    </p>
                                                 </div>
                                                 <button
                                                     type="button"

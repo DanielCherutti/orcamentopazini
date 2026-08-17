@@ -27,7 +27,7 @@ export interface SaveBudgetImageParams {
     locationId?: string;
     blockId?: string;   // compositor: referência ao budget_block
     imageId?: string; // Se presente, atualiza em vez de criar
-    /** Legenda opcional para imagens do Escopo (local/trecho). */
+    /** Obrigatório ao salvar imagem do Escopo (local/trecho) */
     caption?: string;
     url: string;
     composedUrl?: string; // Imagem com anotações "queimadas" (flattened)
@@ -168,6 +168,9 @@ export async function saveBudgetImageWithAnnotations(params: SaveBudgetImagePara
 
         const scopeImage = hasSection || hasLocation;
         const cap = typeof params.caption === "string" ? params.caption.trim() : "";
+        if (scopeImage && !cap) {
+            return { success: false, error: "Preencha a descrição da figura (lista de figuras no documento)." };
+        }
         try {
         let imageId: string;
         let image: DbImage;

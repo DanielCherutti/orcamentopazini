@@ -51,12 +51,6 @@ export const TEMPLATE_VARIABLE_TOKENS: TemplateVariableToken[] = [
     group: "Orçamento",
   },
   {
-    token: "{{numero.revisao}}",
-    label: "Número da revisão",
-    group: "Orçamento",
-    description: "00 no orçamento original; 01, 02… nas revisões.",
-  },
-  {
     token: "{{data.atual}}",
     label: "Data atual",
     group: "Data e hora",
@@ -89,9 +83,6 @@ export type TemplateVariableContext = {
   } | null;
   orcamento?: {
     codigo?: string | null;
-  } | null;
-  numero?: {
-    revisao?: string | null;
   } | null;
   data?: {
     atual?: string | null;
@@ -135,7 +126,7 @@ export function formatCustomerAddress(customer?: CustomerFull | null): string {
 
 export function buildTemplateVariableContext(params: {
   customer?: CustomerFull | null;
-  budget?: Pick<Budget, "code" | "revision_number"> | null;
+  budget?: Pick<Budget, "code"> | null;
   now?: Date;
   timeZone?: string;
 }): TemplateVariableContext {
@@ -157,11 +148,6 @@ export function buildTemplateVariableContext(params: {
     hour12: false,
     timeZone,
   }).format(now);
-  const rawRevisionNumber = Number(params.budget?.revision_number ?? 0);
-  const revisionNumber =
-    Number.isFinite(rawRevisionNumber) && rawRevisionNumber >= 1
-      ? Math.trunc(rawRevisionNumber)
-      : 0;
   return {
     cliente: {
       razao_social: customer?.razao_social || customer?.name || "",
@@ -175,9 +161,6 @@ export function buildTemplateVariableContext(params: {
     },
     orcamento: {
       codigo: params.budget?.code || "",
-    },
-    numero: {
-      revisao: String(revisionNumber).padStart(2, "0"),
     },
     data: {
       atual: currentDate,
@@ -253,7 +236,6 @@ function resolveVariable(
   if (normalizedPath === "cliente.cidade") return valueToString(context.cliente?.cidade);
   if (normalizedPath === "cliente.bairro") return valueToString(context.cliente?.bairro);
   if (normalizedPath === "orcamento.codigo") return valueToString(context.orcamento?.codigo);
-  if (normalizedPath === "numero.revisao") return valueToString(context.numero?.revisao);
   if (normalizedPath === "data.atual") return valueToString(context.data?.atual);
   if (normalizedPath === "hora.atual") return valueToString(context.hora?.atual);
   if (normalizedPath.startsWith("cliente.adicional.")) {
