@@ -14,6 +14,8 @@ import {
   snapHeaderFooterElement,
 } from "./compositor/header-footer-layout";
 import { parsePdfInlineRuns } from "./pdf/pdf-rich-text-runs";
+import { buildTree, type BudgetBlockFlat } from "@/types/budget-compositor-types";
+import { buildTocModel } from "@/components/budgets/compositor/compositor-toc-utils";
 
 test("creates visual header and footer structures with canvas elements", () => {
   const header = createModelTemplateStructure("cabecalho");
@@ -46,11 +48,125 @@ test("creates a complete budget model with compositor building blocks", () => {
   const types = new Set(structure.blocks.map((block) => block.type));
   assert.deepEqual(
     [...types].sort(),
-    ["cover", "header_footer", "quote", "session", "text"].sort(),
+    ["cover", "header_footer", "figures", "toc", "scope", "quote", "session"].sort(),
   );
-  const text = structure.blocks.find((block) => block.type === "text");
   const section = structure.blocks.find((block) => block.type === "session");
-  assert.equal(text?.parent_id, section?.id);
+  assert.match(String(section?.props.description), /cliente\.razao_social/);
+
+  const roots = structure.blocks
+    .filter((block) => block.parent_id === null)
+    .sort((a, b) => a.order_index - b.order_index);
+  assert.ok(roots.findIndex((block) => block.type === "figures") < roots.findIndex((block) => block.type === "toc"));
+  assert.ok(roots.findIndex((block) => block.type === "session") < roots.findIndex((block) => block.type === "scope"));
+});
+
+test("preserves watermark settings configured in a complete budget model", () => {
+  const structure = createModelTemplateStructure("orcamento_completo");
+  assert.equal(structure.kind, "budget");
+  if (structure.kind !== "budget") return;
+
+  const headerFooter = structure.blocks.find((block) => block.type === "header_footer");
+  assert.ok(headerFooter);
+  if (!headerFooter) return;
+  headerFooter.props = {
+    ...headerFooter.props,
+    cover_watermark_url: "/api/uploads/models/watermark.png",
+    cover_watermark_opacity: 0.14,
+    cover_watermark_scale_pct: 175,
+    inner_use_cover_watermark: false,
+    inner_watermark_url: "/api/uploads/models/inner-watermark.png",
+    inner_watermark_opacity: 0.07,
+    inner_watermark_scale_pct: 120,
+  };
+
+  const normalized = normalizeModelTemplateStructure("orcamento_completo", structure);
+  assert.equal(normalized.kind, "budget");
+  if (normalized.kind !== "budget") return;
+  const normalizedProps = normalized.blocks.find(
+    (block) => block.type === "header_footer",
+  )?.props;
+
+  assert.equal(normalizedProps?.cover_watermark_url, "/api/uploads/models/watermark.png");
+  assert.equal(normalizedProps?.cover_watermark_opacity, 0.14);
+  assert.equal(normalizedProps?.cover_watermark_scale_pct, 175);
+  assert.equal(normalizedProps?.inner_use_cover_watermark, false);
+  assert.equal(normalizedProps?.inner_watermark_url, "/api/uploads/models/inner-watermark.png");
+  assert.equal(normalizedProps?.inner_watermark_opacity, 0.07);
+  assert.equal(normalizedProps?.inner_watermark_scale_pct, 120);
+});
+
+test("upgrades legacy budget models with automatic indexes and movable project detail", () => {
+  const normalized = normalizeModelTemplateStructure("orcamento_completo", {
+    version: 1,
+    kind: "budget",
+    blocks: [
+      { id: "cover", parent_id: null, type: "cover", label: "CAPA", order_index: 0, props: {} },
+      { id: "hf", parent_id: null, type: "header_footer", label: "CABEÇALHO", order_index: 1, props: {} },
+      { id: "parent", parent_id: null, type: "session", label: "SEÇÃO", order_index: 2, props: {} },
+      { id: "child", parent_id: "parent", type: "session", label: "SUBSEÇÃO", order_index: 0, props: {} },
+      { id: "legacy-text", parent_id: "parent", type: "text", label: "FRETE", order_index: 1, props: { content: "<p>Incluso</p>" } },
+      { id: "quote", parent_id: null, type: "quote", label: "ORÇAMENTO", order_index: 3, props: {} },
+    ],
+  });
+
+  assert.equal(normalized.kind, "budget");
+  if (normalized.kind !== "budget") return;
+  const roots = normalized.blocks
+    .filter((block) => block.parent_id === null)
+    .sort((a, b) => a.order_index - b.order_index);
+  assert.deepEqual(
+    roots.map((block) => block.type),
+    ["cover", "header_footer", "figures", "toc", "session", "scope", "quote"],
+  );
+  assert.equal(normalized.blocks.find((block) => block.id === "child")?.parent_id, "parent");
+  const migratedText = normalized.blocks.find((block) => block.id === "legacy-text");
+  assert.equal(migratedText?.type, "session");
+  assert.equal(migratedText?.parent_id, "parent");
+  assert.equal(migratedText?.props.description, "<p>Incluso</p>");
+
+  const tree = buildTree(
+    normalized.blocks.map((block) => ({
+      ...block,
+      budget_id: "budget:test",
+      created_at: "",
+      updated_at: "",
+    })) as BudgetBlockFlat[],
+  );
+  const parent = tree.blocks.find((block) => block.id === "parent");
+  assert.equal(parent?.number, "1");
+  assert.deepEqual(parent?.children.map((block) => block.number), ["1.1", "1.2"]);
+});
+
+test("includes the first Presentation section in the table of contents", () => {
+  const tree = buildTree([
+    {
+      id: "cover",
+      budget_id: "budget:test",
+      parent_id: null,
+      type: "cover",
+      label: "CAPA",
+      order_index: 0,
+      props: {},
+      created_at: "",
+      updated_at: "",
+    },
+    {
+      id: "presentation",
+      budget_id: "budget:test",
+      parent_id: null,
+      type: "session",
+      label: "APRESENTAÇÃO",
+      order_index: 1,
+      props: { description: "<p>Conteúdo institucional</p>" },
+      created_at: "",
+      updated_at: "",
+    },
+  ]);
+
+  assert.deepEqual(
+    buildTocModel(tree.blocks, {}).map(({ number, title }) => ({ number, title })),
+    [{ number: "1", title: "APRESENTAÇÃO" }],
+  );
 });
 
 test("preserves page-number placeholders while rendering customer variables", () => {

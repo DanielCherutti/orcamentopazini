@@ -31,7 +31,7 @@ function DestinationIcon({
         <div
             className={
                 authShell
-                    ? "mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-[color:rgb(var(--primary-rgb)/0.35)] bg-[color:rgb(var(--primary-rgb)/0.15)] text-[color:color-mix(in_srgb,var(--primary)_30%,#fff)]"
+                    ? "mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-[color:rgb(var(--primary-rgb)/0.25)] bg-[color:rgb(var(--primary-rgb)/0.1)] text-[var(--primary)]"
                     : "mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary"
             }
         >
@@ -67,7 +67,7 @@ function DestinationList({
                 <p
                     className={
                         authShell
-                            ? "rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200"
+                            ? "rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700"
                             : "rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
                     }
                 >
@@ -78,7 +78,7 @@ function DestinationList({
                 <div
                     className={
                         authShell
-                            ? "flex items-center justify-center gap-2 py-8 text-white/50"
+                            ? "flex items-center justify-center gap-2 py-8 text-slate-500"
                             : "flex items-center justify-center gap-2 py-8 text-muted-foreground"
                     }
                 >
@@ -87,7 +87,7 @@ function DestinationList({
                 </div>
             )}
             {loadError && (
-                <p className={authShell ? "text-center text-sm text-red-300" : "text-sm text-destructive text-center"}>
+                <p className={authShell ? "text-center text-sm text-red-700" : "text-sm text-destructive text-center"}>
                     {loadError}
                 </p>
             )}
@@ -98,7 +98,7 @@ function DestinationList({
                             type="submit"
                             className="auth-destination-btn auth-destination-btn--platform w-full text-left"
                         >
-                            <span className="flex items-center gap-2 font-medium text-white">
+                            <span className="flex items-center gap-2 font-medium text-slate-900">
                                 <Shield className="auth-destination-icon h-4 w-4 shrink-0" />
                                 Painel da plataforma
                             </span>
@@ -110,7 +110,7 @@ function DestinationList({
                         <Button
                             type="submit"
                             variant="outline"
-                            className="h-auto w-full justify-between border-violet-200 bg-violet-50/50 px-4 py-3 text-left hover:bg-violet-50 dark:border-violet-900 dark:bg-violet-950/30"
+                            className="h-auto w-full justify-between border-violet-200 bg-violet-50/50 px-4 py-3 text-left hover:bg-violet-50"
                         >
                             <span>
                                 <span className="flex items-center gap-2 font-medium">
@@ -130,7 +130,7 @@ function DestinationList({
                     <form key={t.tenantId} action={switchTenantAndRedirectAction.bind(null, t.tenantId)}>
                         {authShell ? (
                             <button type="submit" className="auth-destination-btn w-full text-left">
-                                <span className="block font-medium text-white">{t.tenantName}</span>
+                                <span className="block font-medium text-slate-900">{t.tenantName}</span>
                                 <span className="auth-destination-btn-sub mt-0.5 block">
                                     {t.tenantSlug} · {t.role}
                                 </span>
@@ -194,7 +194,7 @@ export function SelectTenantForm({
             <div>
                 <div className="mb-6 space-y-1.5 text-center">
                     <DestinationIcon hasPlatform={hasPlatform} hasOrgs={hasOrgs} authShell />
-                    <h2 className="text-lg font-semibold text-white">{title}</h2>
+                    <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
                     <p className="auth-muted text-sm leading-relaxed">{description}</p>
                 </div>
                 <DestinationList

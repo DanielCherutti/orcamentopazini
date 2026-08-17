@@ -23,7 +23,7 @@ export function PlatformCommandBar({
                 <button
                     type="button"
                     onClick={toggleSidebar}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-violet-500/25 bg-violet-500/10 text-violet-200/80 transition-colors hover:border-violet-400/50 hover:bg-violet-500/20 hover:text-white"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-violet-200 bg-violet-50 text-violet-700 transition-colors hover:border-violet-300 hover:bg-violet-100 hover:text-violet-900"
                     aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
                     title={collapsed ? "Expandir menu" : "Recolher menu"}
                 >
@@ -49,10 +49,10 @@ export function PlatformCommandBar({
                         {initialsFromEmail(sessionEmail)}
                     </div>
                     <div className="min-w-0 max-w-[140px]">
-                        <p className="truncate text-xs font-semibold text-violet-100">
+                        <p className="truncate text-xs font-semibold text-slate-800">
                             {sessionEmail?.split("@")[0] ?? "Admin"}
                         </p>
-                        <p className="truncate text-[10px] text-violet-300/60">
+                        <p className="truncate text-[10px] text-slate-600/60">
                             {PLATFORM_ROLE_LABELS[platformRole]}
                         </p>
                     </div>

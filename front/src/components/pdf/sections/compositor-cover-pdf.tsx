@@ -432,7 +432,11 @@ export function CompositorCoverPdfPage({
     >
       {/* Marca d’água primeiro; cabeçalho/rodapé com zIndex maior para não ficarem ocultos. */}
       {wmResolved ? (
-        <View style={[styles.watermarkLayer, { top: 0, height: PAGE_H }]}>
+        <View
+          fixed
+          wrap={false}
+          style={[styles.watermarkLayer, { top: 0, height: PAGE_H }]}
+        >
           {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image */}
           <Image
             src={wmResolved}

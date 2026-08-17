@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, memo } from "react";
 import type { HTMLAttributes } from "react";
-import { GripVertical, MessageSquareText, Trash2 } from "lucide-react";
+import { GripVertical, MessageSquareText, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import type { BudgetItem } from "@/types/budget-types";
@@ -10,10 +10,22 @@ import {
     updateItemQuantityAction,
     deleteItemAction,
     updateItemCommercialSettingsAction,
+    updateItemGroupInSectionAction,
+    type SectionItemGroupTarget,
 } from "@/actions/budget-hierarchy-section-items-actions";
 import { QuantityTextInput } from "@/components/budgets/quantity-text-input";
+import { EditTemporaryProductScopeDialog } from "@/components/budgets/scope/add-temporary-product-scope-dialog";
+import { SignedNumberInput } from "@/components/budgets/scope/signed-number-input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { formatCurrency } from "./budget-scope-utils";
+import { TruncatedTextTooltip } from "@/components/ui/tooltip";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { formatCurrency, NO_GROUP_VALUE } from "./budget-scope-utils";
 import {
     applyQuoteCommercialFactor,
     computeItemAdjustmentValue,
@@ -22,6 +34,12 @@ import {
     type LocationAssemblyMode,
     type PriceAdjustmentMode,
 } from "@/lib/budgets/scope-pricing";
+
+export type ScopeItemGroupDestination = {
+    value: string;
+    label: string;
+    target: SectionItemGroupTarget;
+};
 
 function ScopeItemRowInner({
     item,
@@ -36,9 +54,13 @@ function ScopeItemRowInner({
     priceAdjustmentInputMode,
     quoteMarkupPercent = 0,
     quoteDiscountPercent = 0,
+    quoteAssemblyMarkupPercent = quoteMarkupPercent,
+    quoteAssemblyDiscountPercent = quoteDiscountPercent,
     selectionEnabled = false,
     selected = false,
     onSelectionChange,
+    groupDestinations = [],
+    currentGroupValue = NO_GROUP_VALUE,
 }: {
     item: BudgetItem;
     budgetId: string;
@@ -52,10 +74,14 @@ function ScopeItemRowInner({
     priceAdjustmentInputMode: PriceAdjustmentMode;
     quoteMarkupPercent?: number;
     quoteDiscountPercent?: number;
+    quoteAssemblyMarkupPercent?: number;
+    quoteAssemblyDiscountPercent?: number;
     /** Caixas para remoção em lote (lista editável do escopo). */
     selectionEnabled?: boolean;
     selected?: boolean;
     onSelectionChange?: (checked: boolean) => void;
+    groupDestinations?: ScopeItemGroupDestination[];
+    currentGroupValue?: string;
 }) {
     const [qty, setQty] = useState(item.quantity);
     const [observationOpen, setObservationOpen] = useState(false);
@@ -77,6 +103,8 @@ function ScopeItemRowInner({
     const [laborShowOnPrint, setLaborShowOnPrint] = useState(
         Boolean((item as Record<string, unknown>).labor_show_on_print)
     );
+    const [groupSaving, setGroupSaving] = useState(false);
+    const [temporaryProductEditOpen, setTemporaryProductEditOpen] = useState(false);
     const qtyDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
@@ -160,14 +188,31 @@ function ScopeItemRowInner({
     /** MO unit.: em montagem manual = montagem manual por unidade (total da linha / qtd). */
     const moUnitValue = assemblyUnitValue;
     const manualMoPerUnit = qty > 0 ? assemblyManualValue / qty : assemblyManualValue;
-    const total = subtotal + assemblyExtra;
+    const total =
+        applyQuoteCommercialFactor(subtotal, quoteMarkupPercent, quoteDiscountPercent) +
+        applyQuoteCommercialFactor(
+            assemblyExtra,
+            quoteAssemblyMarkupPercent,
+            quoteAssemblyDiscountPercent,
+        );
 
-    const displayMoney = useCallback(
+    const displayEquipmentMoney = useCallback(
         (value: number) =>
             formatCurrency(
                 applyQuoteCommercialFactor(value, quoteMarkupPercent ?? 0, quoteDiscountPercent ?? 0)
             ),
         [quoteMarkupPercent, quoteDiscountPercent]
+    );
+    const displayAssemblyMoney = useCallback(
+        (value: number) =>
+            formatCurrency(
+                applyQuoteCommercialFactor(
+                    value,
+                    quoteAssemblyMarkupPercent,
+                    quoteAssemblyDiscountPercent,
+                ),
+            ),
+        [quoteAssemblyDiscountPercent, quoteAssemblyMarkupPercent],
     );
 
     const handleQtyChange = (val: number) => {
@@ -182,6 +227,17 @@ function ScopeItemRowInner({
     const handleDelete = async () => {
         const result = await deleteItemAction(item.id!, budgetId);
         if (!result.success) toast.error(result.error || "Erro ao remover");
+        else onRefresh();
+    };
+
+    const handleGroupChange = async (value: string) => {
+        const destination = groupDestinations.find((option) => option.value === value);
+        const target = value === NO_GROUP_VALUE ? null : destination?.target;
+        if (value !== NO_GROUP_VALUE && !target) return;
+        setGroupSaving(true);
+        const result = await updateItemGroupInSectionAction(item.id!, budgetId, target ?? null);
+        setGroupSaving(false);
+        if (!result.success) toast.error(result.error || "Erro ao mover produto entre grupos");
         else onRefresh();
     };
 
@@ -232,11 +288,27 @@ function ScopeItemRowInner({
                             <GripVertical className="h-3.5 w-3.5" />
                         </button>
                     )}
-                    <span className="truncate text-xs">{productName || "Produto"}</span>
+                    <TruncatedTextTooltip
+                        text={productName || "Produto"}
+                        className="text-xs"
+                    />
                     {isTemporaryProduct ? (
-                        <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
-                            Temp.
-                        </span>
+                        <>
+                            <span className="shrink-0 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                                Temp.
+                            </span>
+                            {!isReadOnly ? (
+                                <button
+                                    type="button"
+                                    className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                    onClick={() => setTemporaryProductEditOpen(true)}
+                                    aria-label="Editar produto temporário"
+                                    title="Editar produto temporário"
+                                >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                            ) : null}
+                        </>
                     ) : null}
                 </div>
                 <div className="col-span-1 truncate text-[11px] font-mono" title={productNcm}>
@@ -270,23 +342,43 @@ function ScopeItemRowInner({
                 )}
                 </div>
                 <div className="col-span-1 text-right text-xs text-muted-foreground">
-                    {displayMoney(unitPrice)}
+                    {displayEquipmentMoney(unitPrice)}
                 </div>
-                <div className="col-span-2 flex items-center justify-end gap-1">
+                <div className="col-span-3 flex items-center justify-end gap-1">
+                    {!isReadOnly && groupDestinations.length > 0 ? (
+                        <Select
+                            value={currentGroupValue}
+                            onValueChange={(value) => void handleGroupChange(value)}
+                            disabled={groupSaving}
+                        >
+                            <SelectTrigger
+                                className="h-7 min-w-0 flex-1 border-dashed px-2 text-[10px]"
+                                aria-label="Mover produto para grupo"
+                                title="Mover produto para dentro ou para fora de um grupo"
+                            >
+                                <SelectValue placeholder="Grupo" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value={NO_GROUP_VALUE}>Sem grupo</SelectItem>
+                                {groupDestinations.map((destination) => (
+                                    <SelectItem key={destination.value} value={destination.value}>
+                                        {destination.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    ) : null}
                     {!isReadOnly && (
-                        <input
-                            type="number"
+                        <SignedNumberInput
                             className="h-6 w-20 rounded border px-1 text-right text-xs"
                             value={priceAdjustmentValue}
-                            onChange={(e) => setPriceAdjustmentValue(Number(e.target.value))}
-                            onBlur={() =>
-                                void handleSaveCommercial({
+                            onValueCommit={(value) => {
+                                setPriceAdjustmentValue(value);
+                                return handleSaveCommercial({
                                     price_adjustment_mode: priceAdjustmentInputMode,
-                                    price_adjustment_value: Number.isFinite(priceAdjustmentValue)
-                                        ? priceAdjustmentValue
-                                        : 0,
-                                })
-                            }
+                                    price_adjustment_value: value,
+                                });
+                            }}
                             title={
                                 priceAdjustmentInputMode === "percent"
                                     ? "Ajuste de preço em %"
@@ -297,7 +389,7 @@ function ScopeItemRowInner({
                     )}
                     {isReadOnly && (
                         <span className="text-xs text-muted-foreground">
-                            {displayMoney(adjustmentValue)}
+                            {displayEquipmentMoney(adjustmentValue)}
                         </span>
                     )}
                 </div>
@@ -324,11 +416,11 @@ function ScopeItemRowInner({
                         />
                     ) : (
                         <span className="text-right text-xs text-muted-foreground tabular-nums w-full">
-                            {displayMoney(moUnitValue)}
+                            {displayAssemblyMoney(moUnitValue)}
                         </span>
                     )}
                 </div>
-                <div className="col-span-1 text-right text-xs font-medium">{displayMoney(total)}</div>
+                <div className="col-span-1 text-right text-xs font-medium">{formatCurrency(total)}</div>
                 <div className="col-span-2 flex items-center justify-end gap-1">
                     {!isReadOnly && (
                         <button
@@ -414,15 +506,24 @@ function ScopeItemRowInner({
                         ) : null}
                         {assemblyMode !== "manual" && (
                             <span className="text-[11px] text-muted-foreground">
-                                Rateio montagem: {displayMoney(assemblyExtra)}
+                                Rateio montagem: {displayAssemblyMoney(assemblyExtra)}
                             </span>
                         )}
                         <span className="text-[11px] text-muted-foreground">
-                            Base: {displayMoney(baseTotal)} | Ajuste: {displayMoney(adjustmentValue)}
+                            Base: {displayEquipmentMoney(baseTotal)} | Ajuste: {displayEquipmentMoney(adjustmentValue)}
                         </span>
                     </div>
                 </div>
             )}
+            {isTemporaryProduct && temporaryProductEditOpen ? (
+                <EditTemporaryProductScopeDialog
+                    open={temporaryProductEditOpen}
+                    onOpenChange={setTemporaryProductEditOpen}
+                    item={item}
+                    budgetId={budgetId}
+                    onSuccess={onRefresh}
+                />
+            ) : null}
         </div>
     );
 }

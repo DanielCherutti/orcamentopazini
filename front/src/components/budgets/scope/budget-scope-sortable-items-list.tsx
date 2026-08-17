@@ -28,14 +28,61 @@ import {
     reorderSectionItemsAction,
 } from "@/actions/budget-hierarchy-section-items-actions";
 import { Button } from "@/components/ui/button";
-import { buildItemSegments, type ItemSegment } from "./budget-scope-utils";
-import { ScopeItemRow } from "./budget-scope-item-row";
+import { buildItemSegments, NO_GROUP_VALUE, type ItemSegment } from "./budget-scope-utils";
+import {
+    ScopeItemRow,
+    type ScopeItemGroupDestination,
+} from "./budget-scope-item-row";
 import type { LocationAssemblyMode, PriceAdjustmentMode } from "@/lib/budgets/scope-pricing";
 
 /** Id estável e único por segmento na lista (o mesmo grupo de catálogo pode aparecer em mais de um bloco). */
 function getSegmentSortableId(seg: ItemSegment): string {
     if (seg.type === "standalone") return seg.item.id!;
     return `group-block:${seg.items[0].id!}`;
+}
+
+export function buildScopeGroupDestinations(
+    segments: ItemSegment[],
+    groups: ProductGroup[],
+): ScopeItemGroupDestination[] {
+    const destinations: ScopeItemGroupDestination[] = [];
+    const catalogGroupsAlreadyVisible = new Set<string>();
+    const labelCounts = new Map<string, number>();
+
+    for (const segment of segments) {
+        if (segment.type !== "group") continue;
+        const first = segment.items[0] as Record<string, unknown> | undefined;
+        if (!first) continue;
+        const groupId = first.group_id ? String(first.group_id) : null;
+        const groupInstanceId = String(first.group_instance_id ?? "").trim() || null;
+        if (groupId) catalogGroupsAlreadyVisible.add(groupId);
+        const count = (labelCounts.get(segment.name) ?? 0) + 1;
+        labelCounts.set(segment.name, count);
+        destinations.push({
+            value: `segment:${segment.id}`,
+            label: `${segment.name}${count > 1 ? ` (${count})` : ""}${groupId ? "" : " · temporário"}`,
+            target: {
+                groupId,
+                groupName: segment.name,
+                groupInstanceId,
+            },
+        });
+    }
+
+    for (const group of groups) {
+        if (catalogGroupsAlreadyVisible.has(group.id)) continue;
+        destinations.push({
+            value: `catalog:${group.id}`,
+            label: group.name,
+            target: {
+                groupId: group.id,
+                groupName: group.name,
+                groupInstanceId: null,
+            },
+        });
+    }
+
+    return destinations;
 }
 
 /** Lista só leitura com virtualização — evita milhares de nós no DOM em trechos enormes. */
@@ -50,6 +97,8 @@ function ReadOnlyVirtualItemsList({
     priceAdjustmentInputMode,
     quoteMarkupPercent = 0,
     quoteDiscountPercent = 0,
+    quoteAssemblyMarkupPercent = quoteMarkupPercent,
+    quoteAssemblyDiscountPercent = quoteDiscountPercent,
 }: {
     segments: ItemSegment[];
     budgetId: string;
@@ -61,6 +110,8 @@ function ReadOnlyVirtualItemsList({
     priceAdjustmentInputMode: PriceAdjustmentMode;
     quoteMarkupPercent?: number;
     quoteDiscountPercent?: number;
+    quoteAssemblyMarkupPercent?: number;
+    quoteAssemblyDiscountPercent?: number;
 }) {
     const parentRef = useRef<HTMLDivElement>(null);
     /* TanStack Virtual: retorno não é memoizável pelo React Compiler — uso intencional. */
@@ -103,6 +154,8 @@ function ReadOnlyVirtualItemsList({
                                     priceAdjustmentInputMode={priceAdjustmentInputMode}
                                     quoteMarkupPercent={quoteMarkupPercent}
                                     quoteDiscountPercent={quoteDiscountPercent}
+                                    quoteAssemblyMarkupPercent={quoteAssemblyMarkupPercent}
+                                    quoteAssemblyDiscountPercent={quoteAssemblyDiscountPercent}
                                 />
                             ) : (
                                 <ReadOnlyGroupBlock
@@ -115,6 +168,8 @@ function ReadOnlyVirtualItemsList({
                                     priceAdjustmentInputMode={priceAdjustmentInputMode}
                                     quoteMarkupPercent={quoteMarkupPercent}
                                     quoteDiscountPercent={quoteDiscountPercent}
+                                    quoteAssemblyMarkupPercent={quoteAssemblyMarkupPercent}
+                                    quoteAssemblyDiscountPercent={quoteAssemblyDiscountPercent}
                                 />
                             )}
                         </div>
@@ -135,6 +190,8 @@ function ReadOnlyGroupBlock({
     priceAdjustmentInputMode,
     quoteMarkupPercent = 0,
     quoteDiscountPercent = 0,
+    quoteAssemblyMarkupPercent = quoteMarkupPercent,
+    quoteAssemblyDiscountPercent = quoteDiscountPercent,
 }: {
     seg: Extract<ItemSegment, { type: "group" }>;
     budgetId: string;
@@ -145,6 +202,8 @@ function ReadOnlyGroupBlock({
     priceAdjustmentInputMode: PriceAdjustmentMode;
     quoteMarkupPercent?: number;
     quoteDiscountPercent?: number;
+    quoteAssemblyMarkupPercent?: number;
+    quoteAssemblyDiscountPercent?: number;
 }) {
     return (
         <div className="rounded-lg border-2 border-primary/45 bg-muted/20 py-1.5 shadow-sm">
@@ -175,6 +234,8 @@ function ReadOnlyGroupBlock({
                             priceAdjustmentInputMode={priceAdjustmentInputMode}
                             quoteMarkupPercent={quoteMarkupPercent}
                             quoteDiscountPercent={quoteDiscountPercent}
+                            quoteAssemblyMarkupPercent={quoteAssemblyMarkupPercent}
+                            quoteAssemblyDiscountPercent={quoteAssemblyDiscountPercent}
                         />
                     </div>
                 ))}
@@ -202,6 +263,8 @@ type SortableItemsListProps = {
     priceAdjustmentInputMode: PriceAdjustmentMode;
     quoteMarkupPercent?: number;
     quoteDiscountPercent?: number;
+    quoteAssemblyMarkupPercent?: number;
+    quoteAssemblyDiscountPercent?: number;
 };
 
 /** Só leitura: segmentos + virtualização, sem custo de @dnd-kit. */
@@ -216,6 +279,8 @@ function SortableItemsListReadonly({
     priceAdjustmentInputMode,
     quoteMarkupPercent = 0,
     quoteDiscountPercent = 0,
+    quoteAssemblyMarkupPercent = quoteMarkupPercent,
+    quoteAssemblyDiscountPercent = quoteDiscountPercent,
 }: SortableItemsListProps) {
     const [segments, setSegments] = useState<ItemSegment[]>(() => buildItemSegments(items));
     useEffect(() => {
@@ -233,6 +298,8 @@ function SortableItemsListReadonly({
             priceAdjustmentInputMode={priceAdjustmentInputMode}
             quoteMarkupPercent={quoteMarkupPercent}
             quoteDiscountPercent={quoteDiscountPercent}
+            quoteAssemblyMarkupPercent={quoteAssemblyMarkupPercent}
+            quoteAssemblyDiscountPercent={quoteAssemblyDiscountPercent}
         />
     );
 }
@@ -248,6 +315,8 @@ function SortableItemsListEditable({
     priceAdjustmentInputMode,
     quoteMarkupPercent = 0,
     quoteDiscountPercent = 0,
+    quoteAssemblyMarkupPercent = quoteMarkupPercent,
+    quoteAssemblyDiscountPercent = quoteDiscountPercent,
 }: SortableItemsListProps) {
     const confirmDialog = useConfirmDialog();
     const [segments, setSegments] = useState<ItemSegment[]>(() => buildItemSegments(items));
@@ -328,6 +397,10 @@ function SortableItemsListEditable({
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
     const segmentIds = segments.map((seg) => getSegmentSortableId(seg));
+    const groupDestinations = useMemo(
+        () => buildScopeGroupDestinations(segments, groups),
+        [segments, groups],
+    );
 
     const flattenToIds = (segs: ItemSegment[]) =>
         segs.flatMap((seg) =>
@@ -442,11 +515,15 @@ function SortableItemsListEditable({
                                         priceAdjustmentInputMode={priceAdjustmentInputMode}
                                         quoteMarkupPercent={quoteMarkupPercent}
                                         quoteDiscountPercent={quoteDiscountPercent}
+                                        quoteAssemblyMarkupPercent={quoteAssemblyMarkupPercent}
+                                        quoteAssemblyDiscountPercent={quoteAssemblyDiscountPercent}
                                         selectionEnabled
                                         selected={Boolean(seg.item.id && selectedIds.has(seg.item.id))}
                                         onToggleSelected={(checked) => {
                                             if (seg.item.id) toggleItemSelected(seg.item.id, checked);
                                         }}
+                                        groupDestinations={groupDestinations}
+                                        currentGroupValue={NO_GROUP_VALUE}
                                     />
                                 ) : (
                                     <SortableGroup
@@ -464,8 +541,12 @@ function SortableItemsListEditable({
                                         priceAdjustmentInputMode={priceAdjustmentInputMode}
                                         quoteMarkupPercent={quoteMarkupPercent}
                                         quoteDiscountPercent={quoteDiscountPercent}
+                                        quoteAssemblyMarkupPercent={quoteAssemblyMarkupPercent}
+                                        quoteAssemblyDiscountPercent={quoteAssemblyDiscountPercent}
                                         selectedIds={selectedIds}
                                         onToggleItemSelected={toggleItemSelected}
+                                        groupDestinations={groupDestinations}
+                                        currentGroupValue={`segment:${seg.id}`}
                                     />
                                 )
                             )}
@@ -496,9 +577,13 @@ function SortableStandaloneItem({
     priceAdjustmentInputMode,
     quoteMarkupPercent = 0,
     quoteDiscountPercent = 0,
+    quoteAssemblyMarkupPercent = quoteMarkupPercent,
+    quoteAssemblyDiscountPercent = quoteDiscountPercent,
     selectionEnabled = false,
     selected = false,
     onToggleSelected,
+    groupDestinations,
+    currentGroupValue,
 }: {
     item: BudgetItem;
     budgetId: string;
@@ -511,15 +596,21 @@ function SortableStandaloneItem({
     priceAdjustmentInputMode: PriceAdjustmentMode;
     quoteMarkupPercent?: number;
     quoteDiscountPercent?: number;
+    quoteAssemblyMarkupPercent?: number;
+    quoteAssemblyDiscountPercent?: number;
     selectionEnabled?: boolean;
     selected?: boolean;
     onToggleSelected?: (checked: boolean) => void;
+    groupDestinations: ScopeItemGroupDestination[];
+    currentGroupValue: string;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: item.id!,
         disabled: isReadOnly,
     });
-    const style = { transform: CSS.Transform.toString(transform), transition };
+    // Produtos e grupos têm alturas diferentes. Aplicar scaleX/scaleY do dnd-kit
+    // faz o item assumir temporariamente o tamanho do bloco sobre o qual passou.
+    const style = { transform: CSS.Translate.toString(transform), transition };
     return (
         <div
             ref={setNodeRef}
@@ -537,10 +628,14 @@ function SortableStandaloneItem({
                 priceAdjustmentInputMode={priceAdjustmentInputMode}
                 quoteMarkupPercent={quoteMarkupPercent}
                 quoteDiscountPercent={quoteDiscountPercent}
+                quoteAssemblyMarkupPercent={quoteAssemblyMarkupPercent}
+                quoteAssemblyDiscountPercent={quoteAssemblyDiscountPercent}
                 dragHandleProps={isReadOnly ? undefined : { ...attributes, ...listeners }}
                 selectionEnabled={selectionEnabled}
                 selected={selected}
                 onSelectionChange={onToggleSelected}
+                groupDestinations={groupDestinations}
+                currentGroupValue={currentGroupValue}
             />
         </div>
     );
@@ -560,8 +655,12 @@ function SortableGroup({
     priceAdjustmentInputMode,
     quoteMarkupPercent = 0,
     quoteDiscountPercent = 0,
+    quoteAssemblyMarkupPercent = quoteMarkupPercent,
+    quoteAssemblyDiscountPercent = quoteDiscountPercent,
     selectedIds,
     onToggleItemSelected,
+    groupDestinations,
+    currentGroupValue,
 }: {
     seg: Extract<ItemSegment, { type: "group" }>;
     sensors: ReturnType<typeof useSensors>;
@@ -576,15 +675,19 @@ function SortableGroup({
     priceAdjustmentInputMode: PriceAdjustmentMode;
     quoteMarkupPercent?: number;
     quoteDiscountPercent?: number;
+    quoteAssemblyMarkupPercent?: number;
+    quoteAssemblyDiscountPercent?: number;
     selectedIds: Set<string>;
     onToggleItemSelected: (id: string, checked: boolean) => void;
+    groupDestinations: ScopeItemGroupDestination[];
+    currentGroupValue: string;
 }) {
     const outerId = getSegmentSortableId(seg);
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: outerId,
         disabled: isReadOnly,
     });
-    const style = { transform: CSS.Transform.toString(transform), transition };
+    const style = { transform: CSS.Translate.toString(transform), transition };
     const groupItemIds = seg.items.map((i) => i.id!);
 
     return (
@@ -648,11 +751,15 @@ function SortableGroup({
                                 priceAdjustmentInputMode={priceAdjustmentInputMode}
                                 quoteMarkupPercent={quoteMarkupPercent}
                                 quoteDiscountPercent={quoteDiscountPercent}
+                                quoteAssemblyMarkupPercent={quoteAssemblyMarkupPercent}
+                                quoteAssemblyDiscountPercent={quoteAssemblyDiscountPercent}
                                 selectionEnabled
                                 selected={Boolean(item.id && selectedIds.has(item.id))}
                                 onToggleSelected={(checked) => {
                                     if (item.id) onToggleItemSelected(item.id, checked);
                                 }}
+                                groupDestinations={groupDestinations}
+                                currentGroupValue={currentGroupValue}
                             />
                         ))}
                     </SortableContext>
@@ -682,9 +789,13 @@ function SortableGroupItem({
     priceAdjustmentInputMode,
     quoteMarkupPercent = 0,
     quoteDiscountPercent = 0,
+    quoteAssemblyMarkupPercent = quoteMarkupPercent,
+    quoteAssemblyDiscountPercent = quoteDiscountPercent,
     selectionEnabled = false,
     selected = false,
     onToggleSelected,
+    groupDestinations,
+    currentGroupValue,
 }: {
     item: BudgetItem;
     budgetId: string;
@@ -697,15 +808,19 @@ function SortableGroupItem({
     priceAdjustmentInputMode: PriceAdjustmentMode;
     quoteMarkupPercent?: number;
     quoteDiscountPercent?: number;
+    quoteAssemblyMarkupPercent?: number;
+    quoteAssemblyDiscountPercent?: number;
     selectionEnabled?: boolean;
     selected?: boolean;
     onToggleSelected?: (checked: boolean) => void;
+    groupDestinations: ScopeItemGroupDestination[];
+    currentGroupValue: string;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: item.id!,
         disabled: isReadOnly,
     });
-    const style = { transform: CSS.Transform.toString(transform), transition };
+    const style = { transform: CSS.Translate.toString(transform), transition };
     return (
         <div
             ref={setNodeRef}
@@ -724,10 +839,14 @@ function SortableGroupItem({
                 priceAdjustmentInputMode={priceAdjustmentInputMode}
                 quoteMarkupPercent={quoteMarkupPercent}
                 quoteDiscountPercent={quoteDiscountPercent}
+                quoteAssemblyMarkupPercent={quoteAssemblyMarkupPercent}
+                quoteAssemblyDiscountPercent={quoteAssemblyDiscountPercent}
                 dragHandleProps={isReadOnly ? undefined : { ...attributes, ...listeners }}
                 selectionEnabled={selectionEnabled}
                 selected={selected}
                 onSelectionChange={onToggleSelected}
+                groupDestinations={groupDestinations}
+                currentGroupValue={currentGroupValue}
             />
         </div>
     );

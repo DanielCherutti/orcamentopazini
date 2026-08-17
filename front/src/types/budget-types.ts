@@ -19,7 +19,7 @@ export const budgetImageSchema = z.object({
     section_id: z.string().optional(),
     location_id: z.string().optional(),
     block_id: z.string().optional(),
-    /** Legenda para lista de figuras (obrigatória no Escopo ao adicionar foto) */
+    /** Legenda opcional exibida abaixo da figura e na lista de figuras. */
     caption: z.string().optional(),
     url: z.string(),
     composed_url: z.string().optional(),
@@ -57,6 +57,8 @@ export const budgetItemSchema = z.object({
     group_name: z.string().optional(), // Nome do grupo (desnormalizado para exibição)
     /** Instância por inserção: mesmo catálogo adicionado 2x = dois blocos separados na UI */
     group_instance_id: z.string().optional(),
+    /** Posição visual persistida pelo drag-and-drop do Compositor/Escopo. */
+    order_index: z.number().optional(),
 });
 
 export const budgetSectionSchema = z.object({
@@ -69,6 +71,8 @@ export const budgetSectionSchema = z.object({
     /** Montagem por trecho (escopo); fallback ao local quando omitido. */
     assembly_mode: z.custom<LocationAssemblyMode>().optional(),
     assembly_value: z.number().optional(),
+    general_price_adjustment_mode: z.custom<PriceAdjustmentMode>().optional(),
+    general_price_adjustment_value: z.number().optional(),
     items: z.array(budgetItemSchema).optional(),
     images: z.array(budgetImageSchema).optional(),
 });
@@ -81,6 +85,8 @@ export const budgetLocationSchema = z.object({
     order_index: z.number().default(0),
     assembly_mode: z.custom<LocationAssemblyMode>().optional().default("percent"),
     assembly_value: z.number().optional().default(0),
+    general_price_adjustment_mode: z.custom<PriceAdjustmentMode>().optional(),
+    general_price_adjustment_value: z.number().optional(),
     sections: z.array(budgetSectionSchema).optional(),
     images: z.array(budgetImageSchema).optional(),
 });

@@ -39,11 +39,11 @@ export function PlanBadge({
             className={cn(
                 "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset",
                 p === "trial" &&
-                    "bg-amber-500/10 text-amber-700 ring-amber-500/25 dark:text-amber-300",
+                    "bg-amber-500/10 text-amber-700 ring-amber-500/25",
                 p === "standard" &&
-                    "bg-sky-500/10 text-sky-700 ring-sky-500/25 dark:text-sky-300",
+                    "bg-sky-500/10 text-sky-700 ring-sky-500/25",
                 p === "professional" &&
-                    "bg-violet-500/10 text-violet-700 ring-violet-500/25 dark:text-violet-300",
+                    "bg-violet-500/10 text-violet-700 ring-violet-500/25",
                 className,
             )}
         >
@@ -78,7 +78,7 @@ export function LicenseStatusBadge({
         return <span className="inline-flex rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-amber-500/20">Vencendo</span>;
     }
     return (
-        <span className="inline-flex rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-500/20 dark:text-emerald-400">
+        <span className="inline-flex rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-500/20">
             Ativa
         </span>
     );
@@ -128,7 +128,7 @@ export function UsageBar({
     return (
         <div className="min-w-[120px] space-y-1.5">
             <div className="flex items-baseline justify-between gap-2 text-xs">
-                <span className={cn("font-medium tabular-nums", warn && "text-amber-600 dark:text-amber-400")}>
+                <span className={cn("font-medium tabular-nums", warn && "text-amber-600")}>
                     {used}/{max}
                 </span>
                 <span className="text-muted-foreground">{pct}%</span>

@@ -38,21 +38,18 @@ async function normalizeFixedRootOrder(
     const toc = roots.find((r) => r.type === "toc");
     const figures = roots.find((r) => r.type === "figures");
     if (!cover || !headerFooter || !toc || !figures) return;
-    const scope = roots.find((r) => r.type === "scope");
-    const tocAndFiguresSorted = [toc, figures].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+    // Índices automáticos têm ordem canônica: Lista de Figuras antes do Sumário.
+    const automaticIndexes = [figures, toc];
     const othersSorted = roots
         .filter(
             (r) =>
                 r.type !== "cover" &&
                 r.type !== "header_footer" &&
                 r.type !== "toc" &&
-                r.type !== "figures" &&
-                r.type !== "scope"
+                r.type !== "figures"
         )
         .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
-    const ordered = scope
-        ? [cover, headerFooter, ...tocAndFiguresSorted, scope, ...othersSorted]
-        : [cover, headerFooter, ...tocAndFiguresSorted, ...othersSorted];
+    const ordered = [cover, headerFooter, ...automaticIndexes, ...othersSorted];
     for (let i = 0; i < ordered.length; i++) {
         await db.update(requireRecordId("budget_block", String(ordered[i].id))).merge({
             order_index: i,
@@ -206,7 +203,7 @@ export async function ensureCompositorHeaderFooterBlockAction(
 }
 
 /**
- * Garante blocos fixos na raiz (capa, cabeçalho/rodapé, sumário, lista de figuras).
+ * Garante blocos fixos na raiz (capa, cabeçalho/rodapé, lista de figuras, sumário).
  * A ordem padrão só é normalizada quando toc/figures é criado nesta execução.
  */
 export async function ensureCompositorTocBlockAction(
@@ -253,7 +250,7 @@ export async function ensureCompositorTocBlockAction(
                 budget_id: budgetRecordId,
                 type: "toc",
                 label: "SUMÁRIO",
-                order_index: 99999,
+                order_index: 100000,
                 props: {},
             });
             roots = await listRootBlocks(db, budgetRecordId);
@@ -265,7 +262,7 @@ export async function ensureCompositorTocBlockAction(
                 budget_id: budgetRecordId,
                 type: "figures",
                 label: "LISTA DE FIGURAS",
-                order_index: 100000,
+                order_index: 99999,
                 props: {},
             });
             roots = await listRootBlocks(db, budgetRecordId);

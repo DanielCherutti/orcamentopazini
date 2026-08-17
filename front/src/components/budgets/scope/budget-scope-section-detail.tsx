@@ -38,8 +38,7 @@ import { SortableItemsList } from "./budget-scope-sortable-items-list";
 import { ScopeGroupAdder, ScopeItemCreator } from "./budget-scope-item-creator";
 import type { LocationAssemblyMode, PriceAdjustmentMode } from "@/lib/budgets/scope-pricing";
 import {
-    applyQuoteCommercialFactor,
-    computeItemSubtotal,
+    computeSectionCostSummary,
     computeLocationAssemblyTotal,
     distributeProportional,
     sectionHasOwnAssembly,
@@ -71,6 +70,8 @@ interface SectionDetailProps {
     priceAdjustmentInputMode: PriceAdjustmentMode;
     quoteMarkupPercent?: number;
     quoteDiscountPercent?: number;
+    quoteAssemblyMarkupPercent?: number;
+    quoteAssemblyDiscountPercent?: number;
     /** Incrementado no pai após `loadLocations` — força recarregar itens do trecho (ex.: zerar ajustes). */
     scopeDataVersion?: number;
     /** Lista de grupos carregada uma vez no `BudgetScope` (evita N× `listProductGroupsAction`). */
@@ -94,6 +95,8 @@ export function SectionDetail({
     priceAdjustmentInputMode,
     quoteMarkupPercent = 0,
     quoteDiscountPercent = 0,
+    quoteAssemblyMarkupPercent = quoteMarkupPercent,
+    quoteAssemblyDiscountPercent = quoteDiscountPercent,
     scopeDataVersion = 0,
     productGroups: productGroupsFromParent,
     disableScopePayloadCache = false,
@@ -339,14 +342,25 @@ export function SectionDetail({
             setItemsLoading(false);
         });
         onRefresh();
-    }, [budgetId, scopeDataVersion, sectionId, onRefresh, disableScopePayloadCache]);
+    }, [budgetId, sectionId, onRefresh, disableScopePayloadCache]);
 
-    const totalRaw = items.reduce((sum, i) => {
-        const subtotal = computeItemSubtotal(i);
-        const assemblyExtra = i.id ? Number(effectiveAssemblyByItemId[i.id] ?? 0) : 0;
-        return sum + subtotal + assemblyExtra;
-    }, 0);
-    const total = applyQuoteCommercialFactor(totalRaw, quoteMarkupPercent, quoteDiscountPercent);
+    const sectionCostSummary = computeSectionCostSummary(
+        items,
+        effectiveAssemblyByItemId,
+        quoteMarkupPercent,
+        quoteDiscountPercent,
+        section,
+        sectionScopedAssembly
+            ? computeLocationAssemblyTotal(
+                  sectionAssemblyMode,
+                  effectiveAssemblyValue,
+                  items,
+              )
+            : 0,
+        quoteAssemblyMarkupPercent,
+        quoteAssemblyDiscountPercent,
+    );
+    const hasSectionCost = items.length > 0 || sectionCostSummary.total !== 0;
 
     const descEmpty = isRichTextContentEmpty(description);
 
@@ -502,7 +516,11 @@ export function SectionDetail({
 
             <CollapsibleEditorSection
                 label="Produtos"
-                rightContent={!itemsLoading && items.length > 0 ? formatCurrency(total) : undefined}
+                rightContent={
+                    !itemsLoading && hasSectionCost
+                        ? `Total: ${formatCurrency(sectionCostSummary.total)}`
+                        : undefined
+                }
             >
                 {itemsLoading ? (
                     <div className="flex items-center justify-center gap-2 py-10 text-muted-foreground">
@@ -518,7 +536,7 @@ export function SectionDetail({
                                 <div className="col-span-1">NCM</div>
                                 <div className="col-span-2 text-center">Qtd / un.</div>
                                 <div className="col-span-1 text-right">Equipto.</div>
-                                <div className="col-span-2 text-right">Ajuste de Preço</div>
+                                <div className="col-span-3 text-right">Grupo / Ajuste de preço</div>
                                 <div className="col-span-1 text-right">MO unit.</div>
                                 <div className="col-span-1 text-right">Total</div>
                                 <div className="col-span-2" />
@@ -536,7 +554,39 @@ export function SectionDetail({
                             priceAdjustmentInputMode={priceAdjustmentInputMode}
                             quoteMarkupPercent={quoteMarkupPercent}
                             quoteDiscountPercent={quoteDiscountPercent}
+                            quoteAssemblyMarkupPercent={quoteAssemblyMarkupPercent}
+                            quoteAssemblyDiscountPercent={quoteAssemblyDiscountPercent}
                         />
+                        {hasSectionCost ? (
+                            <div className="mt-3 flex justify-end">
+                                <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-3">
+                                    <div className="min-w-40 rounded-md border bg-muted/20 px-3 py-2 text-right">
+                                        <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                            Total equipamentos
+                                        </p>
+                                        <p className="mt-0.5 text-sm font-semibold tabular-nums">
+                                            {formatCurrency(sectionCostSummary.equipment)}
+                                        </p>
+                                    </div>
+                                    <div className="min-w-40 rounded-md border bg-muted/20 px-3 py-2 text-right">
+                                        <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                            Total montagem
+                                        </p>
+                                        <p className="mt-0.5 text-sm font-semibold tabular-nums">
+                                            {formatCurrency(sectionCostSummary.assembly)}
+                                        </p>
+                                    </div>
+                                    <div className="min-w-40 rounded-md border border-primary/35 bg-primary/5 px-3 py-2 text-right">
+                                        <p className="text-[10px] font-medium uppercase tracking-wide text-primary">
+                                            Total do trecho
+                                        </p>
+                                        <p className="mt-0.5 text-sm font-bold tabular-nums text-primary">
+                                            {formatCurrency(sectionCostSummary.total)}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : null}
                     </>
                 )}
                 {!isReadOnly && (

@@ -4,7 +4,7 @@ import { assertActionSession } from "@/actions/auth-actions";
 import { getDb, resetDb, isTokenExpiredError, isDbConnectionError, toPlain } from "@/lib/surreal";
 import type { Budget } from "@/types/budget-types";
 import { serializeBudgetEntity } from "@/actions/budget-shared";
-import { InvalidRecordIdError, requireRecordId } from "@/lib/surreal-record-ids";
+import { InvalidRecordIdError } from "@/lib/surreal-record-ids";
 import { assertBudgetInActiveTenant } from "@/lib/budget-tenant";
 import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
 import { getLocationsAction } from "@/actions/budget-scope-actions";
@@ -84,6 +84,7 @@ const BUDGET_HIERARCHY_SQL_FULL = `
             SELECT *,
               (
                 SELECT * FROM budget_item WHERE section_id = $parent.id AND deleted_at IS NONE
+                  ORDER BY order_index ASC, created_at ASC
                   FETCH product_id
               ) as items,
               (
@@ -127,6 +128,7 @@ const BUDGET_HIERARCHY_SQL_PDF_SCOPE = `
             SELECT *,
               (
                 SELECT * FROM budget_item WHERE section_id = $parent.id AND deleted_at IS NONE
+                  ORDER BY order_index ASC, created_at ASC
               ) as items,
               (
                 SELECT *,
@@ -224,11 +226,15 @@ export async function getBudgetQuoteTabDataAction(budgetId: string): Promise<{
             location: {
                 assembly_mode: loc.assembly_mode,
                 assembly_value: loc.assembly_value,
+                general_price_adjustment_mode: loc.general_price_adjustment_mode,
+                general_price_adjustment_value: loc.general_price_adjustment_value,
             },
             sections: sections.map((s) => ({
                 id: String(s.id),
                 assembly_mode: s.assembly_mode,
                 assembly_value: s.assembly_value,
+                general_price_adjustment_mode: s.general_price_adjustment_mode,
+                general_price_adjustment_value: s.general_price_adjustment_value,
             })),
             items,
         });

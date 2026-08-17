@@ -1,9 +1,6 @@
 @import "tailwindcss";
 @plugin "tailwindcss-animate";
 
-@custom-variant dark (&:where(.dark, .dark *));
-
-
 /* Theme definitions handled by Shadcn's @theme inline block below */
 
 
@@ -40,16 +37,15 @@
 
   --radius: 0.625rem;
 
-  /* Sidebar - Dark Navy */
-  --sidebar: oklch(0.18 0.04 265);
-  --sidebar-foreground: oklch(0.98 0 0);
+  /* Sidebar clara */
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.205 0 0);
   --sidebar-primary: oklch(0.45 0.18 265);
   /* Matches Primary */
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.25 0.05 265);
-  /* Slightly lighter navy */
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.25 0.05 265);
+  --sidebar-accent: oklch(0.97 0.015 265);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.45 0.18 265);
 
   --background: oklch(0.985 0 0);
@@ -68,42 +64,6 @@
   --chart-5: oklch(0.769 0.188 70.08);
 }
 
-
-/* Dark Mode Overrides (Optional/Future Proofing) */
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: 210 20% 96%;
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
-}
 
 @layer base {
   * {
@@ -470,8 +430,7 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   COMMAND DECK — shell visual (tenant + platform)
-   Dark chrome · neon accents · light content islands
+   Shell visual claro (tenant + platform)
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── Platform · EngHub Ops (layout totalmente novo) ──────────────────────── */
@@ -480,12 +439,22 @@
 }
 
 .platform-app.platform-ops {
-  color: #e9e4ff;
+  --background: #eef1f6;
+  --foreground: #1f2937;
+  --card: #fff;
+  --card-foreground: #1f2937;
+  --muted: #f3f0ff;
+  --muted-foreground: #64748b;
+  --border: rgba(76, 29, 149, 0.14);
+  --input: #fff;
+  --ring: #7c3aed;
+  color: #1f2937;
 }
 
 .platform-app .platform-ops-rail {
-  background: linear-gradient(180deg, #0c0a14 0%, #050408 100%);
-  box-shadow: 8px 0 40px -12px rgba(0, 0, 0, 0.9);
+  background: #fff;
+  border-color: rgba(76, 29, 149, 0.14);
+  box-shadow: 8px 0 32px -20px rgba(30, 41, 59, 0.3);
 }
 
 .platform-app .platform-ops-nav-link {
@@ -493,32 +462,32 @@
 }
 
 .platform-app .platform-ops-command-bar {
-  background: rgba(7, 6, 13, 0.95);
-  border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+  background: rgba(255, 255, 255, 0.94);
+  border-bottom: 1px solid rgba(76, 29, 149, 0.12);
   backdrop-filter: blur(12px);
 }
 
 .platform-app .platform-ops-command-bar nav a {
-  color: rgba(233, 228, 255, 0.5);
+  color: #64748b;
 }
 
 .platform-app .platform-ops-command-bar nav a:hover {
-  color: #fff;
+  color: #5b21b6;
 }
 
 .platform-app .platform-ops-command-bar nav span[aria-current="page"] {
-  color: #fff;
+  color: #1f2937;
   font-weight: 600;
 }
 
 .platform-app .platform-ops-main {
-  background: #07060d;
+  background: #eef1f6;
 }
 
 .platform-app .platform-mission-hero-bg {
   position: absolute;
   inset: 0;
-  background: linear-gradient(125deg, #4c1d95 0%, #1e1b4b 35%, #0f0d18 70%, #07060d 100%);
+  background: linear-gradient(125deg, #ede9fe 0%, #f5f3ff 48%, #eef1f6 100%);
 }
 
 .platform-app .platform-mission-hero-bg::after {
@@ -526,86 +495,71 @@
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at 85% 15%, rgba(167, 139, 250, 0.45), transparent 42%),
-    radial-gradient(circle at 10% 90%, rgba(99, 102, 241, 0.25), transparent 40%);
+    radial-gradient(circle at 85% 15%, rgba(167, 139, 250, 0.28), transparent 42%),
+    radial-gradient(circle at 10% 90%, rgba(99, 102, 241, 0.14), transparent 40%);
 }
 
 .platform-app .platform-ops-page-hero-bg {
   position: absolute;
   inset: 0;
-  background: linear-gradient(120deg, #312e81 0%, #1e1b4b 40%, #0f0d18 100%);
+  background: linear-gradient(120deg, #ede9fe 0%, #f5f3ff 55%, #eef1f6 100%);
 }
 
 .platform-app .platform-ops-page-hero--emerald .platform-ops-page-hero-bg {
-  background: linear-gradient(120deg, #064e3b 0%, #1e1b4b 50%, #0f0d18 100%);
+  background: linear-gradient(120deg, #d1fae5 0%, #f5f3ff 55%, #eef1f6 100%);
 }
 
 .platform-app .platform-ops-page-hero--amber .platform-ops-page-hero-bg {
-  background: linear-gradient(120deg, #78350f 0%, #1e1b4b 50%, #0f0d18 100%);
+  background: linear-gradient(120deg, #fef3c7 0%, #f5f3ff 55%, #eef1f6 100%);
 }
 
 .platform-app .platform-ops-page-body {
-  background: #07060d;
+  background: #eef1f6;
   min-height: 40vh;
 }
 
 .platform-app .platform-ops-surface {
   border-radius: 0.75rem;
-  border: 1px solid rgba(139, 92, 246, 0.22);
-  background: linear-gradient(165deg, rgba(22, 18, 36, 0.98) 0%, rgba(12, 10, 20, 0.98) 100%);
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.4),
-    0 0 48px -16px rgba(139, 92, 246, 0.25);
-  color: #ede9fe;
+  border: 1px solid rgba(76, 29, 149, 0.14);
+  background: #fff;
+  box-shadow: 0 16px 42px -28px rgba(30, 41, 59, 0.35);
+  color: #1f2937;
 }
 
 .platform-app .app-table {
   overflow: hidden;
   border-radius: 0.5rem;
-  border-color: rgba(139, 92, 246, 0.2);
-  background: rgba(14, 12, 22, 0.95);
-  color: #ede9fe;
+  border-color: rgba(76, 29, 149, 0.14);
+  background: #fff;
+  color: #1f2937;
 }
 
 .platform-app .app-table thead {
-  border-bottom: 2px solid rgba(139, 92, 246, 0.35);
-  background: rgba(139, 92, 246, 0.12);
+  border-bottom: 2px solid rgba(76, 29, 149, 0.2);
+  background: #f5f3ff;
 }
 
 .platform-app .app-table th {
-  color: #c4b5fd;
+  color: #4c1d95;
 }
 
 .platform-app .app-table [data-slot="table-head"] {
-  color: #c4b5fd;
+  color: #4c1d95;
 }
 
 .platform-app .app-table tbody tr {
-  border-bottom-color: rgba(139, 92, 246, 0.08);
+  border-bottom-color: rgba(76, 29, 149, 0.08);
 }
 
 .platform-app .app-table tbody tr:hover,
 .platform-app .app-table [data-slot="table-row"]:hover {
-  background: rgba(139, 92, 246, 0.08);
-}
-
-/* Tokens + formulários dentro do EngHub (evita branco estourado) */
-.platform-app.platform-ops {
-  --background: #07060d;
-  --foreground: #ede9fe;
-  --card: rgba(18, 15, 28, 0.98);
-  --card-foreground: #ede9fe;
-  --muted: rgba(139, 92, 246, 0.14);
-  --muted-foreground: rgba(196, 181, 253, 0.55);
-  --border: rgba(139, 92, 246, 0.22);
-  --input: rgba(139, 92, 246, 0.12);
-  --ring: #a78bfa;
+  background: #f5f3ff;
 }
 
 .platform-app .app-table [data-slot="table-container"],
 .platform-app .app-table [data-slot="table"] {
   background: transparent;
-  color: #ede9fe;
+  color: #1f2937;
 }
 
 .platform-app .app-table [data-slot="table-body"] {
@@ -613,62 +567,62 @@
 }
 
 .platform-app .app-table [data-slot="table-row"] {
-  border-bottom-color: rgba(139, 92, 246, 0.1);
+  border-bottom-color: rgba(76, 29, 149, 0.1);
   background: transparent;
 }
 
 .platform-app .app-table [data-slot="table-row"]:hover {
-  background: rgba(139, 92, 246, 0.1);
+  background: #f5f3ff;
 }
 
 .platform-app .app-table [data-slot="table-cell"] {
-  color: rgba(237, 233, 254, 0.92);
+  color: #1f2937;
 }
 
 .platform-app .app-table [data-slot="table-cell"] .text-muted-foreground {
-  color: rgba(196, 181, 253, 0.55);
+  color: #64748b;
 }
 
 .platform-app .platform-ops-surface input,
 .platform-app .platform-ops-surface textarea,
 .platform-app .platform-ops-surface [data-slot="select-trigger"] {
-  border-color: rgba(139, 92, 246, 0.28);
-  background: rgba(139, 92, 246, 0.08);
-  color: #ede9fe;
+  border-color: rgba(76, 29, 149, 0.2);
+  background: #fff;
+  color: #1f2937;
 }
 
 .platform-app .platform-ops-surface input::placeholder,
 .platform-app .platform-ops-surface textarea::placeholder {
-  color: rgba(196, 181, 253, 0.4);
+  color: #94a3b8;
 }
 
 .platform-app .platform-ops-surface label {
-  color: rgba(196, 181, 253, 0.75);
+  color: #475569;
 }
 
 .platform-app .platform-ops-surface .text-muted-foreground {
-  color: rgba(196, 181, 253, 0.55);
+  color: #64748b;
 }
 
 .platform-app .platform-ops-surface [class*="border-black"] {
-  border-color: rgba(139, 92, 246, 0.15);
+  border-color: rgba(76, 29, 149, 0.12);
 }
 
 .platform-app .platform-ops-surface [class*="bg-white"] {
-  background-color: rgba(139, 92, 246, 0.06);
+  background-color: #fff;
 }
 
 .platform-app .platform-ops-surface [class*="bg-muted"] {
-  background-color: rgba(139, 92, 246, 0.08);
+  background-color: #f5f3ff;
 }
 
 .platform-app .bg-card {
-  background-color: rgba(18, 15, 28, 0.98);
-  color: #ede9fe;
+  background-color: #fff;
+  color: #1f2937;
 }
 
 .platform-app .text-card-foreground {
-  color: #ede9fe;
+  color: #1f2937;
 }
 
 .platform-app .platform-ops-surface .border-border,
@@ -676,23 +630,17 @@
   border-color: rgba(139, 92, 246, 0.2);
 }
 
-/* ── Tenant · Ops (mesmo padrão EngHub, cores da marca) ───────────────────── */
-html[data-tenant-theme="dark"] .tenant-app.tenant-ops,
-html:not([data-tenant-theme]) .tenant-app.tenant-ops {
-  color: #e9e4ff;
-}
+/* ── Tenant · Ops claro, com cores da marca ──────────────────────────────── */
 
-html[data-tenant-theme="light"] .tenant-app.tenant-ops {
+.tenant-app.tenant-ops {
   color: oklch(0.13 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-rail {
-  color: rgba(255, 255, 255, 0.88);
-}
-
 .tenant-app .tenant-ops-rail {
-  background: linear-gradient(180deg, #0c0a14 0%, #050408 100%);
-  box-shadow: 8px 0 40px -12px rgba(0, 0, 0, 0.9);
+  color: #334155;
+  background: #fff;
+  border-color: rgb(var(--primary-rgb) / 0.14);
+  box-shadow: 8px 0 32px -20px rgba(30, 41, 59, 0.3);
 }
 
 .tenant-app .tenant-ops-nav-link {
@@ -701,26 +649,26 @@ html[data-tenant-theme="light"] .tenant-app .tenant-ops-rail {
 
 .tenant-app .tenant-ops-command-bar,
 .tenant-app .tenant-command-header {
-  background: rgba(7, 6, 13, 0.95);
+  background: rgba(255, 255, 255, 0.92);
   border-bottom: 1px solid rgb(var(--primary-rgb) / 0.2);
   backdrop-filter: blur(12px);
-  color: #fff;
+  color: oklch(0.13 0.02 265);
 }
 
 .tenant-app .shell-chrome-btn {
   border-color: rgb(var(--primary-rgb) / 0.25);
   background: rgb(var(--primary-rgb) / 0.1);
-  color: rgba(255, 255, 255, 0.85);
+  color: oklch(0.35 0.03 265);
 }
 
 .tenant-app .shell-chrome-btn:hover {
   background: rgb(var(--primary-rgb) / 0.2);
-  color: #fff;
+  color: oklch(0.13 0.02 265);
   border-color: rgb(var(--brand-secondary-rgb) / 0.5);
 }
 
 .tenant-app .tenant-ops-main {
-  background: #07060d;
+  background: #eef1f6;
 }
 
 .tenant-app .tenant-ops-page-hero-bg {
@@ -728,9 +676,9 @@ html[data-tenant-theme="light"] .tenant-app .tenant-ops-rail {
   inset: 0;
   background: linear-gradient(
     120deg,
-    color-mix(in srgb, var(--primary) 55%, #000) 0%,
-    #1e1b4b 40%,
-    #0f0d18 100%
+    color-mix(in srgb, var(--primary) 25%, #fff) 0%,
+    #eef1f6 55%,
+    #e8ecf4 100%
   );
 }
 
@@ -745,15 +693,15 @@ html[data-tenant-theme="light"] .tenant-app .tenant-ops-rail {
 
 .tenant-app .tenant-ops-page-desc,
 .tenant-app .tenant-ops-back-link {
-  color: rgba(255, 255, 255, 0.55);
+  color: oklch(0.45 0.02 265);
 }
 
 .tenant-app .tenant-ops-back-link:hover {
-  color: #fff;
+  color: var(--primary);
 }
 
 .tenant-app .tenant-ops-page-body {
-  background: #07060d;
+  background: #eef1f6;
   min-height: 40vh;
 }
 
@@ -761,11 +709,9 @@ html[data-tenant-theme="light"] .tenant-app .tenant-ops-rail {
 .tenant-app .tenant-panel {
   border-radius: 0.75rem;
   border: 1px solid rgb(var(--primary-rgb) / 0.22);
-  background: linear-gradient(165deg, rgba(22, 18, 36, 0.98) 0%, rgba(12, 10, 20, 0.98) 100%);
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.4),
-    0 0 48px -16px rgb(var(--primary-rgb) / 0.25);
-  color: #ede9fe;
+  background: #fff;
+  box-shadow: 0 12px 40px -24px rgb(var(--primary-rgb) / 0.18);
+  color: oklch(0.13 0.02 265);
 }
 
 .tenant-app .tenant-ops-surface .text-muted-foreground,
@@ -778,7 +724,7 @@ html[data-tenant-theme="light"] .tenant-app .tenant-ops-rail {
   color: #ede9fe;
 }
 
-/* Texto e superfícies internas — dark default, light via overrides abaixo */
+/* Texto e superfícies internas */
 .tenant-app .tenant-ops-text {
   color: #ede9fe;
 }
@@ -822,10 +768,10 @@ html[data-tenant-theme="light"] .tenant-app .tenant-ops-rail {
 
 /* Tokens + conteúdo dentro do ops tenant (evita texto/botões apagados) */
 .tenant-app.tenant-ops {
-  --background: #07060d;
-  --foreground: #ede9fe;
-  --card: rgba(18, 15, 28, 0.98);
-  --card-foreground: #ede9fe;
+  --background: #eef1f6;
+  --foreground: oklch(0.13 0.02 265);
+  --card: #fff;
+  --card-foreground: oklch(0.13 0.02 265);
   --muted: rgb(var(--primary-rgb) / 0.14);
   --muted-foreground: color-mix(in srgb, var(--primary) 30%, #fff);
   --border: rgb(var(--primary-rgb) / 0.22);
@@ -927,9 +873,9 @@ html[data-tenant-theme="light"] .tenant-app .tenant-ops-rail {
 .tenant-app .tenant-stat-card {
   border-radius: 0.75rem;
   border: 1px solid rgb(var(--primary-rgb) / 0.35);
-  background: linear-gradient(165deg, rgba(22, 18, 36, 0.98) 0%, rgba(12, 10, 20, 0.98) 100%);
+  background: #fff;
   box-shadow: 0 0 48px -16px rgb(var(--primary-rgb) / 0.3);
-  color: #ede9fe;
+  color: oklch(0.13 0.02 265);
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
@@ -943,8 +889,8 @@ html[data-tenant-theme="light"] .tenant-app .tenant-ops-rail {
   overflow: hidden;
   border-radius: 0.5rem;
   border-color: rgb(var(--primary-rgb) / 0.2);
-  background: rgba(14, 12, 22, 0.95);
-  color: #ede9fe;
+  background: #fff;
+  color: oklch(0.13 0.02 265);
 }
 
 .tenant-app .app-table thead {
@@ -1019,12 +965,12 @@ html[data-tenant-theme="light"] .tenant-app .tenant-ops-rail {
   text-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
 }
 
-/* ── Tenant — tema claro (canvas claro, chrome ops escuro) ──────────────── */
-html[data-tenant-theme="light"] body {
+/* ── Tenant — padrão visual claro ───────────────────────────────────────── */
+body {
   background: #eef1f6;
 }
 
-html[data-tenant-theme="light"] .tenant-app.tenant-ops {
+.tenant-app.tenant-ops {
   --background: #eef1f6;
   --foreground: oklch(0.13 0.02 265);
   --card: #fff;
@@ -1036,44 +982,39 @@ html[data-tenant-theme="light"] .tenant-app.tenant-ops {
   --ring: var(--primary);
 }
 
-html[data-tenant-theme="dark"] body,
-html:not([data-tenant-theme]) body {
-  background: #07060d;
-}
-
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-main,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-body {
+.tenant-app .tenant-ops-main,
+.tenant-app .tenant-ops-page-body {
   background: #eef1f6;
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-command-bar,
-html[data-tenant-theme="light"] .tenant-app .tenant-command-header {
+.tenant-app .tenant-ops-command-bar,
+.tenant-app .tenant-command-header {
   background: rgba(255, 255, 255, 0.92);
   border-bottom-color: rgba(0, 0, 0, 0.08);
   color: oklch(0.13 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-command-title {
+.tenant-app .tenant-ops-command-title {
   color: oklch(0.13 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .shell-chrome-btn {
+.tenant-app .shell-chrome-btn {
   border-color: rgb(var(--primary-rgb) / 0.2);
   background: rgb(var(--primary-rgb) / 0.06);
   color: oklch(0.35 0.03 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .shell-chrome-btn:hover {
+.tenant-app .shell-chrome-btn:hover {
   background: rgb(var(--primary-rgb) / 0.12);
   color: oklch(0.13 0.02 265);
   border-color: var(--primary);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-hero {
+.tenant-app .tenant-ops-page-hero {
   border-bottom-color: rgba(0, 0, 0, 0.08);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-hero-bg {
+.tenant-app .tenant-ops-page-hero-bg {
   background: linear-gradient(
     120deg,
     color-mix(in srgb, var(--primary) 25%, #fff) 0%,
@@ -1082,264 +1023,264 @@ html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-hero-bg {
   );
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-hero-bg::after {
+.tenant-app .tenant-ops-page-hero-bg::after {
   background:
     radial-gradient(circle at 85% 15%, rgb(var(--brand-secondary-rgb) / 0.12), transparent 42%),
     radial-gradient(circle at 10% 90%, rgb(var(--primary-rgb) / 0.1), transparent 40%);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-hero h1,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-title {
+.tenant-app .tenant-ops-page-hero h1,
+.tenant-app .tenant-ops-page-title {
   color: oklch(0.13 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-desc,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-back-link {
+.tenant-app .tenant-ops-page-desc,
+.tenant-app .tenant-ops-back-link {
   color: oklch(0.45 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-back-link:hover {
+.tenant-app .tenant-ops-back-link:hover {
   color: var(--primary);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface table {
+.tenant-app .tenant-ops-surface table {
   color: oklch(0.13 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface table th {
+.tenant-app .tenant-ops-surface table th {
   color: oklch(0.35 0.03 265) !important;
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface table td {
+.tenant-app .tenant-ops-surface table td {
   color: oklch(0.13 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface table .text-muted-foreground {
+.tenant-app .tenant-ops-surface table .text-muted-foreground {
   color: oklch(0.48 0.02 265) !important;
   opacity: 1;
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface button.border,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface [data-slot="button"].border {
+.tenant-app .tenant-ops-surface button.border,
+.tenant-app .tenant-ops-surface [data-slot="button"].border {
   border-color: rgb(var(--primary-rgb) / 0.2) !important;
   background: rgb(var(--primary-rgb) / 0.05) !important;
   color: oklch(0.13 0.02 265) !important;
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface table tbody tr:hover {
+.tenant-app .tenant-ops-surface table tbody tr:hover {
   background: rgb(var(--primary-rgb) / 0.06);
 }
 
-html[data-tenant-theme="light"] .tenant-app .app-table td,
-html[data-tenant-theme="light"] .tenant-app .app-table [data-slot="table-cell"] {
+.tenant-app .app-table td,
+.tenant-app .app-table [data-slot="table-cell"] {
   color: oklch(0.13 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .app-table td .text-muted-foreground,
-html[data-tenant-theme="light"] .tenant-app .app-table [data-slot="table-cell"] .text-muted-foreground {
+.tenant-app .app-table td .text-muted-foreground,
+.tenant-app .app-table [data-slot="table-cell"] .text-muted-foreground {
   color: oklch(0.48 0.02 265);
   opacity: 1;
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface,
-html[data-tenant-theme="light"] .tenant-app .tenant-panel {
+.tenant-app .tenant-ops-surface,
+.tenant-app .tenant-panel {
   border-color: rgba(0, 0, 0, 0.08);
   background: #fff;
   box-shadow: 0 12px 40px -24px rgb(var(--primary-rgb) / 0.18);
   color: oklch(0.13 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface .text-muted-foreground,
-html[data-tenant-theme="light"] .tenant-app .tenant-panel .text-muted-foreground {
+.tenant-app .tenant-ops-surface .text-muted-foreground,
+.tenant-app .tenant-panel .text-muted-foreground {
   color: oklch(0.48 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface .text-foreground,
-html[data-tenant-theme="light"] .tenant-app .tenant-panel .text-foreground {
+.tenant-app .tenant-ops-surface .text-foreground,
+.tenant-app .tenant-panel .text-foreground {
   color: oklch(0.13 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-stat-card {
+.tenant-app .tenant-stat-card {
   border-color: rgb(var(--primary-rgb) / 0.25);
   background: #fff;
   box-shadow: 0 4px 24px -12px rgb(var(--primary-rgb) / 0.15);
   color: oklch(0.13 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-stat-card .text-white {
+.tenant-app .tenant-stat-card .text-white {
   color: oklch(0.13 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-stat-card .text-white\/45 {
+.tenant-app .tenant-stat-card .text-white\/45 {
   color: oklch(0.48 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .app-table {
+.tenant-app .app-table {
   background: #fff;
   color: oklch(0.13 0.02 265);
   border-color: rgba(0, 0, 0, 0.08);
 }
 
-html[data-tenant-theme="light"] .tenant-app .app-table th,
-html[data-tenant-theme="light"] .tenant-app .app-table [data-slot="table-head"] {
+.tenant-app .app-table th,
+.tenant-app .app-table [data-slot="table-head"] {
   color: oklch(0.35 0.03 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .app-table tbody tr.budget-revision-row {
+.tenant-app .app-table tbody tr.budget-revision-row {
   background: rgb(var(--primary-rgb) / 0.08);
 }
 
-html[data-tenant-theme="light"] .tenant-app .app-table tbody tr.budget-revision-row:hover {
+.tenant-app .app-table tbody tr.budget-revision-row:hover {
   background: rgb(var(--primary-rgb) / 0.12);
 }
 
-html[data-tenant-theme="light"] .tenant-app .app-table tbody tr.budget-revision-row td {
+.tenant-app .app-table tbody tr.budget-revision-row td {
   color: oklch(0.13 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .app-table tbody tr.budget-revision-row td .text-muted-foreground {
+.tenant-app .app-table tbody tr.budget-revision-row td .text-muted-foreground {
   color: oklch(0.42 0.03 265) !important;
 }
 
-html[data-tenant-theme="light"] .tenant-app .app-table tbody tr.budget-revision-row .tenant-ops-text {
+.tenant-app .app-table tbody tr.budget-revision-row .tenant-ops-text {
   color: oklch(0.13 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-command-bar .text-white\/90,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-command-bar .text-white\/45 {
+.tenant-app .tenant-ops-command-bar .text-white\/90,
+.tenant-app .tenant-ops-command-bar .text-white\/45 {
   color: oklch(0.35 0.03 265);
 }
 
-/* Conteúdo das páginas (hero + painéis) — corrige utilitários pensados para dark */
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-body .tenant-ops-text,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface .tenant-ops-text,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-body .text-\[\#ede9fe\],
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface .text-\[\#ede9fe\] {
+/* Conteúdo das páginas (hero + painéis) */
+.tenant-app .tenant-ops-page-body .tenant-ops-text,
+.tenant-app .tenant-ops-surface .tenant-ops-text,
+.tenant-app .tenant-ops-page-body .text-\[\#ede9fe\],
+.tenant-app .tenant-ops-surface .text-\[\#ede9fe\] {
   color: oklch(0.13 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-body .tenant-ops-text-muted,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface .tenant-ops-text-muted,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-body .text-white\/55,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface .text-white\/55 {
+.tenant-app .tenant-ops-page-body .tenant-ops-text-muted,
+.tenant-app .tenant-ops-surface .tenant-ops-text-muted,
+.tenant-app .tenant-ops-page-body .text-white\/55,
+.tenant-app .tenant-ops-surface .text-white\/55 {
   color: oklch(0.45 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-body .tenant-ops-text-subtle,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface .tenant-ops-text-subtle,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-body .text-white\/45,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface .text-white\/45 {
+.tenant-app .tenant-ops-page-body .tenant-ops-text-subtle,
+.tenant-app .tenant-ops-surface .tenant-ops-text-subtle,
+.tenant-app .tenant-ops-page-body .text-white\/45,
+.tenant-app .tenant-ops-surface .text-white\/45 {
   color: oklch(0.48 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-body .tenant-ops-text-faint,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface .tenant-ops-text-faint,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-body .text-white\/20,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface .text-white\/20 {
+.tenant-app .tenant-ops-page-body .tenant-ops-text-faint,
+.tenant-app .tenant-ops-surface .tenant-ops-text-faint,
+.tenant-app .tenant-ops-page-body .text-white\/20,
+.tenant-app .tenant-ops-surface .text-white\/20 {
   color: oklch(0.58 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-body .tenant-ops-inset,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface .tenant-ops-inset,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-body .border-white\/\[0\.06\],
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface .border-white\/\[0\.06\] {
+.tenant-app .tenant-ops-page-body .tenant-ops-inset,
+.tenant-app .tenant-ops-surface .tenant-ops-inset,
+.tenant-app .tenant-ops-page-body .border-white\/\[0\.06\],
+.tenant-app .tenant-ops-surface .border-white\/\[0\.06\] {
   border-color: rgba(0, 0, 0, 0.08);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-body .tenant-ops-inset,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface .tenant-ops-inset,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-body .bg-white\/\[0\.03\],
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface .bg-white\/\[0\.03\] {
+.tenant-app .tenant-ops-page-body .tenant-ops-inset,
+.tenant-app .tenant-ops-surface .tenant-ops-inset,
+.tenant-app .tenant-ops-page-body .bg-white\/\[0\.03\],
+.tenant-app .tenant-ops-surface .bg-white\/\[0\.03\] {
   background: rgb(var(--primary-rgb) / 0.04);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-body .tenant-ops-inset-hover:hover,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface .tenant-ops-inset-hover:hover {
+.tenant-app .tenant-ops-page-body .tenant-ops-inset-hover:hover,
+.tenant-app .tenant-ops-surface .tenant-ops-inset-hover:hover {
   border-color: rgb(var(--primary-rgb) / 0.25);
   background: rgb(var(--primary-rgb) / 0.08);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-body .tenant-ops-divide > :not([hidden]) ~ :not([hidden]),
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface .tenant-ops-divide > :not([hidden]) ~ :not([hidden]),
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-body .divide-white\/\[0\.06\] > :not([hidden]) ~ :not([hidden]),
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface .divide-white\/\[0\.06\] > :not([hidden]) ~ :not([hidden]) {
+.tenant-app .tenant-ops-page-body .tenant-ops-divide > :not([hidden]) ~ :not([hidden]),
+.tenant-app .tenant-ops-surface .tenant-ops-divide > :not([hidden]) ~ :not([hidden]),
+.tenant-app .tenant-ops-page-body .divide-white\/\[0\.06\] > :not([hidden]) ~ :not([hidden]),
+.tenant-app .tenant-ops-surface .divide-white\/\[0\.06\] > :not([hidden]) ~ :not([hidden]) {
   border-color: rgba(0, 0, 0, 0.08);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-body .tenant-ops-empty,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface .tenant-ops-empty {
+.tenant-app .tenant-ops-page-body .tenant-ops-empty,
+.tenant-app .tenant-ops-surface .tenant-ops-empty {
   border-color: rgba(0, 0, 0, 0.12);
   background: rgb(var(--primary-rgb) / 0.03);
   color: oklch(0.45 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-body .border-white\/\[0\.1\],
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface .border-white\/\[0\.1\] {
+.tenant-app .tenant-ops-page-body .border-white\/\[0\.1\],
+.tenant-app .tenant-ops-surface .border-white\/\[0\.1\] {
   border-color: rgba(0, 0, 0, 0.1);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-body .bg-white\/\[0\.02\],
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface .bg-white\/\[0\.02\] {
+.tenant-app .tenant-ops-page-body .bg-white\/\[0\.02\],
+.tenant-app .tenant-ops-surface .bg-white\/\[0\.02\] {
   background: rgb(var(--primary-rgb) / 0.03);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-page-body .tenant-ops-logo-frame,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface .tenant-ops-logo-frame {
+.tenant-app .tenant-ops-page-body .tenant-ops-logo-frame,
+.tenant-app .tenant-ops-surface .tenant-ops-logo-frame {
   background: rgb(var(--primary-rgb) / 0.06);
   box-shadow: 0 0 0 1px rgb(var(--primary-rgb) / 0.12);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface input,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface textarea,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface [data-slot="select-trigger"] {
+.tenant-app .tenant-ops-surface input,
+.tenant-app .tenant-ops-surface textarea,
+.tenant-app .tenant-ops-surface [data-slot="select-trigger"] {
   border-color: rgb(var(--primary-rgb) / 0.2);
   background: #fff;
   color: oklch(0.13 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface input::placeholder,
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface textarea::placeholder {
+.tenant-app .tenant-ops-surface input::placeholder,
+.tenant-app .tenant-ops-surface textarea::placeholder {
   color: oklch(0.55 0.02 265);
   opacity: 1;
 }
 
-html[data-tenant-theme="light"] .tenant-app .budget-ops-panel,
-html[data-tenant-theme="light"] .tenant-app .budget-ops-panel .text-muted-foreground {
+.tenant-app .budget-ops-panel,
+.tenant-app .budget-ops-panel .text-muted-foreground {
   --tw-text-opacity: 1;
 }
 
-html[data-tenant-theme="light"] .tenant-app .budget-ops-panel .text-muted-foreground {
+.tenant-app .budget-ops-panel .text-muted-foreground {
   color: oklch(0.48 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .budget-scope-sidebar {
+.tenant-app .budget-scope-sidebar {
   color: oklch(0.13 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .budget-scope-sidebar .text-muted-foreground {
+.tenant-app .budget-scope-sidebar .text-muted-foreground {
   color: oklch(0.48 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .budget-revision-badge {
+.tenant-app .budget-revision-badge {
   color: #fff;
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-command-bar .text-muted-foreground {
+.tenant-app .tenant-ops-command-bar .text-muted-foreground {
   color: oklch(0.48 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-command-bar .text-foreground {
+.tenant-app .tenant-ops-command-bar .text-foreground {
   color: oklch(0.13 0.02 265);
 }
 
-html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface label {
+.tenant-app .tenant-ops-surface label {
   color: oklch(0.35 0.03 265);
 }
 
 /* ── Auth · login unificado ────────────────────────────────────────────────── */
 .auth-app {
-  --auth-chrome: #09090b;
-  color: #fafafa;
+  --auth-chrome: #eef1f6;
+  color: #1f2937;
 }
 
 .auth-app .auth-mesh-bg {
@@ -1356,11 +1297,9 @@ html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface label {
 .auth-app .auth-shell {
   position: relative;
   border-radius: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(18, 18, 22, 0.82);
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.35),
-    0 24px 64px -24px rgba(0, 0, 0, 0.75);
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 24px 64px -32px rgba(30, 41, 59, 0.35);
   backdrop-filter: blur(24px);
 }
 
@@ -1410,8 +1349,8 @@ html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface label {
 }
 
 .auth-app .auth-aside-col {
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(0, 0, 0, 0.12);
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  background: #f8fafc;
   padding: 2rem 1.75rem;
   max-height: min(560px, calc(100dvh - 8rem));
 }
@@ -1419,38 +1358,38 @@ html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface label {
 @media (min-width: 1024px) {
   .auth-app .auth-aside-col {
     border-top: none;
-    border-left: 1px solid rgba(255, 255, 255, 0.06);
+    border-left: 1px solid rgba(15, 23, 42, 0.08);
     padding: 2.25rem 2rem;
   }
 }
 
 .auth-app .auth-logo-wrap {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #fff;
 }
 
 .auth-app .auth-page-title {
-  color: #fafafa;
+  color: #0f172a;
 }
 
 .auth-app .auth-muted {
-  color: rgba(255, 255, 255, 0.45);
+  color: #64748b;
 }
 
 .auth-app .auth-label {
-  color: rgba(255, 255, 255, 0.72);
+  color: #334155;
   font-weight: 500;
 }
 
 .auth-app .auth-footer {
-  color: rgba(255, 255, 255, 0.32);
+  color: #64748b;
   font-size: 0.75rem;
 }
 
 .auth-app .auth-input {
-  border-color: rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
-  color: #fafafa;
+  border-color: rgba(15, 23, 42, 0.16);
+  background: #fff;
+  color: #0f172a;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
@@ -1458,33 +1397,33 @@ html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface label {
 .auth-app .auth-input:-webkit-autofill:hover,
 .auth-app .auth-input:-webkit-autofill:focus,
 .auth-app .auth-input:-webkit-autofill:active {
-  -webkit-text-fill-color: #fafafa !important;
-  caret-color: #fafafa;
-  border-color: rgba(255, 255, 255, 0.14) !important;
-  box-shadow: 0 0 0 1000px rgba(24, 24, 28, 0.95) inset !important;
+  -webkit-text-fill-color: #0f172a !important;
+  caret-color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.16) !important;
+  box-shadow: 0 0 0 1000px #fff inset !important;
   transition: background-color 99999s ease-out 0s;
 }
 
 .auth-app .auth-input::placeholder {
-  color: rgba(255, 255, 255, 0.28);
+  color: #94a3b8;
 }
 
 .auth-app .auth-input:focus-visible {
   border-color: rgb(var(--primary-rgb) / 0.45);
-  background: rgba(255, 255, 255, 0.06);
+  background: #fff;
   box-shadow: 0 0 0 3px rgb(var(--primary-rgb) / 0.12);
 }
 
 .auth-app .auth-input + svg,
 .auth-app .relative:has(.auth-input) svg {
-  color: rgba(255, 255, 255, 0.35);
+  color: #64748b;
 }
 
 .auth-app .auth-submit-btn {
   height: 2.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: #fafafa;
-  color: #18181b;
+  border: 1px solid rgb(var(--primary-rgb) / 0.28);
+  background: var(--primary);
+  color: #fff;
   font-weight: 600;
   font-size: 0.9375rem;
   box-shadow: none;
@@ -1492,63 +1431,63 @@ html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface label {
 }
 
 .auth-app .auth-submit-btn:hover:not(:disabled) {
-  background: #fff;
+  background: color-mix(in srgb, var(--primary) 88%, #000);
   opacity: 0.95;
 }
 
 .auth-app .auth-highlight-list {
-  border-color: rgba(255, 255, 255, 0.06);
+  border-color: rgba(15, 23, 42, 0.08);
 }
 
 .auth-app .auth-highlight-row {
-  border-color: rgba(255, 255, 255, 0.06);
+  border-color: rgba(15, 23, 42, 0.08);
 }
 
 .auth-app .auth-highlight-dot {
-  background: rgba(255, 255, 255, 0.35);
+  background: #94a3b8;
   box-shadow: none;
 }
 
 .auth-app .auth-highlight-kind--improvement {
-  color: color-mix(in srgb, var(--primary) 25%, #fff);
-  background: rgb(var(--primary-rgb) / 0.2);
-  border: 1px solid rgb(var(--primary-rgb) / 0.35);
+  color: color-mix(in srgb, var(--primary) 78%, #000);
+  background: rgb(var(--primary-rgb) / 0.1);
+  border: 1px solid rgb(var(--primary-rgb) / 0.22);
 }
 
 .auth-app .auth-highlight-kind--feature {
-  color: color-mix(in srgb, var(--brand-secondary) 20%, #fff);
-  background: rgb(var(--brand-secondary-rgb) / 0.18);
-  border: 1px solid rgb(var(--brand-secondary-rgb) / 0.35);
+  color: color-mix(in srgb, var(--brand-secondary) 78%, #000);
+  background: rgb(var(--brand-secondary-rgb) / 0.1);
+  border: 1px solid rgb(var(--brand-secondary-rgb) / 0.22);
 }
 
 .auth-app .auth-highlight-kind--fix {
-  color: rgba(255, 255, 255, 0.78);
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #475569;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
 }
 
 .auth-app .auth-highlight-date {
-  color: rgba(255, 255, 255, 0.5);
+  color: #64748b;
 }
 
 .auth-app .auth-destination-btn {
   display: block;
   width: 100%;
   border-radius: 0.625rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: #fff;
   padding: 0.875rem 1rem;
   transition: background 0.15s ease, border-color 0.15s ease;
   cursor: pointer;
 }
 
 .auth-app .auth-destination-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: #f8fafc;
+  border-color: rgba(15, 23, 42, 0.24);
 }
 
 .auth-app .auth-destination-btn-sub {
-  color: rgba(255, 255, 255, 0.58);
+  color: #64748b;
   font-size: 0.75rem;
   line-height: 1.35;
 }
@@ -1564,11 +1503,11 @@ html[data-tenant-theme="light"] .tenant-app .tenant-ops-surface label {
 }
 
 .auth-app .auth-destination-btn--platform .auth-destination-icon {
-  color: #c4b5fd;
+  color: #6d28d9;
 }
 
 .auth-app .auth-destination-btn--platform .auth-destination-btn-sub {
-  color: rgba(221, 214, 254, 0.72);
+  color: #6d28d9;
 }
 
 /* Marcas não imprimíveis do editor (Mostrar Tudo / Ctrl+Shift+8). */

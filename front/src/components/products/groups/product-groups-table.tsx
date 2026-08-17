@@ -152,7 +152,7 @@ export function ProductGroupsTable({ groups, productCounts }: ProductGroupsTable
                         <span className="font-semibold text-foreground">{group?.name}</span>?
                       </p>
                       {count > 0 && (
-                        <p className="text-amber-600 dark:text-amber-400">
+                        <p className="text-amber-600">
                           {count} produto{count !== 1 ? "s" : ""} vinculado{count !== 1 ? "s" : ""} será{count !== 1 ? "ão" : ""} desvinculado{count !== 1 ? "s" : ""}, mas não excluído{count !== 1 ? "s" : ""}.
                         </p>
                       )}

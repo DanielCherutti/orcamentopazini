@@ -1,6 +1,7 @@
 import { getDb, resetDb, isTokenExpiredError } from "@/lib/surreal";
 import { recordIdToString, safeStringRecordId } from "@/lib/surreal-record-ids";
 import {
+    applyGeneralPriceAdjustment,
     applyQuoteRowAdjustments,
     computeItemSubtotal,
     computeLocationAssemblyTotal,
@@ -109,8 +110,8 @@ export async function recalculateBudgetTotal(budgetId: string) {
 
         const locRows =
             (
-                await db.query<[Array<{ id: unknown; assembly_mode?: unknown; assembly_value?: unknown }>]>(
-                    `SELECT id, assembly_mode, assembly_value FROM budget_location WHERE budget_id = $budgetId AND deleted_at IS NONE`,
+                await db.query<[Array<{ id: unknown; assembly_mode?: unknown; assembly_value?: unknown; general_price_adjustment_mode?: unknown; general_price_adjustment_value?: unknown }>]>(
+                    `SELECT id, assembly_mode, assembly_value, general_price_adjustment_mode, general_price_adjustment_value FROM budget_location WHERE budget_id = $budgetId AND deleted_at IS NONE`,
                     { budgetId: budgetRecordId }
                 )
             )?.[0] ?? [];
@@ -125,10 +126,12 @@ export async function recalculateBudgetTotal(budgetId: string) {
                                 location_id?: unknown;
                                 assembly_mode?: unknown;
                                 assembly_value?: unknown;
+                                general_price_adjustment_mode?: unknown;
+                                general_price_adjustment_value?: unknown;
                             }>,
                         ]
                     >(
-                        `SELECT id, location_id, assembly_mode, assembly_value
+                        `SELECT id, location_id, assembly_mode, assembly_value, general_price_adjustment_mode, general_price_adjustment_value
                          FROM budget_section
                          WHERE location_id = $locationId AND deleted_at IS NONE`,
                         { locationId: loc.id }
@@ -145,6 +148,8 @@ export async function recalculateBudgetTotal(budgetId: string) {
                 location_id?: unknown;
                 assembly_mode?: unknown;
                 assembly_value?: unknown;
+                general_price_adjustment_mode?: unknown;
+                general_price_adjustment_value?: unknown;
             }
         >();
         for (const row of sectionRowsRaw) {
@@ -194,7 +199,12 @@ export async function recalculateBudgetTotal(budgetId: string) {
 
         const locationConfig = new Map<
             string,
-            { mode: LocationAssemblyMode; value: number }
+            {
+                mode: LocationAssemblyMode;
+                value: number;
+                generalMode: "percent" | "fixed";
+                generalValue: number;
+            }
         >();
         for (const row of locRows) {
             const id = recordIdToString(row.id) || String(row.id ?? "");
@@ -205,6 +215,8 @@ export async function recalculateBudgetTotal(budgetId: string) {
             locationConfig.set(id, {
                 mode,
                 value: Number(row.assembly_value ?? 0),
+                generalMode: row.general_price_adjustment_mode === "fixed" ? "fixed" : "percent",
+                generalValue: Number(row.general_price_adjustment_value ?? 0),
             });
         }
 
@@ -215,6 +227,8 @@ export async function recalculateBudgetTotal(budgetId: string) {
                 mode: LocationAssemblyMode;
                 value: number;
                 hasOwnAssembly: boolean;
+                generalMode: "percent" | "fixed";
+                generalValue: number;
             }
         >();
         const sectionIdsByLocation = new Map<string, string[]>();
@@ -243,6 +257,8 @@ export async function recalculateBudgetTotal(budgetId: string) {
                 mode,
                 value,
                 hasOwnAssembly,
+                generalMode: row.general_price_adjustment_mode === "fixed" ? "fixed" : "percent",
+                generalValue: Number(row.general_price_adjustment_value ?? 0),
             });
             const locSections = sectionIdsByLocation.get(locationId) ?? [];
             locSections.push(sectionId);
@@ -251,6 +267,7 @@ export async function recalculateBudgetTotal(budgetId: string) {
 
         const itemsByLocationFallback = new Map<string, ScopePricingItem[]>();
         const itemsBySection = new Map<string, ScopePricingItem[]>();
+        const allItemsBySection = new Map<string, ScopePricingItem[]>();
         for (const row of itemRows) {
             const section = row.section_id as Record<string, unknown> | undefined;
             const sectionIdRaw = section && typeof section === "object" ? section.id : undefined;
@@ -274,6 +291,9 @@ export async function recalculateBudgetTotal(budgetId: string) {
                 assembly_manual_value: Number(row.assembly_manual_value ?? 0),
             };
             const secCfg = sectionConfig.get(sectionId);
+            const allSectionItems = allItemsBySection.get(sectionId) ?? [];
+            allSectionItems.push(item);
+            allItemsBySection.set(sectionId, allSectionItems);
             if (secCfg?.hasOwnAssembly) {
                 const sectionItems = itemsBySection.get(sectionId) ?? [];
                 sectionItems.push(item);
@@ -287,20 +307,42 @@ export async function recalculateBudgetTotal(budgetId: string) {
 
         let equipmentTotal = 0;
         let assemblyTotal = 0;
+        for (const [locationId, cfg] of locationConfig.entries()) {
+            const sectionEquipment = (sectionIdsByLocation.get(locationId) ?? []).reduce(
+                (sum, sectionId) => {
+                    const section = sectionConfig.get(sectionId);
+                    const raw = (allItemsBySection.get(sectionId) ?? []).reduce(
+                        (subtotal, item) => subtotal + computeItemSubtotal(item),
+                        0,
+                    );
+                    return sum + applyGeneralPriceAdjustment(raw, {
+                        general_price_adjustment_mode: section?.generalMode,
+                        general_price_adjustment_value: section?.generalValue,
+                    });
+                },
+                0,
+            );
+            equipmentTotal += applyGeneralPriceAdjustment(sectionEquipment, {
+                general_price_adjustment_mode: cfg.generalMode,
+                general_price_adjustment_value: cfg.generalValue,
+            });
+        }
+
         for (const [sectionId, cfg] of sectionConfig.entries()) {
             if (!cfg.hasOwnAssembly) continue;
             const items = itemsBySection.get(sectionId) ?? [];
-            const itemSubtotal = items.reduce((sum, item) => sum + computeItemSubtotal(item), 0);
             const assembly = computeLocationAssemblyTotal(cfg.mode, cfg.value, items);
-            equipmentTotal += itemSubtotal;
             assemblyTotal += assembly;
         }
 
         for (const [locationId, items] of itemsByLocationFallback.entries()) {
-            const itemSubtotal = items.reduce((sum, item) => sum + computeItemSubtotal(item), 0);
-            const cfg = locationConfig.get(locationId) ?? { mode: "percent", value: 0 };
+            const cfg = locationConfig.get(locationId) ?? {
+                mode: "percent",
+                value: 0,
+                generalMode: "percent",
+                generalValue: 0,
+            };
             const assembly = computeLocationAssemblyTotal(cfg.mode, cfg.value, items);
-            equipmentTotal += itemSubtotal;
             assemblyTotal += assembly;
         }
 

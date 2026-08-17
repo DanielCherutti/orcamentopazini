@@ -3,6 +3,7 @@ import {
     buildDuplicatedBudgetItemContent,
     recalculateBudgetTotal,
 } from "@/actions/budget-hierarchy-helpers";
+import { onlyActiveBudgetRecords } from "@/lib/budgets/active-budget-records";
 
 type BudgetDb = Awaited<ReturnType<typeof import("@/lib/surreal").getDb>>;
 
@@ -73,7 +74,7 @@ export async function duplicateBudgetImages(
          ORDER BY order_index ASC, created_at ASC`,
         { budgetId: originalBudgetRecordId }
     );
-    const images = imagesRes[0] || [];
+    const images = onlyActiveBudgetRecords(imagesRes[0] || []);
 
     for (const img of images) {
         const locKey = img.location_id ? String(img.location_id) : null;
@@ -147,7 +148,7 @@ export async function duplicateCompositorBlocks(
         "SELECT * FROM budget_block WHERE budget_id = $budgetId AND deleted_at IS NONE ORDER BY order_index ASC",
         { budgetId: originalBudgetRecordId }
     );
-    const flatBlocks = blocksRes[0] || [];
+    const flatBlocks = onlyActiveBudgetRecords(blocksRes[0] || []);
     if (flatBlocks.length === 0) return;
 
     const oldToNew = maps.block;
@@ -193,7 +194,7 @@ export async function duplicateCompositorBlocks(
             "SELECT * FROM budget_item WHERE block_id = $blockId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC",
             { blockId: origBlockRecordId }
         );
-        const items = itemsRes[0] || [];
+        const items = onlyActiveBudgetRecords(itemsRes[0] || []);
         for (const item of items) {
             const newItemRaw = await db.create(new Table("budget_item")).content({
                 ...buildDuplicatedBudgetItemContent(item),
@@ -217,7 +218,7 @@ export async function duplicateBudgetScopeHierarchy(
         "SELECT * FROM budget_location WHERE budget_id = $budgetId AND deleted_at IS NONE ORDER BY created_at ASC",
         { budgetId: originalBudgetRecordId }
     );
-    const locations = locationsRes?.[0] || [];
+    const locations = onlyActiveBudgetRecords(locationsRes?.[0] || []);
 
     for (const loc of locations) {
         const newLocRaw = await db.create(new Table("budget_location")).content({
@@ -233,6 +234,9 @@ export async function duplicateBudgetScopeHierarchy(
             price_adjustment_enabled: Boolean(loc.price_adjustment_enabled),
             price_adjustment_input_mode:
                 loc.price_adjustment_input_mode === "percent" ? "percent" : "fixed",
+            general_price_adjustment_mode:
+                loc.general_price_adjustment_mode === "fixed" ? "fixed" : "percent",
+            general_price_adjustment_value: Number(loc.general_price_adjustment_value ?? 0),
             assembly_mode: loc.assembly_mode ?? "percent",
             assembly_value: Number(loc.assembly_value ?? 0),
             created_at: new Date().toISOString(),
@@ -248,7 +252,7 @@ export async function duplicateBudgetScopeHierarchy(
             "SELECT * FROM budget_section WHERE location_id = $locId AND deleted_at IS NONE ORDER BY created_at ASC",
             { locId: origLocRecordId }
         );
-        const sections = sectionsRes?.[0] || [];
+        const sections = onlyActiveBudgetRecords(sectionsRes?.[0] || []);
 
         for (const sec of sections) {
             const newSecRaw = await db.create(new Table("budget_section")).content({
@@ -265,6 +269,9 @@ export async function duplicateBudgetScopeHierarchy(
                 price_adjustment_enabled: Boolean(sec.price_adjustment_enabled),
                 price_adjustment_input_mode:
                     sec.price_adjustment_input_mode === "percent" ? "percent" : "fixed",
+                general_price_adjustment_mode:
+                    sec.general_price_adjustment_mode === "fixed" ? "fixed" : "percent",
+                general_price_adjustment_value: Number(sec.general_price_adjustment_value ?? 0),
                 assembly_mode:
                     sec.assembly_mode === "fixed" || sec.assembly_mode === "manual"
                         ? sec.assembly_mode
@@ -282,7 +289,7 @@ export async function duplicateBudgetScopeHierarchy(
                 "SELECT * FROM budget_item WHERE section_id = $secId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC",
                 { secId: origSecRecordId }
             );
-            const items = itemsRes?.[0] || [];
+            const items = onlyActiveBudgetRecords(itemsRes?.[0] || []);
             for (const item of items) {
                 const newItemRaw = await db.create(new Table("budget_item")).content({
                     ...buildDuplicatedBudgetItemContent(item as Record<string, unknown>),

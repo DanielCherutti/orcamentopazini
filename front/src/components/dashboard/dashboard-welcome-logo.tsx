@@ -45,13 +45,15 @@ export function DashboardWelcomeLogo({
       role={failed && alt ? "img" : undefined}
       aria-label={failed && alt ? alt : undefined}
     >
-      <div
-        className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/15 via-muted/60 to-secondary/15 text-primary"
-        aria-hidden="true"
-        data-testid="platform-logo-fallback"
-      >
-        <DraftingCompass className="h-8 w-8" strokeWidth={1.8} />
-      </div>
+      {failed ? (
+        <div
+          className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/15 via-muted/60 to-secondary/15 text-primary"
+          aria-hidden="true"
+          data-testid="platform-logo-fallback"
+        >
+          <DraftingCompass className="h-8 w-8" strokeWidth={1.8} />
+        </div>
+      ) : null}
       {!failed && shouldUsePlainImg(src) ? (
         // eslint-disable-next-line @next/next/no-img-element -- URL externa, upload ou Data URI da configuração
         <img

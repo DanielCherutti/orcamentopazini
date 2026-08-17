@@ -15,6 +15,45 @@ export type ScopePricingItem = {
     assembly_manual_value?: number;
 };
 
+export type GeneralPriceAdjustmentConfig = {
+    general_price_adjustment_mode?: PriceAdjustmentMode | string | null;
+    general_price_adjustment_value?: number | null;
+};
+
+export type QuoteSplitPercents = {
+    markupEquip: number;
+    discountEquip: number;
+    markupAsm: number;
+    discountAsm: number;
+};
+
+/** Lê os percentuais separados, mantendo compatibilidade com orçamentos legados. */
+export function readQuoteSplitPercents(record: Record<string, unknown>): QuoteSplitPercents {
+    const legacyMarkup = normalizeMoney(record.quote_markup_percent);
+    const legacyDiscount = normalizeMoney(record.quote_discount_percent);
+    const hasExplicitSplit =
+        record.quote_markup_equipment_percent !== undefined ||
+        record.quote_discount_equipment_percent !== undefined ||
+        record.quote_markup_assembly_percent !== undefined ||
+        record.quote_discount_assembly_percent !== undefined;
+
+    if (!hasExplicitSplit) {
+        return {
+            markupEquip: legacyMarkup,
+            discountEquip: legacyDiscount,
+            markupAsm: legacyMarkup,
+            discountAsm: legacyDiscount,
+        };
+    }
+
+    return {
+        markupEquip: normalizeMoney(record.quote_markup_equipment_percent),
+        discountEquip: normalizeMoney(record.quote_discount_equipment_percent),
+        markupAsm: normalizeMoney(record.quote_markup_assembly_percent),
+        discountAsm: normalizeMoney(record.quote_discount_assembly_percent),
+    };
+}
+
 export function normalizeMoney(value: unknown): number {
     const n = Number(value ?? 0);
     return Number.isFinite(n) ? n : 0;
@@ -47,6 +86,21 @@ export function computeItemSubtotal(item: ScopePricingItem): number {
     const adjustment = computeItemAdjustmentValue(item);
     const observationExtra = normalizeMoney(item.observation_extra_value);
     return base + adjustment + observationExtra;
+}
+
+/** Ajuste geral de preço; valores negativos representam desconto. */
+export function applyGeneralPriceAdjustment(
+    baseValue: number,
+    config?: GeneralPriceAdjustmentConfig | null,
+): number {
+    const base = normalizeMoney(baseValue);
+    if (base <= 0) return 0;
+    const adjustment = normalizeMoney(config?.general_price_adjustment_value);
+    const adjusted =
+        config?.general_price_adjustment_mode === "percent"
+            ? base * (1 + adjustment / 100)
+            : base + adjustment;
+    return Math.round(Math.max(0, adjusted) * 100) / 100;
 }
 
 /**
@@ -91,12 +145,12 @@ export function computeLocationScopeTotal(params: {
     location: {
         assembly_mode?: LocationAssemblyMode | string;
         assembly_value?: number;
-    };
+    } & GeneralPriceAdjustmentConfig;
     sections: Array<{
         id: string;
         assembly_mode?: "percent" | "fixed" | "manual";
         assembly_value?: number;
-    }>;
+    } & GeneralPriceAdjustmentConfig>;
     items: Array<ScopePricingItem & { section_id: string }>;
 }): number {
     const locModeRaw = String(params.location.assembly_mode ?? "percent");
@@ -109,6 +163,7 @@ export function computeLocationScopeTotal(params: {
         { mode: LocationAssemblyMode; value: number; hasOwnAssembly: boolean }
     >();
     const sectionIds: string[] = [];
+    const sectionGeneralAdjustment = new Map<string, GeneralPriceAdjustmentConfig>();
     for (const row of params.sections) {
         const sectionId = canonicalTableRecordId("budget_section", row.id);
         sectionIds.push(sectionId);
@@ -118,6 +173,7 @@ export function computeLocationScopeTotal(params: {
             modeRaw === "fixed" || modeRaw === "manual" ? modeRaw : "percent";
         const value = Number(row.assembly_value ?? 0);
         sectionConfig.set(sectionId, { mode, value, hasOwnAssembly });
+        sectionGeneralAdjustment.set(sectionId, row);
     }
 
     const itemsByLocationFallback: ScopePricingItem[] = [];
@@ -170,7 +226,25 @@ export function computeLocationScopeTotal(params: {
         }
     }
 
-    return grandTotal;
+    const equipmentBySection = new Map<string, number>();
+    for (const row of params.items) {
+        const sectionId = canonicalTableRecordId("budget_section", row.section_id);
+        equipmentBySection.set(
+            sectionId,
+            (equipmentBySection.get(sectionId) ?? 0) + computeItemSubtotal(row),
+        );
+    }
+    const rawEquipment = [...equipmentBySection.values()].reduce((sum, value) => sum + value, 0);
+    const afterSectionAdjustments = [...equipmentBySection.entries()].reduce(
+        (sum, [sectionId, equipment]) =>
+            sum + applyGeneralPriceAdjustment(equipment, sectionGeneralAdjustment.get(sectionId)),
+        0,
+    );
+    const adjustedEquipment = applyGeneralPriceAdjustment(
+        afterSectionAdjustments,
+        params.location,
+    );
+    return Math.round((grandTotal - rawEquipment + adjustedEquipment) * 100) / 100;
 }
 
 /** Uma linha de trecho na aba Orçamento (equipamentos vs montagem). */
@@ -197,12 +271,12 @@ export function computeLocationQuoteBreakdown(params: {
     location: {
         assembly_mode?: LocationAssemblyMode | string;
         assembly_value?: number;
-    };
+    } & GeneralPriceAdjustmentConfig;
     sections: Array<{
         id: string;
         assembly_mode?: "percent" | "fixed" | "manual";
         assembly_value?: number;
-    }>;
+    } & GeneralPriceAdjustmentConfig>;
     items: Array<ScopePricingItem & { section_id: string }>;
 }): QuoteLocationCostBreakdown {
     const sectionConfig = new Map<
@@ -232,43 +306,46 @@ export function computeLocationQuoteBreakdown(params: {
             observation_extra_value: row.observation_extra_value,
             assembly_manual_value: row.assembly_manual_value,
         };
-        const secCfg = sectionConfig.get(sectionId);
-        if (secCfg?.hasOwnAssembly) {
-            const sectionItems = itemsBySection.get(sectionId) ?? [];
-            sectionItems.push(item);
-            itemsBySection.set(sectionId, sectionItems);
-        }
+        const sectionItems = itemsBySection.get(sectionId) ?? [];
+        sectionItems.push(item);
+        itemsBySection.set(sectionId, sectionItems);
     }
 
-    const collapsedEquipment = params.items.reduce(
-        (sum, row) => sum + computeItemSubtotal(row),
-        0
-    );
-    const scopeTotal = computeLocationScopeTotal(params);
-    const collapsedAssembly = scopeTotal - collapsedEquipment;
-
     const sectionRows: QuoteSectionCostRow[] = [];
-    let assemblyFromOwnSections = 0;
 
     for (const sec of params.sections) {
         const cfg = sectionConfig.get(sec.id);
         const itemsInSec = params.items.filter((it) => it.section_id === sec.id);
-        const equipment = itemsInSec.reduce((s, it) => s + computeItemSubtotal(it), 0);
+        const equipment = applyGeneralPriceAdjustment(
+            itemsInSec.reduce((s, it) => s + computeItemSubtotal(it), 0),
+            sec,
+        );
 
         if (cfg?.hasOwnAssembly) {
             const pool = itemsBySection.get(sec.id) ?? [];
             const assembly = computeLocationAssemblyTotal(cfg.mode, cfg.value, pool);
-            assemblyFromOwnSections += assembly;
             sectionRows.push({ sectionId: sec.id, equipment, assembly });
         } else {
             sectionRows.push({ sectionId: sec.id, equipment, assembly: 0 });
         }
     }
 
-    const remainingAssembly = Math.max(0, collapsedAssembly - assemblyFromOwnSections);
     const fallbackIdx = sectionRows
         .map((r, idx) => ({ r, idx }))
         .filter(({ r }) => !sectionConfig.get(r.sectionId)?.hasOwnAssembly);
+    const fallbackItems = fallbackIdx.flatMap(
+        ({ r }) => itemsBySection.get(r.sectionId) ?? [],
+    );
+    const locationModeRaw = String(params.location.assembly_mode ?? "percent");
+    const locationMode: LocationAssemblyMode =
+        locationModeRaw === "fixed" || locationModeRaw === "manual"
+            ? locationModeRaw
+            : "percent";
+    const remainingAssembly = computeLocationAssemblyTotal(
+        locationMode,
+        normalizeMoney(params.location.assembly_value),
+        fallbackItems,
+    );
 
     if (remainingAssembly > 0 && fallbackIdx.length > 0) {
         const weights = fallbackIdx.map(({ r }) => Math.max(0, r.equipment));
@@ -301,6 +378,37 @@ export function computeLocationQuoteBreakdown(params: {
             }
         }
     }
+
+    const beforeLocationAdjustment = sectionRows.reduce(
+        (sum, row) => sum + row.equipment,
+        0,
+    );
+    const afterLocationAdjustment = applyGeneralPriceAdjustment(
+        beforeLocationAdjustment,
+        params.location,
+    );
+    if (sectionRows.length > 0 && afterLocationAdjustment !== beforeLocationAdjustment) {
+        const weights = sectionRows.map((row) => Math.max(0, row.equipment));
+        const weightSum = weights.reduce((sum, value) => sum + value, 0);
+        let allocated = 0;
+        for (let index = 0; index < sectionRows.length; index++) {
+            const row = sectionRows[index];
+            const isLast = index === sectionRows.length - 1;
+            const share =
+                weightSum > 0
+                    ? afterLocationAdjustment * (weights[index] / weightSum)
+                    : afterLocationAdjustment / sectionRows.length;
+            const adjusted = isLast
+                ? Math.round((afterLocationAdjustment - allocated) * 100) / 100
+                : Math.round(share * 100) / 100;
+            row.equipment = adjusted;
+            allocated += adjusted;
+        }
+    }
+
+    const collapsedEquipment = sectionRows.reduce((sum, row) => sum + row.equipment, 0);
+    const collapsedAssembly = sectionRows.reduce((sum, row) => sum + row.assembly, 0);
+    const scopeTotal = Math.round((collapsedEquipment + collapsedAssembly) * 100) / 100;
 
     return {
         collapsedEquipment,
@@ -347,6 +455,52 @@ export function applyQuoteCommercialFactor(
     const d = Number.isFinite(discountPercent) ? discountPercent : 0;
     const factor = (1 + m / 100) * (1 - d / 100);
     return Math.round(normalizeMoney(value) * factor * 100) / 100;
+}
+
+export type SectionCostSummary = {
+    equipment: number;
+    assembly: number;
+    total: number;
+};
+
+/**
+ * Resumo exibido no trecho. Equipamentos seguem o subtotal comercial dos itens;
+ * montagem corresponde ao rateio/configuração de montagem atribuído às linhas.
+ */
+export function computeSectionCostSummary(
+    items: ScopePricingItem[],
+    assemblyByItemId: Record<string, number>,
+    markupPercent = 0,
+    discountPercent = 0,
+    generalAdjustment?: GeneralPriceAdjustmentConfig | null,
+    standaloneAssembly = 0,
+    assemblyMarkupPercent = markupPercent,
+    assemblyDiscountPercent = discountPercent,
+): SectionCostSummary {
+    const equipmentRaw = applyGeneralPriceAdjustment(
+        items.reduce((sum, item) => sum + computeItemSubtotal(item), 0),
+        generalAdjustment,
+    );
+    const allocatedAssembly = items.reduce(
+        (sum, item) => sum + (item.id ? normalizeMoney(assemblyByItemId[item.id]) : 0),
+        0,
+    );
+    const assemblyRaw = items.length > 0 ? allocatedAssembly : normalizeMoney(standaloneAssembly);
+    const equipment = applyQuoteCommercialFactor(
+        equipmentRaw,
+        markupPercent,
+        discountPercent,
+    );
+    const assembly = applyQuoteCommercialFactor(
+        assemblyRaw,
+        assemblyMarkupPercent,
+        assemblyDiscountPercent,
+    );
+    return {
+        equipment,
+        assembly,
+        total: Math.round((equipment + assembly) * 100) / 100,
+    };
 }
 
 export function distributeProportional(

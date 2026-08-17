@@ -136,7 +136,7 @@ function ManagePortalUserPanel({
                     {isActive ? (
                         <Badge
                             variant="secondary"
-                            className="shrink-0 bg-green-500/15 text-green-700 border-green-500/30 dark:text-green-400"
+                            className="shrink-0 bg-green-500/15 text-green-700 border-green-500/30"
                         >
                             Ativo
                         </Badge>
@@ -154,7 +154,7 @@ function ManagePortalUserPanel({
 
             <div className="space-y-4">
                 {user.pending_setup && (
-                    <p className="text-sm rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-amber-950 dark:text-amber-50">
+                    <p className="text-sm rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-amber-950">
                         Esta conta ainda não tem senha definida. Informe uma senha
                         abaixo para liberar o acesso ao portal.
                     </p>
@@ -235,7 +235,7 @@ function ManagePortalUserPanel({
                                 variant="outline"
                                 size="sm"
                                 disabled={statusPending}
-                                className="border-green-600/40 text-green-700 hover:bg-green-500/10 dark:text-green-400"
+                                className="border-green-600/40 text-green-700 hover:bg-green-500/10"
                                 onClick={() => submitStatus(true)}
                             >
                                 {statusPending
@@ -328,7 +328,7 @@ function ManagePortalUserPanel({
                             <p className="text-sm text-destructive">{pwError}</p>
                         )}
                         {pwOk && (
-                            <p className="text-sm text-green-600 dark:text-green-400">
+                            <p className="text-sm text-green-600">
                                 Senha atualizada com sucesso.
                             </p>
                         )}

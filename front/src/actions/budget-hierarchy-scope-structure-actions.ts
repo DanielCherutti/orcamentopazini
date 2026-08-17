@@ -12,6 +12,7 @@ import {
     canonicalTableRecordId,
 } from "@/lib/surreal-record-ids";
 import { buildDuplicatedBudgetItemContent, recalculateBudgetTotal } from "@/actions/budget-hierarchy-helpers";
+import { onlyActiveBudgetRecords } from "@/lib/budgets/active-budget-records";
 import type { CostDisplayMode, LocationAssemblyMode, PriceAdjustmentMode } from "@/lib/budgets/scope-pricing";
 import {
     assertBudgetChildInActiveTenant,
@@ -29,6 +30,8 @@ export async function updateLocationAction(
         costs_display_mode?: CostDisplayMode;
         price_adjustment_enabled?: boolean;
         price_adjustment_input_mode?: PriceAdjustmentMode;
+        general_price_adjustment_mode?: PriceAdjustmentMode;
+        general_price_adjustment_value?: number;
         assembly_mode?: LocationAssemblyMode;
         assembly_value?: number;
     }
@@ -45,7 +48,12 @@ export async function updateLocationAction(
             ...patch,
             updated_at: new Date().toISOString(),
         });
-        if (patch.assembly_mode !== undefined || patch.assembly_value !== undefined) {
+        if (
+            patch.assembly_mode !== undefined ||
+            patch.assembly_value !== undefined ||
+            patch.general_price_adjustment_mode !== undefined ||
+            patch.general_price_adjustment_value !== undefined
+        ) {
             await recalculateBudgetTotal(budgetId);
         }
         revalidatePath(budgetRevalidatePath(budgetId));
@@ -84,6 +92,8 @@ export async function addLocationAction(budgetId: string, name: string) {
             costs_display_mode: "section",
             price_adjustment_enabled: false,
             price_adjustment_input_mode: "fixed",
+            general_price_adjustment_mode: "percent",
+            general_price_adjustment_value: 0,
             assembly_mode: "percent",
             assembly_value: 0,
             created_at: new Date().toISOString(),
@@ -120,6 +130,8 @@ export async function updateSectionAction(
         costs_display_mode?: CostDisplayMode;
         price_adjustment_enabled?: boolean;
         price_adjustment_input_mode?: PriceAdjustmentMode;
+        general_price_adjustment_mode?: PriceAdjustmentMode;
+        general_price_adjustment_value?: number;
         assembly_mode?: LocationAssemblyMode;
         assembly_value?: number;
     }
@@ -136,7 +148,12 @@ export async function updateSectionAction(
             ...patch,
             updated_at: new Date().toISOString(),
         });
-        if (patch.assembly_mode !== undefined || patch.assembly_value !== undefined) {
+        if (
+            patch.assembly_mode !== undefined ||
+            patch.assembly_value !== undefined ||
+            patch.general_price_adjustment_mode !== undefined ||
+            patch.general_price_adjustment_value !== undefined
+        ) {
             await recalculateBudgetTotal(budgetId);
         }
         revalidatePath(budgetRevalidatePath(budgetId));
@@ -176,6 +193,8 @@ export async function addSectionAction(locationId: string, budgetId: string, nam
             costs_display_mode: "section",
             price_adjustment_enabled: false,
             price_adjustment_input_mode: "fixed",
+            general_price_adjustment_mode: "percent",
+            general_price_adjustment_value: 0,
             created_at: new Date().toISOString(),
         });
         const created = Array.isArray(raw) ? raw[0] : raw;
@@ -320,7 +339,7 @@ export async function duplicateSectionAction(sectionId: string, budgetId: string
             "SELECT * FROM budget_item WHERE section_id = $secId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC",
             { secId: secRecordId }
         );
-        const items = itemsRes?.[0] || [];
+        const items = onlyActiveBudgetRecords(itemsRes?.[0] || []);
 
         const newSection = await db.create(new Table("budget_section")).content({
             location_id: original.location_id,
@@ -335,6 +354,9 @@ export async function duplicateSectionAction(sectionId: string, budgetId: string
             price_adjustment_enabled: Boolean(original.price_adjustment_enabled),
             price_adjustment_input_mode:
                 original.price_adjustment_input_mode === "percent" ? "percent" : "fixed",
+            general_price_adjustment_mode:
+                original.general_price_adjustment_mode === "fixed" ? "fixed" : "percent",
+            general_price_adjustment_value: Number(original.general_price_adjustment_value ?? 0),
             assembly_mode:
                 original.assembly_mode === "fixed" || original.assembly_mode === "manual"
                     ? original.assembly_mode
@@ -519,6 +541,9 @@ export async function duplicateLocationAction(locationId: string, budgetId: stri
             price_adjustment_enabled: Boolean(original.price_adjustment_enabled),
             price_adjustment_input_mode:
                 original.price_adjustment_input_mode === "percent" ? "percent" : "fixed",
+            general_price_adjustment_mode:
+                original.general_price_adjustment_mode === "fixed" ? "fixed" : "percent",
+            general_price_adjustment_value: Number(original.general_price_adjustment_value ?? 0),
             assembly_mode: original.assembly_mode ?? "percent",
             assembly_value: Number(original.assembly_value ?? 0),
             created_at: new Date().toISOString(),
@@ -527,10 +552,10 @@ export async function duplicateLocationAction(locationId: string, budgetId: stri
         const newLocationId = String(createdLoc.id);
 
         const sectionsRes = await db.query<[Array<Record<string, unknown>>]>(
-            "SELECT * FROM budget_section WHERE location_id = $locId ORDER BY order_index ASC",
+            "SELECT * FROM budget_section WHERE location_id = $locId AND deleted_at IS NONE ORDER BY order_index ASC",
             { locId: locRecordId }
         );
-        const sections = sectionsRes?.[0] || [];
+        const sections = onlyActiveBudgetRecords(sectionsRes?.[0] || []);
 
         for (const sec of sections) {
             const origSecRecordId = requireRecordId("budget_section", String(sec.id));
@@ -549,6 +574,9 @@ export async function duplicateLocationAction(locationId: string, budgetId: stri
                 price_adjustment_enabled: Boolean(sec.price_adjustment_enabled),
                 price_adjustment_input_mode:
                     sec.price_adjustment_input_mode === "percent" ? "percent" : "fixed",
+                general_price_adjustment_mode:
+                    sec.general_price_adjustment_mode === "fixed" ? "fixed" : "percent",
+                general_price_adjustment_value: Number(sec.general_price_adjustment_value ?? 0),
                 assembly_mode:
                     sec.assembly_mode === "fixed" || sec.assembly_mode === "manual"
                         ? sec.assembly_mode
@@ -563,7 +591,7 @@ export async function duplicateLocationAction(locationId: string, budgetId: stri
                 "SELECT * FROM budget_item WHERE section_id = $secId AND deleted_at IS NONE ORDER BY order_index ASC, created_at ASC",
                 { secId: origSecRecordId }
             );
-            const items = itemsRes?.[0] || [];
+            const items = onlyActiveBudgetRecords(itemsRes?.[0] || []);
             for (const item of items) {
                 await db.create(new Table("budget_item")).content({
                     ...buildDuplicatedBudgetItemContent(item as Record<string, unknown>),

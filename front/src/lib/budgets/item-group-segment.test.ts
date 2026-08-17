@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { BudgetItem } from "@/types/budget-types";
-import { buildItemSegments, getBudgetItemGroupSegmentKey } from "./item-group-segment";
+import {
+    buildItemSegments,
+    getBudgetItemGroupSegmentKey,
+    moveItemAfterGroupMembers,
+} from "./item-group-segment";
 
 function item(id: string, extra: Partial<BudgetItem> = {}): BudgetItem {
     return {
@@ -37,4 +41,18 @@ test("keeps items without complete temporary-group metadata standalone", () => {
     assert.equal(getBudgetItemGroupSegmentKey(withoutName), null);
     assert.equal(getBudgetItemGroupSegmentKey(withoutInstance), null);
     assert.equal(buildItemSegments([withoutName, withoutInstance]).length, 2);
+});
+
+test("moves a standalone item to the end of an existing group", () => {
+    assert.deepEqual(
+        moveItemAfterGroupMembers(["outside", "g1", "g2", "tail"], "outside", ["g1", "g2"]),
+        ["g1", "g2", "outside", "tail"],
+    );
+});
+
+test("moves an ungrouped item after its former group without splitting it", () => {
+    assert.deepEqual(
+        moveItemAfterGroupMembers(["g1", "leaving", "g2", "tail"], "leaving", ["g1", "g2"]),
+        ["g1", "g2", "leaving", "tail"],
+    );
 });

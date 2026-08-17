@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -8,12 +8,17 @@ import {
   Heading2,
   Image as ImageIcon,
   LayoutTemplate,
+  ListOrdered,
+  Map as MapIcon,
   Plus,
   ReceiptText,
   Trash2,
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CompositorRichTextEditor } from "@/components/budgets/compositor/compositor-rich-text-editor";
 import { HeaderFooterLayoutEditor } from "@/components/budgets/compositor/header-footer-layout-editor";
@@ -32,6 +37,7 @@ import {
   type ModelTemplateStructure,
 } from "@/lib/model-template-structure";
 import { cn } from "@/lib/utils";
+import { toast } from "@/lib/toast";
 import type { ModeloTipo } from "@/actions/model-actions";
 import {
   migrateHeaderFooterLayoutsForScopeMode,
@@ -156,7 +162,7 @@ function CoverModelEditor({
   };
 
   return (
-    <div className="min-h-[680px] bg-neutral-200/70 p-4 dark:bg-neutral-950/50 lg:p-6">
+    <div className="min-h-[680px] bg-neutral-200/70 p-4 lg:p-6">
       <div className="mx-auto max-w-[980px] overflow-hidden rounded-md border bg-background shadow-sm">
         <CompositorRichTextEditor
           variant="word"
@@ -182,6 +188,7 @@ function BudgetModelEditor({
     () => orderTemplateBlocks(structure.blocks),
     [structure.blocks],
   );
+  const blockDepths = useMemo(() => templateBlockDepths(structure.blocks), [structure.blocks]);
   const [selectedId, setSelectedId] = useState<string | null>(sortedBlocks[0]?.id ?? null);
   const effectiveSelectedId = structure.blocks.some((block) => block.id === selectedId)
     ? selectedId
@@ -200,19 +207,17 @@ function BudgetModelEditor({
     );
   };
 
-  const addBlock = (type: "session" | "text") => {
-    const parent = type === "text" && selected?.type === "session" ? selected.id : null;
+  const addSection = (asSubsection: boolean) => {
+    const parent = asSubsection && selected?.type === "session" ? selected.id : null;
     const siblings = structure.blocks.filter((block) => block.parent_id === parent);
-    const id = createLocalId(type);
+    const id = createLocalId(asSubsection ? "subsecao" : "secao");
     const block: ModelTemplateBlock = {
       id,
       parent_id: parent,
-      type,
-      label: defaultBlockLabel(type),
+      type: "session",
+      label: asSubsection ? "NOVA SUBSEÇÃO" : defaultBlockLabel("session"),
       order_index: siblings.length,
-      props: type === "text"
-        ? { content: "<p>Novo conteúdo</p>" }
-        : { description: "", page_break_before: false },
+      props: { description: "", page_break_before: false },
     };
     updateBlocks([...structure.blocks, block]);
     setSelectedId(id);
@@ -245,6 +250,7 @@ function BudgetModelEditor({
     const targetIndex = currentIndex + direction;
     if (currentIndex < 0 || targetIndex < 0 || targetIndex >= siblings.length) return;
     const target = siblings[targetIndex]!;
+    if (isFixedModelBlock(target.type)) return;
     updateBlocks(
       structure.blocks.map((block) => {
         if (block.id === selected.id) return { ...block, order_index: target.order_index };
@@ -253,16 +259,32 @@ function BudgetModelEditor({
       }),
     );
   };
+  const canMoveSelected = (direction: -1 | 1) => {
+    if (!selected || isFixedModelBlock(selected.type)) return false;
+    const siblings = structure.blocks
+      .filter((block) => block.parent_id === selected.parent_id)
+      .sort((a, b) => a.order_index - b.order_index);
+    const currentIndex = siblings.findIndex((block) => block.id === selected.id);
+    const target = siblings[currentIndex + direction];
+    return Boolean(target && !isFixedModelBlock(target.type));
+  };
 
   return (
     <div className="grid min-h-[720px] lg:grid-cols-[240px_minmax(0,1fr)]">
       <aside className="border-b bg-muted/20 lg:border-b-0 lg:border-r">
         <div className="flex items-center gap-1 border-b p-2">
-          <Button size="sm" variant="ghost" className="h-8 gap-1.5 px-2 text-xs" onClick={() => addBlock("session")}>
+          <Button size="sm" variant="ghost" className="h-8 gap-1.5 px-2 text-xs" onClick={() => addSection(false)}>
             <Plus className="h-3.5 w-3.5" /> Seção
           </Button>
-          <Button size="sm" variant="ghost" className="h-8 gap-1.5 px-2 text-xs" onClick={() => addBlock("text")}>
-            <Plus className="h-3.5 w-3.5" /> Texto
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 gap-1.5 px-2 text-xs"
+            disabled={selected?.type !== "session"}
+            title={selected?.type === "session" ? "Adicionar dentro da seção selecionada" : "Selecione uma seção"}
+            onClick={() => addSection(true)}
+          >
+            <Plus className="h-3.5 w-3.5" /> Subseção
           </Button>
         </div>
         <div className="space-y-1 p-2">
@@ -276,7 +298,7 @@ function BudgetModelEditor({
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-foreground hover:bg-muted",
               )}
-              style={{ paddingLeft: block.parent_id ? 24 : 8 }}
+              style={{ paddingLeft: 8 + (blockDepths.get(block.id) ?? 0) * 16 }}
               onClick={() => setSelectedId(block.id)}
             >
               <BlockIcon type={block.type} />
@@ -293,14 +315,14 @@ function BudgetModelEditor({
               <Input
                 className="h-8 min-w-48 max-w-md text-sm font-medium"
                 value={selected.label}
-                disabled={["cover", "header_footer", "quote"].includes(selected.type)}
+                disabled={["cover", "header_footer", "figures", "toc", "quote"].includes(selected.type)}
                 onChange={(event) => updateBlock(selected.id, { label: event.target.value })}
               />
               <div className="ml-auto flex items-center gap-1">
-                <Button size="icon" variant="ghost" className="h-8 w-8" title="Mover para cima" onClick={() => moveSelected(-1)}>
+                <Button size="icon" variant="ghost" className="h-8 w-8" title="Mover para cima" disabled={!canMoveSelected(-1)} onClick={() => moveSelected(-1)}>
                   <ArrowUp className="h-4 w-4" />
                 </Button>
-                <Button size="icon" variant="ghost" className="h-8 w-8" title="Mover para baixo" onClick={() => moveSelected(1)}>
+                <Button size="icon" variant="ghost" className="h-8 w-8" title="Mover para baixo" disabled={!canMoveSelected(1)} onClick={() => moveSelected(1)}>
                   <ArrowDown className="h-4 w-4" />
                 </Button>
                 {["session", "text"].includes(selected.type) ? (
@@ -335,7 +357,7 @@ function BudgetBlockEditor({
   if (block.type === "cover") {
     const props = { ...DEFAULT_COVER_PROPS, ...block.props } as CoverBlockProps;
     return (
-      <div className="min-h-[650px] bg-neutral-200/70 p-4 dark:bg-neutral-950/50">
+      <div className="min-h-[650px] bg-neutral-200/70 p-4">
         <div className="mx-auto max-w-[900px] overflow-hidden rounded-md border bg-background shadow-sm">
           <CompositorRichTextEditor
             variant="word"
@@ -400,6 +422,10 @@ function BudgetBlockEditor({
             </Tabs>
           ) : null}
         </div>
+        <ModelWatermarkControls
+          props={props}
+          onPatch={(patch) => onPatch(patch as Record<string, unknown>)}
+        />
         <div className="flex items-center gap-2 rounded-md border bg-background p-3">
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             Altura do {band === "header" ? "cabeçalho" : "rodapé"}
@@ -452,6 +478,29 @@ function BudgetBlockEditor({
     );
   }
 
+  if (block.type === "figures" || block.type === "toc" || block.type === "scope") {
+    const isScope = block.type === "scope";
+    return (
+      <div className="grid min-h-[560px] place-items-center p-8">
+        <div className="w-full max-w-2xl rounded-md border bg-muted/15 p-8 text-center">
+          {block.type === "figures" ? (
+            <ImageIcon className="mx-auto h-9 w-9 text-primary" />
+          ) : block.type === "toc" ? (
+            <ListOrdered className="mx-auto h-9 w-9 text-primary" />
+          ) : (
+            <MapIcon className="mx-auto h-9 w-9 text-primary" />
+          )}
+          <h3 className="mt-4 font-semibold">{block.label}</h3>
+          <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+            {isScope
+              ? "As adequações, locais, trechos, fotos e produtos do orçamento serão inseridos nesta posição. Use as setas para definir onde o detalhamento aparecerá."
+              : "Bloco automático gerado a partir da estrutura e das figuras do orçamento."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const field = block.type === "session" ? "description" : "content";
   return (
     <div className="min-h-[560px] p-4 lg:p-6">
@@ -474,9 +523,189 @@ function BudgetBlockEditor({
   );
 }
 
+function ModelWatermarkControls({
+  props,
+  onPatch,
+}: {
+  props: HeaderFooterBlockProps;
+  onPatch: (patch: Partial<HeaderFooterBlockProps>) => void;
+}) {
+  const [scope, setScope] = useState<"cover" | "inner">("cover");
+  const [uploading, setUploading] = useState(false);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const innerInputRef = useRef<HTMLInputElement>(null);
+  const isCover = scope === "cover";
+  const inheritsCover = !isCover && props.inner_use_cover_watermark !== false;
+  const watermarkUrl = isCover
+    ? props.cover_watermark_url ?? ""
+    : inheritsCover
+      ? props.cover_watermark_url ?? ""
+      : props.inner_watermark_url ?? "";
+  const opacity = isCover
+    ? props.cover_watermark_opacity ?? 0.12
+    : inheritsCover
+      ? props.cover_watermark_opacity ?? 0.12
+      : props.inner_watermark_opacity ?? 0.06;
+  const scale = isCover
+    ? props.cover_watermark_scale_pct ?? 100
+    : inheritsCover
+      ? props.cover_watermark_scale_pct ?? 100
+      : props.inner_watermark_scale_pct ?? 100;
+
+  const uploadWatermark = async (file: File) => {
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch("/api/upload/library", {
+        method: "POST",
+        body: formData,
+      });
+      const payload = (await response.json()) as { url?: string; error?: string };
+      if (!response.ok || !payload.url) {
+        toast.error(payload.error || "Falha ao enviar marca d'água");
+        return;
+      }
+      onPatch(
+        isCover
+          ? { cover_watermark_url: payload.url }
+          : { inner_watermark_url: payload.url },
+      );
+      toast.success("Marca d'água adicionada ao modelo.");
+    } catch {
+      toast.error("Erro ao enviar marca d'água");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const inputRef = isCover ? coverInputRef : innerInputRef;
+
+  return (
+    <div className="space-y-3 rounded-md border bg-background p-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Marca d&apos;água do modelo
+          </Label>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Esta configuração será aplicada automaticamente aos orçamentos que usarem o modelo.
+          </p>
+        </div>
+        <Tabs value={scope} onValueChange={(value) => setScope(value as "cover" | "inner")}>
+          <TabsList>
+            <TabsTrigger value="cover">Capa</TabsTrigger>
+            <TabsTrigger value="inner">Páginas internas</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
+      {!isCover ? (
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Checkbox
+            checked={props.inner_use_cover_watermark !== false}
+            onCheckedChange={(checked) => onPatch({ inner_use_cover_watermark: checked === true })}
+          />
+          Usar a mesma marca d&apos;água da capa
+        </label>
+      ) : null}
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <Input
+          value={watermarkUrl}
+          disabled={inheritsCover}
+          placeholder="URL da marca d'água"
+          className="h-8 min-w-0 flex-1 text-xs"
+          onChange={(event) =>
+            onPatch(
+              isCover
+                ? { cover_watermark_url: event.target.value }
+                : { inner_watermark_url: event.target.value },
+            )
+          }
+        />
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/gif,image/webp"
+          className="sr-only"
+          disabled={inheritsCover || uploading}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (file) void uploadWatermark(file);
+          }}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 shrink-0 text-xs"
+          disabled={inheritsCover || uploading}
+          onClick={() => inputRef.current?.click()}
+        >
+          <Upload className="mr-1.5 h-3.5 w-3.5" />
+          {uploading ? "Enviando..." : "Importar"}
+        </Button>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Label className="w-16 text-[11px] text-muted-foreground">Opacidade</Label>
+        <input
+          type="range"
+          min={0}
+          max={0.35}
+          step={0.01}
+          value={opacity}
+          disabled={inheritsCover}
+          className="h-2 flex-1 accent-primary"
+          onChange={(event) => {
+            const value = Number(event.target.value);
+            onPatch(
+              isCover
+                ? { cover_watermark_opacity: value }
+                : { inner_watermark_opacity: value },
+            );
+          }}
+        />
+        <span className="w-12 text-right text-xs tabular-nums text-muted-foreground">
+          {Math.round(opacity * 100)}%
+        </span>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Label className="w-16 text-[11px] text-muted-foreground">Tamanho</Label>
+        <input
+          type="range"
+          min={40}
+          max={220}
+          step={1}
+          value={Math.max(40, Math.min(220, Number(scale) || 100))}
+          disabled={inheritsCover}
+          className="h-2 flex-1 accent-primary"
+          onChange={(event) => {
+            const value = Math.max(40, Math.min(220, Number(event.target.value) || 100));
+            onPatch(
+              isCover
+                ? { cover_watermark_scale_pct: value }
+                : { inner_watermark_scale_pct: value },
+            );
+          }}
+        />
+        <span className="w-14 text-right text-xs tabular-nums text-muted-foreground">
+          {Math.round(Math.max(40, Math.min(220, Number(scale) || 100)))}%
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function BlockIcon({ type }: { type: ModelTemplateBlockType }) {
   if (type === "cover") return <ImageIcon className="h-3.5 w-3.5 shrink-0" />;
   if (type === "header_footer") return <LayoutTemplate className="h-3.5 w-3.5 shrink-0" />;
+  if (type === "figures") return <ImageIcon className="h-3.5 w-3.5 shrink-0" />;
+  if (type === "toc") return <ListOrdered className="h-3.5 w-3.5 shrink-0" />;
+  if (type === "scope") return <MapIcon className="h-3.5 w-3.5 shrink-0" />;
   if (type === "quote") return <ReceiptText className="h-3.5 w-3.5 shrink-0" />;
   if (type === "session") return <Heading2 className="h-3.5 w-3.5 shrink-0" />;
   return <FileText className="h-3.5 w-3.5 shrink-0" />;
@@ -487,6 +716,10 @@ function createLocalId(prefix: string): string {
     return `${prefix}-${crypto.randomUUID()}`;
   }
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function isFixedModelBlock(type: ModelTemplateBlockType): boolean {
+  return ["cover", "header_footer", "figures", "toc"].includes(type);
 }
 
 function orderTemplateBlocks(blocks: ModelTemplateBlock[]): ModelTemplateBlock[] {
@@ -502,4 +735,16 @@ function orderTemplateBlocks(blocks: ModelTemplateBlock[]): ModelTemplateBlock[]
   };
   visit(null);
   return result;
+}
+
+function templateBlockDepths(blocks: ModelTemplateBlock[]): Map<string, number> {
+  const depths = new Map<string, number>();
+  const visit = (parentId: string | null, depth: number) => {
+    for (const block of blocks.filter((candidate) => candidate.parent_id === parentId)) {
+      depths.set(block.id, depth);
+      visit(block.id, depth + 1);
+    }
+  };
+  visit(null, 0);
+  return depths;
 }

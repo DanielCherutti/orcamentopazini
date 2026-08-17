@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import { JSDOM } from "jsdom";
 import { DashboardWelcomeLogo } from "./dashboard-welcome-logo";
 
-test("shows the platform icon when the configured logo fails", async () => {
+test("never overlays the fallback icon on the company logo", async () => {
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
     url: "http://localhost",
   });
@@ -28,6 +28,16 @@ test("shows the platform icon when the configured logo fails", async () => {
 
   const image = document.querySelector("img");
   assert.ok(image);
+  assert.equal(document.querySelector('[data-testid="platform-logo-fallback"]'), null);
+
+  await act(async () => {
+    image.dispatchEvent(new win.Event("load"));
+  });
+
+  const readyLogo = document.querySelector("[data-logo-state]");
+  assert.equal(readyLogo?.getAttribute("data-logo-state"), "ready");
+  assert.equal(document.querySelector('[data-testid="platform-logo-fallback"]'), null);
+
   await act(async () => {
     image.dispatchEvent(new win.Event("error"));
   });

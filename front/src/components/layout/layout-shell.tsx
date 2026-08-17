@@ -21,7 +21,7 @@ export function LayoutShell({
     const { collapsed } = useSidebar();
 
     return (
-        <div className="tenant-app tenant-ops min-h-dvh bg-[#07060d]">
+        <div className="tenant-app tenant-ops min-h-dvh bg-background">
             <Sidebar companyName={companyName} companySubtitle={companySubtitle} />
             <div
                 className="flex min-h-dvh flex-col transition-[padding-left] duration-300 ease-in-out"

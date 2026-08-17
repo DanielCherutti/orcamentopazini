@@ -22,7 +22,7 @@ export function PlatformOrgAccessButton({ variant = "sidebar" }: { variant?: "si
             <form action={exitPlatformToOrgPickerAction}>
                 <button
                     type="submit"
-                    className="inline-flex h-10 items-center gap-2 rounded-lg border border-violet-400/40 bg-violet-500/20 px-4 text-sm font-bold text-violet-100 transition-colors hover:bg-violet-500/35 hover:text-white"
+                    className="inline-flex h-10 items-center gap-2 rounded-lg border border-violet-300 bg-violet-100 px-4 text-sm font-bold text-violet-800 transition-colors hover:bg-violet-200 hover:text-violet-950"
                 >
                     <Building2 className="h-4 w-4" />
                     <span className="hidden sm:inline">Ir para empresa</span>
@@ -35,7 +35,7 @@ export function PlatformOrgAccessButton({ variant = "sidebar" }: { variant?: "si
         <form action={exitPlatformToOrgPickerAction} className="mb-2">
             <button
                 type="submit"
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-sm text-slate-200 transition-colors hover:border-violet-400/30 hover:bg-violet-500/20 hover:text-white"
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-violet-50 px-3 py-2.5 text-sm text-slate-700 transition-colors hover:border-violet-300 hover:bg-violet-100 hover:text-violet-900"
             >
                 <Building2 className="h-4 w-4" />
                 Ir para empresa

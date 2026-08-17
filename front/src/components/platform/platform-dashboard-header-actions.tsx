@@ -13,7 +13,7 @@ export function PlatformDashboardHeaderActions() {
     const { can } = usePlatformPermissions();
 
     const outlineClass =
-        "rounded-lg border-violet-300/30 bg-violet-500/15 text-violet-50 hover:bg-violet-500/25 hover:text-white";
+        "rounded-lg border-violet-300/30 bg-violet-500/15 text-slate-900 hover:bg-violet-500/25 hover:text-white";
 
     return (
         <>

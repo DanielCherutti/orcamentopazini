@@ -20,14 +20,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" suppressHydrationWarning>
+    <html lang="pt-BR" style={{ colorScheme: "light" }}>
       <body
         className="antialiased"
         style={{
           "--font-geist-sans": "Inter, ui-sans-serif, system-ui, sans-serif",
           "--font-geist-mono": "ui-monospace, SFMono-Regular, Menlo, monospace",
         } as React.CSSProperties}
-        suppressHydrationWarning
       >
         {children}
       </body>

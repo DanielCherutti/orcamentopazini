@@ -25,7 +25,7 @@ export function PasswordRequirementsHint({ password, className }: Props) {
                 ? "bg-amber-500/90"
                 : score === 3
                   ? "bg-yellow-500/80"
-                  : "bg-green-600 dark:bg-green-500";
+                  : "bg-green-600";
 
     return (
         <div className={cn("space-y-2", className)}>
@@ -47,7 +47,7 @@ export function PasswordRequirementsHint({ password, className }: Props) {
                         className={cn(
                             "flex items-start gap-2",
                             c.pass
-                                ? "text-green-700 dark:text-green-400"
+                                ? "text-green-700"
                                 : "text-muted-foreground",
                         )}
                     >

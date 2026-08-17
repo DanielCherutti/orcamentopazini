@@ -37,7 +37,6 @@ import {
     deleteItemFromBlockAction,
     reorderItemsInBlockAction,
 } from "@/actions/budget-compositor-block-items-actions";
-import { updateBlockAction } from "@/actions/budget-compositor-block-actions";
 import { useCompositorRuntime } from "./compositor-runtime-context";
 import { listProductGroupsAction, type ProductGroup } from "@/actions/product-group-actions";
 import { deleteBudgetImage } from "@/actions/budget-annotations";
@@ -71,6 +70,8 @@ import { CompositorFiguresBlock } from "./compositor-figures-block";
 import type { ScopeFigureEntry } from "./compositor-figures-utils";
 import { useScopeFigureNumbers } from "@/components/budgets/use-scope-figure-numbers";
 import { parseFigureFrameOrientation } from "@/lib/budgets/figure-frame-utils";
+
+const EMPTY_IMAGES: BudgetImage[] = [];
 
 // ─── Renderers de bloco (modo documento) ──────────────────────────────────────
 
@@ -189,7 +190,7 @@ function LocationRenderer({
         budgetId,
         onRefresh,
     );
-    const images = imagesByBlock[block.id] ?? [];
+    const images = imagesByBlock[block.id] ?? EMPTY_IMAGES;
     const [addPhotoOpen, setAddPhotoOpen] = useState(false);
     const [editingImage, setEditingImage] = useState<BudgetImage | null>(null);
     const locationImageIdsKey = useMemo(
@@ -301,7 +302,7 @@ function SectionRenderer({
         budgetId,
         onRefresh,
     );
-    const images = imagesByBlock[block.id] ?? [];
+    const images = imagesByBlock[block.id] ?? EMPTY_IMAGES;
     const sectionBlockImageIdsKey = useMemo(
         () => [...images].map((i) => i.id).sort().join(","),
         [images],

@@ -151,7 +151,7 @@ export function PortalUsersTable({
                                         ) : (
                                             <Badge
                                                 variant="secondary"
-                                                className="bg-green-500/15 text-green-700 border-green-500/30 dark:text-green-400"
+                                                className="bg-green-500/15 text-green-700 border-green-500/30"
                                             >
                                                 Ativo
                                             </Badge>
@@ -159,7 +159,7 @@ export function PortalUsersTable({
                                         {u.pending_setup && (
                                             <Badge
                                                 variant="outline"
-                                                className="border-amber-500/50 text-amber-800 dark:text-amber-200"
+                                                className="border-amber-500/50 text-amber-800"
                                             >
                                                 Convite pendente
                                             </Badge>

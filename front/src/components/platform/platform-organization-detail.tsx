@@ -211,7 +211,7 @@ export function PlatformOrganizationDetail({
                 <div className="flex flex-wrap items-center gap-3">
                     <PlanBadge plan={organization.license_plan} />
                     {isActive ? (
-                        <Badge className="bg-emerald-500/10 text-emerald-700 ring-1 ring-emerald-500/20 hover:bg-emerald-500/10 dark:text-emerald-400">
+                        <Badge className="bg-emerald-500/10 text-emerald-700 ring-1 ring-emerald-500/20 hover:bg-emerald-500/10">
                             Ativa
                         </Badge>
                     ) : (
@@ -447,7 +447,7 @@ export function PlatformOrganizationDetail({
                             <CardContent className="space-y-6">
                                 <div className="rounded-lg border bg-muted/30 p-4 text-sm">
                                     <p className="font-medium">URL pública</p>
-                                    <p className="mt-1 font-mono text-violet-700 dark:text-violet-300">{publicOrigin}</p>
+                                    <p className="mt-1 font-mono text-violet-700">{publicOrigin}</p>
                                 </div>
                                 <div className="grid gap-4 sm:grid-cols-2">
                                     <div className="space-y-2">

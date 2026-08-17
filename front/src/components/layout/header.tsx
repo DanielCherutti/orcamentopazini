@@ -4,7 +4,6 @@ import { PanelLeft, PanelLeftClose } from "lucide-react";
 import { BudgetEmailNotificationsBell } from "@/components/layout/budget-email-notifications-bell";
 import { PlatformAccessLink } from "@/components/platform/platform-access-link";
 import { initialsFromEmail } from "@/components/platform/platform-utils";
-import { TenantThemeToggle } from "@/components/theme/tenant-theme-toggle";
 import { TenantSwitcher } from "@/components/tenant/tenant-switcher";
 import { useSidebar } from "./sidebar-context";
 
@@ -42,7 +41,6 @@ export function Header({
                 </p>
             </div>
             <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-                <TenantThemeToggle />
                 <PlatformAccessLink />
                 <TenantSwitcher />
                 <BudgetEmailNotificationsBell />

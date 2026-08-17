@@ -20,6 +20,7 @@ import {
 import type { ProductGroup } from "@/actions/product-group-actions";
 import type { BudgetItem } from "@/types/budget-types";
 import { QuantityTextInput } from "@/components/budgets/quantity-text-input";
+import { TruncatedTextTooltip } from "@/components/ui/tooltip";
 import { formatCurrency, NO_GROUP_VALUE } from "./compositor-content-utils";
 
 export function CompositorItemRow({
@@ -123,8 +124,8 @@ export function CompositorItemRow({
                     </button>
                 )}
             </div>
-            <div className="col-span-11 md:col-span-4 font-medium truncate">
-                {name}
+            <div className="col-span-11 min-w-0 font-medium md:col-span-4">
+                <TruncatedTextTooltip text={name} className="block" />
             </div>
             <div className="col-span-4 md:col-span-2 flex items-center justify-center gap-1">
                 <QuantityTextInput

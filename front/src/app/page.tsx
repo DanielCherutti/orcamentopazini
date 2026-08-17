@@ -38,10 +38,10 @@ export default async function LoginPage({
         >
             <div className="space-y-4">
                 {success === "invite" && (
-                    <Alert className="rounded-lg border-emerald-500/25 bg-emerald-500/10 text-emerald-50">
+                    <Alert className="rounded-lg border-emerald-300 bg-emerald-50 text-emerald-800">
                         <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                        <AlertTitle className="text-emerald-50">Senha criada</AlertTitle>
-                        <AlertDescription className="text-emerald-100/90">
+                        <AlertTitle className="text-emerald-900">Senha criada</AlertTitle>
+                        <AlertDescription className="text-emerald-800">
                             Agora você pode entrar com seu e-mail e a nova senha.
                         </AlertDescription>
                     </Alert>
@@ -68,12 +68,12 @@ export default async function LoginPage({
 
                 {error === "pending" && (
                     <Alert
-                        className="rounded-lg border-amber-500/25 bg-amber-500/10 text-amber-50"
+                        className="rounded-lg border-amber-300 bg-amber-50 text-amber-900"
                         role="alert"
                     >
                         <AlertCircle className="h-4 w-4 text-amber-400" />
-                        <AlertTitle className="text-amber-50">Conta ainda não ativada</AlertTitle>
-                        <AlertDescription className="space-y-2 text-amber-100/90">
+                        <AlertTitle className="text-amber-950">Conta ainda não ativada</AlertTitle>
+                        <AlertDescription className="space-y-2 text-amber-900">
                             <p>
                                 Use o link enviado por e-mail para criar sua senha. Se expirou ou não
                                 recebeu, peça um novo convite ao administrador.
@@ -131,15 +131,15 @@ export default async function LoginPage({
                 )}
 
                 {error === "config" && (
-                    <Alert className="rounded-lg border-amber-500/25 bg-amber-500/10 text-amber-50" role="alert">
+                    <Alert className="rounded-lg border-amber-300 bg-amber-50 text-amber-900" role="alert">
                         <AlertCircle className="h-4 w-4 text-amber-400" />
-                        <AlertTitle className="text-amber-50">Configuração necessária</AlertTitle>
-                        <AlertDescription className="space-y-2 text-amber-100/90">
+                        <AlertTitle className="text-amber-950">Configuração necessária</AlertTitle>
+                        <AlertDescription className="space-y-2 text-amber-900">
                             <p>
                                 Defina{" "}
-                                <code className="rounded bg-black/20 px-1 py-0.5 text-xs">JWT_SECRET</code> (mín. 32
+                                <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">JWT_SECRET</code> (mín. 32
                                 caracteres) no{" "}
-                                <code className="rounded bg-black/20 px-1 py-0.5 text-xs">.env</code>.
+                                <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">.env</code>.
                             </p>
                         </AlertDescription>
                     </Alert>

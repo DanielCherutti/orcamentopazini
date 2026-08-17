@@ -44,8 +44,8 @@ function NavItem({
                 className={cn(
                     "platform-ops-rail-link group relative flex h-12 w-12 items-center justify-center rounded-xl transition-all duration-200",
                     active
-                        ? "bg-violet-500/25 text-white shadow-[0_0_28px_-4px_rgba(139,92,246,0.9)] ring-1 ring-violet-400/50"
-                        : "text-violet-300/45 hover:bg-white/[0.06] hover:text-violet-100",
+                        ? "bg-violet-100 text-violet-800 shadow-sm ring-1 ring-violet-300"
+                        : "text-slate-500 hover:bg-violet-50 hover:text-slate-900",
                 )}
             >
                 {active ? (
@@ -65,8 +65,8 @@ function NavItem({
             className={cn(
                 "platform-ops-nav-link relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200",
                 active
-                    ? "bg-violet-500/25 text-white shadow-[0_0_28px_-4px_rgba(139,92,246,0.5)] ring-1 ring-violet-400/40"
-                    : "text-violet-300/70 hover:bg-white/[0.06] hover:text-violet-100",
+                    ? "bg-violet-100 text-violet-800 shadow-sm ring-1 ring-violet-300"
+                    : "text-slate-600 hover:bg-violet-50 hover:text-slate-950",
             )}
         >
             {active ? (
@@ -119,14 +119,13 @@ function PlatformOpsLayout({
     ] as const;
 
     return (
-        <div className="platform-app platform-ops min-h-dvh bg-[#07060d]">
+        <div className="platform-app platform-ops min-h-dvh bg-background">
             <aside
                 className={cn(
                     "platform-ops-rail fixed inset-y-0 left-0 z-30 flex flex-col border-r border-violet-500/15 py-4 transition-[width] duration-300 ease-in-out",
                     collapsed ? "w-20 items-center" : "w-64 items-stretch px-3",
                 )}
                 aria-label="Navegação EngHub"
-                aria-expanded={!collapsed}
             >
                 {collapsed ? (
                     <Link
@@ -148,7 +147,7 @@ function PlatformOpsLayout({
                             <p className="truncate text-[10px] font-black uppercase tracking-[0.22em] text-violet-400/80">
                                 {PRODUCT_NAME}
                             </p>
-                            <p className="truncate text-sm font-bold text-white">Mission Control</p>
+                            <p className="truncate text-sm font-bold text-slate-900">Mission Control</p>
                         </div>
                     </Link>
                 )}
@@ -169,7 +168,7 @@ function PlatformOpsLayout({
                         type="submit"
                         title="Sair"
                         className={cn(
-                            "flex items-center justify-center rounded-xl border border-white/10 text-violet-300/50 transition-colors hover:border-red-400/40 hover:bg-red-500/10 hover:text-red-300",
+                            "flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-700",
                             collapsed ? "h-11 w-11" : "w-full gap-3 px-3 py-2.5 text-sm font-medium",
                         )}
                     >
