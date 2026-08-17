@@ -100,7 +100,7 @@ export function SupportModeBanner({
                     size="sm"
                     disabled={pending}
                     onClick={() => startTransition(() => endImpersonationAndRedirectAction())}
-                    className="shrink-0 border-2 border-amber-950/30 bg-amber-950 font-semibold text-amber-50 shadow-md hover:bg-amber-900 hover:text-white"
+                    className="shrink-0 border-2 border-amber-300 bg-amber-100 font-semibold text-amber-950 shadow-sm hover:bg-amber-200 hover:text-amber-950"
                 >
                     <LogOut className="h-4 w-4" />
                     Sair do modo suporte

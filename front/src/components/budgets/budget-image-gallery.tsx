@@ -142,7 +142,7 @@ export function BudgetImageGallery({
                   cap ? "text-foreground" : "italic text-muted-foreground",
                 )}
               >
-                {cap || "Sem legenda — use Editar para preencher a descrição da figura."}
+                {cap || "Sem legenda (opcional)"}
               </p>
               {w != null && h != null ? (
                 <p className="text-center text-[11px] text-muted-foreground tabular-nums sm:text-left">

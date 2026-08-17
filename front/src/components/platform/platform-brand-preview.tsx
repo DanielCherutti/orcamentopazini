@@ -16,7 +16,7 @@ export function PlatformBrandPreview({
     secondaryColor,
 }: Props) {
     return (
-        <div className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.04]">
+        <div className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm ring-1 ring-black/[0.03]">
             <div
                 className="relative px-5 py-6"
                 style={{

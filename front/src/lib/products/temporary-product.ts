@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isValidNcm } from "@/lib/products/ncm";
+import type { BudgetItem } from "@/types/budget-types";
 
 export const temporaryProductInputSchema = z.object({
     code: z.string().trim().optional(),
@@ -27,6 +28,37 @@ export function resolveAssemblyPrice(input: TemporaryProductInput): number {
         return (input.equipmentPrice * pct) / 100;
     }
     return input.assemblyPrice ?? 0;
+}
+
+/** Reconstrói o formulário a partir do produto carregado e do snapshot da linha do orçamento. */
+export function temporaryProductInputFromBudgetItem(item: BudgetItem): TemporaryProductInput {
+    const row = item as unknown as Record<string, unknown>;
+    const productData =
+        row.product_data && typeof row.product_data === "object"
+            ? (row.product_data as Record<string, unknown>)
+            : typeof row.product_id === "object" && row.product_id !== null
+              ? (row.product_id as Record<string, unknown>)
+              : {};
+    const assemblyPriceType =
+        productData.assemblyPriceType === "percentage" ? "percentage" : "fixed";
+
+    return {
+        code: String(productData.code ?? row.product_code ?? "").trim(),
+        ncm: String(productData.ncm ?? row.product_ncm ?? "").trim(),
+        description: String(
+            productData.description ?? productData.name ?? row.product_name ?? "",
+        ).trim(),
+        unit: String(productData.unit ?? row.product_unit ?? "").trim(),
+        equipmentPrice: Number(productData.equipmentPrice ?? item.unit_price ?? 0),
+        assemblyPrice: Number(productData.assemblyPrice ?? item.labor_cost ?? 0),
+        assemblyPriceType,
+        assemblyPricePercentage:
+            assemblyPriceType === "percentage"
+                ? Number(productData.assemblyPricePercentage ?? 0)
+                : null,
+        detailedDescription: String(productData.detailedDescription ?? ""),
+        imageUrl: String(productData.imageUrl ?? productData.image_url ?? ""),
+    };
 }
 
 export function parseTemporaryProductInput(raw: unknown):

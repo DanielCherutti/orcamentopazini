@@ -87,15 +87,15 @@ export async function createBudgetAction(title: string, code: string, clientId: 
         await addBlockAction({
             budgetId: createdBudget.id!,
             parentId: null,
-            type: "toc",
-            label: "SUMÁRIO",
+            type: "figures",
+            label: "LISTA DE FIGURAS",
             props: {},
         });
         await addBlockAction({
             budgetId: createdBudget.id!,
             parentId: null,
-            type: "figures",
-            label: "LISTA DE FIGURAS",
+            type: "toc",
+            label: "SUMÁRIO",
             props: {},
         });
         await addBlockAction({ budgetId: createdBudget.id!, parentId: null, type: "scope", label: COMPOSITOR_SCOPE_BLOCK_DEFAULT_LABEL });

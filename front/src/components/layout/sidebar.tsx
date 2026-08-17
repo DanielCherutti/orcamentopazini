@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
     BookOpen,
     Boxes,
@@ -61,8 +61,8 @@ function NavItem({
                 className={cn(
                     "tenant-ops-rail-link group relative flex h-12 w-12 items-center justify-center rounded-xl transition-all duration-200",
                     active
-                        ? "bg-[rgb(var(--primary-rgb)/0.25)] text-white shadow-[0_0_28px_-4px_rgb(var(--primary-rgb)/0.9)] ring-1 ring-[rgb(var(--primary-rgb)/0.5)]"
-                        : "text-white/45 hover:bg-white/[0.06] hover:text-white/90",
+                        ? "bg-[rgb(var(--primary-rgb)/0.12)] text-[var(--primary)] shadow-sm ring-1 ring-[rgb(var(--primary-rgb)/0.28)]"
+                        : "text-slate-500 hover:bg-[rgb(var(--primary-rgb)/0.06)] hover:text-slate-900",
                 )}
             >
                 {active ? <span className={activeBar(true)} aria-hidden /> : null}
@@ -78,8 +78,8 @@ function NavItem({
                 "tenant-ops-nav-link relative flex items-center gap-3 rounded-xl py-2.5 text-sm font-semibold transition-all duration-200",
                 subItem ? "pl-9 pr-3" : "px-3",
                 active
-                    ? "bg-[rgb(var(--primary-rgb)/0.25)] text-white shadow-[0_0_28px_-4px_rgb(var(--primary-rgb)/0.5)] ring-1 ring-[rgb(var(--primary-rgb)/0.4)]"
-                    : "text-white/70 hover:bg-white/[0.06] hover:text-white",
+                    ? "bg-[rgb(var(--primary-rgb)/0.12)] text-[var(--primary)] shadow-sm ring-1 ring-[rgb(var(--primary-rgb)/0.28)]"
+                    : "text-slate-600 hover:bg-[rgb(var(--primary-rgb)/0.06)] hover:text-slate-950",
             )}
         >
             {active ? <span className={activeBar(false)} aria-hidden /> : null}
@@ -98,10 +98,7 @@ function NavGroup({
 }) {
     const groupActive = group.items.some((item) => item.active);
     const [open, setOpen] = useState(groupActive);
-
-    useEffect(() => {
-        if (groupActive) setOpen(true);
-    }, [groupActive]);
+    const expanded = groupActive || open;
 
     const Icon = group.icon;
 
@@ -115,8 +112,8 @@ function NavGroup({
                         className={cn(
                             "tenant-ops-rail-link relative flex h-12 w-12 items-center justify-center rounded-xl transition-all duration-200",
                             groupActive
-                                ? "bg-[rgb(var(--primary-rgb)/0.25)] text-white shadow-[0_0_28px_-4px_rgb(var(--primary-rgb)/0.9)] ring-1 ring-[rgb(var(--primary-rgb)/0.5)]"
-                                : "text-white/45 hover:bg-white/[0.06] hover:text-white/90",
+                                ? "bg-[rgb(var(--primary-rgb)/0.12)] text-[var(--primary)] shadow-sm ring-1 ring-[rgb(var(--primary-rgb)/0.28)]"
+                                : "text-slate-500 hover:bg-[rgb(var(--primary-rgb)/0.06)] hover:text-slate-900",
                         )}
                     >
                         {groupActive ? <span className={activeBar(true)} aria-hidden /> : null}
@@ -127,9 +124,9 @@ function NavGroup({
                     side="right"
                     align="start"
                     sideOffset={12}
-                    className="w-52 border-white/10 bg-[#12101a] p-2 text-white"
+                    className="w-52 border-slate-200 bg-white p-2 text-slate-900 shadow-xl"
                 >
-                    <p className="mb-2 px-2 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
+                    <p className="mb-2 px-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
                         {group.label}
                     </p>
                     <div className="flex flex-col gap-0.5">
@@ -140,8 +137,8 @@ function NavGroup({
                                 className={cn(
                                     "flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium transition-colors",
                                     item.active
-                                        ? "bg-[rgb(var(--primary-rgb)/0.3)] text-white"
-                                        : "text-white/75 hover:bg-white/[0.06] hover:text-white",
+                                        ? "bg-[rgb(var(--primary-rgb)/0.12)] text-[var(--primary)]"
+                                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-950",
                                 )}
                             >
                                 <item.icon className="h-4 w-4 shrink-0 opacity-80" />
@@ -158,24 +155,24 @@ function NavGroup({
         <div className="flex flex-col gap-0.5">
             <button
                 type="button"
-                onClick={() => setOpen((v) => !v)}
+                onClick={() => setOpen((value) => !(groupActive || value))}
                 className={cn(
                     "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200",
                     groupActive
-                        ? "bg-[rgb(var(--primary-rgb)/0.12)] text-white"
-                        : "text-white/70 hover:bg-white/[0.06] hover:text-white",
+                        ? "bg-[rgb(var(--primary-rgb)/0.1)] text-[var(--primary)]"
+                        : "text-slate-600 hover:bg-[rgb(var(--primary-rgb)/0.06)] hover:text-slate-950",
                 )}
             >
                 <Icon className="h-5 w-5 shrink-0" />
                 <span className="flex-1 truncate text-left">{group.label}</span>
                 <ChevronDown
                     className={cn(
-                        "h-4 w-4 shrink-0 text-white/45 transition-transform duration-200",
-                        open && "rotate-180",
+                        "h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200",
+                        expanded && "rotate-180",
                     )}
                 />
             </button>
-            {open ? (
+            {expanded ? (
                 <div className="flex flex-col gap-0.5 pb-1">
                     {group.items.map((item) => (
                         <NavItem key={item.href} {...item} collapsed={false} subItem />
@@ -203,7 +200,7 @@ export function Sidebar({
         !pathname.startsWith("/dashboard/products/groups");
     const isGroups = pathname.startsWith("/dashboard/products/groups");
     const isTechnicalEquipment = pathname.startsWith("/dashboard/technical-equipment");
-    const isDatabooks = pathname.startsWith("/dashboard/databooks");
+    const isDatabookDocuments = pathname.startsWith("/dashboard/databook-documents");
     const isDeliveryProjects = pathname.startsWith("/delivery-projects");
     const isBudgets = pathname.startsWith("/budgets");
     const isCustomers = pathname.startsWith("/customers");
@@ -251,6 +248,12 @@ export function Sidebar({
                         active: isBudgets,
                     },
                     {
+                        href: "/dashboard/databook-documents",
+                        icon: BookOpen,
+                        label: "DataBooks",
+                        active: isDatabookDocuments,
+                    },
+                    {
                         href: "/customers",
                         icon: Users,
                         label: "Clientes",
@@ -274,12 +277,6 @@ export function Sidebar({
                         icon: Wrench,
                         label: "Equip. técnicos",
                         active: isTechnicalEquipment,
-                    },
-                    {
-                        href: "/dashboard/databooks",
-                        icon: BookOpen,
-                        label: "Modelos de DataBook",
-                        active: isDatabooks,
                     },
                     {
                         href: "/delivery-projects",
@@ -316,7 +313,7 @@ export function Sidebar({
             isCustomers,
             isModelos,
             isTechnicalEquipment,
-            isDatabooks,
+            isDatabookDocuments,
             isDeliveryProjects,
             isSettings,
             isUsers,
@@ -358,12 +355,12 @@ export function Sidebar({
                         {initial}
                     </div>
                     <div className="min-w-0">
-                        <p className="truncate text-[10px] font-bold uppercase tracking-[0.18em] text-white/50">
+                        <p className="truncate text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
                             Operação
                         </p>
-                        <p className="truncate text-xs font-semibold text-white">{companyName}</p>
+                        <p className="truncate text-xs font-semibold text-slate-900">{companyName}</p>
                         {companySubtitle ? (
-                            <p className="truncate text-[10px] text-white/45">{companySubtitle}</p>
+                            <p className="truncate text-[10px] text-slate-500">{companySubtitle}</p>
                         ) : null}
                     </div>
                 </Link>
@@ -386,7 +383,7 @@ export function Sidebar({
                     type="submit"
                     title="Sair"
                     className={cn(
-                        "flex items-center justify-center rounded-xl border border-white/10 text-white/50 transition-colors hover:border-red-400/40 hover:bg-red-500/10 hover:text-red-300",
+                        "flex items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-700",
                         collapsed ? "h-11 w-11" : "w-full gap-3 px-3 py-2.5 text-sm font-medium",
                     )}
                 >

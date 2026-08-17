@@ -55,13 +55,16 @@ function resolveBudgetIdFromChildRow(
 }
 
 const CHILD_SELECT: Record<BudgetChildTable, string> = {
-    budget_location: "SELECT budget_id FROM budget_location WHERE id = $id LIMIT 1",
+    budget_location:
+        "SELECT budget_id FROM budget_location WHERE id = $id AND deleted_at IS NONE LIMIT 1",
     budget_section:
-        "SELECT location_id.budget_id AS budget_id FROM budget_section WHERE id = $id LIMIT 1",
+        "SELECT location_id.budget_id AS budget_id FROM budget_section WHERE id = $id AND deleted_at IS NONE LIMIT 1",
     budget_item:
-        "SELECT budget_id, section_id, block_id FROM budget_item WHERE id = $id LIMIT 1 FETCH section_id, block_id, section_id.location_id",
-    budget_block: "SELECT budget_id FROM budget_block WHERE id = $id LIMIT 1",
-    budget_image: "SELECT budget_id FROM budget_image WHERE id = $id LIMIT 1",
+        "SELECT budget_id, section_id, block_id FROM budget_item WHERE id = $id AND deleted_at IS NONE LIMIT 1 FETCH section_id, block_id, section_id.location_id",
+    budget_block:
+        "SELECT budget_id FROM budget_block WHERE id = $id AND deleted_at IS NONE LIMIT 1",
+    budget_image:
+        "SELECT budget_id FROM budget_image WHERE id = $id AND deleted_at IS NONE LIMIT 1",
 };
 
 /** Valida que o orçamento pertence ao tenant informado (API routes / scripts). */
@@ -149,6 +152,7 @@ export async function assertSectionsInActiveTenant(
         const res = await database.query<[Array<{ id?: unknown }>]>(
             `SELECT id FROM budget_section
              WHERE id IN $ids
+             AND deleted_at IS NONE
              AND location_id.budget_id.tenant_id = $tenantId`,
             { ids, tenantId: tenantRecordId(tenantId) },
         );

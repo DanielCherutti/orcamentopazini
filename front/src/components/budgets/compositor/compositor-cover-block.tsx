@@ -26,7 +26,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { updateBlockAction } from "@/actions/budget-compositor-block-actions";
 import { getBudgetShellAction } from "@/actions/budget-actions";
 import { getDeliveryCompositorShellAction } from "@/actions/delivery-project-actions";
 import { useCompositorRuntime } from "./compositor-runtime-context";
@@ -81,7 +80,11 @@ export function CompositorCoverBlock({
   const blockPropsStableKey = useMemo(() => JSON.stringify(block.props ?? {}), [block.props]);
 
   useEffect(() => {
-    setProps(mergeCoverDocumentProps(block.props as Record<string, unknown>));
+    setProps(
+      mergeCoverDocumentProps(
+        JSON.parse(blockPropsStableKey) as Record<string, unknown>,
+      ),
+    );
   }, [block.id, blockPropsStableKey]);
 
   useEffect(() => {
@@ -401,16 +404,16 @@ export function CompositorCoverBlock({
       className={cn(
         "flex flex-col overflow-hidden",
         coverExpanded
-          ? "fixed inset-0 z-40 m-0 flex h-[100dvh] max-h-none min-h-0 w-screen rounded-none border-0 bg-neutral-200/95 shadow-none dark:bg-neutral-950"
-          : "max-h-[min(92vh,960px)] min-h-[min(72vh,560px)] rounded-lg border border-neutral-300/90 bg-neutral-200/50 shadow-sm dark:border-neutral-700 dark:bg-neutral-950/40",
+          ? "fixed inset-0 z-40 m-0 flex h-[100dvh] max-h-none min-h-0 w-screen rounded-none border-0 bg-neutral-200/95 shadow-none"
+          : "max-h-[min(92vh,960px)] min-h-[min(72vh,560px)] rounded-lg border border-neutral-300/90 bg-neutral-200/50 shadow-sm",
       )}
     >
-      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-neutral-300/90 bg-gradient-to-b from-neutral-50 to-neutral-200/95 px-3 py-2 dark:border-neutral-700 dark:from-neutral-900 dark:to-neutral-950">
-        <div className="flex items-center gap-2 border-r border-neutral-300 pr-3 dark:border-neutral-600">
-          <Sparkles className="h-4 w-4 shrink-0 text-neutral-600 dark:text-neutral-400" />
+      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-neutral-300/90 bg-gradient-to-b from-neutral-50 to-neutral-200/95 px-3 py-2">
+        <div className="flex items-center gap-2 border-r border-neutral-300 pr-3">
+          <Sparkles className="h-4 w-4 shrink-0 text-neutral-600" />
           <div>
-            <h2 className="text-sm font-semibold tracking-tight text-neutral-900 dark:text-neutral-100">Capa</h2>
-            <p className="hidden text-[10px] text-neutral-500 sm:block dark:text-neutral-400">
+            <h2 className="text-sm font-semibold tracking-tight text-neutral-900">Capa</h2>
+            <p className="hidden text-[10px] text-neutral-500 sm:block">
               {coverExpanded
                 ? "Modo expandido — Esc para sair"
                 : "Edite o texto na folha; mídia e marcas d’água em Ajustes da capa. Faixas do PDF da capa: bloco Cabeçalho e Rodapé → Capa."}
@@ -423,7 +426,7 @@ export function CompositorCoverBlock({
               type="button"
               variant="outline"
               size="sm"
-              className="h-8 border-neutral-300 bg-white text-xs shadow-sm dark:border-neutral-600 dark:bg-neutral-800"
+              className="h-8 border-neutral-300 bg-white text-xs shadow-sm"
               onClick={fillFromCustomer}
               disabled={loadingClient}
             >
@@ -435,7 +438,7 @@ export function CompositorCoverBlock({
             type="button"
             variant={coverExpanded ? "secondary" : "outline"}
             size="sm"
-            className="h-8 border-neutral-300 bg-white text-xs shadow-sm dark:border-neutral-600 dark:bg-neutral-800"
+            className="h-8 border-neutral-300 bg-white text-xs shadow-sm"
             onClick={() => setCoverExpanded((v) => !v)}
             title={coverExpanded ? "Sair da edição em tela cheia (Esc)" : "Expandir capa para editar em tela cheia"}
           >
@@ -455,7 +458,7 @@ export function CompositorCoverBlock({
             type="button"
             variant="outline"
             size="sm"
-            className="h-8 border-neutral-300 bg-white text-xs shadow-sm dark:border-neutral-600 dark:bg-neutral-800"
+            className="h-8 border-neutral-300 bg-white text-xs shadow-sm"
             onClick={() => setCoverSettingsOpen(true)}
           >
             <SlidersHorizontal className="mr-1.5 h-3.5 w-3.5" />
@@ -465,7 +468,7 @@ export function CompositorCoverBlock({
             type="button"
             variant="outline"
             size="sm"
-            className="h-8 border-neutral-300 bg-white text-xs shadow-sm dark:border-neutral-600 dark:bg-neutral-800"
+            className="h-8 border-neutral-300 bg-white text-xs shadow-sm"
             asChild
           >
             <Link href="/settings">
@@ -475,7 +478,7 @@ export function CompositorCoverBlock({
           </Button>
         </div>
         {budget?.code ? (
-          <span className="ml-auto hidden font-mono text-[10px] text-neutral-500 sm:inline dark:text-neutral-400">
+          <span className="ml-auto hidden font-mono text-[10px] text-neutral-500 sm:inline">
             {budget.code}
           </span>
         ) : null}
@@ -516,7 +519,7 @@ export function CompositorCoverBlock({
         }}
       />
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white dark:bg-neutral-950">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
         <CompositorRichTextEditor
           budgetId={budgetId}
           variant="word"

@@ -35,11 +35,11 @@ function BentoHeader({
     return (
         <div className="flex items-start justify-between gap-4 border-b border-violet-500/15 px-5 py-4">
             <div>
-                <h2 className="text-sm font-black uppercase tracking-[0.14em] text-violet-200/90">
+                <h2 className="text-sm font-black uppercase tracking-[0.14em] text-slate-700/90">
                     {title}
                 </h2>
                 {description ? (
-                    <p className="mt-1 text-xs text-violet-200/45">{description}</p>
+                    <p className="mt-1 text-xs text-slate-700/45">{description}</p>
                 ) : null}
             </div>
             {action}
@@ -51,14 +51,14 @@ function AlertIcon({ type }: { type: PlatformDashboardData["alerts"][0]["type"] 
     if (type === "expired") return <XCircle className="h-4 w-4 shrink-0 text-red-400" />;
     if (type === "expiring") return <CalendarClock className="h-4 w-4 shrink-0 text-amber-400" />;
     if (type === "user_limit") return <Users className="h-4 w-4 shrink-0 text-orange-400" />;
-    return <AlertTriangle className="h-4 w-4 shrink-0 text-violet-300/60" />;
+    return <AlertTriangle className="h-4 w-4 shrink-0 text-slate-600/60" />;
 }
 
 function MiniStat({ label, value }: { label: string; value: string | number }) {
     return (
         <div className="rounded-lg border border-violet-500/20 bg-violet-500/10 px-4 py-3">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-violet-300/55">{label}</p>
-            <p className="mt-0.5 text-xl font-black tabular-nums text-white">{value}</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600/55">{label}</p>
+            <p className="mt-0.5 text-xl font-black tabular-nums text-slate-900">{value}</p>
         </div>
     );
 }
@@ -111,7 +111,7 @@ export function PlatformDashboard({
                     />
                     <div className="max-h-[420px] overflow-y-auto p-2">
                         {alerts.length === 0 ? (
-                            <p className="py-12 text-center text-sm text-violet-200/40">
+                            <p className="py-12 text-center text-sm text-slate-700/40">
                                 Nenhum alerta. Operação saudável.
                             </p>
                         ) : (
@@ -124,10 +124,10 @@ export function PlatformDashboard({
                                         >
                                             <AlertIcon type={alert.type} />
                                             <div className="min-w-0 flex-1">
-                                                <p className="truncate text-sm font-semibold text-violet-50">
+                                                <p className="truncate text-sm font-semibold text-slate-900">
                                                     {alert.organization.name}
                                                 </p>
-                                                <p className="text-xs text-violet-200/45">{alert.detail}</p>
+                                                <p className="text-xs text-slate-700/45">{alert.detail}</p>
                                             </div>
                                             <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-violet-400/50" />
                                         </Link>
@@ -142,7 +142,7 @@ export function PlatformDashboard({
                     <BentoHeader title="Top clientes" description="Por usuários" />
                     <div className="max-h-[420px] overflow-y-auto p-3">
                         {topByUsers.length === 0 ? (
-                            <p className="py-12 text-center text-sm text-violet-200/40">
+                            <p className="py-12 text-center text-sm text-slate-700/40">
                                 Nenhuma organização.
                             </p>
                         ) : (
@@ -153,12 +153,12 @@ export function PlatformDashboard({
                                             href={`/platform/organizations/${org.slug}`}
                                             className="flex items-center gap-3 rounded-lg p-2.5 transition-colors hover:bg-violet-500/10"
                                         >
-                                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-violet-500/20 text-xs font-black text-violet-200">
+                                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-violet-500/20 text-xs font-black text-slate-700">
                                                 {i + 1}
                                             </span>
                                             <OrgAvatar name={org.name} size="sm" />
                                             <div className="min-w-0 flex-1">
-                                                <p className="truncate text-sm font-medium text-violet-50">
+                                                <p className="truncate text-sm font-medium text-slate-900">
                                                     {org.name}
                                                 </p>
                                                 <PlanBadge plan={org.license_plan} />
@@ -184,7 +184,7 @@ export function PlatformDashboard({
                                 <p className="text-xs font-bold uppercase tracking-wider text-emerald-300/60">
                                     MRR estimado
                                 </p>
-                                <p className="text-2xl font-black text-white">
+                                <p className="text-2xl font-black text-slate-900">
                                     {formatBrl(summary.estimatedMrrBrl)}
                                 </p>
                             </div>
@@ -204,7 +204,7 @@ export function PlatformDashboard({
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="text-violet-300 hover:bg-violet-500/15 hover:text-white"
+                            className="text-slate-600 hover:bg-violet-100 hover:text-violet-900"
                             asChild
                         >
                             <Link href="/platform/organizations">
@@ -223,18 +223,18 @@ export function PlatformDashboard({
                         >
                             <OrgAvatar name={org.name} />
                             <div className="min-w-0 flex-1">
-                                <p className="truncate font-semibold text-violet-50 group-hover:text-white">
+                                <p className="truncate font-semibold text-slate-900 group-hover:text-violet-900">
                                     {org.name}
                                 </p>
-                                <p className="truncate font-mono text-[11px] text-violet-300/45">{org.slug}</p>
+                                <p className="truncate font-mono text-[11px] text-slate-600/45">{org.slug}</p>
                                 <div className="mt-2 flex flex-wrap gap-2">
                                     <PlanBadge plan={org.license_plan} />
-                                    <span className="text-[11px] text-violet-300/50">
+                                    <span className="text-[11px] text-slate-600/50">
                                         {org.member_count} usuário{org.member_count === 1 ? "" : "s"}
                                     </span>
                                 </div>
                             </div>
-                            <ChevronRight className="h-4 w-4 text-violet-500/40 group-hover:text-violet-300" />
+                            <ChevronRight className="h-4 w-4 text-violet-500/40 group-hover:text-violet-700" />
                         </Link>
                     ))}
                 </div>

@@ -31,7 +31,7 @@ export function PlatformContentCard({
 }
 
 /**
- * Layout de páginas internas — hero full-width + corpo escuro.
+ * Layout de páginas internas — hero full-width + corpo claro.
  */
 export function PlatformPageShell({
     title,
@@ -70,7 +70,7 @@ export function PlatformPageShell({
             {breadcrumbs ? <SetPlatformBreadcrumbs items={breadcrumbs} /> : null}
             <section
                 className={cn(
-                    "platform-ops-page-hero relative overflow-hidden border-b border-white/10",
+                    "platform-ops-page-hero relative overflow-hidden border-b border-slate-200",
                     tone === "emerald" && "platform-ops-page-hero--emerald",
                     tone === "amber" && "platform-ops-page-hero--amber",
                 )}
@@ -80,7 +80,7 @@ export function PlatformPageShell({
                     {backLink ? (
                         <Link
                             href={backLink.href}
-                            className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-violet-200/60 transition-colors hover:text-white"
+                            className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-slate-600 transition-colors hover:text-violet-700"
                         >
                             <ArrowLeft className="h-4 w-4" />
                             {backLink.label}
@@ -95,15 +95,15 @@ export function PlatformPageShell({
                             ) : null}
                             <div className="min-w-0 space-y-3">
                                 {eyebrow ? (
-                                    <p className="text-[11px] font-black uppercase tracking-[0.26em] text-violet-300/70">
+                                    <p className="text-[11px] font-black uppercase tracking-[0.26em] text-slate-600/70">
                                         {eyebrow}
                                     </p>
                                 ) : null}
-                                <h1 className="text-4xl font-black uppercase tracking-tighter text-white sm:text-5xl">
+                                <h1 className="text-4xl font-black uppercase tracking-tighter text-slate-950 sm:text-5xl">
                                     {title}
                                 </h1>
                                 {description ? (
-                                    <p className="max-w-2xl text-base leading-relaxed text-violet-100/55">
+                                    <p className="max-w-2xl text-base leading-relaxed text-slate-800/55">
                                         {description}
                                     </p>
                                 ) : null}

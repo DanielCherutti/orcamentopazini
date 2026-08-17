@@ -40,17 +40,17 @@ export function PlatformRevenueByPlan({
             <div className="border-b border-violet-500/15 px-5 py-5">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                        <h2 className="text-sm font-black uppercase tracking-[0.14em] text-violet-200">
+                        <h2 className="text-sm font-black uppercase tracking-[0.14em] text-slate-700">
                             Receita por plano
                         </h2>
-                        <p className="mt-1 max-w-lg text-xs text-violet-200/45">
+                        <p className="mt-1 max-w-lg text-xs text-slate-700/45">
                             MRR = licenças ativas × preço. Trials não entram na receita.
                         </p>
                     </div>
                     <Button
                         variant="outline"
                         size="sm"
-                        className="shrink-0 border-violet-500/30 bg-violet-500/10 text-violet-100 hover:bg-violet-500/20 hover:text-white"
+                        className="shrink-0 border-violet-500/30 bg-violet-500/10 text-slate-800 hover:bg-violet-500/20 hover:text-white"
                         asChild
                     >
                         <Link href="/platform/licenses">
@@ -85,11 +85,11 @@ export function PlatformRevenueByPlan({
                     </div>
                     <div>
                         <p className="text-[10px] font-bold uppercase tracking-wider text-violet-400/60">Ativas</p>
-                        <p className="text-2xl font-black text-white">{totalActive}</p>
+                        <p className="text-2xl font-black text-slate-900">{totalActive}</p>
                     </div>
                     <div>
                         <p className="text-[10px] font-bold uppercase tracking-wider text-violet-400/60">Cadastradas</p>
-                        <p className="text-2xl font-black text-white">{totalRegistered}</p>
+                        <p className="text-2xl font-black text-slate-900">{totalRegistered}</p>
                     </div>
                 </div>
             </div>
@@ -112,16 +112,16 @@ export function PlatformRevenueByPlan({
                         >
                             <div className="mb-3 flex items-start justify-between gap-2">
                                 <PlanBadge plan={row.plan} />
-                                <span className="text-right text-xs font-semibold text-violet-200/70">
+                                <span className="text-right text-xs font-semibold text-slate-700/70">
                                     {formatBrl(def.monthlyPriceBrl)}/mês
                                 </span>
                             </div>
-                            <p className="text-sm font-semibold text-violet-50">{def.label}</p>
+                            <p className="text-sm font-semibold text-slate-900">{def.label}</p>
                             <p className="mt-3 text-2xl font-black text-emerald-400">{formatBrl(row.mrrBrl)}</p>
                             {!isTrial && row.mrrBrl > 0 ? (
-                                <p className="text-xs text-violet-300/45">{share}% do MRR</p>
+                                <p className="text-xs text-slate-600/45">{share}% do MRR</p>
                             ) : null}
-                            <p className="mt-3 text-xs text-violet-300/50">
+                            <p className="mt-3 text-xs text-slate-600/50">
                                 {row.activeCount} ativa(s) · {row.count} cadastrada(s)
                             </p>
                         </div>
@@ -132,7 +132,7 @@ export function PlatformRevenueByPlan({
             <div className="border-t border-violet-500/10 px-5 py-3">
                 <Link
                     href="/platform/organizations"
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-violet-300 hover:text-white"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-violet-900"
                 >
                     Ver organizações
                     <ArrowRight className="h-3 w-3" />

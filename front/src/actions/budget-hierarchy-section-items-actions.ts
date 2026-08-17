@@ -31,6 +31,8 @@ import {
     type TemporaryProductInput,
 } from "@/lib/products/temporary-product";
 import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
+import { assertEntityInActiveTenant } from "@/lib/tenant-access";
+import { moveItemAfterGroupMembers } from "@/lib/budgets/item-group-segment";
 
 /** Próximo `order_index` na seção (múltiplos de 10, alinhado a `reorderSectionItemsAction`). */
 async function nextSectionItemOrderIndex(
@@ -308,6 +310,15 @@ async function hydrateLightItemsProductData(
                     unit: p.unit,
                     imageUrl: p.imageUrl ?? p.image_url ?? undefined,
                     is_temporary: Boolean(p.is_temporary),
+                    equipmentPrice: Number(p.equipmentPrice ?? 0),
+                    assemblyPrice: Number(p.assemblyPrice ?? 0),
+                    assemblyPriceType:
+                        p.assemblyPriceType === "percentage" ? "percentage" : "fixed",
+                    assemblyPricePercentage:
+                        p.assemblyPricePercentage == null
+                            ? null
+                            : Number(p.assemblyPricePercentage),
+                    detailedDescription: p.detailedDescription ?? "",
                 };
                 byId.set(rawId, normalized);
                 byId.set(clean, normalized);
@@ -808,7 +819,7 @@ export async function addTemporaryProductToSectionAction(
         const created = await db.create(new Table("product")).content({
             code,
             description: productInput.description.trim(),
-            detailedDescription: productInput.detailedDescription?.trim() || undefined,
+            detailedDescription: productInput.detailedDescription?.trim() || null,
             unit: productInput.unit.trim(),
             ncm: productInput.ncm,
             equipmentPrice: productInput.equipmentPrice,
@@ -818,7 +829,7 @@ export async function addTemporaryProductToSectionAction(
                 productInput.assemblyPriceType === "percentage"
                     ? productInput.assemblyPricePercentage ?? null
                     : null,
-            imageUrl: productInput.imageUrl?.trim() || undefined,
+            imageUrl: productInput.imageUrl?.trim() || null,
             group_ids: [],
             attachments: [],
             company_id: DEFAULT_COMPANY_ID,
@@ -868,6 +879,161 @@ export async function addTemporaryProductToSectionAction(
         console.error("addTemporaryProductToSectionAction error:", error);
         if (isTokenExpiredError(error)) resetDb();
         return { success: false, error: "Falha ao adicionar produto temporário" };
+    }
+}
+
+export async function updateTemporaryProductInSectionAction(
+    itemId: string,
+    budgetId: string,
+    rawProduct: TemporaryProductInput,
+    quantity: number,
+) {
+    const auth = await assertWriteActionSession();
+    if (!auth.ok) return { success: false, error: auth.error };
+
+    const parsed = parseTemporaryProductInput(rawProduct);
+    if (!parsed.ok) {
+        return {
+            success: false,
+            error: parsed.error,
+            fieldErrors: parsed.fieldErrors,
+        };
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+        return { success: false, error: "Quantidade inválida" };
+    }
+
+    const gate = await assertBudgetChildInActiveTenant("budget_item", itemId, budgetId);
+    if (!gate.ok) return { success: false, error: gate.error };
+
+    const db = await getDb();
+    try {
+        const itemRecordId = requireRecordId("budget_item", itemId);
+        const selectedItem = await db.select(itemRecordId);
+        const item = (Array.isArray(selectedItem) ? selectedItem[0] : selectedItem) as
+            | Record<string, unknown>
+            | undefined;
+        if (!item || !item.section_id) {
+            return { success: false, error: "Produto temporário não encontrado no trecho" };
+        }
+
+        const productId = extractProductId(item.product_id);
+        if (!productId) return { success: false, error: "Produto temporário inválido" };
+        const productGate = await assertEntityInActiveTenant(
+            "product",
+            productId,
+            "Produto temporário não encontrado",
+        );
+        if (!productGate.ok) return { success: false, error: productGate.error };
+
+        const productRecordId = requireRecordId("product", productId);
+        const selectedProduct = await db.select(productRecordId);
+        const currentProduct = (Array.isArray(selectedProduct)
+            ? selectedProduct[0]
+            : selectedProduct) as Record<string, unknown> | undefined;
+        if (!currentProduct || currentProduct.is_temporary !== true) {
+            return { success: false, error: "Somente produtos temporários podem ser editados" };
+        }
+
+        const tenantId = await requireActiveTenantId();
+        const productInput = parsed.data;
+        const requestedCode = (productInput.code?.trim() || generateTemporaryProductCode()).toUpperCase();
+        const currentCode = String(currentProduct.code ?? "").trim().toUpperCase();
+        const code =
+            requestedCode === currentCode
+                ? currentCode
+                : await ensureUniqueTemporaryProductCode(db, tenantId, requestedCode);
+        const assemblyPrice = resolveAssemblyPrice(productInput);
+        const now = new Date().toISOString();
+        const productContent = {
+            code,
+            description: productInput.description.trim(),
+            detailedDescription: productInput.detailedDescription?.trim() || null,
+            unit: productInput.unit.trim(),
+            ncm: productInput.ncm,
+            equipmentPrice: productInput.equipmentPrice,
+            assemblyPrice,
+            assemblyPriceType: productInput.assemblyPriceType ?? "fixed",
+            assemblyPricePercentage:
+                productInput.assemblyPriceType === "percentage"
+                    ? productInput.assemblyPricePercentage ?? null
+                    : null,
+            imageUrl: productInput.imageUrl?.trim() || null,
+            group_ids: Array.isArray(currentProduct.group_ids) ? currentProduct.group_ids : [],
+            attachments: Array.isArray(currentProduct.attachments)
+                ? currentProduct.attachments
+                : [],
+            company_id: currentProduct.company_id ?? DEFAULT_COMPANY_ID,
+            tenant_id: tenantRecordId(tenantId),
+            is_temporary: true,
+            source_budget_id: requireRecordId("budget", budgetId),
+            updated_at: now,
+        };
+
+        const referenceRows = await db.query<[Array<{ id: unknown }>]>(
+            `SELECT id FROM budget_item
+             WHERE product_id = $productId AND deleted_at IS NONE LIMIT 2`,
+            { productId: productRecordId },
+        );
+        const isShared = (referenceRows[0]?.length ?? 0) > 1;
+        let effectiveProductId = productRecordId;
+        if (isShared) {
+            const created = await db.create(new Table("product")).content({
+                ...productContent,
+                created_at: now,
+            });
+            const clonedProduct = Array.isArray(created) ? created[0] : created;
+            if (!clonedProduct?.id) throw new Error("Falha ao isolar produto temporário");
+            effectiveProductId = requireRecordId("product", String(clonedProduct.id));
+        } else {
+            await db.update(productRecordId).merge(productContent);
+        }
+
+        const total = computeItemSubtotal({
+            quantity,
+            unit_price: productInput.equipmentPrice,
+            labor_cost: assemblyPrice,
+            price_adjustment_mode:
+                item.price_adjustment_mode === "percent" || item.price_adjustment_mode === "fixed"
+                    ? item.price_adjustment_mode
+                    : null,
+            price_adjustment_value: Number(item.price_adjustment_value ?? 0),
+            observation_extra_value: Number(item.observation_extra_value ?? 0),
+        });
+        await db.update(itemRecordId).merge({
+            product_id: effectiveProductId,
+            product_name: productInput.description.trim(),
+            product_code: code,
+            product_ncm: productInput.ncm,
+            product_unit: productInput.unit.trim(),
+            quantity,
+            unit_price: productInput.equipmentPrice,
+            labor_cost: assemblyPrice,
+            total,
+        });
+
+        await recalculateBudgetTotal(budgetId);
+        revalidatePath(budgetRevalidatePath(budgetId));
+        await auditTenantAction({
+            action: "budget_item.update_temporary",
+            resourceType: "budget_item",
+            resourceId: itemId,
+            summary: "Produto temporário do trecho atualizado",
+            metadata: {
+                budgetId,
+                productId: String(effectiveProductId),
+                isolatedCopy: isShared,
+                code,
+            },
+        });
+        return { success: true };
+    } catch (error) {
+        if (error instanceof InvalidRecordIdError) {
+            return { success: false, error: error.message };
+        }
+        console.error("updateTemporaryProductInSectionAction error:", error);
+        if (isTokenExpiredError(error)) resetDb();
+        return { success: false, error: "Falha ao atualizar produto temporário" };
     }
 }
 
@@ -1284,12 +1450,17 @@ export async function updateItemLaborCostAction(itemId: string, budgetId: string
     }
 }
 
-/** Atualiza o grupo de um item na aba Escopo (budget_item com section_id). groupId null = "Sem grupo". */
+export type SectionItemGroupTarget = {
+    groupId: string | null;
+    groupName: string;
+    groupInstanceId?: string | null;
+};
+
+/** Atualiza a associação e reposiciona o item junto ao grupo de destino. `null` = sem grupo. */
 export async function updateItemGroupInSectionAction(
     itemId: string,
     budgetId: string,
-    groupId: string | null,
-    groupName?: string
+    target: SectionItemGroupTarget | null,
 ) {
     const auth = await assertWriteActionSession();
     if (!auth.ok) return { success: false, error: auth.error };
@@ -1300,18 +1471,127 @@ export async function updateItemGroupInSectionAction(
     const db = await getDb();
     try {
         const itemRecordId = requireRecordId("budget_item", itemId);
-        if (groupId === null) {
+        if (target?.groupId) {
+            const groupGate = await assertEntityInActiveTenant(
+                "product_group",
+                target.groupId,
+                "Grupo não encontrado",
+            );
+            if (!groupGate.ok) return { success: false, error: groupGate.error };
+        }
+
+        const itemRows = await db.query<[Array<Record<string, unknown>>]>(
+            `SELECT id, section_id, group_id, group_name, group_instance_id
+             FROM budget_item WHERE id = $item AND deleted_at IS NONE LIMIT 1`,
+            { item: itemRecordId },
+        );
+        const currentItem = itemRows[0]?.[0];
+        const sectionId = recordIdToString(currentItem?.section_id);
+        if (!currentItem || !sectionId) {
+            return { success: false, error: "Produto ou trecho não encontrado." };
+        }
+
+        const sectionRecordId = requireRecordId("budget_section", sectionId);
+        const sectionRows = await db.query<[Array<Record<string, unknown>>]>(
+            `SELECT id, group_id, group_name, group_instance_id
+             FROM budget_item
+             WHERE section_id = $sectionId AND deleted_at IS NONE
+             ORDER BY order_index ASC, created_at ASC`,
+            { sectionId: sectionRecordId },
+        );
+        const rows = sectionRows[0] ?? [];
+        const rowId = (row: Record<string, unknown>) =>
+            canonicalTableRecordId("budget_item", row.id);
+        const groupIdOf = (row: Record<string, unknown>) =>
+            row.group_id ? canonicalTableRecordId("product_group", row.group_id) : null;
+        const instanceOf = (row: Record<string, unknown>) =>
+            String(row.group_instance_id ?? "").trim() || null;
+        const groupNameOf = (row: Record<string, unknown>) =>
+            String(row.group_name ?? "").trim();
+
+        const currentGroupId = groupIdOf(currentItem);
+        const currentInstanceId = instanceOf(currentItem);
+        const currentGroupName = groupNameOf(currentItem);
+        const currentGroupMembers = rows
+            .filter((row) => {
+                if (rowId(row) === canonicalTableRecordId("budget_item", itemId)) return false;
+                if (currentInstanceId) {
+                    return (
+                        instanceOf(row) === currentInstanceId &&
+                        groupIdOf(row) === currentGroupId &&
+                        groupNameOf(row) === currentGroupName
+                    );
+                }
+                return currentGroupId != null && groupIdOf(row) === currentGroupId && !instanceOf(row);
+            })
+            .map(rowId);
+
+        let targetInstanceId = target?.groupInstanceId?.trim() || null;
+        let targetMembers: string[] = [];
+        if (target) {
+            const targetGroupId = target.groupId
+                ? canonicalTableRecordId("product_group", target.groupId)
+                : null;
+            const targetGroupName = target.groupName.trim();
+            if (!targetGroupName || (!targetGroupId && !targetInstanceId)) {
+                return { success: false, error: "Grupo de destino inválido." };
+            }
+            targetMembers = rows
+                .filter((row) => {
+                    if (rowId(row) === canonicalTableRecordId("budget_item", itemId)) return false;
+                    if (targetInstanceId) {
+                        return (
+                            instanceOf(row) === targetInstanceId &&
+                            groupIdOf(row) === targetGroupId &&
+                            groupNameOf(row) === targetGroupName
+                        );
+                    }
+                    return targetGroupId != null && groupIdOf(row) === targetGroupId && !instanceOf(row);
+                })
+                .map(rowId);
+            if (!targetInstanceId && targetMembers.length === 0) {
+                targetInstanceId = crypto.randomUUID();
+            }
+            if (!targetGroupId && targetMembers.length === 0) {
+                return { success: false, error: "Grupo temporário não encontrado neste trecho." };
+            }
+        }
+
+        if (target === null) {
             await db.query(
                 "UPDATE $item SET group_id = NONE, group_name = NONE, group_instance_id = NONE",
                 { item: itemRecordId }
             );
-        } else {
-            const groupRecordId = requireRecordId("product_group", groupId);
+        } else if (target.groupId) {
             await db.update(itemRecordId).merge({
-                group_id: groupRecordId,
-                group_name: groupName ?? "",
+                group_id: requireRecordId("product_group", target.groupId),
+                group_name: target.groupName.trim(),
+                group_instance_id: targetInstanceId,
             });
-            await db.query("UPDATE $item SET group_instance_id = NONE", { item: itemRecordId });
+        } else {
+            await db.query(
+                `UPDATE $item SET
+                    group_id = NONE,
+                    group_name = $groupName,
+                    group_instance_id = $groupInstanceId`,
+                {
+                    item: itemRecordId,
+                    groupName: target.groupName.trim(),
+                    groupInstanceId: targetInstanceId,
+                },
+            );
+        }
+
+        const orderedIds = rows.map(rowId).filter(Boolean);
+        const reorderedIds = moveItemAfterGroupMembers(
+            orderedIds,
+            canonicalTableRecordId("budget_item", itemId),
+            target ? targetMembers : currentGroupMembers,
+        );
+        for (const [index, orderedId] of reorderedIds.entries()) {
+            await db.update(requireRecordId("budget_item", orderedId)).merge({
+                order_index: index * 10,
+            });
         }
         revalidatePath(budgetRevalidatePath(budgetId));
         await auditTenantAction({
@@ -1319,7 +1599,11 @@ export async function updateItemGroupInSectionAction(
             resourceType: "budget_item",
             resourceId: itemId,
             summary: "Grupo do item atualizado no trecho",
-            metadata: { budgetId, groupId },
+            metadata: {
+                budgetId,
+                groupId: target?.groupId ?? null,
+                groupInstanceId: targetInstanceId,
+            },
         });
         return { success: true };
     } catch (error) {

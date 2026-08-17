@@ -39,7 +39,7 @@ export default function NewProductPage() {
     };
 
     return (
-        <div className="max-w-5xl mx-auto p-6 space-y-6">
+        <div className="w-full max-w-none space-y-6 px-4 py-6 md:px-6 xl:px-8">
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold tracking-tight">Novo Produto</h1>
             </div>

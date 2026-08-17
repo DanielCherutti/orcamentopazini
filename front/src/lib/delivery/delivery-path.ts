@@ -54,6 +54,9 @@ export function deliveryProjectUrl(id: string): string {
 }
 
 export function deliveryProjectRevalidatePath(id: string): string {
+    if (id.startsWith("databook:")) {
+        return `/dashboard/databook-documents/${encodeURIComponent(id)}`;
+    }
     return deliveryProjectUrl(id);
 }
 

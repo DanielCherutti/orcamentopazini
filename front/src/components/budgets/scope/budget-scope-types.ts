@@ -9,4 +9,7 @@ export interface BudgetScopeProps {
     quoteMarkupPercent?: number;
     /** Desconto % (aba Orçamento) — reflete na exibição de valores no escopo. */
     quoteDiscountPercent?: number;
+    /** Acréscimo e desconto aplicados exclusivamente à montagem. */
+    quoteAssemblyMarkupPercent?: number;
+    quoteAssemblyDiscountPercent?: number;
 }

@@ -94,7 +94,7 @@ export function PlatformLicensesForm({ initialForm, updatedAt }: Props) {
                             <CardHeader className="border-b border-violet-500/15 bg-violet-500/[0.06]">
                                 <div className="flex items-center justify-between gap-2">
                                     <PlanBadge plan={id} />
-                                    <span className="text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                                    <span className="text-sm font-semibold tabular-nums text-emerald-700">
                                         {formatBrl(Number.isFinite(pricePreview) ? pricePreview : 0)}
                                         /mês
                                     </span>

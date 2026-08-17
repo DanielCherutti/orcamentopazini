@@ -163,7 +163,7 @@ function CollapsibleTextBlock({
         persistDebounced(html);
     };
     return (
-        <div className="overflow-hidden rounded-2xl border border-border/70 bg-card/80 shadow-sm ring-1 ring-black/[0.03] backdrop-blur-sm dark:ring-white/[0.04]">
+        <div className="overflow-hidden rounded-2xl border border-border/70 bg-card/80 shadow-sm ring-1 ring-black/[0.03] backdrop-blur-sm">
             <button
                 type="button"
                 onClick={() => setOpen((o) => !o)}
@@ -423,7 +423,7 @@ export function BudgetQuoteTab({
                                 <div className="flex min-w-[7.5rem] flex-col gap-1">
                                     <Label
                                         htmlFor="quote-vara-eq"
-                                        className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-300/90"
+                                        className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-800"
                                     >
                                         <TrendingUp className="h-3 w-3 shrink-0" />
                                         Vara
@@ -432,7 +432,7 @@ export function BudgetQuoteTab({
                                         <Input
                                             id="quote-vara-eq"
                                             type="number"
-                                            className="h-9 w-[4.25rem] rounded-lg border-emerald-200/80 bg-white/90 text-center text-sm font-semibold tabular-nums dark:border-emerald-800/60 dark:bg-emerald-950/40"
+                                            className="h-9 w-[4.25rem] rounded-lg border-emerald-200/80 bg-white/90 text-center text-sm font-semibold tabular-nums"
                                             disabled={isReadOnly}
                                             value={Number.isFinite(markupEquip) ? markupEquip : 0}
                                             onFocus={(e) => selectPercentInputIfZero(e, markupEquip)}
@@ -445,7 +445,7 @@ export function BudgetQuoteTab({
                                 <div className="flex min-w-[7.5rem] flex-col gap-1">
                                     <Label
                                         htmlFor="quote-desc-eq"
-                                        className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-rose-800 dark:text-rose-300/90"
+                                        className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-rose-800"
                                     >
                                         <TrendingDown className="h-3 w-3 shrink-0" />
                                         Desconto
@@ -454,7 +454,7 @@ export function BudgetQuoteTab({
                                         <Input
                                             id="quote-desc-eq"
                                             type="number"
-                                            className="h-9 w-[4.25rem] rounded-lg border-rose-200/80 bg-white/90 text-center text-sm font-semibold tabular-nums dark:border-rose-800/60 dark:bg-rose-950/40"
+                                            className="h-9 w-[4.25rem] rounded-lg border-rose-200/80 bg-white/90 text-center text-sm font-semibold tabular-nums"
                                             disabled={isReadOnly}
                                             value={Number.isFinite(discountEquip) ? discountEquip : 0}
                                             onFocus={(e) => selectPercentInputIfZero(e, discountEquip)}
@@ -467,15 +467,15 @@ export function BudgetQuoteTab({
                             </div>
                         </div>
 
-                        <div className="flex flex-col gap-2 rounded-2xl border border-violet-200/60 bg-gradient-to-br from-violet-50/80 to-background px-3 py-2.5 shadow-sm dark:border-violet-900/35 dark:from-violet-950/35">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-violet-800 dark:text-violet-300/90">
+                        <div className="flex flex-col gap-2 rounded-2xl border border-violet-200/60 bg-gradient-to-br from-violet-50/80 to-background px-3 py-2.5 shadow-sm">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-violet-800">
                                 Montagem
                             </p>
                             <div className="flex flex-wrap items-end gap-3">
                                 <div className="flex min-w-[7.5rem] flex-col gap-1">
                                     <Label
                                         htmlFor="quote-vara-mo"
-                                        className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-300/90"
+                                        className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-800"
                                     >
                                         <TrendingUp className="h-3 w-3 shrink-0" />
                                         Vara
@@ -484,7 +484,7 @@ export function BudgetQuoteTab({
                                         <Input
                                             id="quote-vara-mo"
                                             type="number"
-                                            className="h-9 w-[4.25rem] rounded-lg border-emerald-200/80 bg-white/90 text-center text-sm font-semibold tabular-nums dark:border-emerald-800/60 dark:bg-emerald-950/40"
+                                            className="h-9 w-[4.25rem] rounded-lg border-emerald-200/80 bg-white/90 text-center text-sm font-semibold tabular-nums"
                                             disabled={isReadOnly}
                                             value={Number.isFinite(markupAsm) ? markupAsm : 0}
                                             onFocus={(e) => selectPercentInputIfZero(e, markupAsm)}
@@ -497,7 +497,7 @@ export function BudgetQuoteTab({
                                 <div className="flex min-w-[7.5rem] flex-col gap-1">
                                     <Label
                                         htmlFor="quote-desc-mo"
-                                        className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-rose-800 dark:text-rose-300/90"
+                                        className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-rose-800"
                                     >
                                         <TrendingDown className="h-3 w-3 shrink-0" />
                                         Desconto
@@ -506,7 +506,7 @@ export function BudgetQuoteTab({
                                         <Input
                                             id="quote-desc-mo"
                                             type="number"
-                                            className="h-9 w-[4.25rem] rounded-lg border-rose-200/80 bg-white/90 text-center text-sm font-semibold tabular-nums dark:border-rose-800/60 dark:bg-rose-950/40"
+                                            className="h-9 w-[4.25rem] rounded-lg border-rose-200/80 bg-white/90 text-center text-sm font-semibold tabular-nums"
                                             disabled={isReadOnly}
                                             value={Number.isFinite(discountAsm) ? discountAsm : 0}
                                             onFocus={(e) => selectPercentInputIfZero(e, discountAsm)}
@@ -544,7 +544,7 @@ export function BudgetQuoteTab({
                         onPersist={(v) => void persist({ quote_note_above: v })}
                     />
 
-                    <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-lg shadow-black/[0.04] ring-1 ring-black/[0.02] dark:bg-card dark:shadow-black/20 dark:ring-white/[0.04]">
+                    <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-lg shadow-black/[0.04] ring-1 ring-black/[0.02]">
                         <div className="relative border-b border-border/50 bg-gradient-to-r from-primary/[0.08] via-primary/[0.04] to-transparent px-5 py-4">
                             <div className="grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
                                 <span className="flex h-9 w-9 items-center justify-center justify-self-center rounded-xl bg-primary/15 text-primary sm:justify-self-start">
@@ -598,30 +598,30 @@ export function BudgetQuoteTab({
                                 </tbody>
                                 {tableRows.length > 0 && (
                                     <tfoot>
-                                        <tr className="border-t-2 border-amber-200/80 bg-gradient-to-r from-amber-100/95 via-amber-50/90 to-amber-100/80 dark:border-amber-800/50 dark:from-amber-950/70 dark:via-amber-950/50 dark:to-amber-950/65">
+                                        <tr className="border-t-2 border-amber-200/80 bg-gradient-to-r from-amber-100/95 via-amber-50/90 to-amber-100/80">
                                             <td
                                                 colSpan={2}
-                                                className="px-4 py-3.5 text-right text-xs font-bold uppercase tracking-wider text-amber-950 dark:text-amber-100"
+                                                className="px-4 py-3.5 text-right text-xs font-bold uppercase tracking-wider text-amber-950"
                                             >
                                                 Totais
                                             </td>
-                                            <td className="px-4 py-3.5 text-right text-sm font-bold tabular-nums text-amber-950 dark:text-amber-50">
+                                            <td className="px-4 py-3.5 text-right text-sm font-bold tabular-nums text-amber-950">
                                                 {formatCurrency(totals.equipment)}
                                             </td>
-                                            <td className="px-4 py-3.5 text-right text-sm font-bold tabular-nums text-amber-950 dark:text-amber-50">
+                                            <td className="px-4 py-3.5 text-right text-sm font-bold tabular-nums text-amber-950">
                                                 {formatCurrency(totals.assembly)}
                                             </td>
                                         </tr>
-                                        <tr className="border-t border-amber-200/50 bg-amber-50/80 dark:border-amber-900/40 dark:bg-amber-950/40">
+                                        <tr className="border-t border-amber-200/50 bg-amber-50/80">
                                             <td colSpan={2} />
-                                            <td className="px-4 py-2 text-right text-[10px] font-bold uppercase tracking-wide text-amber-900/70 dark:text-amber-200/80">
+                                            <td className="px-4 py-2 text-right text-[10px] font-bold uppercase tracking-wide text-amber-900/70">
                                                 Equipamentos
                                             </td>
-                                            <td className="px-4 py-2 text-right text-[10px] font-bold uppercase tracking-wide text-amber-900/70 dark:text-amber-200/80">
+                                            <td className="px-4 py-2 text-right text-[10px] font-bold uppercase tracking-wide text-amber-900/70">
                                                 Montagem
                                             </td>
                                         </tr>
-                                        <tr className="border-t-2 border-primary/25 bg-gradient-to-r from-primary/[0.08] via-primary/[0.04] to-transparent dark:border-primary/30">
+                                        <tr className="border-t-2 border-primary/25 bg-gradient-to-r from-primary/[0.08] via-primary/[0.04] to-transparent">
                                             <td
                                                 colSpan={2}
                                                 className="px-4 py-3.5 text-right text-xs font-bold uppercase tracking-wider text-foreground"

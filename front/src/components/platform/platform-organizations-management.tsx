@@ -121,10 +121,10 @@ export function PlatformOrganizationsManagement({
                 <div className="border-b border-violet-500/15 px-6 py-5">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                            <h2 className="text-sm font-black uppercase tracking-[0.14em] text-violet-200">
+                            <h2 className="text-sm font-black uppercase tracking-[0.14em] text-slate-700">
                                 Empresas clientes
                             </h2>
-                            <p className="mt-1 text-sm text-violet-300/50">
+                            <p className="mt-1 text-sm text-slate-600/50">
                                 Licenças, limites e identidade visual por organização.
                             </p>
                         </div>
@@ -142,11 +142,11 @@ export function PlatformOrganizationsManagement({
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
                                 placeholder="Buscar por nome ou slug…"
-                                className="h-10 rounded-lg border-violet-500/25 bg-violet-500/10 pl-9 text-violet-50 placeholder:text-violet-300/40"
+                                className="h-10 rounded-lg border-violet-500/25 bg-violet-500/10 pl-9 text-slate-900 placeholder:text-slate-600/40"
                             />
                         </div>
                         <Select value={planFilter} onValueChange={setPlanFilter}>
-                            <SelectTrigger className="w-full rounded-lg border-violet-500/25 bg-violet-500/10 text-violet-50 sm:w-40">
+                            <SelectTrigger className="w-full rounded-lg border-violet-500/25 bg-violet-500/10 text-slate-900 sm:w-40">
                                 <SelectValue placeholder="Plano" />
                             </SelectTrigger>
                             <SelectContent>
@@ -164,7 +164,7 @@ export function PlatformOrganizationsManagement({
                             value={statusFilter}
                             onValueChange={(v) => setStatusFilter(v as StatusFilter)}
                         >
-                            <SelectTrigger className="w-full rounded-lg border-violet-500/25 bg-violet-500/10 text-violet-50 sm:w-44">
+                            <SelectTrigger className="w-full rounded-lg border-violet-500/25 bg-violet-500/10 text-slate-900 sm:w-44">
                                 <SelectValue placeholder="Status" />
                             </SelectTrigger>
                             <SelectContent>
@@ -182,13 +182,13 @@ export function PlatformOrganizationsManagement({
                     {filtered.length === 0 ? (
                         <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
                             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/10">
-                                <Building2 className="h-7 w-7 text-violet-600 dark:text-violet-400" />
+                                <Building2 className="h-7 w-7 text-violet-600" />
                             </div>
                             <div>
                                 <p className="font-medium">
                                     {query ? "Nenhum resultado" : "Nenhuma organização ainda"}
                                 </p>
-                                <p className="mt-1 max-w-sm text-sm text-violet-300/50">
+                                <p className="mt-1 max-w-sm text-sm text-slate-600/50">
                                     {query
                                         ? "Tente outro termo ou filtro."
                                         : "Crie a primeira empresa cliente para começar."}
@@ -227,7 +227,7 @@ export function PlatformOrganizationsManagement({
                                                 <OrgAvatar name={org.name} />
                                                 <div className="min-w-0">
                                                     <p className="font-medium truncate">{org.name}</p>
-                                                    <p className="text-xs font-mono text-violet-300/45 truncate">
+                                                    <p className="text-xs font-mono text-slate-600/45 truncate">
                                                         {org.slug}
                                                     </p>
                                                 </div>

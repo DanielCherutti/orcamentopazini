@@ -17,7 +17,7 @@ interface ProductCardProps {
  */
 export function ProductCard({ product }: ProductCardProps) {
     return (
-        <Card className="overflow-hidden rounded-xl border-border/80 shadow-sm ring-1 ring-black/[0.02] dark:ring-white/[0.04]">
+        <Card className="overflow-hidden rounded-xl border-border/80 shadow-sm ring-1 ring-black/[0.02]">
             <CardContent className="space-y-3 p-4 sm:p-5">
                 {/* Header */}
                 <div className="flex items-start justify-between gap-3">

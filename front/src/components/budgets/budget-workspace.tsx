@@ -22,6 +22,7 @@ import {
     isBudgetEditableStatus,
 } from "@/lib/budgets/budget-status";
 import { cn } from "@/lib/utils";
+import { readQuoteSplitPercents } from "@/lib/budgets/scope-pricing";
 import { WorkspaceContext, type ActiveTab } from "./workspace-context";
 
 function BudgetTabLoading() {
@@ -88,26 +89,26 @@ export function BudgetWorkspace({
     const [hasChanges, setHasChanges] = useState(false);
     const [refreshCounter, setRefreshCounter] = useState(0);
     const [liveQuoteTotal, setLiveQuoteTotal] = useState<number | null>(null);
+    const quotePercents = readQuoteSplitPercents(budget as unknown as Record<string, unknown>);
     const [environmentsExpanded, setEnvironmentsExpanded] = useState(false);
     const searchParams = useSearchParams();
-    const [activeTab, setActiveTab] = useState<ActiveTab>("budget");
+    const [activeTab, setActiveTab] = useState<ActiveTab>(() =>
+        searchParams.get("tab") === "email" && canUseBudgetEmail(initialBudget.status)
+            ? "email"
+            : "budget",
+    );
     const [scopeMounted, setScopeMounted] = useState(false);
     const repo = useBudgetsRepository();
 
-    useEffect(() => {
-        if (activeTab === "scope") setScopeMounted(true);
-    }, [activeTab]);
-
-    useEffect(() => {
-        const tab = searchParams.get("tab");
-        if (tab === "email" && canUseBudgetEmail(budget.status)) {
-            setActiveTab("email");
-        }
-    }, [searchParams, budget.status]);
+    const handleTabChange = useCallback((tab: ActiveTab) => {
+        if (tab === "scope") setScopeMounted(true);
+        setActiveTab(tab);
+    }, []);
 
     const toggleEnvironmentsExpanded = () => setEnvironmentsExpanded((prev) => !prev);
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- sincroniza a revalidação externa do orçamento
         setBudget(initialBudget);
         // Mantém o total comercial ao revalidar: a aba Orçamento pode ainda não ter reenviado o live.
         setLiveQuoteTotal((prev) => {
@@ -130,6 +131,7 @@ export function BudgetWorkspace({
 
     useEffect(() => {
         if (activeTab === "email" && !canUseBudgetEmail(budget.status)) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- revoga uma aba que deixou de ser permitida
             setActiveTab("budget");
         }
     }, [activeTab, budget.status]);
@@ -180,7 +182,7 @@ export function BudgetWorkspace({
     );
 
     return (
-        <WorkspaceContext.Provider value={{ activeTab, setActiveTab }}>
+        <WorkspaceContext.Provider value={{ activeTab, setActiveTab: handleTabChange }}>
             <EnvironmentsContext.Provider value={{ environmentsExpanded, toggleEnvironmentsExpanded }}>
                 <div className="flex flex-col fixed inset-x-0 bottom-0 top-[var(--support-banner-height,0px)] z-40 bg-background animate-in fade-in-0 duration-200 budget-ops-panel">
                     <BudgetWorkspaceFocusMode />
@@ -193,7 +195,7 @@ export function BudgetWorkspace({
                         onOpenPreview={() => window.open(pdfUrl, "_blank")}
                         onBudgetRefresh={handleRefresh}
                         activeTab={activeTab}
-                        onTabChange={setActiveTab}
+                        onTabChange={handleTabChange}
                         tabs={TABS}
                     />
 
@@ -246,6 +248,10 @@ export function BudgetWorkspace({
                                             key={budgetId}
                                             budgetId={budgetId}
                                             isReadOnly={isReadOnly}
+                                            quoteMarkupPercent={quotePercents.markupEquip}
+                                            quoteDiscountPercent={quotePercents.discountEquip}
+                                            quoteAssemblyMarkupPercent={quotePercents.markupAsm}
+                                            quoteAssemblyDiscountPercent={quotePercents.discountAsm}
                                         />
                                     </div>
                                 )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, type MouseEvent } from "react";
+import { useState, type MouseEvent } from "react";
 import { BudgetLocation } from "@/types/budget-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,12 +49,6 @@ export function LocationSidebar({
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
     const [addingForLocationId, setAddingForLocationId] = useState<string | null>(null);
     const [newSectionName, setNewSectionName] = useState("");
-
-    useEffect(() => {
-        if (selectedLocationId) {
-            setExpandedIds((prev) => new Set(prev).add(selectedLocationId));
-        }
-    }, [selectedLocationId]);
 
     const toggleExpand = (locId: string) => {
         setExpandedIds((prev) => {
@@ -120,7 +114,7 @@ export function LocationSidebar({
                 <nav className="p-2 space-y-2">
                     {locations.map((location, idx) => {
                         const locId = location.id as string;
-                        const expanded = expandedIds.has(locId);
+                        const expanded = selectedLocationId === locId || expandedIds.has(locId);
                         const isLocationOnlySelected =
                             selectedLocationId === locId && selectedSectionId === null;
                         const sections = location.sections || [];
@@ -130,7 +124,7 @@ export function LocationSidebar({
                         return (
                             <div
                                 key={locId}
-                                className="rounded-lg border border-border/80 bg-background/60 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.04]"
+                                className="rounded-lg border border-border/80 bg-background/60 shadow-sm ring-1 ring-black/[0.03]"
                             >
                                 <div
                                     className={cn(

@@ -59,9 +59,6 @@ import { cn } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 import { useConfirmDialog } from "@/components/providers/confirm-dialog-provider";
 import type { ScopeLocation, ScopeSection } from "@/actions/budget-scope-actions";
-import {
-    applyQuoteCommercialFactor,
-} from "@/lib/budgets/scope-pricing";
 import { formatCurrency } from "./budget-scope-utils";
 import {
     addLocationAction,
@@ -168,7 +165,7 @@ function ScopeSidebarDragOverlay({
         const idx = localLocations.findIndex((l) => l.id === locId) + 1;
         if (!loc) return null;
         return (
-            <div className="w-[min(100%,17.5rem)] rounded-lg border border-border/80 bg-background shadow-lg ring-1 ring-black/[0.06] dark:ring-white/[0.08]">
+            <div className="w-[min(100%,17.5rem)] rounded-lg border border-border/80 bg-background shadow-lg ring-1 ring-black/[0.06]">
                 <div className="flex items-center gap-1.5 px-2 py-2">
                     <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" />
                     <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
@@ -193,7 +190,7 @@ function ScopeSidebarDragOverlay({
             if (!sec) continue;
             const si = l.sections.findIndex((s) => s.id === secId) + 1;
             return (
-                <div className="ml-1 w-[min(100%,16.5rem)] rounded-md border border-border/80 bg-background py-1.5 pl-2 pr-1 shadow-md ring-1 ring-black/[0.05] dark:ring-white/[0.06]">
+                <div className="ml-1 w-[min(100%,16.5rem)] rounded-md border border-border/80 bg-background py-1.5 pl-2 pr-1 shadow-md ring-1 ring-black/[0.05]">
                     <div className="flex items-center gap-1">
                         <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         <Layers className="h-3.5 w-3.5 shrink-0 text-primary/50" />
@@ -217,8 +214,6 @@ interface ScopeSidebarProps {
     locations: ScopeLocation[];
     locationTotalsById: Record<string, number>;
     locationTotalsLoading: boolean;
-    quoteMarkupPercent?: number;
-    quoteDiscountPercent?: number;
     selected: Selection | null;
     onSelect: (sel: Selection) => void;
     onRefresh: () => void;
@@ -233,8 +228,6 @@ export function ScopeSidebar({
     locations,
     locationTotalsById,
     locationTotalsLoading,
-    quoteMarkupPercent = 0,
-    quoteDiscountPercent = 0,
     selected,
     onSelect,
     onRefresh,
@@ -725,8 +718,6 @@ export function ScopeSidebar({
                                     budgetId={budgetId}
                                     locationTotal={locationTotalsById[loc.id]}
                                     locationTotalsLoading={locationTotalsLoading}
-                                    quoteMarkupPercent={quoteMarkupPercent}
-                                    quoteDiscountPercent={quoteDiscountPercent}
                                     selected={selected}
                                     expanded={expandedLocations.has(loc.id)}
                                     onToggleExpand={() => toggleExpanded(loc.id)}
@@ -1002,8 +993,6 @@ interface LocationNodeProps {
     budgetId: string;
     locationTotal?: number;
     locationTotalsLoading: boolean;
-    quoteMarkupPercent: number;
-    quoteDiscountPercent: number;
     selected: Selection | null;
     expanded: boolean;
     onToggleExpand: () => void;
@@ -1022,8 +1011,6 @@ function LocationNode({
     budgetId,
     locationTotal,
     locationTotalsLoading,
-    quoteMarkupPercent,
-    quoteDiscountPercent,
     selected,
     expanded,
     onToggleExpand,
@@ -1120,7 +1107,7 @@ function LocationNode({
 
     return (
         <>
-        <div className="rounded-lg border border-border/80 bg-background/60 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.04]">
+        <div className="rounded-lg border border-border/80 bg-background/60 shadow-sm ring-1 ring-black/[0.03]">
             <div ref={setDroppableNodeRef} className="flex flex-col">
             <div
                 ref={setDraggableNodeRef}
@@ -1282,13 +1269,7 @@ function LocationNode({
                             <span className="text-xs font-semibold tabular-nums text-foreground">
                                 {displayLocationLoading
                                     ? "…"
-                                    : formatCurrency(
-                                          applyQuoteCommercialFactor(
-                                              displayLocationTotal,
-                                              quoteMarkupPercent,
-                                              quoteDiscountPercent
-                                          )
-                                      )}
+                                    : formatCurrency(displayLocationTotal)}
                             </span>
                         </div>
                         </div>

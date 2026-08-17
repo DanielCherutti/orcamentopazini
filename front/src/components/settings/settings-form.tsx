@@ -7,7 +7,6 @@ import {
     testImapConnectionAction,
     updateProposalSettingsAction,
 } from "@/actions/settings-actions";
-import { TenantAppearanceSettings } from "@/components/settings/tenant-appearance-settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -87,8 +86,6 @@ export function SettingsForm({ initialSettings }: { initialSettings: ProposalSet
                     Salvar Alterações
                 </Button>
             </div>
-
-            <TenantAppearanceSettings />
 
             {/* Dados usados pelo PDF; liga/desliga e layout ficam no compositor. */}
             <Card>

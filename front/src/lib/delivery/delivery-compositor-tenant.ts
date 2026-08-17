@@ -11,8 +11,10 @@ export async function assertDeliveryProjectInActiveTenant(
     projectId: string,
     db?: Surreal,
 ): Promise<DeliveryProjectTenantGate> {
+    const isDatabook = recordIdToString(projectId).startsWith("databook:");
+    const table = isDatabook ? "databook" : "delivery_project";
     const gate = await assertEntityInActiveTenant(
-        "delivery_project",
+        table,
         projectId,
         "Projeto não encontrado",
         db,
@@ -21,7 +23,7 @@ export async function assertDeliveryProjectInActiveTenant(
     try {
         return {
             ok: true,
-            projectRecordId: requireRecordId("delivery_project", projectId),
+            projectRecordId: requireRecordId(table, projectId),
         };
     } catch (e) {
         if (e instanceof InvalidRecordIdError) {

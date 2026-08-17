@@ -45,7 +45,7 @@ interface BudgetPhotoAnnotatorDialogProps {
     initialAnnotations?: ImageAnnotation[];
     /** Zoom/pan salvos no registro da imagem — restaurados ao abrir o anotador. */
     initialEditorViewport?: AnnotatorViewportState | null;
-    /** Escopo (local/trecho): legenda obrigatória para a lista de figuras do documento */
+    /** Escopo (local/trecho): legenda opcional exibida abaixo da figura. */
     initialCaption?: string | null;
     /** Formato do quadro salvo (galeria / guia no editor). */
     initialFigureFrameOrientation?: FigureFrameOrientation | null;
@@ -77,8 +77,6 @@ export function BudgetPhotoAnnotatorDialog({
         : setInternalOpen;
 
     // ---------- estado do modo CRIAÇÃO ----------
-    /** data URL gerada pelo FileReader para preview local */
-    const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
     /** Arquivo original selecionado pelo usuário (só existe no modo criação) */
     const [originalFile, setOriginalFile] = useState<File | null>(null);
     /** Dimensões da imagem selecionada pelo usuário */
@@ -164,7 +162,6 @@ export function BudgetPhotoAnnotatorDialog({
     // ── Limpar ao fechar ────────────────────────────────────────────────────
     const clearState = () => {
         setTimeout(() => {
-            setPreviewDataUrl(null);
             setOriginalFile(null);
             setCreatedImageDoc(null);
             setActiveImageUrl(null);
@@ -196,7 +193,6 @@ export function BudgetPhotoAnnotatorDialog({
             img.onload = () => {
                 setOriginalDimensions({ width: img.width, height: img.height });
                 setOriginalFile(file);
-                setPreviewDataUrl(dataUrl);
                 setActiveImageUrl(dataUrl);
                 setSessionAnnotations([]);
                 setAnnotatorKey((k) => k + 1);
@@ -293,14 +289,6 @@ export function BudgetPhotoAnnotatorDialog({
         isAutoSave = false,
         editorViewport?: AnnotatorViewportState
     ) => {
-        if (isAutoSave && requiresCaption && !figureCaption.trim()) {
-            return;
-        }
-        if (requiresCaption && !figureCaption.trim()) {
-            toast.error('Preencha a descrição da figura (lista de figuras no documento).');
-            return;
-        }
-
         setIsSaving(true);
         const activeImageId = imageId || createdImageDoc?.id;
         try {
@@ -390,7 +378,6 @@ export function BudgetPhotoAnnotatorDialog({
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => {
-                                        setPreviewDataUrl(null);
                                         setOriginalFile(null);
                                         setActiveImageUrl(null);
                                         setSessionAnnotations([]);
@@ -408,7 +395,7 @@ export function BudgetPhotoAnnotatorDialog({
                 {requiresCaption && activeImageUrl ? (
                     <div className="shrink-0 space-y-1.5 border-b px-4 py-2">
                         <Label htmlFor={captionFieldId} className="text-xs font-medium">
-                            Descrição da figura <span className="text-destructive">*</span>
+                            Legenda da figura <span className="font-normal text-muted-foreground">(opcional)</span>
                         </Label>
                         <Input
                             id={captionFieldId}
@@ -422,7 +409,7 @@ export function BudgetPhotoAnnotatorDialog({
                             autoComplete="off"
                         />
                         <p className="text-[10px] text-muted-foreground">
-                            Aparece na Lista de figuras do compositor (obrigatório em Adequações).
+                            Quando preenchida, aparece abaixo da imagem e na Lista de figuras.
                         </p>
                     </div>
                 ) : null}

@@ -58,7 +58,7 @@ function HighlightRow({ item }: { item: LoginHighlight }) {
                     </time>
                 ) : null}
             </div>
-            <p className="mt-1 text-sm font-medium leading-snug text-white/90">{item.title}</p>
+            <p className="mt-1 text-sm font-medium leading-snug text-slate-800">{item.title}</p>
             {item.description ? (
                 <p className="auth-muted mt-0.5 text-xs leading-relaxed">{item.description}</p>
             ) : null}
@@ -72,7 +72,7 @@ export function LoginHighlightsCard({ className }: { className?: string }) {
     return (
         <aside className={cn("flex h-full flex-col", className)} aria-labelledby="login-highlights-heading">
             <div className="mb-4 space-y-1">
-                <h2 id="login-highlights-heading" className="text-sm font-semibold text-white/90">
+                <h2 id="login-highlights-heading" className="text-sm font-semibold text-slate-800">
                     {LOGIN_HIGHLIGHTS_TITLE}
                 </h2>
                 <p className="auth-muted text-xs leading-relaxed">{LOGIN_HIGHLIGHTS_SUBTITLE}</p>

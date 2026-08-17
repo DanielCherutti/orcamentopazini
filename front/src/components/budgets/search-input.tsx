@@ -26,7 +26,7 @@ export function SearchInput() {
             <Input
                 type="search"
                 placeholder="Buscar Orçamentos..."
-                className="h-11 rounded-xl border-black/10 bg-white pl-9 shadow-sm dark:border-white/10 dark:bg-white/[0.04]"
+                className="h-11 rounded-xl border-black/10 bg-white pl-9 shadow-sm"
                 onChange={(e) => handleSearch(e.target.value)}
                 defaultValue={searchParams.get("query")?.toString()}
             />

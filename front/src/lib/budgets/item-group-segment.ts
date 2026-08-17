@@ -43,3 +43,25 @@ export function buildItemSegments(items: BudgetItem[]): ItemSegment[] {
     }
     return segments;
 }
+
+/** Mantém o item movido junto ao grupo de destino (ou após o grupo do qual saiu). */
+export function moveItemAfterGroupMembers(
+    orderedItemIds: string[],
+    itemId: string,
+    groupMemberIds: string[]
+): string[] {
+    const withoutItem = orderedItemIds.filter((id) => id !== itemId);
+    const members = new Set(groupMemberIds.filter((id) => id !== itemId));
+    let lastMemberIndex = -1;
+    for (let index = 0; index < withoutItem.length; index++) {
+        if (members.has(withoutItem[index])) lastMemberIndex = index;
+    }
+    if (lastMemberIndex === -1) {
+        const originalIndex = orderedItemIds.indexOf(itemId);
+        const safeIndex = Math.min(Math.max(originalIndex, 0), withoutItem.length);
+        withoutItem.splice(safeIndex, 0, itemId);
+        return withoutItem;
+    }
+    withoutItem.splice(lastMemberIndex + 1, 0, itemId);
+    return withoutItem;
+}

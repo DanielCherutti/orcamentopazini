@@ -7,6 +7,7 @@ import { createTemporaryGroupInSectionAction } from "@/actions/budget-hierarchy-
 import type { BudgetItem } from "@/types/budget-types";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { TruncatedTextTooltip } from "@/components/ui/tooltip";
 import {
     Dialog,
     DialogContent,
@@ -177,7 +178,10 @@ export function AddTemporaryGroupScopeDialog({
                                                 disabled={loading}
                                                 onCheckedChange={(checked) => toggle(item.id, checked === true)}
                                             />
-                                            <span className="min-w-0 flex-1 truncate text-sm">{itemLabel(item)}</span>
+                                            <TruncatedTextTooltip
+                                                text={itemLabel(item)}
+                                                className="flex-1 text-sm"
+                                            />
                                             <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                                                 Qtd. {Number(item.quantity) || 1}
                                             </span>

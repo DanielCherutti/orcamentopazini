@@ -25,6 +25,7 @@ const tipoLabels: Record<ModeloTipo, string> = {
   rodape: "Rodapé",
   capa: "Capa",
   orcamento_completo: "Orçamento",
+  databook_completo: "DataBook",
 };
 
 interface ModelEditorClientProps {

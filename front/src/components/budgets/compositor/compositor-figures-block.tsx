@@ -37,7 +37,7 @@ export function CompositorFiguresBlock({ block }: { block: BudgetBlock; isReadOn
 
   return (
     <div
-      className="overflow-hidden rounded-lg border border-neutral-300/80 bg-white shadow-sm dark:border-neutral-700 dark:bg-neutral-950"
+      className="overflow-hidden rounded-lg border border-neutral-300/80 bg-white shadow-sm"
       data-compositor-block={block.id}
     >
       <div className="relative min-h-[280px] px-6 py-5 sm:px-10 sm:py-7">
@@ -51,8 +51,8 @@ export function CompositorFiguresBlock({ block }: { block: BudgetBlock; isReadOn
           />
         ) : null}
 
-        <div className="relative z-[1] space-y-5 text-neutral-900 dark:text-neutral-100">
-          <header className="flex flex-col gap-3 border-b border-neutral-200 pb-4 sm:flex-row sm:items-start sm:justify-between dark:border-neutral-700">
+        <div className="relative z-[1] space-y-5 text-neutral-900">
+          <header className="flex flex-col gap-3 border-b border-neutral-200 pb-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex min-w-0 items-center gap-3">
               {settings?.company_logo_url ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
@@ -67,10 +67,10 @@ export function CompositorFiguresBlock({ block }: { block: BudgetBlock; isReadOn
                 </span>
               )}
             </div>
-            <div className="text-[10px] leading-relaxed text-neutral-500 sm:text-right sm:text-[11px] dark:text-neutral-400">
+            <div className="text-[10px] leading-relaxed text-neutral-500 sm:text-right sm:text-[11px]">
               {settings?.app_public_url ? (
                 <p className="break-all">
-                  <span className="font-medium text-neutral-600 dark:text-neutral-300">Site: </span>
+                  <span className="font-medium text-neutral-600">Site: </span>
                   {settings.app_public_url}
                 </p>
               ) : null}
@@ -78,17 +78,17 @@ export function CompositorFiguresBlock({ block }: { block: BudgetBlock; isReadOn
           </header>
 
           <div>
-            <h2 className="font-serif text-lg font-semibold tracking-tight text-blue-800 dark:text-blue-400 sm:text-xl">
+            <h2 className="font-serif text-lg font-semibold tracking-tight text-blue-800 sm:text-xl">
               Lista de Figuras
             </h2>
-            <p className="mt-1 text-[10px] text-neutral-500 dark:text-neutral-400">
-              Lista automática das fotos de Adequações (locais e trechos). A descrição é obrigatória ao adicionar cada
-              figura. Números de página são estimativas.
+            <p className="mt-1 text-[10px] text-neutral-500">
+              Lista automática das fotos de Adequações (locais e trechos). As legendas são opcionais. Números de página
+              são estimativas.
             </p>
           </div>
 
           {rows.length === 0 ? (
-            <p className="text-sm italic text-neutral-500 dark:text-neutral-400">
+            <p className="text-sm italic text-neutral-500">
               Nenhuma figura em Adequações. Adicione fotos nos locais e trechos (aba Adequações ou galeria de cada bloco no
               Compositor).
             </p>
@@ -98,13 +98,13 @@ export function CompositorFiguresBlock({ block }: { block: BudgetBlock; isReadOn
                 <li key={`fig-${row.n}`}>
                   <div className="flex items-baseline gap-2">
                     <span className="min-w-0 shrink font-medium">
-                      Figura {row.n} - {row.caption}
+                      Figura {row.n}{row.caption ? ` - ${row.caption}` : ""}
                     </span>
                     <span
-                      className="mb-[3px] min-w-[8px] flex-1 border-b border-dotted border-neutral-400 opacity-70 dark:border-neutral-500"
+                      className="mb-[3px] min-w-[8px] flex-1 border-b border-dotted border-neutral-400 opacity-70"
                       aria-hidden
                     />
-                    <span className="shrink-0 tabular-nums font-medium text-neutral-800 dark:text-neutral-200">
+                    <span className="shrink-0 tabular-nums font-medium text-neutral-800">
                       {row.page}
                     </span>
                   </div>

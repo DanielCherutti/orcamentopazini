@@ -37,7 +37,6 @@ import {
     deleteItemFromBlockAction,
     reorderItemsInBlockAction,
 } from "@/actions/budget-compositor-block-items-actions";
-import { updateBlockAction } from "@/actions/budget-compositor-block-actions";
 import { useCompositorRuntime } from "./compositor-runtime-context";
 import { listProductGroupsAction, type ProductGroup } from "@/actions/product-group-actions";
 import { deleteBudgetImage } from "@/actions/budget-annotations";
@@ -72,6 +71,8 @@ import type { ScopeFigureEntry } from "./compositor-figures-utils";
 import { useScopeFigureNumbers } from "@/components/budgets/use-scope-figure-numbers";
 import { parseFigureFrameOrientation } from "@/lib/budgets/figure-frame-utils";
 
+const EMPTY_IMAGES: BudgetImage[] = [];
+
 // ─── Renderers de bloco (modo documento) ──────────────────────────────────────
 
 function CoverRenderer({ block, budgetId, isReadOnly }: CompositorRendererProps) {
@@ -84,6 +85,19 @@ function TocRenderer({ block, isReadOnly }: CompositorRendererProps) {
 
 function FiguresRenderer({ block, isReadOnly }: CompositorRendererProps) {
     return <CompositorFiguresBlock block={block} isReadOnly={isReadOnly} />;
+}
+
+function DatabookAutomaticSectionRenderer({ block }: CompositorRendererProps) {
+    const descriptions: Record<string, string> = {
+        databook_figures: "Gerada automaticamente a partir das imagens marcadas para a lista de figuras.",
+        databook_installations: "Gerada automaticamente com as instalações, produtos e tabelas técnicas configuradas no DataBook.",
+        databook_attachments: "Gerada automaticamente com os manuais próprios (apêndices) e externos (anexos).",
+    };
+    return <div className="mx-auto max-w-4xl rounded-xl border border-dashed bg-muted/20 p-8 text-center">
+        <p className="text-lg font-semibold">{block.label}</p>
+        <p className="mx-auto mt-2 max-w-2xl text-sm text-muted-foreground">{descriptions[block.type]}</p>
+        <p className="mt-3 text-xs font-medium uppercase tracking-wide text-primary">Seção automática · arraste pela árvore para alterar a ordem</p>
+    </div>;
 }
 
 export interface CompositorRendererProps {
@@ -176,7 +190,7 @@ function LocationRenderer({
         budgetId,
         onRefresh,
     );
-    const images = imagesByBlock[block.id] ?? [];
+    const images = imagesByBlock[block.id] ?? EMPTY_IMAGES;
     const [addPhotoOpen, setAddPhotoOpen] = useState(false);
     const [editingImage, setEditingImage] = useState<BudgetImage | null>(null);
     const locationImageIdsKey = useMemo(
@@ -288,7 +302,7 @@ function SectionRenderer({
         budgetId,
         onRefresh,
     );
-    const images = imagesByBlock[block.id] ?? [];
+    const images = imagesByBlock[block.id] ?? EMPTY_IMAGES;
     const sectionBlockImageIdsKey = useMemo(
         () => [...images].map((i) => i.id).sort().join(","),
         [images],
@@ -1324,6 +1338,9 @@ const RENDERERS: Record<string, ComponentType<CompositorRendererProps>> = {
     header_footer: HeaderFooterRenderer,
     toc: TocRenderer,
     figures: FiguresRenderer,
+    databook_figures: DatabookAutomaticSectionRenderer,
+    databook_installations: DatabookAutomaticSectionRenderer,
+    databook_attachments: DatabookAutomaticSectionRenderer,
     session: SessionRenderer,
     location: LocationRenderer,
     section: SectionRenderer,

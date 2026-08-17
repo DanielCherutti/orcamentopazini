@@ -28,7 +28,7 @@ import {
   type ModelTemplateStructure,
 } from "@/lib/model-template-structure";
 
-const modeloTipos = ["cabecalho", "rodape", "capa", "orcamento_completo"] as const;
+const modeloTipos = ["cabecalho", "rodape", "capa", "orcamento_completo", "databook_completo"] as const;
 export type ModeloTipo = (typeof modeloTipos)[number];
 
 export type Modelo = {
@@ -459,7 +459,9 @@ async function importTemplateAuthoredBlocks(
   blocks: ModelTemplateBlock[],
   rootOrder: Map<string, number>,
 ) {
-  const authored = blocks.filter((block) => block.type === "session" || block.type === "text");
+  const authored = blocks.filter(
+    (block) => block.type === "session" || block.type === "text" || block.type === "scope",
+  );
   const createdIds = new Map<string, ReturnType<typeof requireRecordId>>();
   const pending = [...authored];
 
@@ -517,36 +519,54 @@ async function importCompleteBudgetModel(
 
   const coverTemplate = structure.blocks.find((block) => block.type === "cover");
   const headerFooterTemplate = structure.blocks.find((block) => block.type === "header_footer");
+  const figuresTemplate = structure.blocks.find((block) => block.type === "figures");
+  const tocTemplate = structure.blocks.find((block) => block.type === "toc");
   const quoteTemplate = structure.blocks.find((block) => block.type === "quote");
   const cover = await findRootBlock(db, budgetRecordId, "cover");
   const headerFooter = await findRootBlock(db, budgetRecordId, "header_footer");
+  const figures = await findRootBlock(db, budgetRecordId, "figures");
+  const toc = await findRootBlock(db, budgetRecordId, "toc");
   const quote = await findRootBlock(db, budgetRecordId, "quote");
-  const orderedContentRoots = structure.blocks
-    .filter(
-      (block) =>
-        block.parent_id === null &&
-        (block.type === "session" || block.type === "text" || block.type === "quote"),
-    )
+  const orderedRoots = structure.blocks
+    .filter((block) => block.parent_id === null)
     .sort((a, b) => a.order_index - b.order_index);
+  const hasCompleteBudgetRootLayout = Boolean(figuresTemplate && tocTemplate);
   const rootOrder = new Map(
-    orderedContentRoots.map((block, index) => [block.id, index + 4]),
+    orderedRoots.map((block, index) => [
+      block.id,
+      hasCompleteBudgetRootLayout || block.type === "cover" || block.type === "header_footer"
+        ? index
+        : index + 2,
+    ]),
   );
+
+  const applyRootOrder = async (
+    current: { id: string } | null,
+    template: ModelTemplateBlock | undefined,
+  ) => {
+    if (!current || !template) return;
+    await db.update(requireRecordId("budget_block", current.id)).merge({
+      order_index: rootOrder.get(template.id) ?? 99990,
+      updated_at: new Date().toISOString(),
+    });
+  };
 
   if (cover && coverTemplate) {
     await mergeBlockProps(db, cover.id, { ...DEFAULT_COVER_PROPS, ...coverTemplate.props });
+    await applyRootOrder(cover, coverTemplate);
   }
   if (headerFooter && headerFooterTemplate) {
     await mergeBlockProps(db, headerFooter.id, {
       ...DEFAULT_HEADER_FOOTER_PROPS,
       ...headerFooterTemplate.props,
     });
+    await applyRootOrder(headerFooter, headerFooterTemplate);
   }
+  await applyRootOrder(figures, figuresTemplate);
+  await applyRootOrder(toc, tocTemplate);
   if (quote && quoteTemplate) {
     await mergeBlockProps(db, quote.id, quoteTemplate.props);
-    await db.update(requireRecordId("budget_block", quote.id)).merge({
-      order_index: rootOrder.get(quoteTemplate.id) ?? 99990,
-      updated_at: new Date().toISOString(),
-    });
+    await applyRootOrder(quote, quoteTemplate);
   }
   await importTemplateAuthoredBlocks(db, budgetRecordId, structure.blocks, rootOrder);
 }

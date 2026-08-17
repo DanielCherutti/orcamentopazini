@@ -52,6 +52,8 @@ interface LocationDetailProps {
     priceAdjustmentInputMode: PriceAdjustmentMode;
     quoteMarkupPercent?: number;
     quoteDiscountPercent?: number;
+    quoteAssemblyMarkupPercent?: number;
+    quoteAssemblyDiscountPercent?: number;
     /** Incrementado no pai após `loadLocations` — recarrega itens do local nos trechos. */
     scopeDataVersion?: number;
     /** Grupos de produto carregados uma vez no `BudgetScope`. */
@@ -69,6 +71,8 @@ export function LocationDetail({
     priceAdjustmentInputMode,
     quoteMarkupPercent = 0,
     quoteDiscountPercent = 0,
+    quoteAssemblyMarkupPercent = quoteMarkupPercent,
+    quoteAssemblyDiscountPercent = quoteDiscountPercent,
     scopeDataVersion = 0,
     productGroups,
 }: LocationDetailProps) {
@@ -364,6 +368,8 @@ export function LocationDetail({
                             priceAdjustmentInputMode={priceAdjustmentInputMode}
                             quoteMarkupPercent={quoteMarkupPercent}
                             quoteDiscountPercent={quoteDiscountPercent}
+                            quoteAssemblyMarkupPercent={quoteAssemblyMarkupPercent}
+                            quoteAssemblyDiscountPercent={quoteAssemblyDiscountPercent}
                             scopeDataVersion={scopeDataVersion}
                             productGroups={productGroups}
                             batchedLocationItems={locationItems}
