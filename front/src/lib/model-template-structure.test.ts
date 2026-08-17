@@ -60,6 +60,41 @@ test("creates a complete budget model with compositor building blocks", () => {
   assert.ok(roots.findIndex((block) => block.type === "session") < roots.findIndex((block) => block.type === "scope"));
 });
 
+test("preserves watermark settings configured in a complete budget model", () => {
+  const structure = createModelTemplateStructure("orcamento_completo");
+  assert.equal(structure.kind, "budget");
+  if (structure.kind !== "budget") return;
+
+  const headerFooter = structure.blocks.find((block) => block.type === "header_footer");
+  assert.ok(headerFooter);
+  if (!headerFooter) return;
+  headerFooter.props = {
+    ...headerFooter.props,
+    cover_watermark_url: "/api/uploads/models/watermark.png",
+    cover_watermark_opacity: 0.14,
+    cover_watermark_scale_pct: 175,
+    inner_use_cover_watermark: false,
+    inner_watermark_url: "/api/uploads/models/inner-watermark.png",
+    inner_watermark_opacity: 0.07,
+    inner_watermark_scale_pct: 120,
+  };
+
+  const normalized = normalizeModelTemplateStructure("orcamento_completo", structure);
+  assert.equal(normalized.kind, "budget");
+  if (normalized.kind !== "budget") return;
+  const normalizedProps = normalized.blocks.find(
+    (block) => block.type === "header_footer",
+  )?.props;
+
+  assert.equal(normalizedProps?.cover_watermark_url, "/api/uploads/models/watermark.png");
+  assert.equal(normalizedProps?.cover_watermark_opacity, 0.14);
+  assert.equal(normalizedProps?.cover_watermark_scale_pct, 175);
+  assert.equal(normalizedProps?.inner_use_cover_watermark, false);
+  assert.equal(normalizedProps?.inner_watermark_url, "/api/uploads/models/inner-watermark.png");
+  assert.equal(normalizedProps?.inner_watermark_opacity, 0.07);
+  assert.equal(normalizedProps?.inner_watermark_scale_pct, 120);
+});
+
 test("upgrades legacy budget models with automatic indexes and movable project detail", () => {
   const normalized = normalizeModelTemplateStructure("orcamento_completo", {
     version: 1,

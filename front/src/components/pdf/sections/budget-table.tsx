@@ -422,11 +422,15 @@ export function computeLocationItemValues(
         location: {
             assembly_mode: getLocationAssemblyMode(location),
             assembly_value: getLocationAssemblyValue(location),
+            general_price_adjustment_mode: location.general_price_adjustment_mode,
+            general_price_adjustment_value: location.general_price_adjustment_value,
         },
         sections: sectionEntries.map(({ section, sectionId }) => ({
             id: sectionId,
             assembly_mode: section.assembly_mode,
             assembly_value: section.assembly_value,
+            general_price_adjustment_mode: section.general_price_adjustment_mode,
+            general_price_adjustment_value: section.general_price_adjustment_value,
         })),
         items: sectionEntries.flatMap(({ section, sectionId }) =>
             (section.items ?? []).map((item) => ({ ...item, section_id: sectionId })),
@@ -458,10 +462,20 @@ export function computeLocationItemValues(
     };
 
     const assemblyByItem: Record<string, number> = {};
+    const standaloneSectionValue = new Map<string, number>();
     for (const row of breakdown.sectionRows) {
         const entry = sectionEntries.find(({ sectionId }) => sectionId === row.sectionId);
         const sectionItems = entry?.section.items ?? [];
         if (sectionItems.length === 0) {
+            standaloneSectionValue.set(
+                row.sectionId,
+                applyQuoteCommercialFactor(row.equipment, quoteMarkupPercent, quoteDiscountPercent) +
+                    applyQuoteCommercialFactor(
+                        row.assembly,
+                        quoteAssemblyMarkupPercent,
+                        quoteAssemblyDiscountPercent,
+                    ),
+            );
             continue;
         }
         redistributeEquipment(sectionItems, row.equipment);
@@ -501,6 +515,7 @@ export function computeLocationItemValues(
     return {
         itemFinalValue,
         assemblyTotal: breakdown.collapsedAssembly,
+        standaloneSectionValue,
     };
 }
 
@@ -608,15 +623,25 @@ export function SectionItemsTable({
     laborCols,
     costsDisplayMode,
     itemFinalValue,
+    standaloneValue = 0,
 }: {
     sec: { id?: string; items?: BudgetItem[] };
     showCosts: boolean;
     laborCols: boolean;
     costsDisplayMode: CostDisplayMode;
     itemFinalValue: Map<string, number>;
+    standaloneValue?: number;
 }) {
     const items = orderBudgetItemsForPdf(sec.items ?? []);
-    if (items.length === 0) return null;
+    if (items.length === 0) {
+        return showCosts && standaloneValue !== 0 ? (
+            <View style={styles.subtotalRow} wrap={false}>
+                <Text style={[styles.textSmall, styles.textBold]}>
+                    Montagem do trecho: {formatMoney(standaloneValue)}
+                </Text>
+            </View>
+        ) : null;
+    }
     const displayRows = buildItemSegments(items).flatMap((segment) => {
         if (segment.type === 'standalone') {
             return [{ type: 'item' as const, key: `item:${segment.item.id}`, item: segment.item }];
@@ -798,9 +823,8 @@ function filterSceneImages(images: BudgetImage[] | undefined): BudgetImage[] {
     });
 }
 
-function figureCaption(sceneImg: BudgetImage): string {
-    const caption = singleLinePdfLabel(sceneImg.caption);
-    return caption || 'Sem descrição';
+export function figureCaption(sceneImg: BudgetImage): string {
+    return singleLinePdfLabel(sceneImg.caption);
 }
 
 function figureObservation(sceneImg: BudgetImage): string {
@@ -851,6 +875,7 @@ function SceneImageCard({
     const src = proxyPdfImageSrc(raw, pdfImagePublicBase, pdfEmbeddedImages) ?? raw;
     const figureId = sceneImg?.id ? String(sceneImg.id) : undefined;
     const observation = figureObservation(sceneImg);
+    const caption = figureCaption(sceneImg);
 
     return (
         <View
@@ -896,7 +921,9 @@ function SceneImageCard({
                 </View>
                 <View style={styles.sceneCaptionRow}>
                     <Text style={styles.sceneCaptionLabel}>{sanitizeTextForPdf(figureLabel)}</Text>
-                    <Text style={styles.sceneCaption}>{sanitizeTextForPdf(figureCaption(sceneImg))}</Text>
+                    {caption ? (
+                        <Text style={styles.sceneCaption}>{sanitizeTextForPdf(caption)}</Text>
+                    ) : null}
                 </View>
             </View>
             {observation ? (
@@ -1079,7 +1106,7 @@ export function BudgetTable({
         const locLabel = singleLinePdfLabel(loc.name);
         const locDescription = singleLinePdfLabel(stripHtmlToText(String(loc.description ?? '')));
         const sections = loc.sections ?? [];
-        const { itemFinalValue } = computeLocationItemValues(
+        const { itemFinalValue, standaloneSectionValue } = computeLocationItemValues(
             loc,
             quoteMarkupPercent,
             quoteDiscountPercent,
@@ -1093,7 +1120,10 @@ export function BudgetTable({
             }, 0);
             return sum + sectionTotal;
         }, 0);
-        const locationTotal = locationItemsTotal;
+        const locationTotal = locationItemsTotal + [...standaloneSectionValue.values()].reduce(
+            (sum, value) => sum + value,
+            0,
+        );
         const locPhotoList = filterSceneImages(loc.images);
         const locHasPhotos = locPhotoList.length > 0;
         const locId = String(loc.id ?? `loc-${locIdx}`);
@@ -1173,6 +1203,7 @@ export function BudgetTable({
             const sectionBreakBefore = hasPrintedDetailBlock;
 
             if (sceneList.length > 0) {
+                const standaloneValue = Number(standaloneSectionValue.get(secId) ?? 0);
                 const hasItems = (sec.items?.length ?? 0) > 0;
                 const firstSectionFigureNumber = nextFigureNumber;
                 nextFigureNumber += sceneList.length;
@@ -1190,13 +1221,14 @@ export function BudgetTable({
                             figurePageCollector={figurePageCollector}
                             lead={sectionTitleLead}
                         />
-                        {hasItems ? (
+                        {hasItems || standaloneValue !== 0 ? (
                             <SectionItemsTable
                                 sec={sec}
                                 showCosts={showCosts}
                                 laborCols={laborCols}
                                 costsDisplayMode={costsDisplayMode}
                                 itemFinalValue={itemFinalValue}
+                                standaloneValue={standaloneValue}
                             />
                         ) : null}
                     </View>,
@@ -1216,6 +1248,7 @@ export function BudgetTable({
                             laborCols={laborCols}
                             costsDisplayMode={costsDisplayMode}
                             itemFinalValue={itemFinalValue}
+                            standaloneValue={Number(standaloneSectionValue.get(secId) ?? 0)}
                         />
                     </View>,
                     { breakBefore: sectionBreakBefore }

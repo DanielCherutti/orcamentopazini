@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -13,9 +13,12 @@ import {
   Plus,
   ReceiptText,
   Trash2,
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CompositorRichTextEditor } from "@/components/budgets/compositor/compositor-rich-text-editor";
 import { HeaderFooterLayoutEditor } from "@/components/budgets/compositor/header-footer-layout-editor";
@@ -34,6 +37,7 @@ import {
   type ModelTemplateStructure,
 } from "@/lib/model-template-structure";
 import { cn } from "@/lib/utils";
+import { toast } from "@/lib/toast";
 import type { ModeloTipo } from "@/actions/model-actions";
 import {
   migrateHeaderFooterLayoutsForScopeMode,
@@ -418,6 +422,10 @@ function BudgetBlockEditor({
             </Tabs>
           ) : null}
         </div>
+        <ModelWatermarkControls
+          props={props}
+          onPatch={(patch) => onPatch(patch as Record<string, unknown>)}
+        />
         <div className="flex items-center gap-2 rounded-md border bg-background p-3">
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             Altura do {band === "header" ? "cabeçalho" : "rodapé"}
@@ -511,6 +519,183 @@ function BudgetBlockEditor({
         onChange={(value) => onPatch({ [field]: value })}
         placeholder={block.type === "session" ? "Descrição opcional da seção..." : "Digite o conteúdo deste bloco..."}
       />
+    </div>
+  );
+}
+
+function ModelWatermarkControls({
+  props,
+  onPatch,
+}: {
+  props: HeaderFooterBlockProps;
+  onPatch: (patch: Partial<HeaderFooterBlockProps>) => void;
+}) {
+  const [scope, setScope] = useState<"cover" | "inner">("cover");
+  const [uploading, setUploading] = useState(false);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const innerInputRef = useRef<HTMLInputElement>(null);
+  const isCover = scope === "cover";
+  const inheritsCover = !isCover && props.inner_use_cover_watermark !== false;
+  const watermarkUrl = isCover
+    ? props.cover_watermark_url ?? ""
+    : inheritsCover
+      ? props.cover_watermark_url ?? ""
+      : props.inner_watermark_url ?? "";
+  const opacity = isCover
+    ? props.cover_watermark_opacity ?? 0.12
+    : inheritsCover
+      ? props.cover_watermark_opacity ?? 0.12
+      : props.inner_watermark_opacity ?? 0.06;
+  const scale = isCover
+    ? props.cover_watermark_scale_pct ?? 100
+    : inheritsCover
+      ? props.cover_watermark_scale_pct ?? 100
+      : props.inner_watermark_scale_pct ?? 100;
+
+  const uploadWatermark = async (file: File) => {
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch("/api/upload/library", {
+        method: "POST",
+        body: formData,
+      });
+      const payload = (await response.json()) as { url?: string; error?: string };
+      if (!response.ok || !payload.url) {
+        toast.error(payload.error || "Falha ao enviar marca d'água");
+        return;
+      }
+      onPatch(
+        isCover
+          ? { cover_watermark_url: payload.url }
+          : { inner_watermark_url: payload.url },
+      );
+      toast.success("Marca d'água adicionada ao modelo.");
+    } catch {
+      toast.error("Erro ao enviar marca d'água");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const inputRef = isCover ? coverInputRef : innerInputRef;
+
+  return (
+    <div className="space-y-3 rounded-md border bg-background p-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Marca d&apos;água do modelo
+          </Label>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Esta configuração será aplicada automaticamente aos orçamentos que usarem o modelo.
+          </p>
+        </div>
+        <Tabs value={scope} onValueChange={(value) => setScope(value as "cover" | "inner")}>
+          <TabsList>
+            <TabsTrigger value="cover">Capa</TabsTrigger>
+            <TabsTrigger value="inner">Páginas internas</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
+      {!isCover ? (
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Checkbox
+            checked={props.inner_use_cover_watermark !== false}
+            onCheckedChange={(checked) => onPatch({ inner_use_cover_watermark: checked === true })}
+          />
+          Usar a mesma marca d&apos;água da capa
+        </label>
+      ) : null}
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <Input
+          value={watermarkUrl}
+          disabled={inheritsCover}
+          placeholder="URL da marca d'água"
+          className="h-8 min-w-0 flex-1 text-xs"
+          onChange={(event) =>
+            onPatch(
+              isCover
+                ? { cover_watermark_url: event.target.value }
+                : { inner_watermark_url: event.target.value },
+            )
+          }
+        />
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/gif,image/webp"
+          className="sr-only"
+          disabled={inheritsCover || uploading}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (file) void uploadWatermark(file);
+          }}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 shrink-0 text-xs"
+          disabled={inheritsCover || uploading}
+          onClick={() => inputRef.current?.click()}
+        >
+          <Upload className="mr-1.5 h-3.5 w-3.5" />
+          {uploading ? "Enviando..." : "Importar"}
+        </Button>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Label className="w-16 text-[11px] text-muted-foreground">Opacidade</Label>
+        <input
+          type="range"
+          min={0}
+          max={0.35}
+          step={0.01}
+          value={opacity}
+          disabled={inheritsCover}
+          className="h-2 flex-1 accent-primary"
+          onChange={(event) => {
+            const value = Number(event.target.value);
+            onPatch(
+              isCover
+                ? { cover_watermark_opacity: value }
+                : { inner_watermark_opacity: value },
+            );
+          }}
+        />
+        <span className="w-12 text-right text-xs tabular-nums text-muted-foreground">
+          {Math.round(opacity * 100)}%
+        </span>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Label className="w-16 text-[11px] text-muted-foreground">Tamanho</Label>
+        <input
+          type="range"
+          min={40}
+          max={220}
+          step={1}
+          value={Math.max(40, Math.min(220, Number(scale) || 100))}
+          disabled={inheritsCover}
+          className="h-2 flex-1 accent-primary"
+          onChange={(event) => {
+            const value = Math.max(40, Math.min(220, Number(event.target.value) || 100));
+            onPatch(
+              isCover
+                ? { cover_watermark_scale_pct: value }
+                : { inner_watermark_scale_pct: value },
+            );
+          }}
+        />
+        <span className="w-14 text-right text-xs tabular-nums text-muted-foreground">
+          {Math.round(Math.max(40, Math.min(220, Number(scale) || 100)))}%
+        </span>
+      </div>
     </div>
   );
 }

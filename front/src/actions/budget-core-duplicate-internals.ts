@@ -234,6 +234,9 @@ export async function duplicateBudgetScopeHierarchy(
             price_adjustment_enabled: Boolean(loc.price_adjustment_enabled),
             price_adjustment_input_mode:
                 loc.price_adjustment_input_mode === "percent" ? "percent" : "fixed",
+            general_price_adjustment_mode:
+                loc.general_price_adjustment_mode === "fixed" ? "fixed" : "percent",
+            general_price_adjustment_value: Number(loc.general_price_adjustment_value ?? 0),
             assembly_mode: loc.assembly_mode ?? "percent",
             assembly_value: Number(loc.assembly_value ?? 0),
             created_at: new Date().toISOString(),
@@ -266,6 +269,9 @@ export async function duplicateBudgetScopeHierarchy(
                 price_adjustment_enabled: Boolean(sec.price_adjustment_enabled),
                 price_adjustment_input_mode:
                     sec.price_adjustment_input_mode === "percent" ? "percent" : "fixed",
+                general_price_adjustment_mode:
+                    sec.general_price_adjustment_mode === "fixed" ? "fixed" : "percent",
+                general_price_adjustment_value: Number(sec.general_price_adjustment_value ?? 0),
                 assembly_mode:
                     sec.assembly_mode === "fixed" || sec.assembly_mode === "manual"
                         ? sec.assembly_mode

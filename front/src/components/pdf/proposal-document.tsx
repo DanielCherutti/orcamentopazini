@@ -125,6 +125,8 @@ type CompositorQuoteSection = {
     items: BudgetItem[];
     assembly_mode?: LocationAssemblyMode;
     assembly_value?: number;
+    general_price_adjustment_mode?: "percent" | "fixed";
+    general_price_adjustment_value?: number;
 };
 
 type CompositorQuoteLocation = {
@@ -133,6 +135,8 @@ type CompositorQuoteLocation = {
     sections: CompositorQuoteSection[];
     assembly_mode?: LocationAssemblyMode;
     assembly_value?: number;
+    general_price_adjustment_mode?: "percent" | "fixed";
+    general_price_adjustment_value?: number;
 };
 
 type PdfFigureEntry = {
@@ -628,6 +632,8 @@ function collectScopeQuoteLocations(locations: BudgetLocation[] | undefined): Co
             items: sec.items ?? [],
             assembly_mode: sec.assembly_mode,
             assembly_value: sec.assembly_value,
+            general_price_adjustment_mode: sec.general_price_adjustment_mode,
+            general_price_adjustment_value: sec.general_price_adjustment_value,
         }));
         out.push({
             id: String(loc.id ?? `loc-${loc.order_index ?? 0}`),
@@ -635,6 +641,8 @@ function collectScopeQuoteLocations(locations: BudgetLocation[] | undefined): Co
             sections,
             assembly_mode: loc.assembly_mode,
             assembly_value: loc.assembly_value,
+            general_price_adjustment_mode: loc.general_price_adjustment_mode,
+            general_price_adjustment_value: loc.general_price_adjustment_value,
         });
     }
     return out;
@@ -649,11 +657,15 @@ function computeQuoteLocationBase(loc: CompositorQuoteLocation): {
         location: {
             assembly_mode: loc.assembly_mode,
             assembly_value: loc.assembly_value,
+            general_price_adjustment_mode: loc.general_price_adjustment_mode,
+            general_price_adjustment_value: loc.general_price_adjustment_value,
         },
         sections: loc.sections.map((sec) => ({
             id: sec.id,
             assembly_mode: sec.assembly_mode,
             assembly_value: sec.assembly_value,
+            general_price_adjustment_mode: sec.general_price_adjustment_mode,
+            general_price_adjustment_value: sec.general_price_adjustment_value,
         })),
         items: loc.sections.flatMap((sec) =>
             sec.items.map((item) => ({
@@ -692,10 +704,7 @@ function collectRenderedPdfFigureEntries(locations: BudgetLocation[] | undefined
         const id = String(image.id);
         if (seen.has(id)) return;
         seen.add(id);
-        const caption =
-            typeof image.caption === "string" && image.caption.trim()
-                ? image.caption.trim()
-                : "Sem descrição";
+        const caption = typeof image.caption === "string" ? image.caption.trim() : "";
         out.push({ id, caption });
     };
 
@@ -1834,7 +1843,7 @@ export const ProposalDocument = ({
         hasCompositorStructure && includeFiguresPage
             ? figureEntries.map((entry, idx) => ({
                   n: idx + 1,
-                  caption: entry.caption?.trim() || "(sem descrição)",
+                  caption: entry.caption?.trim() || "",
                   page: (() => {
                       const resolved = Number.isFinite(resolvedSegmentPages[`figure:${entry.id}`])
                           ? Math.max(1, Math.trunc(resolvedSegmentPages[`figure:${entry.id}`]))
@@ -1970,7 +1979,9 @@ export const ProposalDocument = ({
                         {figureRows.map((row) => (
                             <View key={`fig-${row.n}`} style={styles.tocRow}>
                                 <Text style={styles.tocTitle}>
-                                    {sanitizeTextForPdf(`Figura ${row.n} - ${row.caption}`)}
+                                    {sanitizeTextForPdf(
+                                        `Figura ${row.n}${row.caption ? ` - ${row.caption}` : ""}`,
+                                    )}
                                 </Text>
                                 <View style={styles.tocDots} />
                                 <Text style={styles.tocPage}>

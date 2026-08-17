@@ -82,8 +82,8 @@ export function CompositorFiguresBlock({ block }: { block: BudgetBlock; isReadOn
               Lista de Figuras
             </h2>
             <p className="mt-1 text-[10px] text-neutral-500">
-              Lista automática das fotos de Adequações (locais e trechos). A descrição é obrigatória ao adicionar cada
-              figura. Números de página são estimativas.
+              Lista automática das fotos de Adequações (locais e trechos). As legendas são opcionais. Números de página
+              são estimativas.
             </p>
           </div>
 
@@ -98,7 +98,7 @@ export function CompositorFiguresBlock({ block }: { block: BudgetBlock; isReadOn
                 <li key={`fig-${row.n}`}>
                   <div className="flex items-baseline gap-2">
                     <span className="min-w-0 shrink font-medium">
-                      Figura {row.n} - {row.caption}
+                      Figura {row.n}{row.caption ? ` - ${row.caption}` : ""}
                     </span>
                     <span
                       className="mb-[3px] min-w-[8px] flex-1 border-b border-dotted border-neutral-400 opacity-70"

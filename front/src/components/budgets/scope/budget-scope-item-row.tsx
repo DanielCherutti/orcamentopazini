@@ -15,6 +15,7 @@ import {
 } from "@/actions/budget-hierarchy-section-items-actions";
 import { QuantityTextInput } from "@/components/budgets/quantity-text-input";
 import { EditTemporaryProductScopeDialog } from "@/components/budgets/scope/add-temporary-product-scope-dialog";
+import { SignedNumberInput } from "@/components/budgets/scope/signed-number-input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TruncatedTextTooltip } from "@/components/ui/tooltip";
 import {
@@ -368,19 +369,16 @@ function ScopeItemRowInner({
                         </Select>
                     ) : null}
                     {!isReadOnly && (
-                        <input
-                            type="number"
+                        <SignedNumberInput
                             className="h-6 w-20 rounded border px-1 text-right text-xs"
                             value={priceAdjustmentValue}
-                            onChange={(event) => setPriceAdjustmentValue(Number(event.target.value))}
-                            onBlur={() =>
-                                void handleSaveCommercial({
+                            onValueCommit={(value) => {
+                                setPriceAdjustmentValue(value);
+                                return handleSaveCommercial({
                                     price_adjustment_mode: priceAdjustmentInputMode,
-                                    price_adjustment_value: Number.isFinite(priceAdjustmentValue)
-                                        ? priceAdjustmentValue
-                                        : 0,
-                                })
-                            }
+                                    price_adjustment_value: value,
+                                });
+                            }}
                             title={
                                 priceAdjustmentInputMode === "percent"
                                     ? "Ajuste de preço em %"
