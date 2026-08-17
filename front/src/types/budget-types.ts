@@ -71,8 +71,6 @@ export const budgetSectionSchema = z.object({
     /** Montagem por trecho (escopo); fallback ao local quando omitido. */
     assembly_mode: z.custom<LocationAssemblyMode>().optional(),
     assembly_value: z.number().optional(),
-    general_price_adjustment_mode: z.custom<PriceAdjustmentMode>().optional(),
-    general_price_adjustment_value: z.number().optional(),
     items: z.array(budgetItemSchema).optional(),
     images: z.array(budgetImageSchema).optional(),
 });
@@ -85,8 +83,6 @@ export const budgetLocationSchema = z.object({
     order_index: z.number().default(0),
     assembly_mode: z.custom<LocationAssemblyMode>().optional().default("percent"),
     assembly_value: z.number().optional().default(0),
-    general_price_adjustment_mode: z.custom<PriceAdjustmentMode>().optional(),
-    general_price_adjustment_value: z.number().optional(),
     sections: z.array(budgetSectionSchema).optional(),
     images: z.array(budgetImageSchema).optional(),
 });

@@ -35,7 +35,7 @@ export function buildFiguresListModel(
   const base = estimatePageAfterFiguresBlock(roots, items);
   return entries.map((e, i) => ({
     n: i + 1,
-    caption: e.caption.trim(),
+    caption: e.caption.trim() || "(sem descrição)",
     page: Math.max(1, Math.floor(base + i * 0.62)),
   }));
 }

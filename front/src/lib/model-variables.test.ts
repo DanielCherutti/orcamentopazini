@@ -26,12 +26,11 @@ test("renderTemplateVariables replaces required customer and budget variables", 
     },
     budget: {
       code: "00042",
-      revision_number: 3,
     },
   });
 
   const rendered = renderTemplateVariables(
-    "{{cliente.razao_social}} / {{cliente.nome_fantasia}} / {{cliente.cnpj}} / {{orcamento.codigo}} / {{numero.revisao}} / {{cliente.adicional.inscricao_estadual}} / {{cliente.logo}}",
+    "{{cliente.razao_social}} / {{cliente.nome_fantasia}} / {{cliente.cnpj}} / {{orcamento.codigo}} / {{cliente.adicional.inscricao_estadual}} / {{cliente.logo}}",
     context,
   );
 
@@ -39,15 +38,8 @@ test("renderTemplateVariables replaces required customer and budget variables", 
   assert.match(rendered, /Pazini/);
   assert.match(rendered, /12\.345\.678\/0001-90/);
   assert.match(rendered, /00042/);
-  assert.match(rendered, /03/);
   assert.match(rendered, /ISENTO/);
   assert.match(rendered, /<img src="\/api\/uploads\/customers\/pazini\/logos\/logo\.png"/);
-});
-
-test("renders revision number as 00 for the original budget", () => {
-  const context = buildTemplateVariableContext({ budget: { code: "00042" } });
-
-  assert.equal(renderTemplateVariables("REV. {{numero.revisao}}", context), "REV. 00");
 });
 
 test("renderTemplateVariables uses structured city and neighborhood fields", () => {

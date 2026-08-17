@@ -30,8 +30,6 @@ export async function updateLocationAction(
         costs_display_mode?: CostDisplayMode;
         price_adjustment_enabled?: boolean;
         price_adjustment_input_mode?: PriceAdjustmentMode;
-        general_price_adjustment_mode?: PriceAdjustmentMode;
-        general_price_adjustment_value?: number;
         assembly_mode?: LocationAssemblyMode;
         assembly_value?: number;
     }
@@ -49,10 +47,7 @@ export async function updateLocationAction(
             updated_at: new Date().toISOString(),
         });
         if (
-            patch.assembly_mode !== undefined ||
-            patch.assembly_value !== undefined ||
-            patch.general_price_adjustment_mode !== undefined ||
-            patch.general_price_adjustment_value !== undefined
+            patch.assembly_mode !== undefined || patch.assembly_value !== undefined
         ) {
             await recalculateBudgetTotal(budgetId);
         }
@@ -92,8 +87,6 @@ export async function addLocationAction(budgetId: string, name: string) {
             costs_display_mode: "section",
             price_adjustment_enabled: false,
             price_adjustment_input_mode: "fixed",
-            general_price_adjustment_mode: "percent",
-            general_price_adjustment_value: 0,
             assembly_mode: "percent",
             assembly_value: 0,
             created_at: new Date().toISOString(),
@@ -130,8 +123,6 @@ export async function updateSectionAction(
         costs_display_mode?: CostDisplayMode;
         price_adjustment_enabled?: boolean;
         price_adjustment_input_mode?: PriceAdjustmentMode;
-        general_price_adjustment_mode?: PriceAdjustmentMode;
-        general_price_adjustment_value?: number;
         assembly_mode?: LocationAssemblyMode;
         assembly_value?: number;
     }
@@ -149,10 +140,7 @@ export async function updateSectionAction(
             updated_at: new Date().toISOString(),
         });
         if (
-            patch.assembly_mode !== undefined ||
-            patch.assembly_value !== undefined ||
-            patch.general_price_adjustment_mode !== undefined ||
-            patch.general_price_adjustment_value !== undefined
+            patch.assembly_mode !== undefined || patch.assembly_value !== undefined
         ) {
             await recalculateBudgetTotal(budgetId);
         }
@@ -193,8 +181,6 @@ export async function addSectionAction(locationId: string, budgetId: string, nam
             costs_display_mode: "section",
             price_adjustment_enabled: false,
             price_adjustment_input_mode: "fixed",
-            general_price_adjustment_mode: "percent",
-            general_price_adjustment_value: 0,
             created_at: new Date().toISOString(),
         });
         const created = Array.isArray(raw) ? raw[0] : raw;
@@ -354,9 +340,6 @@ export async function duplicateSectionAction(sectionId: string, budgetId: string
             price_adjustment_enabled: Boolean(original.price_adjustment_enabled),
             price_adjustment_input_mode:
                 original.price_adjustment_input_mode === "percent" ? "percent" : "fixed",
-            general_price_adjustment_mode:
-                original.general_price_adjustment_mode === "fixed" ? "fixed" : "percent",
-            general_price_adjustment_value: Number(original.general_price_adjustment_value ?? 0),
             assembly_mode:
                 original.assembly_mode === "fixed" || original.assembly_mode === "manual"
                     ? original.assembly_mode
@@ -541,9 +524,6 @@ export async function duplicateLocationAction(locationId: string, budgetId: stri
             price_adjustment_enabled: Boolean(original.price_adjustment_enabled),
             price_adjustment_input_mode:
                 original.price_adjustment_input_mode === "percent" ? "percent" : "fixed",
-            general_price_adjustment_mode:
-                original.general_price_adjustment_mode === "fixed" ? "fixed" : "percent",
-            general_price_adjustment_value: Number(original.general_price_adjustment_value ?? 0),
             assembly_mode: original.assembly_mode ?? "percent",
             assembly_value: Number(original.assembly_value ?? 0),
             created_at: new Date().toISOString(),
@@ -574,9 +554,6 @@ export async function duplicateLocationAction(locationId: string, budgetId: stri
                 price_adjustment_enabled: Boolean(sec.price_adjustment_enabled),
                 price_adjustment_input_mode:
                     sec.price_adjustment_input_mode === "percent" ? "percent" : "fixed",
-                general_price_adjustment_mode:
-                    sec.general_price_adjustment_mode === "fixed" ? "fixed" : "percent",
-                general_price_adjustment_value: Number(sec.general_price_adjustment_value ?? 0),
                 assembly_mode:
                     sec.assembly_mode === "fixed" || sec.assembly_mode === "manual"
                         ? sec.assembly_mode
