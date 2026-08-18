@@ -32,6 +32,7 @@ import {
   type DocumentFontOption,
 } from '@/components/ui/document-font-picker';
 import { normalizeDocumentMargins, type DocumentMarginsCm } from '@/lib/document-page-layout';
+import { trimEmptyBoundaryParagraphsFromPastedSlice } from '@/lib/rich-text-paste';
 
 interface RichTextEditorProps {
   value: string;
@@ -716,6 +717,7 @@ export function RichTextEditor({
       }
     },
     editorProps: {
+      transformPasted: trimEmptyBoundaryParagraphsFromPastedSlice,
       handleKeyDown: (_view, event) => {
         if (event.key === 'Tab') {
           const { $from } = _view.state.selection;
