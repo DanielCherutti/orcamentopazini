@@ -44,26 +44,16 @@ function KpiCard({
         <Link href={href} className={cn("tenant-stat-card group block p-5", className)}>
             <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
-                    <p className="text-[10px] font-black uppercase tracking-[0.18em] tenant-ops-text-subtle">
+                    <p className="tenant-stat-label text-[10px] font-bold uppercase tracking-[0.18em]">
                         {label}
                     </p>
-                    <p className="text-4xl font-black tabular-nums tracking-tighter text-white">{value}</p>
-                    <p
-                        className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider"
-                        style={{ color: "var(--brand-secondary)" }}
-                    >
+                    <p className="tenant-stat-value text-4xl font-black tabular-nums tracking-tighter">{value}</p>
+                    <p className="tenant-stat-action flex items-center gap-1 text-xs font-bold uppercase tracking-wider">
                         Abrir
                         <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                     </p>
                 </div>
-                <div
-                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg text-white"
-                    style={{
-                        background: `linear-gradient(135deg, var(--brand-secondary) 0%, var(--primary) 100%)`,
-                        boxShadow: "0 0 28px -4px rgb(var(--brand-secondary-rgb) / 0.75)",
-                    }}
-                    aria-hidden
-                >
+                <div className="tenant-stat-icon flex h-12 w-12 shrink-0 items-center justify-center rounded-xl" aria-hidden>
                     <Icon className="h-5 w-5" />
                 </div>
             </div>
@@ -156,12 +146,7 @@ export function DashboardHomePanel({
                                     href={href}
                                     className="tenant-ops-inset tenant-ops-inset-hover flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium tenant-ops-text transition-colors"
                                 >
-                                    <span
-                                        className="flex h-9 w-9 items-center justify-center rounded-lg text-white"
-                                        style={{
-                                            background: `linear-gradient(135deg, var(--primary) 0%, color-mix(in srgb, var(--primary) 80%, var(--brand-secondary)) 100%)`,
-                                        }}
-                                    >
+                                    <span className="tenant-shortcut-icon flex h-9 w-9 items-center justify-center rounded-lg">
                                         <Icon className="h-4 w-4" />
                                     </span>
                                     <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
