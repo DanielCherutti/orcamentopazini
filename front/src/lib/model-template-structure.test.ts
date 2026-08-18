@@ -102,6 +102,23 @@ test("upgrades legacy budget models with automatic indexes and movable project d
   assert.deepEqual(parent?.children.map((block) => block.number), ["1.1", "1.2"]);
 });
 
+test("normalizes duplicated project detail blocks to a single root", () => {
+  const normalized = normalizeModelTemplateStructure("orcamento_completo", {
+    version: 1,
+    kind: "budget",
+    blocks: [
+      { id: "scope-first", parent_id: null, type: "scope", label: "DETALHAMENTO", order_index: 2, props: {} },
+      { id: "scope-duplicate", parent_id: null, type: "scope", label: "DETALHAMENTO DUPLICADO", order_index: 3, props: {} },
+    ],
+  });
+
+  assert.equal(normalized.kind, "budget");
+  if (normalized.kind !== "budget") return;
+  const scopes = normalized.blocks.filter((block) => block.type === "scope");
+  assert.equal(scopes.length, 1);
+  assert.equal(scopes[0]?.id, "scope-first");
+});
+
 test("includes the first Presentation section in the table of contents", () => {
   const tree = buildTree([
     {

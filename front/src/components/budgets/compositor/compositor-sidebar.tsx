@@ -16,10 +16,10 @@ import type { BudgetBlock, BlockType } from "@/types/budget-compositor-types";
 import { flattenTree } from "@/types/budget-compositor-types";
 import {
   COMPOSITOR_SCOPE_BLOCK_DEFAULT_LABEL,
-  getCompositorPanelLabel,
   getScopeBlockLabel,
 } from "./compositor-content-utils";
 import { normalizeLabel } from "./compositor-content-hooks";
+import { canDeleteBudgetCompositorBlock } from "@/lib/compositor-block-policy";
 import {
   DndContext,
   DragOverlay,
@@ -471,6 +471,7 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
   const isToc = block.type === "toc";
   const isFigures = block.type === "figures";
   const isDatabookAutomatic = ["databook_figures", "databook_installations", "databook_attachments"].includes(block.type);
+  const canDelete = canDeleteBudgetCompositorBlock(block.type) && !isDatabookAutomatic;
   const isSelected = selectedId === block.id;
   const isExpandable = (block.type === "session" || block.type === "location") && !isScope && !isHeaderFooter && !isQuote;
   const canAdd = (block.type === "session" || block.type === "location") && !isScope && !isHeaderFooter && !isQuote;
@@ -635,8 +636,8 @@ function BlockTreeNode({ block, budgetId, selectedId, onSelect, onRefresh, depth
           </button>
         )}
 
-        {/* Botão excluir — oculto em isReadOnly e scope */}
-        {!isReadOnly && !isScope && !isHeaderFooter && !isQuote && !isCover && !isToc && !isFigures && !isDatabookAutomatic && (
+        {/* Detalhamento pode ser removido e recriado pela opção da raiz. */}
+        {!isReadOnly && canDelete && (
           <button
             disabled={deleting}
             onClick={handleDelete}
