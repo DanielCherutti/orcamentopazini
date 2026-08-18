@@ -1055,6 +1055,12 @@ body {
   color: oklch(0.13 0.02 265);
 }
 
+/* Mantém células destacadas legíveis sobre as tabelas claras. Esta regra
+   precisa ter a mesma especificidade da antiga variação escura. */
+.tenant-app .tenant-ops-surface table td.font-medium {
+  color: oklch(0.13 0.02 265);
+}
+
 .tenant-app .tenant-ops-surface table .text-muted-foreground {
   color: oklch(0.48 0.02 265) !important;
   opacity: 1;
@@ -1065,6 +1071,23 @@ body {
   border-color: rgb(var(--primary-rgb) / 0.2) !important;
   background: rgb(var(--primary-rgb) / 0.05) !important;
   color: oklch(0.13 0.02 265) !important;
+}
+
+.tenant-app .tenant-ops-surface button.border:hover,
+.tenant-app .tenant-ops-surface [data-slot="button"].border:hover {
+  border-color: rgb(var(--primary-rgb) / 0.35) !important;
+  background: rgb(var(--primary-rgb) / 0.1) !important;
+  color: oklch(0.13 0.02 265) !important;
+}
+
+.tenant-app .tenant-ops-surface button.text-destructive {
+  border-color: rgb(185 28 28 / 0.3) !important;
+  color: #b91c1c !important;
+}
+
+.tenant-app .tenant-ops-surface button.text-destructive:hover {
+  background: #fef2f2 !important;
+  color: #991b1b !important;
 }
 
 .tenant-app .tenant-ops-surface table tbody tr:hover {
