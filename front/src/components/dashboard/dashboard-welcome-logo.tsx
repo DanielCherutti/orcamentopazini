@@ -34,13 +34,11 @@ export function DashboardWelcomeLogo({
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const failed = failedSrc === src;
   const loaded = loadedSrc === src && !failed;
-  const imageClassName = `h-full w-full object-contain p-1.5 transition-opacity duration-200 ${
-    loaded ? "opacity-100" : "opacity-0"
-  }`;
+  const imageClassName = "h-full w-full object-contain p-1";
 
   return (
     <div
-      className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-border/60 bg-muted/40"
+      className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-border/60 bg-white"
       data-logo-state={failed ? "fallback" : loaded ? "ready" : "loading"}
       role={failed && alt ? "img" : undefined}
       aria-label={failed && alt ? alt : undefined}
