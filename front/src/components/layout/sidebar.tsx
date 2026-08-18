@@ -333,10 +333,7 @@ export function Sidebar({
             {collapsed ? (
                 <Link
                     href="/dashboard"
-                    className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl text-lg font-black text-white shadow-[0_0_32px_-4px_rgb(var(--primary-rgb)/0.85)] ring-1 ring-[rgb(var(--primary-rgb)/0.3)]"
-                    style={{
-                        background: `linear-gradient(135deg, var(--primary) 0%, var(--brand-secondary) 100%)`,
-                    }}
+                    className="tenant-sidebar-avatar mb-6 flex h-12 w-12 items-center justify-center rounded-2xl text-lg font-black"
                     title={companyName}
                 >
                     {initial}
@@ -344,14 +341,9 @@ export function Sidebar({
             ) : (
                 <Link
                     href="/dashboard"
-                    className="mb-6 flex items-center gap-3 rounded-2xl border border-[rgb(var(--primary-rgb)/0.2)] bg-[rgb(var(--primary-rgb)/0.1)] px-3 py-3 transition-colors hover:border-[rgb(var(--primary-rgb)/0.4)] hover:bg-[rgb(var(--primary-rgb)/0.15)]"
+                    className="tenant-sidebar-brand mb-6 flex items-center gap-3 rounded-2xl px-3 py-3"
                 >
-                    <div
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-black text-white shadow-[0_0_24px_-4px_rgb(var(--primary-rgb)/0.85)] ring-1 ring-[rgb(var(--primary-rgb)/0.3)]"
-                        style={{
-                            background: `linear-gradient(135deg, var(--primary) 0%, var(--brand-secondary) 100%)`,
-                        }}
-                    >
+                    <div className="tenant-sidebar-avatar flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-black">
                         {initial}
                     </div>
                     <div className="min-w-0">

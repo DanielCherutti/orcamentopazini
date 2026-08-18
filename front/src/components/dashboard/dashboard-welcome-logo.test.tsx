@@ -28,6 +28,8 @@ test("never overlays the fallback icon on the company logo", async () => {
 
   const image = document.querySelector("img");
   assert.ok(image);
+  assert.match(image.className, /object-contain/);
+  assert.doesNotMatch(image.className, /opacity-0/);
   assert.equal(document.querySelector('[data-testid="platform-logo-fallback"]'), null);
 
   await act(async () => {
