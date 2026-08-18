@@ -355,6 +355,12 @@ function ensureBudgetSystemBlocks(blocks: ModelTemplateBlock[]): ModelTemplateBl
     .filter((block) => block.parent_id === null)
     .sort((a, b) => a.order_index - b.order_index);
   const children = blocks.filter((block) => block.parent_id !== null);
+
+  // `scope` é um bloco único. Modelos antigos ou previamente corrompidos podem
+  // conter mais de um; mantenha apenas o primeiro antes de importar.
+  const firstScopeId = roots.find((block) => block.type === "scope")?.id;
+  roots = roots.filter((block) => block.type !== "scope" || block.id === firstScopeId);
+
   const makeSystem = (type: ModelTemplateBlockType): ModelTemplateBlock => ({
       id: createId(type),
       parent_id: null,

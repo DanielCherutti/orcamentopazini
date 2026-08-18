@@ -18,6 +18,7 @@ import { assertEntityInActiveTenant } from "@/lib/tenant-access";
 import { requireActiveTenantId, tenantRecordId } from "@/lib/tenant-query";
 import { isBudgetEditableStatus } from "@/lib/budgets/budget-status";
 import { budgetRevalidatePath } from "@/lib/budgets/budget-path";
+import { BUDGET_MODEL_REPLACED_BLOCK_TYPES } from "@/lib/budgets/budget-model-import";
 import { stripHtmlToText } from "@/lib/pdf/html-to-plain-text";
 import { sanitizeRichHtmlForStorage } from "@/lib/pdf/sanitize-inline-styles-for-pdf";
 import { DEFAULT_COVER_PROPS, DEFAULT_HEADER_FOOTER_PROPS } from "@/types/budget-compositor-types";
@@ -355,6 +356,17 @@ async function mergeBlockProps(
   });
 }
 
+async function replaceBlockProps(
+  db: Awaited<ReturnType<typeof getDb>>,
+  blockId: string,
+  props: Record<string, unknown>,
+) {
+  await db.update(requireRecordId("budget_block", blockId)).merge({
+    props,
+    updated_at: new Date().toISOString(),
+  });
+}
+
 async function importCoverModel(
   db: Awaited<ReturnType<typeof getDb>>,
   budgetId: string,
@@ -508,8 +520,11 @@ async function importCompleteBudgetModel(
      SET deleted_at = time::now(), updated_at = time::now()
      WHERE budget_id = $budgetId
        AND deleted_at IS NONE
-       AND type INSIDE ["session", "text", "location", "section", "terms"]`,
-    { budgetId: budgetRecordId },
+       AND type INSIDE $replacedBlockTypes`,
+    {
+      budgetId: budgetRecordId,
+      replacedBlockTypes: [...BUDGET_MODEL_REPLACED_BLOCK_TYPES],
+    },
   );
 
   const structure = normalizeModelTemplateStructure(modelo.tipo, modelo.estrutura, modelo.conteudo);
@@ -552,20 +567,26 @@ async function importCompleteBudgetModel(
   };
 
   if (cover && coverTemplate) {
-    await mergeBlockProps(db, cover.id, { ...DEFAULT_COVER_PROPS, ...coverTemplate.props });
+    await replaceBlockProps(db, cover.id, { ...DEFAULT_COVER_PROPS, ...coverTemplate.props });
     await applyRootOrder(cover, coverTemplate);
   }
   if (headerFooter && headerFooterTemplate) {
-    await mergeBlockProps(db, headerFooter.id, {
+    await replaceBlockProps(db, headerFooter.id, {
       ...DEFAULT_HEADER_FOOTER_PROPS,
       ...headerFooterTemplate.props,
     });
     await applyRootOrder(headerFooter, headerFooterTemplate);
   }
-  await applyRootOrder(figures, figuresTemplate);
-  await applyRootOrder(toc, tocTemplate);
+  if (figures && figuresTemplate) {
+    await replaceBlockProps(db, figures.id, figuresTemplate.props);
+    await applyRootOrder(figures, figuresTemplate);
+  }
+  if (toc && tocTemplate) {
+    await replaceBlockProps(db, toc.id, tocTemplate.props);
+    await applyRootOrder(toc, tocTemplate);
+  }
   if (quote && quoteTemplate) {
-    await mergeBlockProps(db, quote.id, quoteTemplate.props);
+    await replaceBlockProps(db, quote.id, quoteTemplate.props);
     await applyRootOrder(quote, quoteTemplate);
   }
   await importTemplateAuthoredBlocks(db, budgetRecordId, structure.blocks, rootOrder);
