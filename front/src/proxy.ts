@@ -12,7 +12,6 @@ import { verifySessionToken, type ImpersonationPayload } from "@/lib/session-tok
 import { tenantMatchesHost } from "@/lib/tenant-host";
 import { resolveTenantFromHost, resolveBrandingTenantFromHost } from "@/lib/tenant-host-resolve";
 import { parseDeliveryProjectPathSegments } from "@/lib/delivery/delivery-path";
-import { applyRuntimeProbe } from "@/lib/runtime-probe";
 
 function normalizeDeliveryProjectPathname(pathname: string): string | null {
     const normalized = pathname.replace(/^\/delivery_projects(?=\/|$)/, "/delivery-projects");
@@ -191,15 +190,9 @@ export async function proxy(request: NextRequest) {
             );
         }
 
-        const apiTenantId = hostResolved.tenant?.id ?? payload.tenantId ?? null;
-        const apiProbe = !payload.platformMode && !payload.impersonation
-            ? await applyRuntimeProbe(apiTenantId, true)
-            : null;
-        if (apiProbe) return apiProbe;
-
         return appendTenantHeaders(
             NextResponse.next(),
-            apiTenantId,
+            hostResolved.tenant?.id ?? payload.tenantId ?? null,
             hostResolved.resolution.kind,
         );
     }
@@ -272,15 +265,9 @@ export async function proxy(request: NextRequest) {
         return NextResponse.redirect(selectUrl);
     }
 
-    const pageTenantId = hostResolved.tenant?.id ?? payload.tenantId ?? null;
-    const pageProbe = !payload.platformMode && !payload.impersonation
-        ? await applyRuntimeProbe(pageTenantId, false)
-        : null;
-    if (pageProbe) return pageProbe;
-
     return appendTenantHeaders(
         NextResponse.next(),
-        pageTenantId,
+        hostResolved.tenant?.id ?? payload.tenantId ?? null,
         hostResolved.resolution.kind,
     );
 }
