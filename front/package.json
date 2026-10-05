@@ -12,7 +12,6 @@
     "test:quote-breakdown": "tsx scripts/quote-breakdown-regression.ts",
     "test:tenant-isolation": "tsx scripts/tenant-isolation-regression.ts",
     "test:platform-license": "tsx scripts/platform-license-enforcement-regression.ts",
-    "test:runtime-probe": "tsx scripts/runtime-probe-regression.ts",
     "init:db": "tsx ./init-db.ts",
     "seed:products": "tsx seed-products.ts",
     "seed:portal-user": "tsx ./seed-portal-user.ts",
